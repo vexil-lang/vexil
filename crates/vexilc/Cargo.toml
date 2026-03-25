@@ -11,4 +11,5 @@ publish = false
 
 [dependencies]
 vexil-lang = { path = "../vexil-lang" }
+vexil-codegen = { path = "../vexil-codegen" }
 ariadne = "0.6"
