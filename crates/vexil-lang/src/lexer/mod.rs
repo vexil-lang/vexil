@@ -1,9 +1,9 @@
 pub mod token;
 
-use smol_str::SmolStr;
-use token::{Token, TokenKind};
 use crate::diagnostic::{Diagnostic, ErrorClass};
 use crate::span::Span;
+use smol_str::SmolStr;
+use token::{Token, TokenKind};
 
 struct Lexer<'a> {
     source: &'a [u8],
@@ -74,12 +74,19 @@ impl<'a> Lexer<'a> {
 
         let ch = match self.advance() {
             Some(ch) => ch,
-            None => return Token { kind: TokenKind::Eof, span: Span::empty(self.pos) },
+            None => {
+                return Token {
+                    kind: TokenKind::Eof,
+                    span: Span::empty(self.pos),
+                }
+            }
         };
 
         match ch {
             b'{' => self.make_token(TokenKind::LBrace, start),
             b'}' => self.make_token(TokenKind::RBrace, start),
+            b'[' => self.make_token(TokenKind::LBracket, start),
+            b']' => self.make_token(TokenKind::RBracket, start),
             b'(' => self.make_token(TokenKind::LParen, start),
             b')' => self.make_token(TokenKind::RParen, start),
             b'<' => self.make_token(TokenKind::LAngle, start),

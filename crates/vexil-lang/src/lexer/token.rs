@@ -12,6 +12,8 @@ pub enum TokenKind {
     // Punctuation
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     LParen,
     RParen,
     LAngle,
