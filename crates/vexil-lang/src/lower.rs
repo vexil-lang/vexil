@@ -24,6 +24,11 @@ struct LowerCtx {
     registry: TypeRegistry,
     diagnostics: Vec<Diagnostic>,
     wildcard_imports: HashSet<SmolStr>,
+    /// Maps type name → source namespace for wildcard imports.
+    /// `None` means ambiguous (multiple wildcards provide this name).
+    wildcard_origins: HashMap<SmolStr, Option<String>>,
+    /// Names from local declarations (populated during `register_declarations`).
+    local_names: HashSet<SmolStr>,
 }
 
 impl LowerCtx {
@@ -32,6 +37,8 @@ impl LowerCtx {
             registry: TypeRegistry::new(),
             diagnostics: Vec::new(),
             wildcard_imports: HashSet::new(),
+            wildcard_origins: HashMap::new(),
+            local_names: HashSet::new(),
         }
     }
 
@@ -143,6 +150,23 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                             &dep_compiled.declarations,
                             &mut ctx.registry,
                         );
+                        // Track wildcard origins for collision detection.
+                        for &old_id in &dep_compiled.declarations {
+                            if let Some(def) = dep_compiled.registry.get(old_id) {
+                                let type_name = SmolStr::new(crate::remap::type_def_name(def));
+                                match ctx.wildcard_origins.get(&type_name) {
+                                    None => {
+                                        ctx.wildcard_origins
+                                            .insert(type_name, Some(ns_key.clone()));
+                                    }
+                                    Some(Some(existing_ns)) if *existing_ns != ns_key => {
+                                        // Ambiguous: same name from different namespaces.
+                                        ctx.wildcard_origins.insert(type_name, None);
+                                    }
+                                    _ => {} // same namespace or already ambiguous
+                                }
+                            }
+                        }
                         ctx.wildcard_imports.insert(SmolStr::new(&ns_key));
                     }
                     ImportKind::Aliased { alias } => {
@@ -215,6 +239,7 @@ fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
             Decl::Newtype(d) => d.name.node.clone(),
             Decl::Config(d) => d.name.node.clone(),
         };
+        ctx.local_names.insert(name.clone());
         // Register a concrete placeholder so get_mut will find it later.
         // Safe: placeholder is overwritten in the lowering loop before any code reads it.
         // All declarations are registered before any are lowered (forward pass).
@@ -418,6 +443,27 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
         TypeExpr::SubByte(s) => ResolvedType::SubByte(*s),
         TypeExpr::Semantic(s) => ResolvedType::Semantic(*s),
         TypeExpr::Named(name) => {
+            // 1. Local declarations always win (shadow wildcards).
+            if ctx.local_names.contains(name.as_str()) {
+                if let Some(id) = ctx.registry.lookup(name.as_str()) {
+                    return ResolvedType::Named(id);
+                }
+            }
+            // 2. Check for wildcard ambiguity (only for non-local names).
+            if let Some(origin) = ctx.wildcard_origins.get(name.as_str()) {
+                if origin.is_none() {
+                    ctx.emit(
+                        span,
+                        ErrorClass::UnresolvedType,
+                        format!(
+                            "ambiguous type `{name}`: provided by multiple wildcard imports; \
+                             use a named or aliased import to disambiguate"
+                        ),
+                    );
+                    return ResolvedType::Named(ir::types::POISON_TYPE_ID);
+                }
+            }
+            // 3. Normal lookup (named imports or unambiguous wildcard types).
             if let Some(id) = ctx.registry.lookup(name.as_str()) {
                 ResolvedType::Named(id)
             } else if !ctx.wildcard_imports.is_empty() {
@@ -729,5 +775,96 @@ mod dep_tests {
             compiled.registry.lookup("DT.Foo").is_some(),
             "DT.Foo should be registered"
         );
+    }
+
+    #[test]
+    fn wildcard_collision_on_use_errors() {
+        let dep_a = crate::compile("namespace dep.a\nmessage Foo { x @0 : u32 }")
+            .compiled
+            .unwrap();
+        let dep_b = crate::compile("namespace dep.b\nmessage Foo { y @0 : string }")
+            .compiled
+            .unwrap();
+
+        let root_source = "namespace root\nimport dep.a\nimport dep.b\nmessage Bar { f @0 : Foo }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx.schemas.insert("dep.a".to_string(), dep_a);
+        dep_ctx.schemas.insert("dep.b".to_string(), dep_b);
+
+        let (_compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        assert!(
+            diags.iter().any(|d| d.message.contains("ambiguous")),
+            "expected ambiguity error, got: {:?}",
+            diags
+        );
+    }
+
+    #[test]
+    fn named_import_overrides_wildcard_ambiguity() {
+        let dep_a = crate::compile("namespace dep.a\nmessage Foo { x @0 : u32 }")
+            .compiled
+            .unwrap();
+        let dep_b = crate::compile("namespace dep.b\nmessage Foo { y @0 : string }")
+            .compiled
+            .unwrap();
+
+        // Named import from dep.a, wildcard from dep.b — named should win.
+        let root_source =
+            "namespace root\nimport { Foo } from dep.a\nimport dep.b\nmessage Bar { f @0 : Foo }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx.schemas.insert("dep.a".to_string(), dep_a);
+        dep_ctx.schemas.insert("dep.b".to_string(), dep_b);
+
+        let (compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "named import should override wildcard ambiguity, got: {:?}",
+            errors
+        );
+        assert!(compiled.is_some());
+    }
+
+    #[test]
+    fn local_declaration_shadows_wildcard_collision() {
+        let dep_a = crate::compile("namespace dep.a\nmessage Foo { x @0 : u32 }")
+            .compiled
+            .unwrap();
+        let dep_b = crate::compile("namespace dep.b\nmessage Foo { y @0 : string }")
+            .compiled
+            .unwrap();
+
+        // Local Foo declaration should shadow the ambiguous wildcards.
+        let root_source = "namespace root\nimport dep.a\nimport dep.b\nmessage Foo { z @0 : bool }\nmessage Bar { f @0 : Foo }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx.schemas.insert("dep.a".to_string(), dep_a);
+        dep_ctx.schemas.insert("dep.b".to_string(), dep_b);
+
+        let (compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "local declaration should shadow wildcard collision, got: {:?}",
+            errors
+        );
+        assert!(compiled.is_some());
     }
 }
