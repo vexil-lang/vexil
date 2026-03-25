@@ -84,8 +84,8 @@ pub fn compile(source: &str) -> CompileResult {
 
 ## Shared Types
 
-`PrimitiveType`, `SubByteType`, and `SemanticType` are re-exported from the AST module.
-The IR does not redefine them.
+`PrimitiveType`, `SubByteType`, `SemanticType`, `EnumBacking`, and `DefaultValue`
+are re-exported from the AST module. The IR does not redefine them.
 
 ## IR Types
 
@@ -114,6 +114,7 @@ impl TypeRegistry {
 ```rust
 pub struct CompiledSchema {
     pub namespace: Vec<SmolStr>,
+    pub annotations: ResolvedAnnotations,  // schema-level (@version, @doc, etc.)
     pub registry: TypeRegistry,
     pub declarations: Vec<TypeId>,  // in source order
 }
@@ -164,7 +165,7 @@ pub struct FieldDef {
 pub struct EnumDef {
     pub name: SmolStr,
     pub span: Span,
-    pub backing: PrimitiveType,      // resolved: default u32 if unspecified
+    pub backing: EnumBacking,        // resolved: default U32 if unspecified (reuse ast::EnumBacking)
     pub variants: Vec<EnumVariantDef>,
     pub tombstones: Vec<TombstoneDef>,
     pub annotations: ResolvedAnnotations,
@@ -172,6 +173,7 @@ pub struct EnumDef {
 
 pub struct EnumVariantDef {
     pub name: SmolStr,
+    pub span: Span,
     pub ordinal: u32,
     pub annotations: ResolvedAnnotations,
 }
@@ -192,6 +194,7 @@ pub struct FlagsDef {
 
 pub struct FlagsBitDef {
     pub name: SmolStr,
+    pub span: Span,
     pub bit: u32,
     pub annotations: ResolvedAnnotations,
 }
@@ -210,6 +213,7 @@ pub struct UnionDef {
 
 pub struct UnionVariantDef {
     pub name: SmolStr,
+    pub span: Span,
     pub ordinal: u32,
     pub fields: Vec<FieldDef>,
     pub tombstones: Vec<TombstoneDef>,
@@ -244,6 +248,7 @@ pub struct ConfigDef {
 
 pub struct ConfigFieldDef {
     pub name: SmolStr,
+    pub span: Span,
     pub resolved_type: ResolvedType,
     pub default_value: DefaultValue,  // reuse AST's DefaultValue
     pub annotations: ResolvedAnnotations,
@@ -317,6 +322,7 @@ pub struct ResolvedAnnotations {
 
 ```rust
 pub struct TombstoneDef {
+    pub span: Span,
     pub ordinal: u32,
     pub reason: SmolStr,
     pub since: Option<SmolStr>,
@@ -367,11 +373,13 @@ Takes `&Schema` (AST), returns `(Option<CompiledSchema>, Vec<Diagnostic>)`.
 
 **Imports handling (pre-Milestone F):**
 When the AST has imports, lowering registers stub `TypeId`s for imported names
-(from named imports) or marks the namespace as wildcard-imported. Type resolution
-against these stubs produces `Named(TypeId)` with no backing `TypeDef`. The type
-checker skips validation on stub types. This is sufficient for single-file
-schemas that reference imported types — the IR acknowledges them without resolving
-their internals.
+(from named imports) or marks the namespace as wildcard-imported. Aliased imports
+(`import foo.bar as baz`) register stubs under the alias name (`baz`); qualified
+references use the alias (`baz.Type`). Type resolution against these stubs
+produces `Named(TypeId)` with no backing `TypeDef`. The type checker skips
+validation on stub types. This is sufficient for single-file schemas that
+reference imported types — the IR acknowledges them without resolving their
+internals.
 
 **Error handling:**
 Lowering accumulates diagnostics but continues as far as possible. If a type
