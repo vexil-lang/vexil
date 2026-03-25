@@ -37,6 +37,12 @@ spec → formal grammar → test corpus → reference implementation
 - **maltty** — the GPU renderer
 - **VNP** — Vexil Native Protocol (wire protocol using Vexil schemas)
 
+## Git Workflow
+
+- A pre-push hook runs `cargo fmt --all` and aborts if it modifies files.
+- Agents MUST bypass it with `VEXIL_NO_FMT=1 git push origin main` to avoid blocking on fmt.
+- Always `git pull origin main` before starting local edits — multiple agents and direct GitHub commits are common.
+
 ## Code Standards (for reference implementation, when it exists)
 
 - Rust, edition 2021
