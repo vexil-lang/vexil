@@ -80,6 +80,7 @@ Both checks are enforced in CI. Run them locally before pushing.
 - Add tests for new behavior; for compiler changes, add corpus files where possible
 - Update `corpus/MANIFEST.md` if you add corpus entries
 - Fill in the PR template
+- For language features, protocol changes, or anything architectural, follow the RFC process described in [GOVERNANCE.md](./GOVERNANCE.md)
 
 ## Commit Messages
 

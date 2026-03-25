@@ -104,6 +104,7 @@ crates/
 ## Contributing
 
 Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
+For architectural decisions, language changes, and protocol modifications, see [GOVERNANCE.md](./GOVERNANCE.md).
 
 ## License
 
