@@ -1,0 +1,18 @@
+[package]
+name = "vexil-codegen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Rust code generation backend for the Vexil schema compiler"
+keywords = ["schema", "codegen", "serialization"]
+categories = ["compilers", "development-tools"]
+
+[dependencies]
+vexil-lang = { path = "../vexil-lang" }
+thiserror = "2"
+
+[dev-dependencies]
+test-case = "3"
