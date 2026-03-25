@@ -1,0 +1,99 @@
+name: RFC (Request for Comments)
+description: Propose a language feature, encoding change, or protocol modification
+title: "[RFC]: "
+labels: ["rfc"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        RFCs are required for language features, encoding semantics changes, wire format
+        modifications, and conformance corpus contract changes. See [GOVERNANCE.md](https://github.com/vexil-lang/vexil/blob/main/GOVERNANCE.md)
+        for the full process. RFCs remain open for a **14-day comment period** before a decision is made.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project does this RFC affect?
+      options:
+        - Language syntax
+        - Type system / encoding semantics
+        - Wire format (VNP)
+        - Conformance corpus contract
+        - Compiler API (vexil-lang)
+        - Codegen contract
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this RFC solve? Be specific about the limitation or gap.
+      placeholder: Currently there is no way to express X, which is needed because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Design
+      description: |
+        Describe the change in detail. For language changes, include example syntax.
+        For encoding changes, describe the wire format precisely.
+      placeholder: |
+        ## Syntax
+
+        ```vexil
+        // example
+        ```
+
+        ## Encoding
+
+        ...
+
+        ## Spec changes required
+
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other designs were considered? Why were they rejected?
+    validations:
+      required: true
+
+  - type: textarea
+    id: breaking
+    attributes:
+      label: Breaking Changes
+      description: |
+        Does this change break existing schemas, wire format compatibility, or generated code?
+        If yes, describe the impact and any migration path.
+      placeholder: |
+        - [ ] No breaking changes
+        - [ ] Breaking to existing schemas (describe)
+        - [ ] Breaking wire format (describe)
+        - [ ] Breaking generated code (describe)
+    validations:
+      required: true
+
+  - type: textarea
+    id: corpus
+    attributes:
+      label: Corpus Impact
+      description: Will this require new valid or invalid corpus entries? Sketch the test cases.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Prior Art
+      description: How do other schema languages (Protobuf, Cap'n Proto, Flatbuffers, etc.) handle this?
+    validations:
+      required: false

@@ -6,7 +6,7 @@
     <img src="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
   <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0">
-  <img src="https://img.shields.io/badge/rust-1.80%2B-orange" alt="Rust 1.80+">
+  <img src="https://img.shields.io/badge/rust-1.94%2B-orange" alt="Rust 1.94+">
 </p>
 
 ---
@@ -37,7 +37,7 @@ Pre-built binaries for Linux, Windows, and macOS are available on the
 
 ### From source
 
-Requires Rust 1.80 or later ([install via rustup](https://rustup.rs)).
+Requires Rust 1.94 or later ([install via rustup](https://rustup.rs)).
 
 ```sh
 git clone https://github.com/vexil-lang/vexil

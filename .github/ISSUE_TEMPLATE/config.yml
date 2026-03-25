@@ -6,3 +6,6 @@ contact_links:
   - name: Language Specification
     url: https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md
     about: Read the Vexil language specification before reporting spec-related issues
+  - name: Governance & RFC Process
+    url: https://github.com/vexil-lang/vexil/blob/main/GOVERNANCE.md
+    about: Read about the RFC process before proposing language or protocol changes
