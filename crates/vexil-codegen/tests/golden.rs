@@ -35,12 +35,14 @@ fn golden_test(corpus_name: &str) {
         return;
     }
 
-    let expected = fs::read_to_string(&golden_path).unwrap_or_else(|e| {
-        panic!(
-            "cannot read golden {}: {e}\nRun with UPDATE_GOLDEN=1 to create",
-            golden_path.display()
-        )
-    });
+    let expected = fs::read_to_string(&golden_path)
+        .unwrap_or_else(|e| {
+            panic!(
+                "cannot read golden {}: {e}\nRun with UPDATE_GOLDEN=1 to create",
+                golden_path.display()
+            )
+        })
+        .replace("\r\n", "\n");
 
     if generated != expected {
         let diff = simple_diff(&expected, &generated);

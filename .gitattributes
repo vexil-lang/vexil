@@ -1,0 +1,8 @@
+# Normalize all text files to LF on checkout.
+* text=auto eol=lf
+
+# Binaries — no line ending conversion.
+*.png binary
+*.jpg binary
+*.ico binary
+*.wasm binary
