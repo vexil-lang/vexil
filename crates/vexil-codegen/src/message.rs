@@ -189,11 +189,11 @@ fn emit_write_type(
         }
         ResolvedType::Result(ok, err) => {
             w.open_block(&format!("match &{access}"));
-            w.open_block("Ok(ok_val)");
+            w.open_block("Ok(ok_val) =>");
             w.line("w.write_bool(true);");
             emit_write_type(w, "ok_val", ok, registry, field_name);
             w.close_block();
-            w.open_block("Err(err_val)");
+            w.open_block("Err(err_val) =>");
             w.line("w.write_bool(false);");
             emit_write_type(w, "err_val", err, registry, field_name);
             w.close_block();
@@ -539,7 +539,9 @@ pub fn emit_message(
     for field in &msg.fields {
         w.line(&format!("{},", field.name));
     }
-    w.close_block();
+    w.dedent();
+    w.line("})");
+
     w.close_block();
     w.close_block();
     w.blank();

@@ -39,7 +39,7 @@ impl vexil_runtime::Unpack for TreeNode {
         Ok(Self {
             value,
             children,
-        }
+        })
     }
 }
 
@@ -83,7 +83,7 @@ impl vexil_runtime::Unpack for LinkedList {
         Ok(Self {
             value,
             next,
-        }
+        })
     }
 }
 
@@ -110,7 +110,7 @@ impl vexil_runtime::Unpack for Expr {
         r.flush_to_byte_boundary();
         Ok(Self {
             kind,
-        }
+        })
     }
 }
 
@@ -126,7 +126,7 @@ impl vexil_runtime::Pack for ExprKind {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.flush_to_byte_boundary();
         match self {
-            Self::Literal { value } {
+            Self::Literal { value } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_i64(value);
@@ -135,7 +135,7 @@ impl vexil_runtime::Pack for ExprKind {
                 w.write_leb128(payload.len() as u64);
                 w.write_raw_bytes(&payload);
             }
-            Self::Binary { left, op, right } {
+            Self::Binary { left, op, right } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 left.pack(w)?;
@@ -157,14 +157,14 @@ impl vexil_runtime::Unpack for ExprKind {
         let disc = r.read_leb128(10_u8)?;
         let len = r.read_leb128(10_u8)? as usize;
         match disc {
-            0_u64 {
+            0_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let value = pr.read_i64()?;
                 pr.flush_to_byte_boundary();
                 Ok(Self::Literal { value })
             }
-            1_u64 {
+            1_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 pr.enter_recursive()?;
@@ -177,7 +177,7 @@ impl vexil_runtime::Unpack for ExprKind {
                 pr.flush_to_byte_boundary();
                 Ok(Self::Binary { left, op, right })
             }
-            _ {
+            _ => {
                 let _skip = r.read_raw_bytes(len)?;
                 Err(vexil_runtime::DecodeError::UnknownUnionVariant { type_name: "ExprKind", discriminant: disc })
             }

@@ -17,7 +17,7 @@ impl vexil_runtime::Pack for Shape {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.flush_to_byte_boundary();
         match self {
-            Self::Circle { radius } {
+            Self::Circle { radius } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_f32(radius);
@@ -26,7 +26,7 @@ impl vexil_runtime::Pack for Shape {
                 w.write_leb128(payload.len() as u64);
                 w.write_raw_bytes(&payload);
             }
-            Self::Rectangle { width, height } {
+            Self::Rectangle { width, height } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_f32(width);
@@ -36,7 +36,7 @@ impl vexil_runtime::Pack for Shape {
                 w.write_leb128(payload.len() as u64);
                 w.write_raw_bytes(&payload);
             }
-            Self::Point {} {
+            Self::Point {} => {
                 w.write_leb128(2_u64);
                 w.write_leb128(0_u64);
             }
@@ -51,14 +51,14 @@ impl vexil_runtime::Unpack for Shape {
         let disc = r.read_leb128(10_u8)?;
         let len = r.read_leb128(10_u8)? as usize;
         match disc {
-            0_u64 {
+            0_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let radius = pr.read_f32()?;
                 pr.flush_to_byte_boundary();
                 Ok(Self::Circle { radius })
             }
-            1_u64 {
+            1_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let width = pr.read_f32()?;
@@ -66,11 +66,11 @@ impl vexil_runtime::Unpack for Shape {
                 pr.flush_to_byte_boundary();
                 Ok(Self::Rectangle { width, height })
             }
-            2_u64 {
+            2_u64 => {
                 let _skip = r.read_raw_bytes(len)?;
                 Ok(Self::Point {})
             }
-            _ {
+            _ => {
                 let _skip = r.read_raw_bytes(len)?;
                 Err(vexil_runtime::DecodeError::UnknownUnionVariant { type_name: "Shape", discriminant: disc })
             }
@@ -93,7 +93,7 @@ impl vexil_runtime::Pack for Color {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.flush_to_byte_boundary();
         match self {
-            Self::Ansi { code } {
+            Self::Ansi { code } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_u8(code);
@@ -102,7 +102,7 @@ impl vexil_runtime::Pack for Color {
                 w.write_leb128(payload.len() as u64);
                 w.write_raw_bytes(&payload);
             }
-            Self::Rgb { r, g, b } {
+            Self::Rgb { r, g, b } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_u8(r);
@@ -113,11 +113,11 @@ impl vexil_runtime::Pack for Color {
                 w.write_leb128(payload.len() as u64);
                 w.write_raw_bytes(&payload);
             }
-            Self::Reset {} {
+            Self::Reset {} => {
                 w.write_leb128(2_u64);
                 w.write_leb128(0_u64);
             }
-            Self::Unknown { discriminant, data } {
+            Self::Unknown { discriminant, data } => {
                 w.write_leb128(*discriminant);
                 w.write_leb128(data.len() as u64);
                 w.write_raw_bytes(data);
@@ -133,14 +133,14 @@ impl vexil_runtime::Unpack for Color {
         let disc = r.read_leb128(10_u8)?;
         let len = r.read_leb128(10_u8)? as usize;
         match disc {
-            0_u64 {
+            0_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let code = pr.read_u8()?;
                 pr.flush_to_byte_boundary();
                 Ok(Self::Ansi { code })
             }
-            1_u64 {
+            1_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let r = pr.read_u8()?;
@@ -149,11 +149,11 @@ impl vexil_runtime::Unpack for Color {
                 pr.flush_to_byte_boundary();
                 Ok(Self::Rgb { r, g, b })
             }
-            2_u64 {
+            2_u64 => {
                 let _skip = r.read_raw_bytes(len)?;
                 Ok(Self::Reset {})
             }
-            other {
+            other => {
                 let data = r.read_raw_bytes(len)?;
                 Ok(Self::Unknown { discriminant: other, data })
             }
@@ -177,7 +177,7 @@ impl vexil_runtime::Pack for Event {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.flush_to_byte_boundary();
         match self {
-            Self::Click { x, y } {
+            Self::Click { x, y } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_u16(x);
@@ -187,7 +187,7 @@ impl vexil_runtime::Pack for Event {
                 w.write_leb128(payload.len() as u64);
                 w.write_raw_bytes(&payload);
             }
-            Self::Scroll { delta } {
+            Self::Scroll { delta } => {
                 w.write_leb128(2_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
                 payload_w.write_i16(delta);
@@ -207,7 +207,7 @@ impl vexil_runtime::Unpack for Event {
         let disc = r.read_leb128(10_u8)?;
         let len = r.read_leb128(10_u8)? as usize;
         match disc {
-            0_u64 {
+            0_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let x = pr.read_u16()?;
@@ -215,14 +215,14 @@ impl vexil_runtime::Unpack for Event {
                 pr.flush_to_byte_boundary();
                 Ok(Self::Click { x, y })
             }
-            2_u64 {
+            2_u64 => {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 let delta = pr.read_i16()?;
                 pr.flush_to_byte_boundary();
                 Ok(Self::Scroll { delta })
             }
-            _ {
+            _ => {
                 let _skip = r.read_raw_bytes(len)?;
                 Err(vexil_runtime::DecodeError::UnknownUnionVariant { type_name: "Event", discriminant: disc })
             }

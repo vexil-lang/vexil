@@ -137,7 +137,7 @@ pub fn emit_union(
 
         if variant.fields.is_empty() {
             // Empty variant: write discriminant + 0-length payload
-            w.open_block(&format!("Self::{vname} {{}}"));
+            w.open_block(&format!("Self::{vname} {{}} =>"));
             w.line(&format!("w.write_leb128({ordinal}_u64);"));
             w.line("w.write_leb128(0_u64);");
             w.close_block();
@@ -148,7 +148,7 @@ pub fn emit_union(
                 .map(|f| f.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            w.open_block(&format!("Self::{vname} {{ {bindings} }}"));
+            w.open_block(&format!("Self::{vname} {{ {bindings} }} =>"));
             w.line(&format!("w.write_leb128({ordinal}_u64);"));
             w.line("let mut payload_w = vexil_runtime::BitWriter::new();");
             for field in &variant.fields {
@@ -169,7 +169,7 @@ pub fn emit_union(
     }
 
     if non_exhaustive {
-        w.open_block("Self::Unknown { discriminant, data }");
+        w.open_block("Self::Unknown { discriminant, data } =>");
         w.line("w.write_leb128(*discriminant);");
         w.line("w.write_leb128(data.len() as u64);");
         w.line("w.write_raw_bytes(data);");
@@ -197,12 +197,12 @@ pub fn emit_union(
         let vname = variant.name.as_str();
 
         if variant.fields.is_empty() {
-            w.open_block(&format!("{ordinal}_u64"));
+            w.open_block(&format!("{ordinal}_u64 =>"));
             w.line("let _skip = r.read_raw_bytes(len)?;");
             w.line(&format!("Ok(Self::{vname} {{}})"));
             w.close_block();
         } else {
-            w.open_block(&format!("{ordinal}_u64"));
+            w.open_block(&format!("{ordinal}_u64 =>"));
             w.line("let payload = r.read_raw_bytes(len)?;");
             w.line("let mut pr = vexil_runtime::BitReader::new(&payload);");
             for field in &variant.fields {
@@ -227,12 +227,12 @@ pub fn emit_union(
     }
 
     if non_exhaustive {
-        w.open_block("other");
+        w.open_block("other =>");
         w.line("let data = r.read_raw_bytes(len)?;");
         w.line("Ok(Self::Unknown { discriminant: other, data })");
         w.close_block();
     } else {
-        w.open_block("_");
+        w.open_block("_ =>");
         w.line("let _skip = r.read_raw_bytes(len)?;");
         w.line(&format!(
             "Err(vexil_runtime::DecodeError::UnknownUnionVariant {{ type_name: \"{name}\", discriminant: disc }})"

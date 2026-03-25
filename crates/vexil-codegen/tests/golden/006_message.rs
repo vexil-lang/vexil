@@ -21,7 +21,7 @@ impl vexil_runtime::Unpack for Empty {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
         Ok(Self {
-        }
+        })
     }
 }
 
@@ -54,7 +54,7 @@ impl vexil_runtime::Unpack for WithGaps {
             first,
             third,
             tenth,
-        }
+        })
     }
 }
 
@@ -79,7 +79,7 @@ impl vexil_runtime::Unpack for Annotated {
         r.flush_to_byte_boundary();
         Ok(Self {
             version,
-        }
+        })
     }
 }
 
@@ -120,7 +120,7 @@ impl vexil_runtime::Unpack for FieldAnnotations {
             b,
             c,
             d,
-        }
+        })
     }
 }
 
@@ -178,7 +178,7 @@ impl FieldAnnotationsDecoder {
             b,
             c,
             d,
-        }
+        })
     }
 
     pub fn reset(&mut self) {

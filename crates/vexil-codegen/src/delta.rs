@@ -219,7 +219,9 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     for field in &msg.fields {
         w.line(&format!("{},", field.name));
     }
-    w.close_block();
+    w.dedent();
+    w.line("})");
+
     w.close_block(); // fn unpack
     w.blank();
 
