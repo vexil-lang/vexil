@@ -624,7 +624,7 @@ pub fn compile(source: &str) -> CompileResult {
         };
     }
     let schema = parse_result.schema.unwrap(); // safe: no errors means Some
-    let (compiled, lower_diags) = lower::lower(&schema);
+    let (mut compiled, lower_diags) = lower::lower(&schema);
     let mut diagnostics = parse_result.diagnostics;
     diagnostics.extend(lower_diags);
     if let Some(ref mut compiled) = compiled {
