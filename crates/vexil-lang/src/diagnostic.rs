@@ -92,6 +92,7 @@ pub struct Diagnostic {
     pub span: Span,
     pub class: ErrorClass,
     pub message: String,
+    pub source_file: Option<std::path::PathBuf>,
 }
 
 impl Diagnostic {
@@ -101,6 +102,7 @@ impl Diagnostic {
             span,
             class,
             message: message.into(),
+            source_file: None,
         }
     }
 
@@ -110,6 +112,12 @@ impl Diagnostic {
             span,
             class,
             message: message.into(),
+            source_file: None,
         }
+    }
+
+    pub fn with_file(mut self, path: std::path::PathBuf) -> Self {
+        self.source_file = Some(path);
+        self
     }
 }
