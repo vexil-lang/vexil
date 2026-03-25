@@ -9,6 +9,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::ast::Schema;
+use crate::diagnostic::Diagnostic;
+use crate::ir::CompiledSchema;
+use crate::lower::DependencyContext;
 use crate::resolve::{LoadError, SchemaLoader};
 
 // ── ProjectError ─────────────────────────────────────────────────────────────
@@ -104,6 +107,76 @@ pub fn build_import_graph(
     )?;
 
     Ok(graph)
+}
+
+// ── ProjectResult ────────────────────────────────────────────────────────────
+
+/// The result of compiling a multi-file Vexil project.
+#[derive(Debug, Clone)]
+pub struct ProjectResult {
+    /// Per-namespace compilation results, in topological order.
+    pub schemas: Vec<(String, CompiledSchema)>,
+    /// All diagnostics across all files.
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Compile a multi-file Vexil project starting from a root schema.
+///
+/// Builds the import graph, then lowers and type-checks each namespace in
+/// topological order so that dependencies are always compiled before their
+/// dependents.
+pub fn compile_project(
+    root_source: &str,
+    root_path: &Path,
+    loader: &dyn SchemaLoader,
+) -> Result<ProjectResult, ProjectError> {
+    let mut graph = build_import_graph(root_source, root_path, loader)?;
+
+    let mut compiled_schemas: HashMap<String, CompiledSchema> = HashMap::new();
+    let mut all_diagnostics: Vec<Diagnostic> = Vec::new();
+    let mut result_schemas: Vec<(String, CompiledSchema)> = Vec::new();
+
+    let topo_order = graph.topo_order.clone();
+
+    for ns in &topo_order {
+        // Remove from graph to take ownership and avoid cloning the Schema.
+        let (schema, _source_text, path) = match graph.schemas.remove(ns) {
+            Some(entry) => entry,
+            None => continue,
+        };
+
+        // Build DependencyContext from direct imports only.
+        let dep_edges = graph.edges.get(ns).cloned().unwrap_or_default();
+        let dep_ctx = DependencyContext {
+            schemas: dep_edges
+                .iter()
+                .filter_map(|dep_ns| {
+                    compiled_schemas
+                        .get(dep_ns)
+                        .map(|cs| (dep_ns.clone(), cs.clone()))
+                })
+                .collect(),
+        };
+
+        let (compiled, lower_diags) = crate::lower::lower_with_deps(&schema, Some(&dep_ctx));
+
+        // Tag diagnostics with source file.
+        all_diagnostics.extend(lower_diags.into_iter().map(|d| d.with_file(path.clone())));
+
+        if let Some(mut compiled) = compiled {
+            let check_diags = crate::typeck::check(&mut compiled);
+            all_diagnostics.extend(check_diags.into_iter().map(|d| d.with_file(path.clone())));
+
+            compiled_schemas.insert(ns.clone(), compiled.clone());
+            result_schemas.push((ns.clone(), compiled));
+        }
+        // If compiled is None, error is already in lower_diags — continue.
+    }
+
+    Ok(ProjectResult {
+        schemas: result_schemas,
+        diagnostics: all_diagnostics,
+    })
 }
 
 // ── DFS ───────────────────────────────────────────────────────────────────────
@@ -220,6 +293,7 @@ fn import_namespaces(schema: &Schema) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostic::Severity;
     use crate::resolve::InMemoryLoader;
     use std::path::PathBuf;
 
@@ -317,5 +391,97 @@ mod tests {
         let pos_d = graph.topo_order.iter().position(|s| s == "d").unwrap();
         let pos_a = graph.topo_order.iter().position(|s| s == "a").unwrap();
         assert!(pos_d < pos_a, "d must appear before a in topo_order");
+    }
+
+    // ── compile_project tests ────────────────────────────────────────────
+
+    #[test]
+    fn compile_project_simple_a_imports_b() {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "b".to_string(),
+            "namespace b\nmessage Dep { y @0 : u32 }".to_string(),
+        );
+
+        let root = "namespace a\nimport { Dep } from b\nmessage Root { d @0 : Dep }";
+        let result = compile_project(root, &PathBuf::from("<test>"), &loader).unwrap();
+
+        assert_eq!(result.schemas.len(), 2);
+        let errors: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .collect();
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    }
+
+    #[test]
+    fn compile_project_diamond() {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "d".to_string(),
+            "namespace d\nenum Base : u8 { X @0 }".to_string(),
+        );
+        loader.schemas.insert(
+            "b".to_string(),
+            "namespace b\nimport { Base } from d\nmessage Left { b @0 : Base }".to_string(),
+        );
+        loader.schemas.insert(
+            "c".to_string(),
+            "namespace c\nimport { Base } from d\nmessage Right { b @0 : Base }".to_string(),
+        );
+
+        let root = "namespace a\nimport { Left } from b\nimport { Right } from c\nmessage Root { l @0 : Left\n  r @1 : Right }";
+        let result = compile_project(root, &PathBuf::from("<test>"), &loader).unwrap();
+
+        // All 4 namespaces should be compiled.
+        assert_eq!(result.schemas.len(), 4);
+        // Verify topological order: d before b and c, b and c before a.
+        let positions: HashMap<&str, usize> = result
+            .schemas
+            .iter()
+            .enumerate()
+            .map(|(i, (ns, _))| (ns.as_str(), i))
+            .collect();
+        assert!(positions["d"] < positions["b"]);
+        assert!(positions["d"] < positions["c"]);
+        assert!(positions["b"] < positions["a"]);
+        assert!(positions["c"] < positions["a"]);
+    }
+
+    #[test]
+    fn compile_project_single_file_no_imports() {
+        let loader = InMemoryLoader::new();
+        let root = "namespace solo\nmessage Msg { x @0 : u32 }";
+        let result = compile_project(root, &PathBuf::from("<test>"), &loader).unwrap();
+
+        assert_eq!(result.schemas.len(), 1);
+        assert_eq!(result.schemas[0].0, "solo");
+        let errors: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .collect();
+        assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    }
+
+    #[test]
+    fn compile_project_diagnostics_have_source_file() {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "b".to_string(),
+            "namespace b\nmessage Dep { y @0 : u32 }".to_string(),
+        );
+
+        let root = "namespace a\nimport { Dep } from b\nmessage Root { d @0 : Dep }";
+        let result = compile_project(root, &PathBuf::from("root.vxl"), &loader).unwrap();
+
+        // All diagnostics (if any) should have source_file set.
+        for diag in &result.diagnostics {
+            assert!(
+                diag.source_file.is_some(),
+                "diagnostic missing source_file: {diag:?}"
+            );
+        }
     }
 }

@@ -12,6 +12,8 @@ pub mod span;
 pub mod typeck;
 pub mod validate;
 
+pub use project::compile_project;
+
 use ast::Schema;
 use diagnostic::{Diagnostic, Severity};
 use ir::CompiledSchema;
