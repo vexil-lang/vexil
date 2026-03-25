@@ -1,5 +1,8 @@
 use crate::ast::{PrimitiveType, SemanticType, SubByteType};
-use crate::ir::{CompiledSchema, ResolvedType, TypeDef, TypeRegistry};
+use crate::ir::{
+    CompiledSchema, DeprecatedInfo, Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType,
+    TombstoneDef, TypeDef, TypeId, TypeRegistry,
+};
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -9,10 +12,25 @@ use crate::ir::{CompiledSchema, ResolvedType, TypeDef, TypeRegistry};
 /// Returns a deterministic UTF-8 string — single-space-delimited, no newlines.
 pub fn canonical_form(compiled: &CompiledSchema) -> String {
     let mut out = String::new();
+
     // namespace
     out.push_str("namespace ");
     out.push_str(&compiled.namespace.join("."));
-    // TODO: schema-level annotations, declarations
+
+    // schema-level annotations
+    if compiled.annotations != ResolvedAnnotations::default() {
+        out.push(' ');
+        let mut ann_buf = String::new();
+        emit_annotations(&mut ann_buf, &compiled.annotations);
+        out.push_str(ann_buf.trim_end());
+    }
+
+    // declarations in source order
+    for &type_id in &compiled.declarations {
+        out.push(' ');
+        emit_type_def(&mut out, type_id, &compiled.registry);
+    }
+
     out
 }
 
@@ -26,7 +44,6 @@ pub fn schema_hash(compiled: &CompiledSchema) -> [u8; 32] {
 // Type string helpers (module-private)
 // ---------------------------------------------------------------------------
 
-#[allow(dead_code)]
 fn type_str(ty: &ResolvedType, registry: &TypeRegistry) -> String {
     #[allow(unreachable_patterns)]
     match ty {
@@ -60,7 +77,6 @@ fn type_str(ty: &ResolvedType, registry: &TypeRegistry) -> String {
     }
 }
 
-#[allow(dead_code)]
 fn primitive_str(p: &PrimitiveType) -> &'static str {
     match p {
         PrimitiveType::Bool => "bool",
@@ -78,7 +94,6 @@ fn primitive_str(p: &PrimitiveType) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 fn sub_byte_str(s: &SubByteType) -> String {
     if s.signed {
         format!("i{}", s.bits)
@@ -87,7 +102,6 @@ fn sub_byte_str(s: &SubByteType) -> String {
     }
 }
 
-#[allow(dead_code)]
 fn semantic_str(s: &SemanticType) -> &'static str {
     match s {
         SemanticType::String => "string",
@@ -99,7 +113,6 @@ fn semantic_str(s: &SemanticType) -> &'static str {
     }
 }
 
-#[allow(dead_code)]
 fn type_def_name(def: &TypeDef) -> &str {
     #[allow(unreachable_patterns)]
     match def {
@@ -112,6 +125,323 @@ fn type_def_name(def: &TypeDef) -> &str {
         _ => {
             debug_assert!(false, "unknown TypeDef variant in canonical form");
             "<unknown>"
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Annotation emission (module-private)
+// ---------------------------------------------------------------------------
+
+/// Emit annotations in sorted lexicographic order, each followed by a space.
+/// Order: deprecated, doc, non_exhaustive, revision, since, version
+fn emit_annotations(out: &mut String, ann: &ResolvedAnnotations) {
+    // deprecated
+    if let Some(dep) = &ann.deprecated {
+        emit_deprecated(out, dep);
+    }
+    // doc (multiple, in source order)
+    for d in &ann.doc {
+        out.push_str("@doc(\"");
+        out.push_str(d.as_str());
+        out.push_str("\") ");
+    }
+    // non_exhaustive
+    if ann.non_exhaustive {
+        out.push_str("@non_exhaustive ");
+    }
+    // revision
+    if let Some(rev) = ann.revision {
+        out.push_str(&format!("@revision({rev}) "));
+    }
+    // since
+    if let Some(since) = &ann.since {
+        out.push_str(&format!("@since(\"{}\") ", since.as_str()));
+    }
+    // version
+    if let Some(ver) = &ann.version {
+        out.push_str(&format!("@version(\"{}\") ", ver.as_str()));
+    }
+}
+
+fn emit_deprecated(out: &mut String, dep: &DeprecatedInfo) {
+    if let Some(since) = &dep.since {
+        out.push_str(&format!(
+            "@deprecated(reason: \"{}\", since: \"{}\") ",
+            dep.reason.as_str(),
+            since.as_str()
+        ));
+    } else {
+        out.push_str(&format!(
+            "@deprecated(reason: \"{}\") ",
+            dep.reason.as_str()
+        ));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Encoding emission (module-private)
+// ---------------------------------------------------------------------------
+
+fn emit_encoding(out: &mut String, enc: &FieldEncoding) {
+    emit_encoding_inner(out, &enc.encoding);
+    if let Some(limit) = enc.limit {
+        out.push_str(&format!("@limit({limit}) "));
+    }
+}
+
+fn emit_encoding_inner(out: &mut String, enc: &Encoding) {
+    #[allow(unreachable_patterns)]
+    match enc {
+        Encoding::Default => {}
+        Encoding::Varint => out.push_str("@varint "),
+        Encoding::ZigZag => out.push_str("@zigzag "),
+        Encoding::Delta(inner) => {
+            out.push_str("@delta ");
+            emit_encoding_inner(out, inner);
+        }
+        _ => {
+            debug_assert!(false, "unknown Encoding variant in canonical form");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tombstone emission (module-private)
+// ---------------------------------------------------------------------------
+
+fn emit_tombstones(out: &mut String, tombstones: &[TombstoneDef]) {
+    // Sort by ordinal for determinism
+    let mut sorted: Vec<&TombstoneDef> = tombstones.iter().collect();
+    sorted.sort_by_key(|t| t.ordinal);
+    for t in sorted {
+        if let Some(since) = &t.since {
+            out.push_str(&format!(
+                "@removed({}, \"{}\", since: \"{}\") ",
+                t.ordinal,
+                t.reason.as_str(),
+                since.as_str()
+            ));
+        } else {
+            out.push_str(&format!(
+                "@removed({}, \"{}\") ",
+                t.ordinal,
+                t.reason.as_str()
+            ));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Declaration emission (module-private)
+// ---------------------------------------------------------------------------
+
+fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
+    let Some(def) = registry.get(type_id) else {
+        debug_assert!(false, "unresolved TypeId {:?} in canonical form", type_id);
+        return;
+    };
+    #[allow(unreachable_patterns)]
+    match def {
+        TypeDef::Message(msg) => {
+            let mut ann_buf = String::new();
+            emit_annotations(&mut ann_buf, &msg.annotations);
+            if !ann_buf.is_empty() {
+                out.push_str(ann_buf.trim_end());
+                out.push(' ');
+            }
+            out.push_str("message ");
+            out.push_str(msg.name.as_str());
+            out.push_str(" {");
+            let mut body = String::new();
+            emit_tombstones(&mut body, &msg.tombstones);
+            let mut fields = msg.fields.clone();
+            fields.sort_by_key(|f| f.ordinal);
+            for field in &fields {
+                let mut f_ann = String::new();
+                emit_annotations(&mut f_ann, &field.annotations);
+                let type_s = type_str(&field.resolved_type, registry);
+                let mut enc_buf = String::new();
+                emit_encoding(&mut enc_buf, &field.encoding);
+                let mut field_str =
+                    format!("{} @{} : {}", field.name.as_str(), field.ordinal, type_s);
+                if !enc_buf.is_empty() {
+                    field_str.push(' ');
+                    field_str.push_str(enc_buf.trim_end());
+                }
+                if !f_ann.is_empty() {
+                    field_str = format!("{} {}", f_ann.trim_end(), field_str);
+                }
+                body.push_str(&field_str);
+                body.push(' ');
+            }
+            let body_trimmed = body.trim_end();
+            if body_trimmed.is_empty() {
+                out.push('}');
+            } else {
+                out.push(' ');
+                out.push_str(body_trimmed);
+                out.push_str(" }");
+            }
+        }
+        TypeDef::Enum(enm) => {
+            let mut ann_buf = String::new();
+            emit_annotations(&mut ann_buf, &enm.annotations);
+            if !ann_buf.is_empty() {
+                out.push_str(ann_buf.trim_end());
+                out.push(' ');
+            }
+            out.push_str("enum ");
+            out.push_str(enm.name.as_str());
+            out.push_str(" {");
+            let mut body = String::new();
+            emit_tombstones(&mut body, &enm.tombstones);
+            let mut variants = enm.variants.clone();
+            variants.sort_by_key(|v| v.ordinal);
+            for v in &variants {
+                let mut v_ann = String::new();
+                emit_annotations(&mut v_ann, &v.annotations);
+                if !v_ann.is_empty() {
+                    body.push_str(v_ann.trim_end());
+                    body.push(' ');
+                }
+                body.push_str(&format!("{} = {} ", v.name.as_str(), v.ordinal));
+            }
+            let body_trimmed = body.trim_end();
+            if body_trimmed.is_empty() {
+                out.push('}');
+            } else {
+                out.push(' ');
+                out.push_str(body_trimmed);
+                out.push_str(" }");
+            }
+        }
+        TypeDef::Flags(flags) => {
+            let mut ann_buf = String::new();
+            emit_annotations(&mut ann_buf, &flags.annotations);
+            if !ann_buf.is_empty() {
+                out.push_str(ann_buf.trim_end());
+                out.push(' ');
+            }
+            out.push_str("flags ");
+            out.push_str(flags.name.as_str());
+            out.push_str(" {");
+            let mut body = String::new();
+            emit_tombstones(&mut body, &flags.tombstones);
+            let mut bits = flags.bits.clone();
+            bits.sort_by_key(|b| b.bit);
+            for b in &bits {
+                let mut b_ann = String::new();
+                emit_annotations(&mut b_ann, &b.annotations);
+                if !b_ann.is_empty() {
+                    body.push_str(b_ann.trim_end());
+                    body.push(' ');
+                }
+                body.push_str(&format!("{} = {} ", b.name.as_str(), b.bit));
+            }
+            let body_trimmed = body.trim_end();
+            if body_trimmed.is_empty() {
+                out.push('}');
+            } else {
+                out.push(' ');
+                out.push_str(body_trimmed);
+                out.push_str(" }");
+            }
+        }
+        TypeDef::Union(u) => {
+            let mut ann_buf = String::new();
+            emit_annotations(&mut ann_buf, &u.annotations);
+            if !ann_buf.is_empty() {
+                out.push_str(ann_buf.trim_end());
+                out.push(' ');
+            }
+            out.push_str("union ");
+            out.push_str(u.name.as_str());
+            out.push_str(" {");
+            let mut body = String::new();
+            emit_tombstones(&mut body, &u.tombstones);
+            let mut variants = u.variants.clone();
+            variants.sort_by_key(|v| v.ordinal);
+            for var in &variants {
+                let mut v_ann = String::new();
+                emit_annotations(&mut v_ann, &var.annotations);
+                if !v_ann.is_empty() {
+                    body.push_str(v_ann.trim_end());
+                    body.push(' ');
+                }
+                body.push_str(&format!("{} @{} {{", var.name.as_str(), var.ordinal));
+                let mut var_body = String::new();
+                emit_tombstones(&mut var_body, &var.tombstones);
+                let mut fields = var.fields.clone();
+                fields.sort_by_key(|f| f.ordinal);
+                for field in &fields {
+                    let type_s = type_str(&field.resolved_type, registry);
+                    let mut enc_buf = String::new();
+                    emit_encoding(&mut enc_buf, &field.encoding);
+                    let mut field_str =
+                        format!("{} @{} : {}", field.name.as_str(), field.ordinal, type_s);
+                    if !enc_buf.is_empty() {
+                        field_str.push(' ');
+                        field_str.push_str(enc_buf.trim_end());
+                    }
+                    var_body.push_str(&field_str);
+                    var_body.push(' ');
+                }
+                let var_body_trimmed = var_body.trim_end();
+                if var_body_trimmed.is_empty() {
+                    body.push('}');
+                } else {
+                    body.push(' ');
+                    body.push_str(var_body_trimmed);
+                    body.push_str(" }");
+                }
+                body.push(' ');
+            }
+            let body_trimmed = body.trim_end();
+            if body_trimmed.is_empty() {
+                out.push('}');
+            } else {
+                out.push(' ');
+                out.push_str(body_trimmed);
+                out.push_str(" }");
+            }
+        }
+        TypeDef::Newtype(nt) => {
+            let mut ann_buf = String::new();
+            emit_annotations(&mut ann_buf, &nt.annotations);
+            if !ann_buf.is_empty() {
+                out.push_str(ann_buf.trim_end());
+                out.push(' ');
+            }
+            let type_s = type_str(&nt.inner_type, registry);
+            out.push_str(&format!("newtype {} = {}", nt.name.as_str(), type_s));
+        }
+        TypeDef::Config(cfg) => {
+            let mut ann_buf = String::new();
+            emit_annotations(&mut ann_buf, &cfg.annotations);
+            if !ann_buf.is_empty() {
+                out.push_str(ann_buf.trim_end());
+                out.push(' ');
+            }
+            out.push_str("config ");
+            out.push_str(cfg.name.as_str());
+            out.push_str(" {");
+            let mut body = String::new();
+            for field in &cfg.fields {
+                let type_s = type_str(&field.resolved_type, registry);
+                body.push_str(&format!("{} : {} ", field.name.as_str(), type_s));
+            }
+            let body_trimmed = body.trim_end();
+            if body_trimmed.is_empty() {
+                out.push('}');
+            } else {
+                out.push(' ');
+                out.push_str(body_trimmed);
+                out.push_str(" }");
+            }
+        }
+        _ => {
+            debug_assert!(false, "unknown TypeDef variant in canonical form");
         }
     }
 }
@@ -264,6 +594,66 @@ mod tests {
                 &dummy_registry()
             ),
             "result<u32, string>"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Task 3: annotation + encoding tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn annotation_sorting() {
+        let result = crate::compile(
+            r#"
+            @version("2.0.0")
+            namespace test.anno
+            @since("1.0") @doc("hello") @deprecated(reason: "old") @revision(3)
+            @non_exhaustive
+            enum Foo { A @0 }
+        "#,
+        );
+        let compiled = result.compiled.unwrap();
+        let form = canonical_form(&compiled);
+        // Schema annotations: @version after namespace
+        assert!(
+            form.contains("namespace test.anno @version(\"2.0.0\")"),
+            "form was: {form}"
+        );
+        // Type annotations sorted: deprecated < doc < non_exhaustive < revision < since
+        assert!(
+            form.contains(
+                "@deprecated(reason: \"old\") @doc(\"hello\") @non_exhaustive @revision(3) @since(\"1.0\") enum Foo"
+            ),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn encoding_annotations() {
+        let result = crate::compile(
+            r#"
+            namespace test.enc
+            message Enc {
+                a @0 : u32 @varint
+                b @1 : i32 @zigzag
+                c @2 : u64 @delta
+                d @3 : u32 @delta @varint
+                e @4 : string @limit(100)
+            }
+        "#,
+        );
+        let compiled = result.compiled.unwrap();
+        let form = canonical_form(&compiled);
+        assert!(form.contains("a @0 : u32 @varint"), "form was: {form}");
+        assert!(form.contains("b @1 : i32 @zigzag"), "form was: {form}");
+        assert!(form.contains("c @2 : u64 @delta"), "form was: {form}");
+        assert!(
+            form.contains("d @3 : u32 @delta @varint"),
+            "form was: {form}"
+        );
+        assert!(
+            form.contains("e @4 : string @limit(100)"),
+            "form was: {form}"
         );
     }
 }
