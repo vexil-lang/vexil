@@ -1,0 +1,12 @@
+[package]
+name = "vexil-lang"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+
+[dependencies]
+smol_str = "0.3"
+thiserror = "2"
+
+[dev-dependencies]
+test-case = "3"
