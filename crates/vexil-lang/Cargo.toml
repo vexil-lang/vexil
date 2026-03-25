@@ -11,6 +11,7 @@ keywords = ["schema", "serialization", "codegen", "protocol", "compiler"]
 categories = ["compilers", "encoding", "development-tools"]
 
 [dependencies]
+blake3 = "1"
 smol_str = "0.3"
 thiserror = "2"
 

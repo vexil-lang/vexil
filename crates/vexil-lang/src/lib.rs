@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod canonical;
 pub mod diagnostic;
 pub mod ir;
 pub mod lexer;
