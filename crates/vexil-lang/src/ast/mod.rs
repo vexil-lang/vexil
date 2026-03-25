@@ -146,7 +146,13 @@ pub struct FlagsBit {
 pub struct UnionDecl {
     pub annotations: Vec<Annotation>,
     pub name: Spanned<SmolStr>,
-    pub body: Vec<Spanned<UnionVariant>>,
+    pub body: Vec<UnionBodyItem>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnionBodyItem {
+    Variant(Spanned<UnionVariant>),
+    Tombstone(Spanned<Tombstone>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

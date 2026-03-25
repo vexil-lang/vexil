@@ -1,13 +1,14 @@
 use crate::ast::{
-    Annotation, Decl, EnumBacking, EnumBodyItem, EnumDecl, EnumVariant, FlagsBit, FlagsBodyItem,
-    FlagsDecl, MessageBodyItem, MessageDecl, MessageField, Tombstone, TombstoneArg,
+    Annotation, ConfigDecl, ConfigField, Decl, EnumBacking, EnumBodyItem, EnumDecl, EnumVariant,
+    FlagsBit, FlagsBodyItem, FlagsDecl, MessageBodyItem, MessageDecl, MessageField, NewtypeDecl,
+    Tombstone, TombstoneArg, UnionBodyItem, UnionDecl, UnionVariant,
 };
 use crate::diagnostic::ErrorClass;
 use crate::lexer::token::TokenKind;
 use crate::span::{Span, Spanned};
 use smol_str::SmolStr;
 
-use super::expr::parse_type_expr;
+use super::expr::{parse_literal_value, parse_type_expr};
 use super::{parse_annotation_value, parse_annotations, Parser};
 
 // ---------------------------------------------------------------------------
@@ -38,36 +39,34 @@ pub(crate) fn parse_type_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) 
             let span = p.span_from(start);
             Spanned::new(Decl::Flags(fl), span)
         }
+        TokenKind::KwUnion => {
+            let un = parse_union_decl(annotations, p);
+            let span = p.span_from(start);
+            Spanned::new(Decl::Union(un), span)
+        }
+        TokenKind::KwNewtype => {
+            let nt = parse_newtype_decl(annotations, p);
+            let span = p.span_from(start);
+            Spanned::new(Decl::Newtype(nt), span)
+        }
+        TokenKind::KwConfig => {
+            let cfg = parse_config_decl(annotations, p);
+            let span = p.span_from(start);
+            Spanned::new(Decl::Config(cfg), span)
+        }
         _ => {
-            // Union, Newtype, Config — will be implemented in Task 9.
-            // For now, skip the declaration body.
-            p.advance(); // consume keyword
-            let name = parse_decl_name(p);
-
-            // Skip through braces
-            let mut brace_depth: u32 = 0;
-            while !p.at_eof() {
-                if p.at(&TokenKind::LBrace) {
-                    brace_depth += 1;
-                    p.advance();
-                } else if p.at(&TokenKind::RBrace) {
-                    brace_depth = brace_depth.saturating_sub(1);
-                    p.advance();
-                    if brace_depth == 0 {
-                        break;
-                    }
-                } else if brace_depth == 0 && super::is_at_decl_keyword(p) {
-                    break;
-                } else {
-                    p.advance();
-                }
-            }
-
+            // Unknown declaration keyword — skip to recover.
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected declaration keyword",
+            );
+            p.advance();
             let span = p.span_from(start);
             Spanned::new(
                 Decl::Message(MessageDecl {
                     annotations,
-                    name: name.unwrap_or_else(|| Spanned::new(SmolStr::new("__placeholder"), span)),
+                    name: Spanned::new(SmolStr::new("__error"), span),
                     body: Vec::new(),
                 }),
                 span,
@@ -586,6 +585,296 @@ fn parse_flags_bit(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> Option<S
             annotations,
             name,
             ordinal,
+        },
+        span,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Union
+// ---------------------------------------------------------------------------
+
+fn parse_union_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> UnionDecl {
+    p.advance(); // consume KwUnion
+    let name = parse_decl_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+    p.expect(&TokenKind::LBrace);
+
+    let mut body = Vec::new();
+    while !p.at(&TokenKind::RBrace) && !p.at_eof() {
+        // Check for tombstone
+        if is_at_tombstone(p) {
+            let ts = parse_tombstone(p);
+            body.push(UnionBodyItem::Tombstone(ts));
+            continue;
+        }
+
+        // Annotations + variant
+        let pre_annotations = parse_annotations(p);
+
+        if p.at(&TokenKind::RBrace) {
+            break;
+        }
+        if is_at_tombstone(p) {
+            let ts = parse_tombstone(p);
+            body.push(UnionBodyItem::Tombstone(ts));
+            continue;
+        }
+
+        match parse_union_variant(pre_annotations, p) {
+            Some(v) => body.push(UnionBodyItem::Variant(v)),
+            None => {
+                if !p.at(&TokenKind::RBrace) && !p.at_eof() {
+                    p.advance();
+                }
+            }
+        }
+    }
+
+    p.expect(&TokenKind::RBrace);
+
+    UnionDecl {
+        annotations,
+        name,
+        body,
+    }
+}
+
+fn parse_union_variant(
+    annotations: Vec<Annotation>,
+    p: &mut Parser<'_>,
+) -> Option<Spanned<UnionVariant>> {
+    let start = if let Some(first) = annotations.first() {
+        first.span.offset as usize
+    } else {
+        p.current_offset()
+    };
+
+    // Variant name: must be UpperIdent
+    let name = match p.peek_kind().clone() {
+        TokenKind::UpperIdent(s) => {
+            let tok = p.advance();
+            Spanned::new(s, tok.span)
+        }
+        TokenKind::Ident(s) => {
+            let tok = p.advance();
+            p.emit(
+                tok.span,
+                ErrorClass::UnionVariantNameInvalid,
+                format!("union variant `{s}` must start with an uppercase letter"),
+            );
+            Spanned::new(s, tok.span)
+        }
+        _ => {
+            return None;
+        }
+    };
+
+    // Ordinal
+    let ordinal = match p.peek_kind().clone() {
+        TokenKind::Ordinal(v) => {
+            let tok = p.advance();
+            Spanned::new(v, tok.span)
+        }
+        _ => {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected ordinal (e.g. @0) for union variant",
+            );
+            return None;
+        }
+    };
+
+    // Optional body: if LBrace follows, parse fields/tombstones like a message body
+    let fields = if p.at(&TokenKind::LBrace) {
+        p.advance(); // consume LBrace
+        let mut items = Vec::new();
+        while !p.at(&TokenKind::RBrace) && !p.at_eof() {
+            if is_at_tombstone(p) {
+                let ts = parse_tombstone(p);
+                items.push(MessageBodyItem::Tombstone(ts));
+                continue;
+            }
+
+            let field_annotations = parse_annotations(p);
+
+            if p.at(&TokenKind::RBrace) {
+                break;
+            }
+            if is_at_tombstone(p) {
+                let ts = parse_tombstone(p);
+                items.push(MessageBodyItem::Tombstone(ts));
+                continue;
+            }
+
+            match parse_field(field_annotations, p) {
+                Some(field) => items.push(MessageBodyItem::Field(field)),
+                None => {
+                    if !p.at(&TokenKind::RBrace) && !p.at_eof() {
+                        p.advance();
+                    }
+                }
+            }
+        }
+        p.expect(&TokenKind::RBrace);
+        items
+    } else {
+        Vec::new()
+    };
+
+    let span = p.span_from(start);
+    Some(Spanned::new(
+        UnionVariant {
+            annotations,
+            name,
+            ordinal,
+            fields,
+        },
+        span,
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Newtype
+// ---------------------------------------------------------------------------
+
+fn parse_newtype_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> NewtypeDecl {
+    p.advance(); // consume KwNewtype
+    let name = parse_decl_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    p.expect(&TokenKind::Colon);
+
+    let inner_type = parse_type_expr(p);
+
+    NewtypeDecl {
+        annotations,
+        name,
+        inner_type,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+fn parse_config_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ConfigDecl {
+    p.advance(); // consume KwConfig
+    let name = parse_decl_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+    p.expect(&TokenKind::LBrace);
+
+    let mut fields = Vec::new();
+    while !p.at(&TokenKind::RBrace) && !p.at_eof() {
+        let field_annotations = parse_annotations(p);
+
+        if p.at(&TokenKind::RBrace) {
+            break;
+        }
+
+        match parse_config_field(field_annotations, p) {
+            Some(field) => fields.push(field),
+            None => {
+                if !p.at(&TokenKind::RBrace) && !p.at_eof() {
+                    p.advance();
+                }
+            }
+        }
+    }
+
+    p.expect(&TokenKind::RBrace);
+
+    ConfigDecl {
+        annotations,
+        name,
+        fields,
+    }
+}
+
+fn parse_config_field(
+    annotations: Vec<Annotation>,
+    p: &mut Parser<'_>,
+) -> Option<Spanned<ConfigField>> {
+    let start = if let Some(first) = annotations.first() {
+        first.span.offset as usize
+    } else {
+        p.current_offset()
+    };
+
+    // Check for ordinal (invalid in config)
+    if let TokenKind::Ordinal(_) = p.peek_kind() {
+        p.emit(
+            p.peek().span,
+            ErrorClass::ConfigHasOrdinal,
+            "config fields must not have ordinals",
+        );
+        p.advance(); // skip the ordinal
+    }
+
+    // Field name
+    let name = parse_field_name(p)?;
+
+    // Validate: field name must start lowercase
+    let name_str = name.node.as_str();
+    if let Some(first_char) = name_str.chars().next() {
+        if first_char.is_ascii_uppercase() {
+            p.emit(
+                name.span,
+                ErrorClass::FieldNameInvalid,
+                format!("field name `{name_str}` must start with a lowercase letter"),
+            );
+        }
+    }
+
+    // Check for ordinal after name (invalid in config)
+    if let TokenKind::Ordinal(_) = p.peek_kind() {
+        p.emit(
+            p.peek().span,
+            ErrorClass::ConfigHasOrdinal,
+            "config fields must not have ordinals",
+        );
+        p.advance(); // skip the ordinal
+    }
+
+    // Colon
+    p.expect(&TokenKind::Colon);
+
+    // Type expression
+    let ty = parse_type_expr(p);
+
+    // Expect `=` for default value
+    if !p.at(&TokenKind::Eq) {
+        p.emit(
+            p.peek().span,
+            ErrorClass::ConfigMissingDefault,
+            format!("config field `{name_str}` must have a default value"),
+        );
+        let span = p.span_from(start);
+        return Some(Spanned::new(
+            ConfigField {
+                annotations,
+                name,
+                ty,
+                default_value: Spanned::new(
+                    crate::ast::DefaultValue::None,
+                    Span::empty(p.current_offset()),
+                ),
+            },
+            span,
+        ));
+    }
+    p.advance(); // consume Eq
+
+    let default_value = parse_literal_value(p);
+
+    let span = p.span_from(start);
+    Some(Spanned::new(
+        ConfigField {
+            annotations,
+            name,
+            ty,
+            default_value,
         },
         span,
     ))

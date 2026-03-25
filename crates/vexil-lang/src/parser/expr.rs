@@ -163,7 +163,6 @@ fn try_parse_sub_byte(s: &str) -> Option<TypeExpr> {
 // ---------------------------------------------------------------------------
 
 /// Parse a literal/default value for config fields.
-#[allow(dead_code)]
 pub(crate) fn parse_literal_value(p: &mut Parser<'_>) -> Spanned<DefaultValue> {
     let start = p.current_offset();
 

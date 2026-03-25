@@ -73,6 +73,21 @@ fn valid_008_flags() {
 }
 
 #[test]
+fn valid_009_union() {
+    parse_valid("009_union.vexil");
+}
+
+#[test]
+fn valid_010_newtype() {
+    parse_valid("010_newtype.vexil");
+}
+
+#[test]
+fn valid_011_config() {
+    parse_valid("011_config.vexil");
+}
+
+#[test]
 fn valid_012_imports() {
     parse_valid("012_imports.vexil");
 }
