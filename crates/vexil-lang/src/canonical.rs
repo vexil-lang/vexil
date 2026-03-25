@@ -796,4 +796,157 @@ mod tests {
         let form = canonical_form(&result.compiled.unwrap());
         assert!(form.contains("name @0 : string @removed(1, \"replaced by full_name\") @removed(2, \"no longer needed\", since: \"2.0\")"), "form was: {form}");
     }
+
+    // -----------------------------------------------------------------------
+    // Task 5: whitespace invariance + hash stability
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn whitespace_invariance() {
+        let compact = "namespace t.w\nmessage Foo { x @0 : u32 }";
+        let spacey =
+            "  namespace   t.w  \n\n# comment\n  message   Foo  {  \n  x   @0   :   u32  \n  }  \n";
+        let h1 = schema_hash(&crate::compile(compact).compiled.unwrap());
+        let h2 = schema_hash(&crate::compile(spacey).compiled.unwrap());
+        assert_eq!(h1, h2, "whitespace/comments should not affect hash");
+    }
+
+    #[test]
+    fn field_order_invariance() {
+        let ordered = "namespace t.o\nmessage M { a @0 : u32 b @1 : string }";
+        let reversed = "namespace t.o\nmessage M { b @1 : string a @0 : u32 }";
+        let h1 = schema_hash(&crate::compile(ordered).compiled.unwrap());
+        let h2 = schema_hash(&crate::compile(reversed).compiled.unwrap());
+        assert_eq!(h1, h2, "field ordering in source should not affect hash");
+    }
+
+    fn corpus_path(name: &str) -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("corpus/valid")
+            .join(format!("{name}.vexil"))
+    }
+
+    #[test]
+    fn corpus_hash_006_message() {
+        let src = std::fs::read_to_string(corpus_path("006_message")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                151, 188, 235, 23, 86, 107, 193, 218, 37, 24, 89, 98, 57, 108, 223, 96, 50, 123,
+                172, 206, 137, 123, 133, 183, 23, 250, 115, 189, 190, 229, 152, 1
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_007_enum() {
+        let src = std::fs::read_to_string(corpus_path("007_enum")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                138, 197, 37, 206, 10, 236, 186, 122, 241, 40, 175, 48, 188, 33, 67, 224, 250, 89,
+                27, 74, 98, 246, 215, 25, 144, 116, 233, 202, 132, 158, 52, 104
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_008_flags() {
+        let src = std::fs::read_to_string(corpus_path("008_flags")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                144, 166, 172, 6, 197, 254, 133, 114, 181, 46, 38, 139, 229, 239, 207, 217, 64,
+                152, 185, 41, 110, 171, 102, 229, 46, 76, 68, 150, 49, 130, 90, 163
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_009_union() {
+        let src = std::fs::read_to_string(corpus_path("009_union")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                47, 99, 143, 62, 23, 143, 80, 156, 143, 123, 251, 109, 56, 168, 86, 143, 110, 140,
+                201, 173, 227, 240, 165, 6, 154, 92, 157, 151, 151, 113, 167, 185
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_010_newtype() {
+        let src = std::fs::read_to_string(corpus_path("010_newtype")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                193, 84, 236, 76, 195, 197, 171, 37, 118, 187, 158, 139, 23, 234, 116, 209, 31,
+                129, 94, 68, 24, 8, 62, 62, 167, 233, 122, 197, 220, 13, 188, 23
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_011_config() {
+        let src = std::fs::read_to_string(corpus_path("011_config")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                184, 20, 231, 186, 60, 172, 191, 182, 164, 184, 226, 177, 56, 55, 239, 169, 103,
+                131, 129, 177, 111, 104, 58, 248, 192, 117, 48, 121, 43, 139, 124, 110
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_013_annotations() {
+        let src = std::fs::read_to_string(corpus_path("013_annotations")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                121, 17, 205, 68, 4, 109, 16, 122, 241, 241, 130, 155, 123, 114, 123, 54, 28, 116,
+                191, 8, 35, 183, 125, 236, 73, 24, 233, 212, 224, 179, 5, 103
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_016_recursive() {
+        let src = std::fs::read_to_string(corpus_path("016_recursive")).unwrap();
+        let result = crate::compile(&src);
+        let compiled = result.compiled.unwrap();
+        let hash = schema_hash(&compiled);
+        assert_eq!(
+            hash,
+            [
+                161, 37, 203, 80, 41, 62, 163, 37, 96, 115, 8, 66, 82, 197, 202, 240, 131, 245,
+                221, 247, 48, 24, 248, 81, 142, 84, 169, 253, 190, 235, 145, 174
+            ]
+        );
+    }
 }
