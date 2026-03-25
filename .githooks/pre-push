@@ -1,0 +1,15 @@
+#!/bin/sh
+# Run cargo fmt and abort the push if it changed any files.
+# This keeps CI's `cargo fmt --all -- --check` green.
+
+cargo fmt --all
+
+if ! git diff --quiet; then
+    echo ""
+    echo "  pre-push: cargo fmt modified files — push aborted."
+    echo "  Stage the changes and commit before pushing:"
+    echo ""
+    echo "    git add -u && git commit -m 'style: cargo fmt'"
+    echo ""
+    exit 1
+fi

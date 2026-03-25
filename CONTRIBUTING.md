@@ -33,7 +33,7 @@ By participating, you agree to uphold it.
 
 ### Prerequisites
 
-- Rust stable toolchain, 1.80 or later ([install via rustup](https://rustup.rs))
+- Rust 1.94 or later ([install via rustup](https://rustup.rs))
 - `cargo` (included with Rust)
 
 ### Build
@@ -41,6 +41,7 @@ By participating, you agree to uphold it.
 ```sh
 git clone https://github.com/vexil-lang/vexil
 cd vexil
+git config core.hooksPath .githooks   # enable the pre-push fmt hook
 cargo build --workspace
 ```
 
