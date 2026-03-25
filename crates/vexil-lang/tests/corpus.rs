@@ -249,3 +249,287 @@ fn invalid_055_namespace_before_version() {
         ErrorClass::VersionAfterNamespace,
     );
 }
+
+// =========================================================================
+// Semantic validation errors
+// =========================================================================
+
+// Namespace semantic
+#[test]
+fn invalid_004() {
+    parse_invalid(
+        "004_namespace_reserved.vexil",
+        ErrorClass::NamespaceReserved,
+    );
+}
+
+// Declaration semantic
+#[test]
+fn invalid_008() {
+    parse_invalid(
+        "008_decl_name_duplicate.vexil",
+        ErrorClass::DeclNameDuplicate,
+    );
+}
+
+// Ordinal semantic
+#[test]
+fn invalid_010() {
+    parse_invalid("010_duplicate_ordinal.vexil", ErrorClass::OrdinalDuplicate);
+}
+
+#[test]
+fn invalid_011() {
+    parse_invalid("011_ordinal_too_large.vexil", ErrorClass::OrdinalTooLarge);
+}
+
+#[test]
+fn invalid_012() {
+    parse_invalid(
+        "012_duplicate_field_name.vexil",
+        ErrorClass::FieldNameDuplicate,
+    );
+}
+
+#[test]
+fn invalid_041() {
+    parse_invalid(
+        "041_removed_reuses_ordinal.vexil",
+        ErrorClass::OrdinalReusedAfterRemoved,
+    );
+}
+
+// Enum/flags/union semantic
+#[test]
+fn invalid_033() {
+    parse_invalid(
+        "033_enum_duplicate_ordinal.vexil",
+        ErrorClass::EnumOrdinalDuplicate,
+    );
+}
+
+#[test]
+fn invalid_034() {
+    parse_invalid(
+        "034_enum_ordinal_overflow.vexil",
+        ErrorClass::EnumOrdinalTooLarge,
+    );
+}
+
+#[test]
+fn invalid_035() {
+    parse_invalid(
+        "035_enum_backing_too_narrow.vexil",
+        ErrorClass::EnumBackingTooNarrow,
+    );
+}
+
+#[test]
+fn invalid_036() {
+    parse_invalid("036_flags_bit_too_high.vexil", ErrorClass::FlagsBitTooHigh);
+}
+
+#[test]
+fn invalid_037() {
+    parse_invalid(
+        "037_union_duplicate_ordinal.vexil",
+        ErrorClass::UnionOrdinalDuplicate,
+    );
+}
+
+#[test]
+fn invalid_038() {
+    parse_invalid(
+        "038_union_ordinal_overflow.vexil",
+        ErrorClass::UnionOrdinalTooLarge,
+    );
+}
+
+#[test]
+fn invalid_051() {
+    parse_invalid(
+        "051_enum_backing_invalid_type.vexil",
+        ErrorClass::EnumBackingInvalid,
+    );
+}
+
+// Annotation semantic
+#[test]
+fn invalid_022() {
+    parse_invalid(
+        "022_duplicate_annotation.vexil",
+        ErrorClass::DuplicateAnnotation,
+    );
+}
+
+#[test]
+fn invalid_056() {
+    parse_invalid("056_duplicate_version.vexil", ErrorClass::VersionDuplicate);
+}
+
+#[test]
+fn invalid_054() {
+    parse_invalid("054_limit_zero.vexil", ErrorClass::LimitZero);
+}
+
+#[test]
+fn invalid_045() {
+    parse_invalid(
+        "045_limit_exceeds_global.vexil",
+        ErrorClass::LimitExceedsGlobal,
+    );
+}
+
+#[test]
+fn invalid_050() {
+    parse_invalid(
+        "050_type_domain_bad_arg.vexil",
+        ErrorClass::TypeValueOverflow,
+    );
+}
+
+// Type-level errors
+#[test]
+fn invalid_046() {
+    parse_invalid("046_type_unknown.vexil", ErrorClass::UnknownType);
+}
+
+#[test]
+fn invalid_013() {
+    parse_invalid(
+        "013_field_references_config.vexil",
+        ErrorClass::ConfigTypeAsField,
+    );
+}
+
+#[test]
+fn invalid_014() {
+    parse_invalid(
+        "014_newtype_over_newtype.vexil",
+        ErrorClass::NewtypeOverNewtype,
+    );
+}
+
+#[test]
+fn invalid_015() {
+    parse_invalid(
+        "015_newtype_over_config.vexil",
+        ErrorClass::NewtypeOverConfig,
+    );
+}
+
+#[test]
+fn invalid_029() {
+    parse_invalid("029_map_invalid_key.vexil", ErrorClass::InvalidMapKey);
+}
+
+#[test]
+fn invalid_030() {
+    parse_invalid("030_map_void_key.vexil", ErrorClass::InvalidMapKey);
+}
+
+#[test]
+fn invalid_031() {
+    parse_invalid("031_map_message_key.vexil", ErrorClass::InvalidMapKey);
+}
+
+#[test]
+fn invalid_032() {
+    parse_invalid("032_map_optional_key.vexil", ErrorClass::InvalidMapKey);
+}
+
+#[test]
+fn invalid_018() {
+    parse_invalid("018_config_map_type.vexil", ErrorClass::ConfigInvalidType);
+}
+
+#[test]
+fn invalid_019() {
+    parse_invalid(
+        "019_config_result_type.vexil",
+        ErrorClass::ConfigInvalidType,
+    );
+}
+
+// Annotation-target errors
+#[test]
+fn invalid_043() {
+    parse_invalid(
+        "043_non_exhaustive_on_message.vexil",
+        ErrorClass::NonExhaustiveInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_025() {
+    parse_invalid(
+        "025_varint_on_subbyte.vexil",
+        ErrorClass::VarintInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_027() {
+    parse_invalid(
+        "027_varint_on_signed.vexil",
+        ErrorClass::VarintInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_053() {
+    parse_invalid("053_varint_on_float.vexil", ErrorClass::VarintInvalidTarget);
+}
+
+#[test]
+fn invalid_026() {
+    parse_invalid(
+        "026_zigzag_on_unsigned.vexil",
+        ErrorClass::ZigzagInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_052() {
+    parse_invalid(
+        "052_zigzag_on_subbyte.vexil",
+        ErrorClass::ZigzagInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_028() {
+    parse_invalid(
+        "028_varint_zigzag_combined.vexil",
+        ErrorClass::VarintZigzagCombined,
+    );
+}
+
+#[test]
+fn invalid_049() {
+    parse_invalid("049_delta_on_string.vexil", ErrorClass::DeltaInvalidTarget);
+}
+
+#[test]
+fn invalid_044() {
+    parse_invalid(
+        "044_limit_on_invalid_type.vexil",
+        ErrorClass::LimitInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_048() {
+    parse_invalid(
+        "048_deprecated_missing_reason.vexil",
+        ErrorClass::DeprecatedMissingReason,
+    );
+}
+
+#[test]
+fn invalid_020() {
+    parse_invalid(
+        "020_config_encoding_annotation.vexil",
+        ErrorClass::ConfigEncodingAnnotation,
+    );
+}

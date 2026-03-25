@@ -89,9 +89,7 @@ fn parse_decl_name(p: &mut Parser<'_>) -> Option<Spanned<SmolStr>> {
                 p.emit(
                     tok.span,
                     ErrorClass::DeclNameInvalid,
-                    format!(
-                        "declaration name `{s}` must match [A-Z][A-Za-z0-9]* (no underscores)"
-                    ),
+                    format!("declaration name `{s}` must match [A-Z][A-Za-z0-9]* (no underscores)"),
                 );
             }
             Some(Spanned::new(s, tok.span))
@@ -882,10 +880,15 @@ fn parse_config_field(
 
     let default_value = parse_literal_value(p);
 
+    // Post-default annotations (e.g. `= 0 @varint`)
+    let post_annotations = parse_annotations(p);
+    let mut all_annotations = annotations;
+    all_annotations.extend(post_annotations);
+
     let span = p.span_from(start);
     Some(Spanned::new(
         ConfigField {
-            annotations,
+            annotations: all_annotations,
             name,
             ty,
             default_value,
