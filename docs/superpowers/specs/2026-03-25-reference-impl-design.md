@@ -73,7 +73,7 @@ pub struct Token {
   and `@ ^` in version constraints)
 - **Keywords:** `KwNamespace`, `KwImport`, `KwFrom`, `KwAs`, `KwMessage`,
   `KwEnum`, `KwFlags`, `KwUnion`, `KwNewtype`, `KwConfig`, `KwOptional`,
-  `KwArray`, `KwMap`, `KwResult`, `KwTrue`, `KwFalse`, `KwNone`, `KwVoid`
+  `KwArray`, `KwMap`, `KwResult`, `KwTrue`, `KwFalse`, `KwNone`
 - **Special:** `Eof`, `Error`
 
 **Key rules:**
