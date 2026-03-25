@@ -12,9 +12,9 @@ cargo fmt --all
 if ! git diff --quiet; then
     echo ""
     echo "  pre-push: cargo fmt modified files — push aborted."
-    echo "  Stage the changes and commit before pushing:"
+    echo "  Amend the last commit with the formatting fixes:"
     echo ""
-    echo "    git add -u && git commit -m 'style: cargo fmt'"
+    echo "    git add -u && git commit --amend --no-edit"
     echo ""
     exit 1
 fi
