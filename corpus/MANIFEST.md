@@ -11,15 +11,15 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
 | 001_minimal.vexil | §2.1 | Minimum valid schema (namespace only, no declarations) |
-| 002_all_primitives.vexil | §3.1 | Every primitive type: bool, u8–u64, i8–i64, f32, f64, void |
-| 003_subbyte_types.vexil | §3.2 | Sub-byte unsigned (u1–u63) and signed (i2–i63) types |
+| 002_primitives.vexil | §3.1 | Every primitive type: bool, u8–u64, i8–i64, f32, f64, void |
+| 003_sub_byte.vexil | §3.2 | Sub-byte unsigned (u1–u63) and signed (i2–i63) types |
 | 004_semantic_types.vexil | §3.3 | All semantic types: string, bytes, rgb, uuid, timestamp, hash |
-| 005_parameterized_types.vexil | §3.4 | optional, array, map, result with nesting |
-| 006_messages.vexil | §4.1, §5.2 | Empty message, ordinal gaps, all annotation positions |
-| 007_enums.vexil | §4.2, §12.2 | Basic, @non_exhaustive, explicit backing type, @removed tombstone |
+| 005_parameterized.vexil | §3.4 | optional, array, map, result with nesting |
+| 006_message.vexil | §4.1, §5.2 | Empty message, ordinal gaps, all annotation positions |
+| 007_enum.vexil | §4.2, §12.2 | Basic, @non_exhaustive, explicit backing type, @removed tombstone |
 | 008_flags.vexil | §4.3 | Basic flags, high bit positions, tombstone |
-| 009_unions.vexil | §4.4 | Variant fields with ordinals, empty variants, tombstone |
-| 010_newtypes.vexil | §4.5 | Newtype wrapping primitive, semantic, and user-defined types |
+| 009_union.vexil | §4.4 | Variant fields with ordinals, empty variants, tombstone |
+| 010_newtype.vexil | §4.5 | Newtype wrapping primitive, semantic, and user-defined types |
 | 011_config.vexil | §4.6 | All default types, optional with none, array defaults |
 | 012_imports.vexil | §2.7 | All 6 import forms (wildcard, named, aliased, versioned, combined) |
 | 013_annotations.vexil | §5, §12 | All standard annotations: @version, @doc, @deprecated, @since, @varint, @zigzag, @delta, @type, @domain, @revision, @limit, @non_exhaustive |
