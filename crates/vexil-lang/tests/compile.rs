@@ -1,5 +1,5 @@
 use vexil_lang::diagnostic::Severity;
-use vexil_lang::ir::{Encoding, ResolvedType, TypeDef};
+use vexil_lang::ir::{Encoding, ResolvedType, TypeDef, WireSize};
 
 fn read_corpus(dir: &str, file: &str) -> String {
     let path = format!("{}/../../corpus/{dir}/{file}", env!("CARGO_MANIFEST_DIR"));
@@ -259,5 +259,115 @@ fn invalid_corpus_produces_errors() {
             "expected errors for invalid file {}, got none",
             path.display()
         );
+    }
+}
+
+/// Wire size for a message with u32 + bool = Fixed(33 bits).
+#[test]
+fn wire_size_fixed_message() {
+    let source = "namespace test.ws\nmessage M { a @0 : u32  b @1 : bool }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert_eq!(msg.wire_size, Some(WireSize::Fixed(33)));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Wire size for a message with string = Variable.
+#[test]
+fn wire_size_variable_string() {
+    let source = "namespace test.vs\nmessage M { s @0 : string }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert!(matches!(msg.wire_size, Some(WireSize::Variable { .. })));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Wire size for optional<u8> = Variable(min=1, max=9).
+#[test]
+fn wire_size_optional() {
+    let source = "namespace test.opt\nmessage M { v @0 : optional<u8> }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert!(matches!(
+            msg.wire_size,
+            Some(WireSize::Variable {
+                min_bits: 1,
+                max_bits: Some(9)
+            })
+        ));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// @varint on u32 makes it Variable(min=8, max=40).
+#[test]
+fn wire_size_varint() {
+    let source = "namespace test.vw\nmessage M { v @0 @varint : u32 }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert!(matches!(
+            msg.wire_size,
+            Some(WireSize::Variable {
+                min_bits: 8,
+                max_bits: Some(40)
+            })
+        ));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Enum wire size = Fixed(backing size), tested via message embedding.
+#[test]
+fn wire_size_enum() {
+    let source = "namespace test.ew2\nenum Dir { N @0 }\nmessage M { d @0 : Dir }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let msg_id = compiled.declarations[1];
+    if let TypeDef::Message(msg) = compiled.registry.get(msg_id).unwrap() {
+        assert_eq!(msg.wire_size, Some(WireSize::Fixed(32)));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Flags wire size = Fixed(64 bits).
+#[test]
+fn wire_size_flags() {
+    let source = "namespace test.fw\nflags F { R @0 }\nmessage M { f @0 : F }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let msg_id = compiled.declarations[1];
+    if let TypeDef::Message(msg) = compiled.registry.get(msg_id).unwrap() {
+        assert_eq!(msg.wire_size, Some(WireSize::Fixed(64)));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Newtype wire size = same as inner type.
+#[test]
+fn wire_size_newtype() {
+    let source = "namespace test.nw\nnewtype Id : u64\nmessage M { id @0 : Id }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let msg_id = compiled.declarations[1];
+    if let TypeDef::Message(msg) = compiled.registry.get(msg_id).unwrap() {
+        assert_eq!(msg.wire_size, Some(WireSize::Fixed(64)));
+    } else {
+        panic!("expected Message");
     }
 }
