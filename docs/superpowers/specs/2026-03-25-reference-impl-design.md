@@ -67,13 +67,13 @@ pub struct Token {
 - **Punctuation:** `LBrace`, `RBrace`, `LParen`, `RParen`, `LAngle`, `RAngle`,
   `Colon`, `Comma`, `Dot`, `Eq`, `Hash`
 - **Literals:** `Ident(SmolStr)`, `UpperIdent(SmolStr)`, `StringLit(String)`,
-  `DecInt(u64)`, `HexInt(u64)`
+  `DecInt(u64)`, `HexInt(u64)`, `FloatLit(f64)`
 - **Ordinal:** `Ordinal(u32)` — `@` followed by digits, lexed as single token
 - **Annotation sigil:** `At` — bare `@` followed by letter
 - **Keywords:** `KwNamespace`, `KwImport`, `KwFrom`, `KwAs`, `KwMessage`,
   `KwEnum`, `KwFlags`, `KwUnion`, `KwNewtype`, `KwConfig`, `KwOptional`,
   `KwArray`, `KwMap`, `KwResult`, `KwTrue`, `KwFalse`, `KwNone`, `KwVoid`
-- **Special:** `Newline`, `Eof`, `Error`
+- **Special:** `Eof`, `Error`
 
 **Key rules:**
 - `@123` → `Ordinal(123)`. `@name` → `At` + `Ident("name")`. Resolved at lex time.
@@ -81,7 +81,24 @@ pub struct Token {
   accepting `Kw*` tokens in field-name position.
 - String literals unescaped during lexing. Invalid escapes emit diagnostic + `Error` token.
 - Comments consumed and discarded. No comment tokens.
+- Whitespace (spaces, tabs, newlines) consumed and discarded. No whitespace tokens.
 - `SmolStr` for identifiers (small string optimization, cheap clone).
+
+**Type name tokenization:** Primitive type names (`bool`, `u8`, `u16`, `u32`,
+`u64`, `i8`, `i16`, `i32`, `i64`, `f32`, `f64`, `void`) and semantic type names
+(`string`, `bytes`, `rgb`, `uuid`, `timestamp`, `hash`) are emitted as `Ident`
+tokens, not keywords. The parser's `parse_type_expr()` matches on the string
+value to distinguish them from user-defined type names.
+
+Sub-byte types (`u3`, `i7`, etc.) are also emitted as `Ident` tokens. The parser
+recognizes the `u`/`i` prefix + digit suffix pattern and validates the bit width
+(u: 1–64 excluding 8/16/32/64; i: 2–64 excluding 8/16/32/64). This avoids
+polluting the keyword list with all valid bit widths.
+
+This means `string`, `hash`, `void`, etc. are `Ident` tokens everywhere. In
+field-name position they're accepted as field names. In type-expression position
+they're recognized as built-in types. The disambiguation is purely positional in
+the parser, not lexer-level.
 
 ## Parser
 
@@ -108,15 +125,15 @@ pub struct Parser<'src> {
 
 | PEG Rule | Method | Notes |
 |---|---|---|
-| `Schema` | `parse_schema()` | Entry point |
+| `Schema` | `parse_schema()` | Collects `annotation*` first, then expects `namespace-decl`. Annotations after namespace are a parse error (`VersionAfterNamespace`). |
 | `namespace-decl` | `parse_namespace()` | Expects `KwNamespace` |
-| `import-decl` | `parse_import()` | 6 forms via ordered choice |
+| `import-decl` | `parse_import()` | Left-factored: parse namespace path + optional version, then peek for `KwAs` → aliased, else → wildcard. Named form branches on leading `{`. |
 | `type-decl` | `parse_type_decl()` | Dispatches on declaration keyword |
 | `message-body` | `parse_message_body()` | Loop: try tombstone, then field |
 | `field` | `parse_field()` | Keyword-as-field-name here |
-| `type-expr` | `parse_type_expr()` | Primitives, parameterized, user types |
+| `type-expr` | `parse_type_expr()` | Matches `Ident` value against known type names, sub-byte pattern, or treats as user-defined |
 | `annotation` | `parse_annotation()` | `At` + `Ident` + optional args |
-| `tombstone` | `parse_tombstone()` | `@removed(...)` |
+| `tombstone` | `parse_tombstone()` | See tombstone section below |
 
 **Keyword-as-field-name:** `parse_field_name()` accepts `Ident` OR any `Kw*`
 token, converting to string. Only place keywords are treated as identifiers.
@@ -126,8 +143,32 @@ token, converting to string. Only place keywords are treated as identifiers.
 - At top level: skip to next recognizable keyword.
 - Parser never panics. Every error path emits diagnostic, returns partial AST node.
 
-**Import parsing:** Check for `{` (named) vs plain namespace, then look for
-`as` / `@` suffixes. Named + aliased combination rejected during parsing.
+**Import parsing — left-factored dispatch:**
+1. If next token is `LBrace` → named import path (`{ A, B } from ns`).
+2. Else parse `namespace-path`, then optional `@ version-constraint`.
+3. After namespace + optional version: peek for `KwAs` → aliased form. Else → wildcard.
+4. Named + aliased combination: if named path was taken AND `KwAs` follows, emit
+   `ImportNamedAliasedCombined` error.
+
+This avoids ordered-choice backtracking entirely. The parser commits after parsing
+the namespace path and uses a single-token peek (`KwAs`) to choose the suffix.
+
+**Tombstone parsing:**
+`@removed` is lexed as `At` + `Ident("removed")` — no special keyword token.
+The parser recognizes tombstones by checking: in a declaration body, if the current
+token is `At` and the next token is `Ident("removed")`, enter `parse_tombstone()`.
+Otherwise, `At` + other `Ident` is a field annotation, and the parser falls through
+to `parse_field()`.
+
+`parse_tombstone()` consumes: `At`, `Ident("removed")`, `LParen`, `DecInt` (the
+ordinal as a non-negative integer), `Comma`, then one or more named `tombstone-arg`s
+(key `:` value pairs), `RParen`. Arguments are mandatory — `reason` must be present
+(semantic check emits `RemovedMissingReason` if absent). `since` is optional.
+
+**Checkpoint/backtrack semantics:**
+`checkpoint()` saves `(pos, diagnostics.len())`. `backtrack(cp)` restores both —
+diagnostics emitted on a failed speculative branch are truncated. This prevents
+false diagnostics from branches that don't match.
 
 ## AST
 
@@ -137,19 +178,29 @@ Source-faithful. Every node carries a `Span`. No resolution or normalization.
 
 - `Schema` — annotations, namespace, imports, declarations
 - `Decl` — enum: `Message`, `Enum`, `Flags`, `Union`, `Newtype`, `Config`
-- `Field` — three annotation positions (pre-name, post-ordinal, post-type),
-  optional ordinal (None for config), optional default value (config only)
+- `MessageField` — three annotation positions (pre-name, post-ordinal, post-type),
+  ordinal (required), type expression
+- `ConfigField` — annotations, name, type expression, default value (required)
 - `TypeExpr` — enum: `Primitive`, `SubByte`, `Semantic`, `Named`,
   `Optional(Box)`, `Array(Box)`, `Map(Box, Box)`, `Result(Box, Box)`
+- `DefaultValue` — enum: `None`, `Bool(bool)`, `Int(i64)`, `UInt(u64)`,
+  `Float(f64)`, `Str(String)`, `Ident(SmolStr)`, `Array(Vec<Spanned<DefaultValue>>)`
 - `Annotation` — name + optional args
-- `Tombstone` — ordinal + named args (reason, since)
+- `Tombstone` — ordinal (`u32`, non-negative) + named args (reason, since)
 - `Spanned<T>` — generic wrapper: `{ node: T, span: Span }`
 
-Three annotation positions on `Field` match spec §5.2. AST preserves which
-position was used; IR won't care.
+Three annotation positions on `MessageField` match spec §5.2. AST preserves
+which position was used; IR won't care.
 
-Union variants are mini-messages (name, ordinal, fields). Config fields have
-`default_value` instead of `ordinal`.
+`MessageField` and `ConfigField` are separate types — not a unified `Field` with
+optional ordinal/default. This makes invalid states unrepresentable: a message
+field always has an ordinal, a config field always has a default.
+`parse_message_body()` produces `MessageField`, `parse_config_body()` produces
+`ConfigField`. Union variant fields reuse `MessageField`.
+
+`DefaultValue` covers all literal forms from the grammar's `literal-value` rule:
+`none` keyword, booleans, integers (signed via context), floats, strings,
+identifiers (for enum variant references), and array literals (`[v1, v2]`).
 
 ## Diagnostic Model
 
@@ -165,11 +216,37 @@ pub enum Severity { Error, Warning }
 ```
 
 **ErrorClass** — one variant per distinct rejection condition in the spec.
-Maps 1:1 to invalid corpus files. Stable enum for programmatic matching.
+Multiple corpus files may share an `ErrorClass` when they test the same rule with
+different inputs (e.g., `029_map_invalid_key` and `030_map_void_key` both map to
+`InvalidMapKey`). Stable enum for programmatic matching.
 
-Categories: lexer errors (3), structure errors (4), namespace errors (3),
-declaration errors (2), field errors (4), type errors (4), config errors (4),
-enum/flags/union errors (9), annotation errors (14), generic (2).
+**Parser-detectable vs semantic-only errors (Milestone B boundary):**
+
+The parser detects and emits errors that are inherent to syntax or structure:
+`MissingNamespace`, `DuplicateNamespace`, `ImportAfterDecl`,
+`ImportNamedAliasedCombined`, `NamespaceInvalidComponent`, `NamespaceEmpty`,
+`DeclNameInvalid`, `FieldNameInvalid`, `ConfigMissingDefault`, `ConfigHasOrdinal`,
+`InvalidEscape`, `UnterminatedString`, `InvalidCharacter`,
+`EnumVariantNameInvalid`, `UnionVariantNameInvalid`, `VersionAfterNamespace`,
+`VersionInvalidSemver`, `UnexpectedToken`, `UnexpectedEof`,
+`RemovedMissingReason` (named arg check in parser).
+
+The following require semantic analysis (a post-parse pass over the AST, still
+within Milestone B scope since they're needed for corpus correctness):
+`DeclNameDuplicate`, `OrdinalDuplicate`, `OrdinalTooLarge`,
+`OrdinalReusedAfterRemoved`, `FieldNameDuplicate`, `EnumOrdinalDuplicate`,
+`EnumOrdinalTooLarge`, `EnumBackingTooNarrow`, `EnumBackingInvalid`,
+`FlagsBitTooHigh`, `UnionOrdinalDuplicate`, `UnionOrdinalTooLarge`,
+`DuplicateAnnotation`, `VersionDuplicate`, `NamespaceReserved`,
+`LimitZero`, `LimitExceedsGlobal`, `TypeValueOverflow`.
+
+Type-level errors (`UnknownType`, `ConfigTypeAsField`, `NewtypeOverNewtype`,
+`NewtypeOverConfig`, `InvalidMapKey`, `ConfigInvalidType`,
+`NonExhaustiveInvalidTarget`, `LimitInvalidTarget`, `VarintInvalidTarget`,
+`ZigzagInvalidTarget`, `VarintZigzagCombined`, `DeltaInvalidTarget`,
+`DeprecatedMissingReason`, `ConfigEncodingAnnotation`) require type resolution.
+These are also within Milestone B scope — implemented as a validation pass over
+the parsed AST.
 
 **Separation:** `vexil-lang` returns `Vec<Diagnostic>`. `vexilc` converts to
 ariadne `Report`s. Library never touches ariadne — keeps it replaceable.
