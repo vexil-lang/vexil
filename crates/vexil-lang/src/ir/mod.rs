@@ -52,10 +52,16 @@ pub struct FieldDef {
 pub struct EnumDef {
     pub name: SmolStr,
     pub span: Span,
-    pub backing: EnumBacking,
+    /// Explicit backing type specified by the user (`: u8`, `: u16`, etc.).
+    /// `None` means no explicit backing — `wire_bits` is auto-computed by typeck.
+    pub backing: Option<EnumBacking>,
     pub variants: Vec<EnumVariantDef>,
     pub tombstones: Vec<TombstoneDef>,
     pub annotations: ResolvedAnnotations,
+    /// Computed by typeck: number of bits used on the wire.
+    /// For explicit backing this equals the backing type width;
+    /// for auto-sized enums this is the minimal bit width for the variant count.
+    pub wire_bits: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -73,6 +79,8 @@ pub struct FlagsDef {
     pub bits: Vec<FlagsBitDef>,
     pub tombstones: Vec<TombstoneDef>,
     pub annotations: ResolvedAnnotations,
+    /// Computed by typeck: number of bytes used on the wire (1, 2, 4, or 8).
+    pub wire_bytes: u8,
 }
 
 #[derive(Debug, Clone)]

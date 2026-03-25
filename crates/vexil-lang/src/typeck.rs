@@ -11,8 +11,30 @@ pub fn check(compiled: &mut CompiledSchema) -> Vec<Diagnostic> {
     // Check recursive types.
     check_recursion(compiled, &mut diags);
 
-    // Compute wire sizes for messages and unions.
     let decl_ids: Vec<TypeId> = compiled.declarations.clone();
+
+    // Pass 1: compute wire_bits for enums and wire_bytes for flags.
+    // These must be set before message/union wire sizes are computed so that
+    // named_type_wire_size can read the correct values for enum/flags fields.
+    for &id in &decl_ids {
+        match compiled.registry.get(id) {
+            Some(TypeDef::Enum(en)) => {
+                let wire_bits = compute_enum_wire_bits(en);
+                if let Some(TypeDef::Enum(en)) = compiled.registry.get_mut(id) {
+                    en.wire_bits = wire_bits;
+                }
+            }
+            Some(TypeDef::Flags(fl)) => {
+                let wire_bytes = compute_flags_wire_bytes(fl);
+                if let Some(TypeDef::Flags(fl)) = compiled.registry.get_mut(id) {
+                    fl.wire_bytes = wire_bytes;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Pass 2: compute wire sizes for messages and unions.
     for &id in &decl_ids {
         if let Some(def) = compiled.registry.get(id) {
             match def {
@@ -187,15 +209,14 @@ fn named_type_wire_size(
 
     match compiled.registry.get(id) {
         Some(TypeDef::Enum(en)) => {
-            let bits = match en.backing {
-                EnumBacking::U8 => 8,
-                EnumBacking::U16 => 16,
-                EnumBacking::U32 => 32,
-                EnumBacking::U64 => 64,
-            };
-            WireSize::Fixed(bits)
+            // wire_bits is computed in pass 1 before message wire sizes (pass 2),
+            // so it is always set by the time we reach here.
+            WireSize::Fixed(u64::from(en.wire_bits))
         }
-        Some(TypeDef::Flags(_)) => WireSize::Fixed(64),
+        Some(TypeDef::Flags(fl)) => {
+            // wire_bytes is computed in pass 1 before message wire sizes (pass 2).
+            WireSize::Fixed(u64::from(fl.wire_bytes) * 8)
+        }
         Some(TypeDef::Newtype(nt)) => {
             let terminal = nt.terminal_type.clone();
             compute_resolved_type_wire_size(&terminal, compiled, computing)
@@ -415,6 +436,47 @@ fn check_recursion(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>) {
                 walk_type_for_recursion(ty, true, &mut state);
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// wire_bits / wire_bytes helpers
+// ---------------------------------------------------------------------------
+
+fn compute_enum_wire_bits(en: &crate::ir::EnumDef) -> u8 {
+    if let Some(backing) = &en.backing {
+        return match backing {
+            EnumBacking::U8 => 8,
+            EnumBacking::U16 => 16,
+            EnumBacking::U32 => 32,
+            EnumBacking::U64 => 64,
+        };
+    }
+    let max_ordinal = en.variants.iter().map(|v| v.ordinal).max().unwrap_or(0);
+    let min_bits: u8 = if max_ordinal == 0 {
+        1
+    } else {
+        let n = u64::from(max_ordinal) + 1;
+        // Number of bits needed to represent n distinct values: ceil(log2(n))
+        // = bit_width(n - 1) = 64 - leading_zeros(n - 1), clamped to at least 1.
+        let leading = (n - 1).leading_zeros();
+        let bits = 64u8.saturating_sub(leading as u8);
+        std::cmp::max(bits, 1)
+    };
+    if en.annotations.non_exhaustive {
+        std::cmp::max(min_bits, 8)
+    } else {
+        std::cmp::max(min_bits, 1)
+    }
+}
+
+fn compute_flags_wire_bytes(fl: &crate::ir::FlagsDef) -> u8 {
+    let max_bit = fl.bits.iter().map(|b| b.bit).max().unwrap_or(0);
+    match max_bit {
+        0..=7 => 1,
+        8..=15 => 2,
+        16..=31 => 4,
+        _ => 8,
     }
 }
 

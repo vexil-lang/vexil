@@ -100,7 +100,7 @@ fn newtype_resolution() {
     }
 }
 
-/// Enum backing defaults to U32 when unspecified.
+/// Enum backing is None when unspecified (auto-sized by typeck).
 #[test]
 fn enum_default_backing() {
     let source = "namespace test.en\nenum Dir { North @0  South @1 }";
@@ -108,7 +108,7 @@ fn enum_default_backing() {
     let compiled = result.compiled.as_ref().unwrap();
     let id = compiled.declarations[0];
     if let TypeDef::Enum(en) = compiled.registry.get(id).unwrap() {
-        assert_eq!(en.backing, vexil_lang::ast::EnumBacking::U32);
+        assert_eq!(en.backing, None);
         assert_eq!(en.variants.len(), 2);
     } else {
         panic!("expected Enum");
@@ -358,10 +358,25 @@ fn wire_size_varint() {
     }
 }
 
-/// Enum wire size = Fixed(backing size), tested via message embedding.
+/// Enum wire size = Fixed(wire_bits), tested via message embedding.
+/// Auto-sized enum with 1 variant (ordinal 0) → 1 bit.
 #[test]
 fn wire_size_enum() {
     let source = "namespace test.ew2\nenum Dir { N @0 }\nmessage M { d @0 : Dir }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let msg_id = compiled.declarations[1];
+    if let TypeDef::Message(msg) = compiled.registry.get(msg_id).unwrap() {
+        assert_eq!(msg.wire_size, Some(WireSize::Fixed(1)));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Enum wire size with explicit backing = Fixed(backing bits).
+#[test]
+fn wire_size_enum_explicit_backing() {
+    let source = "namespace test.ew3\nenum Dir : u32 { N @0 }\nmessage M { d @0 : Dir }";
     let result = vexil_lang::compile(source);
     let compiled = result.compiled.as_ref().unwrap();
     let msg_id = compiled.declarations[1];
@@ -372,7 +387,7 @@ fn wire_size_enum() {
     }
 }
 
-/// Flags wire size = Fixed(64 bits).
+/// Flags wire size = Fixed(wire_bytes * 8). One bit in @0 → 1 byte → 8 bits.
 #[test]
 fn wire_size_flags() {
     let source = "namespace test.fw\nflags F { R @0 }\nmessage M { f @0 : F }";
@@ -380,7 +395,7 @@ fn wire_size_flags() {
     let compiled = result.compiled.as_ref().unwrap();
     let msg_id = compiled.declarations[1];
     if let TypeDef::Message(msg) = compiled.registry.get(msg_id).unwrap() {
-        assert_eq!(msg.wire_size, Some(WireSize::Fixed(64)));
+        assert_eq!(msg.wire_size, Some(WireSize::Fixed(8)));
     } else {
         panic!("expected Message");
     }
@@ -532,4 +547,86 @@ fn schema_annotations_preserved() {
     let result = vexil_lang::compile(source);
     let compiled = result.compiled.as_ref().unwrap();
     assert_eq!(compiled.annotations.version.as_deref(), Some("1.2.0"));
+}
+
+/// EnumDef.wire_bits: exhaustive enum with no explicit backing — minimal bits.
+/// Direction: 4 variants (0-3) → ceil(log2(4)) = 2 bits.
+#[test]
+fn enum_wire_bits_exhaustive_no_backing() {
+    let src = r#"
+        namespace test.wire
+        enum Direction { North @0  South @1  East @2  West @3 }
+    "#;
+    let result = vexil_lang::compile(src);
+    let compiled = result.compiled.unwrap();
+    let id = compiled.declarations[0];
+    match compiled.registry.get(id).unwrap() {
+        TypeDef::Enum(e) => assert_eq!(e.wire_bits, 2),
+        _ => panic!("expected enum"),
+    }
+}
+
+/// EnumDef.wire_bits: non-exhaustive with 4 variants → max(ceil(log2(4)), 8) = 8.
+#[test]
+fn enum_wire_bits_non_exhaustive() {
+    let src = r#"
+        namespace test.wire2
+        @non_exhaustive
+        enum Kind { A @0  B @1  C @2  D @3 }
+    "#;
+    let result = vexil_lang::compile(src);
+    let compiled = result.compiled.unwrap();
+    let id = compiled.declarations[0];
+    match compiled.registry.get(id).unwrap() {
+        TypeDef::Enum(e) => assert_eq!(e.wire_bits, 8),
+        _ => panic!("expected enum"),
+    }
+}
+
+/// EnumDef.wire_bits: explicit backing u16 → 16 bits.
+#[test]
+fn enum_wire_bits_explicit_backing() {
+    let src = r#"
+        namespace test.wire3
+        enum Status : u16 { Ok @0  Err @1 }
+    "#;
+    let result = vexil_lang::compile(src);
+    let compiled = result.compiled.unwrap();
+    let id = compiled.declarations[0];
+    match compiled.registry.get(id).unwrap() {
+        TypeDef::Enum(e) => assert_eq!(e.wire_bits, 16),
+        _ => panic!("expected enum"),
+    }
+}
+
+/// FlagsDef.wire_bytes: 4 bits all in 0-7 range → 1 byte.
+#[test]
+fn flags_wire_bytes_low_bits() {
+    let src = r#"
+        namespace test.wire4
+        flags Perms { Read @0  Write @1  Exec @2  Del @3 }
+    "#;
+    let result = vexil_lang::compile(src);
+    let compiled = result.compiled.unwrap();
+    let id = compiled.declarations[0];
+    match compiled.registry.get(id).unwrap() {
+        TypeDef::Flags(f) => assert_eq!(f.wire_bytes, 1),
+        _ => panic!("expected flags"),
+    }
+}
+
+/// FlagsDef.wire_bytes: bit @32 → 8 bytes.
+#[test]
+fn flags_wire_bytes_high_bits() {
+    let src = r#"
+        namespace test.wire5
+        flags Wide { Low @0  High @32 }
+    "#;
+    let result = vexil_lang::compile(src);
+    let compiled = result.compiled.unwrap();
+    let id = compiled.declarations[0];
+    match compiled.registry.get(id).unwrap() {
+        TypeDef::Flags(f) => assert_eq!(f.wire_bytes, 8),
+        _ => panic!("expected flags"),
+    }
 }

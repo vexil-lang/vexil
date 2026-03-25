@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use smol_str::SmolStr;
 
 use crate::ast::{
-    Annotation, AnnotationValue, Decl, EnumBacking, EnumBodyItem, FlagsBodyItem, ImportKind,
-    MessageBodyItem, MessageField, Schema, TypeExpr, UnionBodyItem,
+    Annotation, AnnotationValue, Decl, EnumBodyItem, FlagsBodyItem, ImportKind, MessageBodyItem,
+    MessageField, Schema, TypeExpr, UnionBodyItem,
 };
 use crate::diagnostic::{Diagnostic, ErrorClass};
 use crate::ir::{
@@ -173,11 +173,8 @@ fn lower_field(field: &MessageField, span: Span, ctx: &mut LowerCtx) -> FieldDef
 }
 
 fn lower_enum(en: &crate::ast::EnumDecl, span: Span, _ctx: &mut LowerCtx) -> EnumDef {
-    let backing = en
-        .backing
-        .as_ref()
-        .map(|b| b.node.clone())
-        .unwrap_or(EnumBacking::U32);
+    // Preserve the explicit backing type as-is; None means auto-sized.
+    let backing = en.backing.as_ref().map(|b| b.node.clone());
     let mut variants = Vec::new();
     let mut tombstones = Vec::new();
     for item in &en.body {
@@ -200,6 +197,7 @@ fn lower_enum(en: &crate::ast::EnumDecl, span: Span, _ctx: &mut LowerCtx) -> Enu
         variants,
         tombstones,
         annotations: resolve_annotations(&en.annotations),
+        wire_bits: 0, // filled in by typeck
     }
 }
 
@@ -225,6 +223,7 @@ fn lower_flags(flags: &crate::ast::FlagsDecl, span: Span, _ctx: &mut LowerCtx) -
         bits,
         tombstones,
         annotations: resolve_annotations(&flags.annotations),
+        wire_bytes: 0, // filled in by typeck
     }
 }
 
