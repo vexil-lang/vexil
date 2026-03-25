@@ -88,7 +88,11 @@ pub fn emit_union(
     // ── Enum body ────────────────────────────────────────────────────────────
     w.open_block(&format!("pub enum {name}"));
     for variant in &un.variants {
-        emit_tombstones(w, &format!("{}_{}", name, variant.name), &variant.tombstones);
+        emit_tombstones(
+            w,
+            &format!("{}_{}", name, variant.name),
+            &variant.tombstones,
+        );
         emit_field_annotations(w, &variant.annotations);
 
         let fields_str: String = variant
@@ -96,8 +100,12 @@ pub fn emit_union(
             .iter()
             .enumerate()
             .map(|(fi, field)| {
-                let field_rust_type =
-                    rust_type(&field.resolved_type, registry, needs_box, Some((type_id, fi)));
+                let field_rust_type = rust_type(
+                    &field.resolved_type,
+                    registry,
+                    needs_box,
+                    Some((type_id, fi)),
+                );
                 format!("{}: {}", field.name, field_rust_type)
             })
             .collect::<Vec<_>>()

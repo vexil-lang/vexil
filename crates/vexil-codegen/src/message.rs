@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 
 use vexil_lang::ast::{PrimitiveType, SemanticType};
-use vexil_lang::ir::{Encoding, FieldEncoding, MessageDef, ResolvedType, TypeDef, TypeId, TypeRegistry};
+use vexil_lang::ir::{
+    Encoding, FieldEncoding, MessageDef, ResolvedType, TypeDef, TypeId, TypeRegistry,
+};
 
 use crate::annotations::{emit_field_annotations, emit_tombstones, emit_type_annotations};
 use crate::emit::CodeWriter;
@@ -90,13 +92,16 @@ pub fn emit_write(
             return;
         }
         Encoding::Default => {} // fall through to type dispatch
-        _ => {} // non_exhaustive guard
+        _ => {}                 // non_exhaustive guard
     }
 
     // Emit limit check for default encoding on collections/strings
     if let Some(limit) = enc.limit {
         match ty {
-            ResolvedType::Array(_) | ResolvedType::Map(_, _) | ResolvedType::Semantic(SemanticType::String) | ResolvedType::Semantic(SemanticType::Bytes) => {
+            ResolvedType::Array(_)
+            | ResolvedType::Map(_, _)
+            | ResolvedType::Semantic(SemanticType::String)
+            | ResolvedType::Semantic(SemanticType::Bytes) => {
                 w.line(&format!(
                     "if ({access}).len() as u64 > {limit}_u64 {{ return Err(vexil_runtime::EncodeError::LimitExceeded {{ field: \"{field_name}\", limit: {limit}_u64, actual: ({access}).len() as u64 }}); }}"
                 ));
@@ -224,7 +229,9 @@ pub fn emit_read(
             }
             // Cast to the appropriate Rust type
             let rust_ty = read_cast_for_varint(ty);
-            w.line(&format!("let {var_name}: {rust_ty} = {var_name}_raw as {rust_ty};"));
+            w.line(&format!(
+                "let {var_name}: {rust_ty} = {var_name}_raw as {rust_ty};"
+            ));
             return;
         }
         Encoding::ZigZag => {
@@ -233,14 +240,18 @@ pub fn emit_read(
                 _ => 64,
             };
             // max_bytes: 10 for i64 zigzag
-            w.line(&format!("let {var_name}_raw = r.read_zigzag({type_bits}_u8, 10_u8)?;"));
+            w.line(&format!(
+                "let {var_name}_raw = r.read_zigzag({type_bits}_u8, 10_u8)?;"
+            ));
             if let Some(limit) = enc.limit {
                 w.line(&format!(
                     "if {var_name}_raw.unsigned_abs() > {limit}_u64 {{ return Err(vexil_runtime::DecodeError::LimitExceeded {{ field: \"{field_name}\", limit: {limit}_u64, actual: {var_name}_raw.unsigned_abs() }}); }}"
                 ));
             }
             let rust_ty = read_cast_for_zigzag(ty);
-            w.line(&format!("let {var_name}: {rust_ty} = {var_name}_raw as {rust_ty};"));
+            w.line(&format!(
+                "let {var_name}: {rust_ty} = {var_name}_raw as {rust_ty};"
+            ));
             return;
         }
         Encoding::Delta(_) => {
@@ -284,9 +295,7 @@ fn emit_read_type(
                     "let {var_name} = r.read_bits({bits}_u8)? as u8 as i8;"
                 ));
             } else {
-                w.line(&format!(
-                    "let {var_name} = r.read_bits({bits}_u8)? as u8;"
-                ));
+                w.line(&format!("let {var_name} = r.read_bits({bits}_u8)? as u8;"));
             }
         }
         ResolvedType::Semantic(s) => match s {
@@ -347,7 +356,14 @@ fn emit_read_type(
                 w.line("r.flush_to_byte_boundary();");
             }
             w.open_block(&format!("let {var_name} = if {var_name}_present"));
-            emit_read_type(w, &format!("{var_name}_inner"), inner, registry, field_name, None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_inner"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!("Some({var_name}_inner)"));
             w.close_block();
             w.open_block("else");
@@ -369,7 +385,14 @@ fn emit_read_type(
                 "let mut {var_name} = Vec::with_capacity({var_name}_len);"
             ));
             w.open_block(&format!("for _ in 0..{var_name}_len"));
-            emit_read_type(w, &format!("{var_name}_item"), inner, registry, field_name, None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_item"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!("{var_name}.push({var_name}_item);"));
             w.close_block();
         }
@@ -382,7 +405,9 @@ fn emit_read_type(
                     "if {var_name}_len as u64 > {lim}_u64 {{ return Err(vexil_runtime::DecodeError::LimitExceeded {{ field: \"{field_name}\", limit: {lim}_u64, actual: {var_name}_len as u64 }}); }}"
                 ));
             }
-            w.line(&format!("let mut {var_name} = std::collections::BTreeMap::new();"));
+            w.line(&format!(
+                "let mut {var_name} = std::collections::BTreeMap::new();"
+            ));
             w.open_block(&format!("for _ in 0..{var_name}_len"));
             emit_read_type(w, &format!("{var_name}_k"), k, registry, field_name, None);
             emit_read_type(w, &format!("{var_name}_v"), v, registry, field_name, None);
@@ -390,15 +415,20 @@ fn emit_read_type(
             w.close_block();
         }
         ResolvedType::Result(ok, err) => {
-            w.line(&format!(
-                "let {var_name}_is_ok = r.read_bool()?;"
-            ));
+            w.line(&format!("let {var_name}_is_ok = r.read_bool()?;"));
             w.open_block(&format!("let {var_name} = if {var_name}_is_ok"));
             emit_read_type(w, &format!("{var_name}_ok"), ok, registry, field_name, None);
             w.line(&format!("Ok({var_name}_ok)"));
             w.close_block();
             w.open_block("else");
-            emit_read_type(w, &format!("{var_name}_err"), err, registry, field_name, None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_err"),
+                err,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!("Err({var_name}_err)"));
             w.close_block();
             w.append(";");

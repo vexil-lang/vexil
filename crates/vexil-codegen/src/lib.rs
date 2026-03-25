@@ -47,19 +47,19 @@ pub fn generate(compiled: &CompiledSchema) -> Result<String, CodegenError> {
 
     // Step 8: Emit schema version constant if set.
     if let Some(ref version) = compiled.annotations.version {
-        w.line(&format!(
-            "pub const SCHEMA_VERSION: &str = \"{version}\";"
-        ));
+        w.line(&format!("pub const SCHEMA_VERSION: &str = \"{version}\";"));
     }
 
     // Step 9: For each declared type, emit the appropriate code.
     for &type_id in &compiled.declarations {
-        let typedef = compiled.registry.get(type_id).ok_or_else(|| {
-            CodegenError::UnresolvedType {
-                type_id,
-                referenced_by: "declarations".to_string(),
-            }
-        })?;
+        let typedef =
+            compiled
+                .registry
+                .get(type_id)
+                .ok_or_else(|| CodegenError::UnresolvedType {
+                    type_id,
+                    referenced_by: "declarations".to_string(),
+                })?;
 
         // Emit blank line + section separator comment.
         w.blank();
@@ -122,11 +122,19 @@ fn schema_uses_map(compiled: &CompiledSchema) -> bool {
 
 fn typedef_uses_map(typedef: &TypeDef) -> bool {
     match typedef {
-        TypeDef::Message(msg) => msg.fields.iter().any(|f| resolved_type_uses_map(&f.resolved_type)),
+        TypeDef::Message(msg) => msg
+            .fields
+            .iter()
+            .any(|f| resolved_type_uses_map(&f.resolved_type)),
         TypeDef::Union(un) => un.variants.iter().any(|v| {
-            v.fields.iter().any(|f| resolved_type_uses_map(&f.resolved_type))
+            v.fields
+                .iter()
+                .any(|f| resolved_type_uses_map(&f.resolved_type))
         }),
-        TypeDef::Config(cfg) => cfg.fields.iter().any(|f| resolved_type_uses_map(&f.resolved_type)),
+        TypeDef::Config(cfg) => cfg
+            .fields
+            .iter()
+            .any(|f| resolved_type_uses_map(&f.resolved_type)),
         TypeDef::Newtype(nt) => resolved_type_uses_map(&nt.inner_type),
         _ => false,
     }
@@ -137,9 +145,7 @@ fn resolved_type_uses_map(ty: &ResolvedType) -> bool {
         ResolvedType::Map(_, _) => true,
         ResolvedType::Optional(inner) => resolved_type_uses_map(inner),
         ResolvedType::Array(inner) => resolved_type_uses_map(inner),
-        ResolvedType::Result(ok, err) => {
-            resolved_type_uses_map(ok) || resolved_type_uses_map(err)
-        }
+        ResolvedType::Result(ok, err) => resolved_type_uses_map(ok) || resolved_type_uses_map(err),
         _ => false,
     }
 }

@@ -77,12 +77,7 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
 
     w.open_block(&format!("pub struct {name}Encoder"));
     for field in &delta_fields {
-        let rust_ty = rust_type(
-            &field.resolved_type,
-            registry,
-            &empty_needs_box,
-            None,
-        );
+        let rust_ty = rust_type(&field.resolved_type, registry, &empty_needs_box, None);
         w.line(&format!("prev_{}: {},", field.name, rust_ty));
     }
     w.close_block();
@@ -162,12 +157,7 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
 
     w.open_block(&format!("pub struct {name}Decoder"));
     for field in &delta_fields {
-        let rust_ty = rust_type(
-            &field.resolved_type,
-            registry,
-            &empty_needs_box,
-            None,
-        );
+        let rust_ty = rust_type(&field.resolved_type, registry, &empty_needs_box, None);
         w.line(&format!("prev_{}: {},", field.name, rust_ty));
     }
     w.close_block();
