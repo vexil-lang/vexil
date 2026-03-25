@@ -106,6 +106,8 @@ fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
             Decl::Config(d) => d.name.node.clone(),
         };
         // Register a concrete placeholder so get_mut will find it later.
+        // Safe: placeholder is overwritten in the lowering loop before any code reads it.
+        // All declarations are registered before any are lowered (forward pass).
         let placeholder = TypeDef::Message(MessageDef {
             name: name.clone(),
             span: decl_spanned.span,
@@ -266,6 +268,8 @@ fn lower_union(un: &crate::ast::UnionDecl, span: Span, ctx: &mut LowerCtx) -> Un
 
 fn lower_newtype(nt: &crate::ast::NewtypeDecl, span: Span, ctx: &mut LowerCtx) -> NewtypeDef {
     let inner_type = resolve_type_expr(&nt.inner_type.node, nt.inner_type.span, ctx);
+    // TODO(typeck): resolve terminal_type through newtype chains.
+    // Currently safe because validate.rs rejects newtype-over-newtype.
     let terminal_type = inner_type.clone();
     NewtypeDef {
         name: nt.name.node.clone(),

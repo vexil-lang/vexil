@@ -52,7 +52,13 @@ pub fn compile(source: &str) -> CompileResult {
             diagnostics: parse_result.diagnostics,
         };
     }
-    let schema = parse_result.schema.unwrap(); // safe: no errors means Some
+    let Some(schema) = parse_result.schema else {
+        return CompileResult {
+            schema: None,
+            compiled: None,
+            diagnostics: parse_result.diagnostics,
+        };
+    };
     let (mut compiled, lower_diags) = lower::lower(&schema);
     let mut diagnostics = parse_result.diagnostics;
     diagnostics.extend(lower_diags);

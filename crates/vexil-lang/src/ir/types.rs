@@ -93,6 +93,7 @@ impl TypeRegistry {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ResolvedType {
     Primitive(PrimitiveType),
     SubByte(SubByteType),
@@ -109,6 +110,7 @@ pub enum ResolvedType {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum Encoding {
     Default,
     Varint,
@@ -136,6 +138,7 @@ impl FieldEncoding {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum WireSize {
     Fixed(u64),
     Variable {

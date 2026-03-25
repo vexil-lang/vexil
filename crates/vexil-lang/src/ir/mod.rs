@@ -1,8 +1,8 @@
 pub mod types;
 
 pub use types::{
-    Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType, TombstoneDef, TypeId,
-    TypeRegistry, WireSize,
+    Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType, TombstoneDef, TypeId, TypeRegistry,
+    WireSize,
 };
 
 use crate::ast::{DefaultValue, EnumBacking};
@@ -18,6 +18,7 @@ pub struct CompiledSchema {
 }
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum TypeDef {
     Message(MessageDef),
     Enum(EnumDef),
