@@ -5,6 +5,7 @@ pub mod ir;
 pub mod lexer;
 pub mod lower;
 pub mod parser;
+pub mod resolve;
 pub mod span;
 pub mod typeck;
 pub mod validate;
