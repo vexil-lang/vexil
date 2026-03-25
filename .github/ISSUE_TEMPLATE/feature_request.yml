@@ -1,0 +1,71 @@
+name: Feature Request
+description: Propose a new feature or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before requesting a feature, please check if it's already been discussed in
+        [Discussions](https://github.com/vexil-lang/vexil/discussions) or in the
+        [language specification](https://github.com/vexil-lang/vexil/blob/master/spec/vexil-spec.md).
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project does this relate to?
+      options:
+        - Language (syntax / semantics)
+        - Type system / encoding
+        - Compiler library (vexil-lang)
+        - CLI (vexilc)
+        - Specification / grammar
+        - Corpus / tests
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What problem does this feature solve? What's the use case?
+      placeholder: I'm trying to express X in a schema, but currently I can't because...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature you'd like to see. Include example syntax if applicable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've tried?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Nice to have
+        - Important
+        - Blocking my use case
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Prior art in other schema languages, links, examples, etc.
+    validations:
+      required: false

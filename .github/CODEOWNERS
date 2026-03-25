@@ -1,0 +1,10 @@
+# .github/CODEOWNERS
+# Automatically requests review from the listed owner(s) when matching files change.
+# Last matching rule wins. See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @mamukfurkan
+
+/.github/   @mamukfurkan
+/spec/      @mamukfurkan
+/corpus/    @mamukfurkan
+/crates/    @mamukfurkan

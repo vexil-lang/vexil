@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a Question
+    url: https://github.com/vexil-lang/vexil/discussions
+    about: Use GitHub Discussions for questions and ideas
+  - name: Language Specification
+    url: https://github.com/vexil-lang/vexil/blob/master/spec/vexil-spec.md
+    about: Read the Vexil language specification before reporting spec-related issues
