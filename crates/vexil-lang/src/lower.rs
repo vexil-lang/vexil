@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use smol_str::SmolStr;
 
@@ -13,6 +13,12 @@ use crate::ir::{
     ResolvedType, TombstoneDef, TypeDef, TypeId, TypeRegistry, UnionDef, UnionVariantDef,
 };
 use crate::span::Span;
+
+/// Pre-compiled dependency information for multi-file compilation.
+pub struct DependencyContext {
+    /// Maps import namespace string (e.g. "dep.types") to its compiled schema.
+    pub schemas: HashMap<String, CompiledSchema>,
+}
 
 struct LowerCtx {
     registry: TypeRegistry,
@@ -36,9 +42,16 @@ impl LowerCtx {
 }
 
 pub fn lower(schema: &Schema) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
+    lower_with_deps(schema, None)
+}
+
+pub fn lower_with_deps(
+    schema: &Schema,
+    deps: Option<&DependencyContext>,
+) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
     let mut ctx = LowerCtx::new();
 
-    register_import_stubs(schema, &mut ctx);
+    register_import_types(schema, &mut ctx, deps);
     let decl_ids = register_declarations(schema, &mut ctx);
 
     for (decl_spanned, &id) in schema.declarations.iter().zip(decl_ids.iter()) {
@@ -68,29 +81,112 @@ pub fn lower(schema: &Schema) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
     (Some(compiled), ctx.diagnostics)
 }
 
-fn register_import_stubs(schema: &Schema, ctx: &mut LowerCtx) {
+fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&DependencyContext>) {
     for imp in &schema.imports {
-        match &imp.node.kind {
-            ImportKind::Wildcard => {
-                let ns_path: SmolStr = imp
-                    .node
-                    .path
-                    .iter()
-                    .map(|s| s.node.as_str())
-                    .collect::<Vec<_>>()
-                    .join(".")
-                    .into();
-                ctx.wildcard_imports.insert(ns_path);
-            }
-            ImportKind::Named { names } => {
-                for name in names {
-                    ctx.registry.register_stub(name.node.clone());
+        let ns_key: String = imp
+            .node
+            .path
+            .iter()
+            .map(|s| s.node.as_str())
+            .collect::<Vec<_>>()
+            .join(".");
+
+        // Emit warning for version constraints (deferred to Milestone G).
+        if let Some(ref ver) = imp.node.version {
+            ctx.diagnostics.push(Diagnostic::warning(
+                ver.span,
+                ErrorClass::UnexpectedToken,
+                format!(
+                    "version constraints are not yet enforced; ignoring `@ {}`",
+                    ver.node
+                ),
+            ));
+        }
+
+        match deps.and_then(|d| d.schemas.get(&ns_key)) {
+            Some(dep_compiled) => {
+                // Real dependency available — inject types by import kind.
+                match &imp.node.kind {
+                    ImportKind::Named { names } => {
+                        for name_spanned in names {
+                            let name = &name_spanned.node;
+                            let found = dep_compiled.declarations.iter().find(|&&id| {
+                                dep_compiled
+                                    .registry
+                                    .get(id)
+                                    .map(|d| crate::remap::type_def_name(d) == name.as_str())
+                                    .unwrap_or(false)
+                            });
+                            match found {
+                                Some(&id) => {
+                                    crate::remap::clone_types_into(
+                                        &dep_compiled.registry,
+                                        &[id],
+                                        &mut ctx.registry,
+                                    );
+                                }
+                                None => {
+                                    ctx.emit(
+                                        name_spanned.span,
+                                        ErrorClass::UnresolvedType,
+                                        format!(
+                                            "imported name `{name}` not found in namespace `{ns_key}`"
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    ImportKind::Wildcard => {
+                        crate::remap::clone_types_into(
+                            &dep_compiled.registry,
+                            &dep_compiled.declarations,
+                            &mut ctx.registry,
+                        );
+                        ctx.wildcard_imports.insert(SmolStr::new(&ns_key));
+                    }
+                    ImportKind::Aliased { alias } => {
+                        // Clone all types under qualified names: "Alias.TypeName".
+                        for &id in &dep_compiled.declarations {
+                            if let Some(def) = dep_compiled.registry.get(id) {
+                                let original_name = crate::remap::type_def_name(def);
+                                let qualified = format!("{}.{}", alias.node, original_name);
+                                let mut cloned = crate::remap::remap_type_def(def, &HashMap::new());
+                                set_type_name(&mut cloned, SmolStr::new(&qualified));
+                                ctx.registry.register(SmolStr::new(&qualified), cloned);
+                            }
+                        }
+                    }
                 }
             }
-            ImportKind::Aliased { alias } => {
-                ctx.registry.register_stub(alias.node.clone());
+            None => {
+                // No dependency context — fall back to stubs (existing behavior).
+                match &imp.node.kind {
+                    ImportKind::Named { names } => {
+                        for name_spanned in names {
+                            ctx.registry.register_stub(name_spanned.node.clone());
+                        }
+                    }
+                    ImportKind::Wildcard => {
+                        ctx.wildcard_imports.insert(SmolStr::new(&ns_key));
+                    }
+                    ImportKind::Aliased { alias } => {
+                        ctx.registry.register_stub(alias.node.clone());
+                    }
+                }
             }
         }
+    }
+}
+
+fn set_type_name(def: &mut TypeDef, name: SmolStr) {
+    match def {
+        TypeDef::Message(m) => m.name = name,
+        TypeDef::Enum(e) => e.name = name,
+        TypeDef::Flags(f) => f.name = name,
+        TypeDef::Union(u) => u.name = name,
+        TypeDef::Newtype(n) => n.name = name,
+        TypeDef::Config(c) => c.name = name,
     }
 }
 
@@ -498,5 +594,126 @@ fn lower_tombstone(tombstone: &crate::ast::Tombstone, span: Span) -> TombstoneDe
         ordinal: tombstone.ordinal.node,
         reason,
         since,
+    }
+}
+
+#[cfg(test)]
+mod dep_tests {
+    use super::*;
+
+    #[test]
+    fn lower_with_dependency_resolves_named_import() {
+        let dep_result = crate::compile("namespace dep.types\nmessage Foo { x @0 : u32 }");
+        let dep_compiled = dep_result.compiled.unwrap();
+
+        let root_source =
+            "namespace root\nimport { Foo } from dep.types\nmessage Bar { f @0 : Foo }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx
+            .schemas
+            .insert("dep.types".to_string(), dep_compiled);
+
+        let (compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        assert!(compiled.is_some(), "should compile: {:?}", diags);
+        let compiled = compiled.unwrap();
+        for &id in &compiled.declarations {
+            if let Some(TypeDef::Message(m)) = compiled.registry.get(id) {
+                if m.name == "Bar" {
+                    if let ResolvedType::Named(ref_id) = &m.fields[0].resolved_type {
+                        assert!(
+                            !compiled.registry.is_stub(*ref_id),
+                            "Foo should not be a stub"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn local_declaration_shadows_wildcard() {
+        let dep_result = crate::compile("namespace dep\nmessage Foo { x @0 : u32 }");
+        let dep_compiled = dep_result.compiled.unwrap();
+
+        let root_source =
+            "namespace root\nimport dep\nmessage Foo { y @0 : string }\nmessage Bar { f @0 : Foo }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx.schemas.insert("dep".to_string(), dep_compiled);
+
+        let (compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        assert!(compiled.is_some());
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+            .collect();
+        assert!(errors.is_empty(), "unexpected errors: {:?}", errors);
+    }
+
+    #[test]
+    fn named_import_nonexistent_type_errors() {
+        let dep_result = crate::compile("namespace dep\nmessage Foo { x @0 : u32 }");
+        let dep_compiled = dep_result.compiled.unwrap();
+
+        let root_source = "namespace root\nimport { Bar } from dep\nmessage Baz { x @0 : u32 }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx.schemas.insert("dep".to_string(), dep_compiled);
+
+        let (_compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        assert!(diags.iter().any(|d| d.message.contains("not found")));
+    }
+
+    #[test]
+    fn lower_without_deps_falls_back_to_stubs() {
+        let source = "namespace root\nimport { Foo } from dep.types\nmessage Bar { f @0 : Foo }";
+        let schema = crate::parse(source).schema.unwrap();
+
+        let (compiled, _diags) = lower_with_deps(&schema, None);
+        assert!(compiled.is_some());
+        let compiled = compiled.unwrap();
+        // Foo should be a stub when no deps provided.
+        if let Some(id) = compiled.registry.lookup("Foo") {
+            assert!(compiled.registry.is_stub(id), "Foo should be a stub");
+        }
+    }
+
+    #[test]
+    fn aliased_import_creates_qualified_names() {
+        let dep_result = crate::compile("namespace dep.types\nmessage Foo { x @0 : u32 }");
+        let dep_compiled = dep_result.compiled.unwrap();
+
+        let root_source = "namespace root\nimport dep.types as DT\nmessage Bar { f @0 : DT.Foo }";
+        let root_schema = crate::parse(root_source).schema.unwrap();
+
+        let mut dep_ctx = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dep_ctx
+            .schemas
+            .insert("dep.types".to_string(), dep_compiled);
+
+        let (compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| d.severity == crate::diagnostic::Severity::Error)
+            .collect();
+        assert!(errors.is_empty(), "unexpected errors: {:?}", errors);
+        assert!(compiled.is_some());
+        let compiled = compiled.unwrap();
+        assert!(
+            compiled.registry.lookup("DT.Foo").is_some(),
+            "DT.Foo should be registered"
+        );
     }
 }
