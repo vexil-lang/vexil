@@ -65,18 +65,23 @@ pub struct Token {
 
 **TokenKind** — flat enum:
 - **Punctuation:** `LBrace`, `RBrace`, `LParen`, `RParen`, `LAngle`, `RAngle`,
-  `Colon`, `Comma`, `Dot`, `Eq`, `Hash`
+  `Colon`, `Comma`, `Dot`, `Eq`, `Hash`, `Caret`, `Minus`
 - **Literals:** `Ident(SmolStr)`, `UpperIdent(SmolStr)`, `StringLit(String)`,
   `DecInt(u64)`, `HexInt(u64)`, `FloatLit(f64)`
 - **Ordinal:** `Ordinal(u32)` — `@` followed by digits, lexed as single token
-- **Annotation sigil:** `At` — bare `@` followed by letter
+- **Annotation sigil:** `At` — `@` not followed by a digit (covers both `@name`
+  and `@ ^` in version constraints)
 - **Keywords:** `KwNamespace`, `KwImport`, `KwFrom`, `KwAs`, `KwMessage`,
   `KwEnum`, `KwFlags`, `KwUnion`, `KwNewtype`, `KwConfig`, `KwOptional`,
   `KwArray`, `KwMap`, `KwResult`, `KwTrue`, `KwFalse`, `KwNone`, `KwVoid`
 - **Special:** `Eof`, `Error`
 
 **Key rules:**
-- `@123` → `Ordinal(123)`. `@name` → `At` + `Ident("name")`. Resolved at lex time.
+- `@123` → `Ordinal(123)`. `@name` → `At` + `Ident("name")`. `@ ^` → `At` + `Caret`.
+  Rule: `@` followed by digit → `Ordinal`. Otherwise → `At`. Resolved at lex time.
+- `-` is always lexed as `Minus`. Negative integer literals are not a lexer concern;
+  the parser handles sign context (e.g., config defaults may have negative values,
+  tombstone ordinals must not).
 - Keywords recognized during lexing. Parser handles keyword-as-field-name by
   accepting `Kw*` tokens in field-name position.
 - String literals unescaped during lexing. Invalid escapes emit diagnostic + `Error` token.
@@ -125,7 +130,7 @@ pub struct Parser<'src> {
 
 | PEG Rule | Method | Notes |
 |---|---|---|
-| `Schema` | `parse_schema()` | Collects `annotation*` first, then expects `namespace-decl`. Annotations after namespace are a parse error (`VersionAfterNamespace`). |
+| `Schema` | `parse_schema()` | Collects `annotation*` first, then expects `namespace-decl`. If `@version` appears after namespace, emit `VersionAfterNamespace`. Other annotations in post-namespace position emit `UnexpectedToken`. |
 | `namespace-decl` | `parse_namespace()` | Expects `KwNamespace` |
 | `import-decl` | `parse_import()` | Left-factored: parse namespace path + optional version, then peek for `KwAs` → aliased, else → wildcard. Named form branches on leading `{`. |
 | `type-decl` | `parse_type_decl()` | Dispatches on declaration keyword |
@@ -161,9 +166,17 @@ Otherwise, `At` + other `Ident` is a field annotation, and the parser falls thro
 to `parse_field()`.
 
 `parse_tombstone()` consumes: `At`, `Ident("removed")`, `LParen`, `DecInt` (the
-ordinal as a non-negative integer), `Comma`, then one or more named `tombstone-arg`s
-(key `:` value pairs), `RParen`. Arguments are mandatory — `reason` must be present
+ordinal — must be non-negative; a `Minus` token at this position is an
+`UnexpectedToken` error), `Comma`, then one or more named `tombstone-arg`s (key
+`:` value pairs), `RParen`. Arguments are mandatory — `reason` must be present
 (semantic check emits `RemovedMissingReason` if absent). `since` is optional.
+
+**Version-constraint parsing:**
+In `parse_import()`, after parsing the namespace path, if the next token is `At`:
+consume `At`, expect `Caret`, then parse a semver string as three `DecInt` tokens
+separated by `Dot` tokens (e.g., `^ 1 . 0 . 0`). This produces a `String` like
+`"^1.0.0"` stored in `ImportDecl.version`. Missing patch component (e.g., `^1.0`)
+emits `VersionInvalidSemver`.
 
 **Checkpoint/backtrack semantics:**
 `checkpoint()` saves `(pos, diagnostics.len())`. `backtrack(cp)` restores both —
@@ -185,7 +198,12 @@ Source-faithful. Every node carries a `Span`. No resolution or normalization.
   `Optional(Box)`, `Array(Box)`, `Map(Box, Box)`, `Result(Box, Box)`
 - `DefaultValue` — enum: `None`, `Bool(bool)`, `Int(i64)`, `UInt(u64)`,
   `Float(f64)`, `Str(String)`, `Ident(SmolStr)`, `Array(Vec<Spanned<DefaultValue>>)`
-- `Annotation` — name + optional args
+- `Annotation` — name + optional `Vec<AnnotationArg>`
+- `AnnotationArg` — optional key (`Ident`) + `AnnotationValue`
+- `AnnotationValue` — enum: `Int(u64)`, `Hex(u64)`, `Str(String)`,
+  `Bool(bool)`, `Ident(SmolStr)`, `UpperIdent(SmolStr)`. Distinct from
+  `DefaultValue` — no `Float`, `None`, or `Array` variants (grammar's
+  `annotation-value` excludes `float-lit`, `none-lit`, `array-literal`)
 - `Tombstone` — ordinal (`u32`, non-negative) + named args (reason, since)
 - `Spanned<T>` — generic wrapper: `{ node: T, span: Span }`
 
