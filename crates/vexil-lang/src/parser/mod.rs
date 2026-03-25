@@ -184,6 +184,24 @@ fn parse_schema(p: &mut Parser<'_>) -> Schema {
         None
     };
 
+    // Detect duplicate namespace.
+    if namespace.is_some() && p.at(&TokenKind::KwNamespace) {
+        p.emit(
+            p.peek().span,
+            ErrorClass::DuplicateNamespace,
+            "only one `namespace` declaration is allowed",
+        );
+        // Skip the duplicate namespace to recover.
+        p.advance(); // consume KwNamespace
+        while !p.at_eof()
+            && !p.at(&TokenKind::KwImport)
+            && !is_at_decl_keyword(p)
+            && !p.at(&TokenKind::At)
+        {
+            p.advance();
+        }
+    }
+
     // Imports.
     let mut imports: Vec<Spanned<ImportDecl>> = Vec::new();
     while p.at(&TokenKind::KwImport) {
@@ -208,6 +226,18 @@ fn parse_schema(p: &mut Parser<'_>) -> Schema {
         let _decl_start = p.current_offset();
         // Consume pre-annotations.
         let annots = parse_annotations(p);
+
+        // Detect @version after namespace (must appear before namespace).
+        for ann in &annots {
+            if ann.name.node == "version" {
+                p.emit(
+                    ann.span,
+                    ErrorClass::VersionAfterNamespace,
+                    "@version must appear before the namespace declaration",
+                );
+            }
+        }
+
         if is_at_decl_keyword(p) {
             let decl_spanned = decl::parse_type_decl(annots, p);
             declarations.push(decl_spanned);

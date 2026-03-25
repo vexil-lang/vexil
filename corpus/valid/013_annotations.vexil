@@ -1,8 +1,8 @@
 # §5, §12: All standard annotations in valid positions.
-namespace test.annotations
 
-# §12.1: Schema-level @version
+# §12.1: Schema-level @version (must appear before namespace)
 @version("1.2.0")
+namespace test.annotations
 
 # §12.2: Declaration-level @doc, @deprecated, @non_exhaustive
 @doc("A test message")

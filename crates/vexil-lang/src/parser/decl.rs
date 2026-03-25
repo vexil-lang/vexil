@@ -84,6 +84,16 @@ fn parse_decl_name(p: &mut Parser<'_>) -> Option<Spanned<SmolStr>> {
     match p.peek_kind().clone() {
         TokenKind::UpperIdent(s) => {
             let tok = p.advance();
+            // Validate: must match [A-Z][A-Za-z0-9]* — no underscores
+            if s.contains('_') {
+                p.emit(
+                    tok.span,
+                    ErrorClass::DeclNameInvalid,
+                    format!(
+                        "declaration name `{s}` must match [A-Z][A-Za-z0-9]* (no underscores)"
+                    ),
+                );
+            }
             Some(Spanned::new(s, tok.span))
         }
         TokenKind::Ident(s) => {
@@ -212,8 +222,12 @@ fn parse_field(
     // Type expression
     let ty = parse_type_expr(p);
 
-    // Post-type annotations
-    let post_type_annotations = parse_annotations(p);
+    // Post-type annotations (but not @removed — that's a tombstone)
+    let post_type_annotations = if is_at_tombstone(p) {
+        Vec::new()
+    } else {
+        parse_annotations(p)
+    };
 
     let span = p.span_from(start);
 
