@@ -80,6 +80,14 @@ impl TypeRegistry {
         self.types.is_empty()
     }
 
+    /// Fill a stub slot with a real type definition.
+    pub fn fill_stub(&mut self, id: TypeId, def: TypeDef) {
+        let idx = id.0 as usize;
+        if idx < self.types.len() {
+            self.types[idx] = Some(def);
+        }
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (TypeId, &TypeDef)> {
         self.types
             .iter()
