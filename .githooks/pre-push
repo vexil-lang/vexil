@@ -1,6 +1,11 @@
 #!/bin/sh
 # Run cargo fmt and abort the push if it changed any files.
 # This keeps CI's `cargo fmt --all -- --check` green.
+# Set VEXIL_NO_FMT=1 to skip (e.g. for automated agents).
+
+if [ "${VEXIL_NO_FMT}" = "1" ]; then
+    exit 0
+fi
 
 cargo fmt --all
 
