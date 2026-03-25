@@ -1,0 +1,2 @@
+namespace diamond.base
+message Id { value @0 : u64 }

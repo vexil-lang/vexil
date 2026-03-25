@@ -1,0 +1,2 @@
+namespace simple.types
+message Coord { x @0 : f32  y @1 : f32 }

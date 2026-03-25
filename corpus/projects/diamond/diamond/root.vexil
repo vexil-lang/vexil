@@ -1,0 +1,4 @@
+namespace diamond.root
+import { LeftNode } from diamond.left
+import { RightNode } from diamond.right
+message Graph { left @0 : LeftNode  right @1 : RightNode }
