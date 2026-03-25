@@ -21,6 +21,6 @@ pub enum CodegenError {
     },
 }
 
-pub fn generate(compiled: &CompiledSchema) -> Result<String, CodegenError> {
+pub fn generate(_compiled: &CompiledSchema) -> Result<String, CodegenError> {
     todo!("implemented in Task 17")
 }

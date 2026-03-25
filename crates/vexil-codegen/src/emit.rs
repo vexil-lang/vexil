@@ -4,6 +4,12 @@ pub struct CodeWriter {
     indent: usize,
 }
 
+impl Default for CodeWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CodeWriter {
     pub fn new() -> Self {
         Self {
