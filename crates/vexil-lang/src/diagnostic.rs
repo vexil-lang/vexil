@@ -4,43 +4,107 @@ use crate::span::Span;
 pub enum Severity {
     Error,
     Warning,
-    Note,
 }
 
-/// Category of error, for structured tooling.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
 pub enum ErrorClass {
-    Syntax,
-    Semantic,
-    Type,
-    Import,
+    // Lexer
+    InvalidCharacter,
+    InvalidEscape,
+    UnterminatedString,
+
+    // Structure
+    MissingNamespace,
+    DuplicateNamespace,
+    ImportAfterDecl,
+    ImportNamedAliasedCombined,
+
+    // Namespace
+    NamespaceInvalidComponent,
+    NamespaceReserved,
+    NamespaceEmpty,
+
+    // Declaration
+    DeclNameInvalid,
+    DeclNameDuplicate,
+
+    // Field
+    FieldNameInvalid,
+    FieldNameDuplicate,
+    OrdinalDuplicate,
+    OrdinalTooLarge,
+    OrdinalReusedAfterRemoved,
+
+    // Type
+    UnknownType,
+    ConfigTypeAsField,
+    NewtypeOverNewtype,
+    NewtypeOverConfig,
+    InvalidMapKey,
+
+    // Config
+    ConfigMissingDefault,
+    ConfigHasOrdinal,
+    ConfigInvalidType,
+    ConfigEncodingAnnotation,
+
+    // Enum/Flags/Union
+    EnumOrdinalDuplicate,
+    EnumOrdinalTooLarge,
+    EnumBackingTooNarrow,
+    EnumBackingInvalid,
+    EnumVariantNameInvalid,
+    FlagsBitTooHigh,
+    UnionOrdinalDuplicate,
+    UnionOrdinalTooLarge,
+    UnionVariantNameInvalid,
+
+    // Annotation
+    DuplicateAnnotation,
+    NonExhaustiveInvalidTarget,
+    DeprecatedMissingReason,
+    RemovedMissingReason,
+    LimitInvalidTarget,
+    LimitExceedsGlobal,
+    LimitZero,
+    VarintInvalidTarget,
+    ZigzagInvalidTarget,
+    VarintZigzagCombined,
+    DeltaInvalidTarget,
+    TypeValueOverflow,
+    VersionAfterNamespace,
+    VersionDuplicate,
+    VersionInvalidSemver,
+
+    // Generic
+    UnexpectedToken,
+    UnexpectedEof,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostic {
     pub severity: Severity,
+    pub span: Span,
     pub class: ErrorClass,
     pub message: String,
-    pub span: Span,
 }
 
 impl Diagnostic {
-    pub fn error(class: ErrorClass, message: impl Into<String>, span: Span) -> Self {
+    pub fn error(span: Span, class: ErrorClass, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Error,
+            span,
             class,
             message: message.into(),
-            span,
         }
     }
 
-    pub fn warning(class: ErrorClass, message: impl Into<String>, span: Span) -> Self {
+    pub fn warning(span: Span, class: ErrorClass, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Warning,
+            span,
             class,
             message: message.into(),
-            span,
         }
     }
 }
