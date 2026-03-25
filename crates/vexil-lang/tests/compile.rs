@@ -1,4 +1,4 @@
-use vexil_lang::diagnostic::Severity;
+use vexil_lang::diagnostic::{ErrorClass, Severity};
 use vexil_lang::ir::{Encoding, ResolvedType, TypeDef, WireSize};
 
 fn read_corpus(dir: &str, file: &str) -> String {
@@ -370,4 +370,138 @@ fn wire_size_newtype() {
     } else {
         panic!("expected Message");
     }
+}
+
+/// Valid recursion through optional — no error.
+#[test]
+fn recursion_through_optional_valid() {
+    let source = r#"
+namespace test.rec
+message Node {
+    value @0 : i32
+    next  @1 : optional<Node>
+}
+"#;
+    let result = vexil_lang::compile(source);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "should allow recursion through optional: {errors:#?}"
+    );
+}
+
+/// Valid recursion through array — no error.
+#[test]
+fn recursion_through_array_valid() {
+    let source = r#"
+namespace test.rec2
+message Tree {
+    value    @0 : i32
+    children @1 : array<Tree>
+}
+"#;
+    let result = vexil_lang::compile(source);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "should allow recursion through array: {errors:#?}"
+    );
+}
+
+/// Valid mutual recursion through union — no error (corpus 016).
+#[test]
+fn recursion_through_union_valid() {
+    let source = r#"
+namespace test.rec3
+message Expr {
+    kind @0 : ExprKind
+}
+union ExprKind {
+    Literal @0 { value @0 : i64 }
+    Binary  @1 { left @0 : Expr  op @1 : u8  right @2 : Expr }
+}
+"#;
+    let result = vexil_lang::compile(source);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "should allow mutual recursion through union: {errors:#?}"
+    );
+}
+
+/// Invalid direct self-recursion — error.
+#[test]
+fn recursion_direct_invalid() {
+    let source = r#"
+namespace test.rec4
+message Bad {
+    self_ref @0 : Bad
+}
+"#;
+    let result = vexil_lang::compile(source);
+    let has_recursive_error = result
+        .diagnostics
+        .iter()
+        .any(|d| d.class == ErrorClass::RecursiveTypeInfinite);
+    assert!(
+        has_recursive_error,
+        "should detect direct infinite recursion"
+    );
+}
+
+/// Invalid mutual direct recursion (A -> B -> A) — error.
+#[test]
+fn recursion_mutual_direct_invalid() {
+    let source = r#"
+namespace test.rec5
+message A { b @0 : B }
+message B { a @0 : A }
+"#;
+    let result = vexil_lang::compile(source);
+    let has_recursive_error = result
+        .diagnostics
+        .iter()
+        .any(|d| d.class == ErrorClass::RecursiveTypeInfinite);
+    assert!(
+        has_recursive_error,
+        "should detect mutual direct infinite recursion"
+    );
+}
+
+/// Newtype terminal type resolves to primitive.
+#[test]
+fn newtype_terminal_type() {
+    let source = "namespace test.ntterm\nnewtype Id : u64";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Newtype(nt) = compiled.registry.get(id).unwrap() {
+        assert_eq!(
+            nt.terminal_type,
+            ResolvedType::Primitive(vexil_lang::ast::PrimitiveType::U64)
+        );
+    } else {
+        panic!("expected Newtype");
+    }
+}
+
+/// Schema-level @version annotation is preserved.
+#[test]
+fn schema_annotations_preserved() {
+    let source = "@version(\"1.2.0\")\nnamespace test.sa\nmessage M { v @0 : u32 }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    assert_eq!(compiled.annotations.version.as_deref(), Some("1.2.0"));
 }
