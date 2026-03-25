@@ -1,0 +1,9 @@
+# §4.2: Enum ordinal values MUST be unique within the enum.
+# EXPECTED ERROR: duplicate enum ordinal
+
+namespace test.enum_dup_ord
+
+enum Status {
+    Ok  @0
+    Err @0
+}

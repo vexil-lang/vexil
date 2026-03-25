@@ -1,0 +1,9 @@
+# §12.2/§12.3: @deprecated — reason MUST be provided.
+# EXPECTED ERROR: @deprecated without reason
+
+namespace test.deprecated_no_reason
+
+@deprecated(since: "1.0.0")
+message Foo {
+    x @0 : u32
+}

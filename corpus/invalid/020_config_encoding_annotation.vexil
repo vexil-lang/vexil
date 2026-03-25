@@ -1,0 +1,8 @@
+# §4.6: Config fields MUST NOT carry encoding annotations.
+# EXPECTED ERROR: encoding annotation on config field
+
+namespace test.config_varint
+
+config Settings {
+    count : u32 = 0 @varint
+}

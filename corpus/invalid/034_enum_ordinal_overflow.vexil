@@ -1,0 +1,9 @@
+# §4.2: Enum ordinals MUST NOT exceed 65535.
+# EXPECTED ERROR: enum ordinal too large
+
+namespace test.enum_overflow
+
+enum Status {
+    Ok    @0
+    Fatal @65536
+}

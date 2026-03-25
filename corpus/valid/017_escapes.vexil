@@ -1,0 +1,13 @@
+# §5.1: All valid escape sequences in string literals.
+namespace test.escapes
+
+@doc("quote: \" backslash: \\ newline: \n tab: \t return: \r")
+message Escapes {
+    a @0 : string
+}
+
+# Empty string
+@doc("")
+message EmptyDoc {
+    b @0 : u8
+}

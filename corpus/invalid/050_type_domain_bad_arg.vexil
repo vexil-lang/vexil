@@ -1,0 +1,9 @@
+# §12.6: @type value MUST be in range 0x00–0xFF (u8).
+# EXPECTED ERROR: @type value exceeds u8 range
+
+namespace test.type_overflow
+
+@type(0x100)
+message Foo {
+    x @0 : u32
+}

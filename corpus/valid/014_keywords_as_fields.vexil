@@ -1,0 +1,26 @@
+# Grammar: field-name permits keywords; ident does not.
+# Keywords commonly used as field names must parse.
+namespace test.keywords_as_fields
+
+message KeywordFields {
+    flags     @0 : u8
+    type      @1 : u16
+    hash      @2 : bytes
+    string    @3 : u32
+    message   @4 : u64
+    enum      @5 : u8
+    union     @6 : u8
+    config    @7 : bool
+    import    @8 : u32
+    namespace @9 : string
+    array     @10 : u8
+    map       @11 : u8
+    result    @12 : u8
+    optional  @13 : u8
+    from      @14 : u8
+    as        @15 : u8
+    void      @16 : u8
+    none      @17 : u8
+    true      @18 : u8
+    false     @19 : u8
+}

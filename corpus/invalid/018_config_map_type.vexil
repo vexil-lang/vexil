@@ -1,0 +1,8 @@
+# §4.6: map<K,V> and result<T,E> are NOT valid config field types.
+# EXPECTED ERROR: map type in config field
+
+namespace test.config_map
+
+config Settings {
+    table : map<string, u32> = []
+}

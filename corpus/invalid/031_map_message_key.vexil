@@ -1,0 +1,12 @@
+# §3.4: Map K MUST NOT be a message type.
+# EXPECTED ERROR: message as map key
+
+namespace test.map_msg_key
+
+message Inner {
+    v @0 : u32
+}
+
+message Outer {
+    x @0 : map<Inner, string>
+}

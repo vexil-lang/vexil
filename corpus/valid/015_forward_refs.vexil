@@ -1,0 +1,17 @@
+# §3.5: Forward references within the same schema are permitted.
+namespace test.forward_refs
+
+message Container {
+    item @0 : Item
+    meta @1 : Metadata
+}
+
+message Item {
+    name  @0 : string
+    value @1 : u64
+}
+
+message Metadata {
+    created @0 : timestamp
+    author  @1 : string
+}

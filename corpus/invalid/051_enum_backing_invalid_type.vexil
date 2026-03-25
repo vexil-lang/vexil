@@ -1,0 +1,9 @@
+# §4.2: Valid backing types are u8, u16, u32, u64 only.
+# EXPECTED ERROR: invalid enum backing type (i32)
+
+namespace test.enum_bad_backing
+
+enum Status : i32 {
+    Ok @0
+    Err @1
+}

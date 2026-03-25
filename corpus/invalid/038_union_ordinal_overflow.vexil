@@ -1,0 +1,8 @@
+# §4.4: Variant ordinals MUST NOT exceed 65535.
+# EXPECTED ERROR: union variant ordinal too large
+
+namespace test.union_overflow
+
+union Shape {
+    Circle @65536 { r @0 : f32 }
+}

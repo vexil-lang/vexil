@@ -1,0 +1,4 @@
+# §2.2: User schemas MUST NOT declare namespaces beginning with vexil.
+# EXPECTED ERROR: reserved namespace
+
+namespace vexil.custom_types

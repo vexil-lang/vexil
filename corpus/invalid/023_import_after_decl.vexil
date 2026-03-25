@@ -1,0 +1,10 @@
+# §2.7/§2.1: Imports MUST be placed after namespace and before type declarations.
+# EXPECTED ERROR: import after type declaration
+
+namespace test.import_order
+
+message Foo {
+    x @0 : u32
+}
+
+import some.other.schema

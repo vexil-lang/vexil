@@ -1,0 +1,8 @@
+# §12.4: @varint valid on u8, u16, u32, u64 only.
+# EXPECTED ERROR: @varint on signed type
+
+namespace test.varint_signed
+
+message Foo {
+    x @0 : i32 @varint
+}

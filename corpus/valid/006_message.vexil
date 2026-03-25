@@ -1,0 +1,35 @@
+# §4.1: Messages — empty, ordinal gaps, all annotation positions.
+namespace test.message
+
+# Empty message is valid
+message Empty {}
+
+# Ordinal gaps are permitted (used for tombstoned fields)
+message WithGaps {
+    first  @0  : u32
+    third  @2  : u32
+    tenth  @10 : string
+}
+
+# Wire protocol annotations on message
+@type(0x01) @revision(1) @domain(Handshake)
+message Annotated {
+    version @0 : u8
+}
+
+# Annotations in all valid field positions
+message FieldAnnotations {
+    # Before field name
+    @doc("leading annotation")
+    a @0 : u32
+
+    # Between ordinal and colon
+    b @1 @varint : u64
+
+    # After type expression
+    c @2 : string @limit(1024)
+
+    # Multiple positions at once
+    @doc("documented delta field")
+    d @3 @delta : i32 @since("1.0.0")
+}

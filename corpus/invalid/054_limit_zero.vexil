@@ -1,0 +1,8 @@
+# §12.5: @limit(N) — N MUST be a positive integer.
+# EXPECTED ERROR: @limit with zero value
+
+namespace test.limit_zero
+
+message Foo {
+    items @0 : array<u8> @limit(0)
+}

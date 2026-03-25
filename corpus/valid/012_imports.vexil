@@ -1,0 +1,26 @@
+# §2.7: All import forms.
+namespace test.imports
+
+# Wildcard
+import test.newtypes
+
+# Named
+import { Shape, Color } from test.unions
+
+# Aliased
+import test.enums as E
+
+# Version-constrained
+import test.config @ ^1.0.0
+
+# Combined: named + version
+import { Permissions } from test.flags @ ^2.0.0
+
+# Combined: aliased + version
+import test.message @ ^1.0.0 as M
+
+message UseImports {
+    session @0 : SessionId
+    shape   @1 : Shape
+    kind    @2 : E.ClientKind
+}

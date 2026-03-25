@@ -1,0 +1,8 @@
+# §4.6: Config fields MUST NOT carry ordinals.
+# EXPECTED ERROR: ordinal on config field
+
+namespace test.config_ordinal
+
+config Settings {
+    max @0 : u32 = 100
+}

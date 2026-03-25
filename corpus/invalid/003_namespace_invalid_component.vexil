@@ -1,0 +1,4 @@
+# §2.2: Namespace components MUST match [a-z][a-z0-9_]*.
+# EXPECTED ERROR: invalid namespace component (uppercase)
+
+namespace test.BadComponent

@@ -1,0 +1,9 @@
+# §2.1: A schema MUST contain exactly one namespace declaration.
+# EXPECTED ERROR: duplicate namespace
+
+namespace test.first
+namespace test.second
+
+message Foo {
+    x @0 : u32
+}

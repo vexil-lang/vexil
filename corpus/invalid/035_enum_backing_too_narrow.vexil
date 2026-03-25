@@ -1,0 +1,9 @@
+# §4.2: Explicit backing type MUST be wide enough for all ordinal values.
+# EXPECTED ERROR: backing type too narrow (u8 cannot hold ordinal 256)
+
+namespace test.enum_narrow_backing
+
+enum Wide : u8 {
+    A @0
+    B @256
+}

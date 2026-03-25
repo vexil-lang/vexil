@@ -1,0 +1,11 @@
+# §5.3: An annotation MUST NOT appear more than once (except @doc).
+# EXPECTED ERROR: duplicate @non_exhaustive
+
+namespace test.dup_annotation
+
+@non_exhaustive
+@non_exhaustive
+enum Status {
+    Ok @0
+    Err @1
+}

@@ -1,0 +1,9 @@
+# §4.4: Variant ordinals MUST be unique within the union.
+# EXPECTED ERROR: duplicate union variant ordinal
+
+namespace test.union_dup_ord
+
+union Shape {
+    Circle @0 { r @0 : f32 }
+    Square @0 { s @0 : f32 }
+}

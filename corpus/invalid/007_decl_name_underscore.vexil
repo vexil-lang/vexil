@@ -1,0 +1,8 @@
+# §2.3: Declaration names MUST match [A-Z][A-Za-z0-9]* — no underscores.
+# EXPECTED ERROR: declaration name contains underscore
+
+namespace test.decl_underscore
+
+message My_Type {
+    x @0 : u32
+}

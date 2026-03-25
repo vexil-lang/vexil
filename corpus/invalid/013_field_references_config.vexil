@@ -1,0 +1,12 @@
+# §3.5: A field MUST NOT reference a config declaration.
+# EXPECTED ERROR: config type used as field type
+
+namespace test.config_ref
+
+config Settings {
+    max : u32 = 100
+}
+
+message Foo {
+    settings @0 : Settings
+}

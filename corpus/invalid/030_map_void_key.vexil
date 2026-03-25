@@ -1,0 +1,8 @@
+# §3.4: Map K MUST NOT be void.
+# EXPECTED ERROR: void as map key
+
+namespace test.map_void_key
+
+message Foo {
+    x @0 : map<void, string>
+}

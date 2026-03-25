@@ -1,0 +1,9 @@
+# §5.1: All other escape sequences MUST be rejected as a parse error.
+# EXPECTED ERROR: invalid escape sequence \a
+
+namespace test.bad_escape
+
+@doc("invalid: \a")
+message Foo {
+    x @0 : u8
+}

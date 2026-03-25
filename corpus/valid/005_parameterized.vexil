@@ -1,0 +1,26 @@
+# §3.4: Parameterized types — all forms and nesting.
+namespace test.parameterized
+
+message Basic {
+    a @0 : optional<u32>
+    b @1 : array<string>
+    c @2 : map<string, u64>
+    d @3 : result<u32, string>
+}
+
+message Nested {
+    # optional wrapping array
+    a @0 : optional<array<string>>
+    # array of optionals
+    b @1 : array<optional<u32>>
+    # map with parameterized value
+    c @2 : map<string, array<u8>>
+    # result with void ok
+    d @3 : result<void, string>
+    # result with void err
+    e @4 : result<string, void>
+    # result with both void
+    f @5 : result<void, void>
+    # deeply nested
+    g @6 : optional<result<array<string>, map<u32, string>>>
+}

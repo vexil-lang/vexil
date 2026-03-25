@@ -1,0 +1,8 @@
+# §2.3: Declaration names MUST match [A-Z][A-Za-z0-9]*.
+# EXPECTED ERROR: declaration name starts with lowercase
+
+namespace test.decl_name
+
+message badName {
+    x @0 : u32
+}

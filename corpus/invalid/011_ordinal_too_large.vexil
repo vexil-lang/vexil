@@ -1,0 +1,8 @@
+# §2.4: Ordinals MUST NOT exceed 65535.
+# EXPECTED ERROR: ordinal exceeds maximum
+
+namespace test.ordinal_overflow
+
+message Foo {
+    x @65536 : u32
+}

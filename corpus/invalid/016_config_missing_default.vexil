@@ -1,0 +1,8 @@
+# §4.6: Config fields MUST carry a default value.
+# EXPECTED ERROR: config field without default
+
+namespace test.config_no_default
+
+config Settings {
+    max : u32
+}

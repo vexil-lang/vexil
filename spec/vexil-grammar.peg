@@ -1,0 +1,455 @@
+# Vexil Language — Formal Grammar
+#
+# Notation: Parsing Expression Grammar (PEG)
+# Reference: vexil-spec-draft.md v0.1.0-draft-r2
+# License:   CC-BY 4.0 (this document) / Apache-2.0 (reference implementation)
+#
+# PEG conventions used:
+#   'x'         — literal string
+#   [abc]       — character class
+#   e*          — zero or more
+#   e+          — one or more
+#   e?          — zero or one
+#   e1 / e2     — ordered choice (try e1 first, then e2)
+#   &e          — positive lookahead (match without consuming)
+#   !e          — negative lookahead (succeed if e does NOT match)
+#   .           — any single character
+#   (e)         — grouping
+#   # ...       — comment (grammar-level, not part of the language)
+#
+# Whitespace and comments are handled explicitly via the `_` rule.
+# The grammar is complete and normative for syntax. Semantic rules
+# (type checking, ordinal uniqueness, import resolution) are defined
+# in the specification prose and enforced by later compiler passes.
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §1  Top-level: Schema
+# ═══════════════════════════════════════════════════════════════════════
+
+Schema
+    = _ schema-annotations namespace-decl import-decl* type-decl* _ !.
+
+schema-annotations
+    = annotation*
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §2  Namespace
+# ═══════════════════════════════════════════════════════════════════════
+
+namespace-decl
+    = KW_NAMESPACE __ namespace-path _
+
+namespace-path
+    = namespace-component ('.' namespace-component)*
+
+namespace-component
+    = [a-z] [a-z0-9_]*
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §3  Imports
+# ═══════════════════════════════════════════════════════════════════════
+
+import-decl
+    = import-named / import-aliased / import-wildcard
+
+# Named: import { Foo, Bar } from ns.path (@ ^1.0.0)?
+import-named
+    = KW_IMPORT __ '{' _ import-name-list _ '}' _ KW_FROM __ namespace-path version-constraint? _
+
+import-name-list
+    = upper-ident (_ ',' _ upper-ident)*
+
+# Aliased: import ns.path (@ ^1.0.0)? as Alias
+import-aliased
+    = KW_IMPORT __ namespace-path version-constraint? __ KW_AS __ upper-ident _
+
+# Wildcard: import ns.path (@ ^1.0.0)?
+import-wildcard
+    = KW_IMPORT __ namespace-path version-constraint? _
+
+version-constraint
+    = _ '@' _ '^' semver-string
+
+# SemVer: major.minor.patch (all three required)
+semver-string
+    = [0-9]+ '.' [0-9]+ '.' [0-9]+
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §4  Type declarations
+# ═══════════════════════════════════════════════════════════════════════
+
+type-decl
+    = message-decl
+    / enum-decl
+    / flags-decl
+    / union-decl
+    / newtype-decl
+    / config-decl
+
+
+# ── message ────────────────────────────────────────────────────────────
+
+message-decl
+    = annotation* KW_MESSAGE __ upper-ident _ '{' _ message-body _ '}' _
+
+message-body
+    = (message-body-item _)*
+
+message-body-item
+    = tombstone / field
+
+
+# ── enum ───────────────────────────────────────────────────────────────
+
+enum-decl
+    = annotation* KW_ENUM __ upper-ident enum-backing? _ '{' _ enum-body _ '}' _
+
+enum-backing
+    = _ ':' _ enum-backing-type
+
+enum-backing-type
+    = 'u64' !ident-continue / 'u32' !ident-continue
+    / 'u16' !ident-continue / 'u8'  !ident-continue
+
+enum-body
+    = (enum-body-item _)*
+
+enum-body-item
+    = tombstone / enum-variant
+
+enum-variant
+    = annotation* upper-ident _ ordinal
+
+
+# ── flags ──────────────────────────────────────────────────────────────
+
+flags-decl
+    = annotation* KW_FLAGS __ upper-ident _ '{' _ flags-body _ '}' _
+
+flags-body
+    = (flags-body-item _)*
+
+flags-body-item
+    = tombstone / flags-bit
+
+flags-bit
+    = annotation* upper-ident _ ordinal
+
+
+# ── union ──────────────────────────────────────────────────────────────
+
+union-decl
+    = annotation* KW_UNION __ upper-ident _ '{' _ union-body _ '}' _
+
+union-body
+    = (union-variant _)*
+
+union-variant
+    = annotation* upper-ident _ ordinal _ '{' _ variant-body _ '}'
+
+variant-body
+    = (variant-body-item _)*
+
+variant-body-item
+    = tombstone / field
+
+
+# ── newtype ────────────────────────────────────────────────────────────
+
+newtype-decl
+    = annotation* KW_NEWTYPE __ upper-ident _ ':' _ type-expr _
+
+
+# ── config ─────────────────────────────────────────────────────────────
+
+config-decl
+    = annotation* KW_CONFIG __ upper-ident _ '{' _ config-body _ '}' _
+
+config-body
+    = (config-field _)*
+
+config-field
+    = annotation* field-name _ ':' _ type-expr _ '=' _ literal-value
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §5  Fields
+# ═══════════════════════════════════════════════════════════════════════
+
+# Annotations may appear before the field name, after the ordinal (before
+# the colon), or after the type expression. The grammar collects them at
+# all three positions; the compiler merges them onto the field.
+#
+# This supports:
+#   @varint x @0 : u64                  (leading annotation)
+#   x @0 @varint : u64                  (between ordinal and colon)
+#   x @0 : u64 @varint                  (trailing annotation)
+#   @doc("X") x @0 @varint : u64 @delta (all positions)
+
+field
+    = field-annotations field-name _ ordinal field-annotations ':' _ type-expr field-annotations
+
+field-annotations
+    = (_ annotation)*
+
+# Field names use a relaxed identifier rule that permits keywords.
+# This is necessary because keywords like 'flags', 'type', 'hash', etc.
+# are commonly used as field names. Declaration keywords are unambiguous
+# in field position because field names are always followed by an ordinal
+# (@N) or a colon (:), neither of which can follow a declaration keyword.
+field-name
+    = [a-z] [a-z0-9_]* !ident-continue
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §6  Tombstones
+# ═══════════════════════════════════════════════════════════════════════
+
+# @removed is syntactically distinct from annotations: it appears as a
+# standalone statement in a declaration body, not attached to any field.
+# In message-body-item/enum-body-item/flags-body-item/variant-body-item,
+# tombstone is tried BEFORE field/variant to prevent @removed from being
+# consumed as a field-level annotation named "removed".
+
+tombstone
+    = '@removed' _ '(' _ nat-int _ ',' _ tombstone-args _ ')'
+
+tombstone-args
+    = tombstone-arg (_ ',' _ tombstone-arg)*
+
+tombstone-arg
+    = ident _ ':' _ annotation-value
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §7  Type expressions
+# ═══════════════════════════════════════════════════════════════════════
+
+type-expr
+    = parameterized-type / named-type
+
+parameterized-type
+    = optional-type / array-type / map-type / result-type
+
+optional-type
+    = KW_OPTIONAL _ '<' _ type-expr _ '>'
+
+array-type
+    = KW_ARRAY _ '<' _ type-expr _ '>'
+
+map-type
+    = KW_MAP _ '<' _ type-expr _ ',' _ type-expr _ '>'
+
+result-type
+    = KW_RESULT _ '<' _ type-expr _ ',' _ type-expr _ '>'
+
+named-type
+    = qualified-type / primitive-type / sub-byte-type / semantic-type / upper-ident
+
+# Qualified reference via alias: T.FooBar
+qualified-type
+    = upper-ident '.' upper-ident
+
+
+# ── Primitive types ────────────────────────────────────────────────────
+# Ordered longest-first within each prefix group to prevent prefix matching.
+
+primitive-type
+    = 'bool' !ident-continue / 'void' !ident-continue
+    / 'u64'  !ident-continue / 'u32'  !ident-continue
+    / 'u16'  !ident-continue / 'u8'   !ident-continue
+    / 'i64'  !ident-continue / 'i32'  !ident-continue
+    / 'i16'  !ident-continue / 'i8'   !ident-continue
+    / 'f64'  !ident-continue / 'f32'  !ident-continue
+
+
+# ── Sub-byte types (uN / iN where N is not a standard width) ──────────
+#
+# The parser accepts any uN/iN token where N is a digit sequence. Since
+# primitive-type is tried first in named-type, standard widths (u8, u16,
+# u32, u64, i8, i16, i32, i64) never reach these rules. Semantic
+# validation rejects invalid N values (N ∉ valid range).
+
+sub-byte-type
+    = sub-byte-unsigned / sub-byte-signed
+
+sub-byte-unsigned
+    = 'u' [0-9]+ !ident-continue
+
+sub-byte-signed
+    = 'i' [0-9]+ !ident-continue
+
+
+# ── Semantic types ─────────────────────────────────────────────────────
+
+semantic-type
+    = 'string'    !ident-continue
+    / 'bytes'     !ident-continue
+    / 'rgb'       !ident-continue
+    / 'uuid'      !ident-continue
+    / 'timestamp' !ident-continue
+    / 'hash'      !ident-continue
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §8  Annotations and ordinals
+# ═══════════════════════════════════════════════════════════════════════
+
+annotation
+    = '@' ident ( _ '(' _ annotation-args? _ ')' )?
+
+ordinal
+    = '@' [0-9]+ !ident-continue
+
+
+# ── Annotation arguments ──────────────────────────────────────────────
+
+annotation-args
+    = annotation-arg (_ ',' _ annotation-arg)*
+
+annotation-arg
+    = named-arg / positional-arg
+
+named-arg
+    = ident _ ':' _ annotation-value
+
+positional-arg
+    = annotation-value
+
+annotation-value
+    = hex-int / dec-int / string-lit / bool-lit / upper-ident / ident
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §9  Literal values (for config defaults and array literals)
+# ═══════════════════════════════════════════════════════════════════════
+
+literal-value
+    = none-lit / array-literal / hex-int / float-lit / dec-int
+    / string-lit / bool-lit / upper-ident / ident
+
+# none — the absent value for optional<T> config fields
+none-lit
+    = 'none' !ident-continue
+
+array-literal
+    = '[' _ array-elements? _ ']'
+
+array-elements
+    = literal-value (_ ',' _ literal-value)*
+
+float-lit
+    = '-'? [0-9]+ '.' [0-9]+ ( [eE] [+\-]? [0-9]+ )? !ident-continue
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# §10  Lexical elements
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── Identifiers ────────────────────────────────────────────────────────
+
+# ident is used for annotation names, named argument keys, and
+# annotation argument values. It rejects keywords via negative lookahead.
+# For field names (which may collide with keywords), use field-name instead.
+ident
+    = !keyword [a-z] [a-z0-9_]* !ident-continue
+
+upper-ident
+    = [A-Z] [A-Za-z0-9]* !ident-continue
+
+ident-continue
+    = [A-Za-z0-9_]
+
+
+# ── Keywords ───────────────────────────────────────────────────────────
+#
+# Keywords are reserved and MUST NOT be used as ident (annotation names,
+# annotation argument keys). They MAY be used as field-name (field names)
+# because field position is unambiguous.
+
+keyword
+    = ( 'namespace' / 'import' / 'from' / 'as' / 'none'
+      / 'message' / 'enum' / 'flags' / 'union' / 'newtype' / 'config'
+      / 'optional' / 'array' / 'map' / 'result'
+      / 'bool' / 'void' / 'string' / 'bytes' / 'rgb' / 'uuid' / 'timestamp' / 'hash'
+      / 'true' / 'false'
+      / 'u8' / 'u16' / 'u32' / 'u64'
+      / 'i8' / 'i16' / 'i32' / 'i64'
+      / 'f32' / 'f64'
+      ) !ident-continue
+
+# ── Keyword tokens ─────────────────────────────────────────────────────
+# Wrapped with !ident-continue to prevent prefix matching (e.g. 'message'
+# matching inside 'messageHandler').
+
+KW_NAMESPACE = 'namespace' !ident-continue
+KW_IMPORT    = 'import'    !ident-continue
+KW_FROM      = 'from'      !ident-continue
+KW_AS        = 'as'        !ident-continue
+KW_MESSAGE   = 'message'   !ident-continue
+KW_ENUM      = 'enum'      !ident-continue
+KW_FLAGS     = 'flags'     !ident-continue
+KW_UNION     = 'union'     !ident-continue
+KW_NEWTYPE   = 'newtype'   !ident-continue
+KW_CONFIG    = 'config'    !ident-continue
+KW_OPTIONAL  = 'optional'  !ident-continue
+KW_ARRAY     = 'array'     !ident-continue
+KW_MAP       = 'map'       !ident-continue
+KW_RESULT    = 'result'    !ident-continue
+
+
+# ── Integer literals ───────────────────────────────────────────────────
+
+# nat-int — non-negative integer (used for tombstone ordinals)
+nat-int
+    = [0-9]+ !ident-continue
+
+# dec-int — optionally negative integer (used for annotation args, config defaults)
+dec-int
+    = '-'? [0-9]+ !ident-continue
+
+hex-int
+    = '0x' [0-9a-fA-F]+ !ident-continue
+
+
+# ── String literals ────────────────────────────────────────────────────
+
+string-lit
+    = '"' string-char* '"'
+
+string-char
+    = escape-seq / [^"\\]
+
+# Exactly five escape sequences per spec §5.1: \" \\ \n \t \r
+escape-seq
+    = '\\' ["\\ntr]
+
+
+# ── Boolean literals ───────────────────────────────────────────────────
+
+bool-lit
+    = ('true' / 'false') !ident-continue
+
+
+# ── Whitespace and comments ────────────────────────────────────────────
+#
+# `_`  = optional whitespace (zero or more spaces, tabs, newlines, comments)
+# `__` = required whitespace (at least one space/tab/newline/comment)
+#
+# Comments begin with `#` and extend to end of line.
+
+_
+    = (ws / comment)*
+
+__
+    = (ws / comment)+
+
+ws
+    = [ \t\n\r]+
+
+comment
+    = '#' [^\n]* ('\n' / !.)

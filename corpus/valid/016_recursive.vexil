@@ -1,0 +1,22 @@
+# §3.5: Recursive types — declaration MAY transitively reference itself.
+namespace test.recursive
+
+message TreeNode {
+    value    @0 : i32
+    children @1 : array<TreeNode>
+}
+
+message LinkedList {
+    value @0 : string
+    next  @1 : optional<LinkedList>
+}
+
+# Mutual recursion
+message Expr {
+    kind @0 : ExprKind
+}
+
+union ExprKind {
+    Literal @0 { value @0 : i64 }
+    Binary  @1 { left @0 : Expr  op @1 : u8  right @2 : Expr }
+}

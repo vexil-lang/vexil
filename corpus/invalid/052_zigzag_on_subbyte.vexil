@@ -1,0 +1,8 @@
+# §12.4: @zigzag MUST NOT be applied to sub-byte types.
+# EXPECTED ERROR: @zigzag on sub-byte type
+
+namespace test.zigzag_subbyte
+
+message Foo {
+    x @0 : i4 @zigzag
+}

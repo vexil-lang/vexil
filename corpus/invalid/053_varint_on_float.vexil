@@ -1,0 +1,8 @@
+# §12.4: @varint valid on u8, u16, u32, u64 only — not float.
+# EXPECTED ERROR: @varint on float type
+
+namespace test.varint_float
+
+message Foo {
+    x @0 : f32 @varint
+}

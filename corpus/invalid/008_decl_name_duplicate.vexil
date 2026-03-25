@@ -1,0 +1,12 @@
+# §2.3: Declaration names MUST be unique within a schema.
+# EXPECTED ERROR: duplicate declaration name
+
+namespace test.dup_decl
+
+message Foo {
+    x @0 : u32
+}
+
+message Foo {
+    y @0 : string
+}

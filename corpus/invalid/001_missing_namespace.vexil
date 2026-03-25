@@ -1,0 +1,6 @@
+# §2.1: A schema MUST contain exactly one namespace declaration.
+# EXPECTED ERROR: missing namespace
+
+message Orphan {
+    x @0 : u32
+}

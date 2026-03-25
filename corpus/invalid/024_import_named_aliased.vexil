@@ -1,0 +1,6 @@
+# §2.7: Named and aliased forms MUST NOT be combined with each other.
+# EXPECTED ERROR: named + aliased import combined
+
+namespace test.import_conflict
+
+import { Foo } from some.schema as T

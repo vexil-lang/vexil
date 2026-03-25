@@ -1,0 +1,9 @@
+# §12.2: @non_exhaustive valid on enum and union only.
+# EXPECTED ERROR: @non_exhaustive on message
+
+namespace test.non_exhaustive_msg
+
+@non_exhaustive
+message Foo {
+    x @0 : u32
+}

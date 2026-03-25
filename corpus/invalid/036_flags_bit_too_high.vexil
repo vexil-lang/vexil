@@ -1,0 +1,9 @@
+# §4.3: Bit positions MUST NOT exceed 63.
+# EXPECTED ERROR: flags bit position > 63
+
+namespace test.flags_overflow
+
+flags Wide {
+    Low  @0
+    High @64
+}

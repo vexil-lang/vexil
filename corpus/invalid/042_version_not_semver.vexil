@@ -1,0 +1,7 @@
+# §6.3: Version constraint MUST be a valid SemVer 2.0.0 string (major.minor.patch).
+# §6.3: The shorthand ^1.0 (missing patch) MUST be rejected.
+# EXPECTED ERROR: invalid semver (missing patch component)
+
+namespace test.bad_version
+
+import some.schema @ ^1.0

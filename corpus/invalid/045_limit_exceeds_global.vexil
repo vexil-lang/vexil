@@ -1,0 +1,8 @@
+# §12.5: @limit(N) for array/map MUST NOT exceed 16,777,216.
+# EXPECTED ERROR: @limit exceeds global maximum
+
+namespace test.limit_overflow
+
+message Foo {
+    items @0 : array<u8> @limit(16777217)
+}

@@ -1,0 +1,9 @@
+# §2.4: Field names MUST be unique within their declaration.
+# EXPECTED ERROR: duplicate field name
+
+namespace test.dup_field
+
+message Foo {
+    x @0 : u32
+    x @1 : string
+}

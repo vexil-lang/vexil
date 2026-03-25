@@ -1,0 +1,54 @@
+# §5, §12: All standard annotations in valid positions.
+namespace test.annotations
+
+# §12.1: Schema-level @version
+@version("1.2.0")
+
+# §12.2: Declaration-level @doc, @deprecated, @non_exhaustive
+@doc("A test message")
+@deprecated(since: "1.1.0", reason: "Use NewMessage instead")
+message OldMessage {
+    value @0 : u32
+}
+
+# §12.3: Field lifecycle annotations
+message Lifecycle {
+    name @0 : string
+        @since("1.0.0")
+
+    @removed(1, since: "1.1.0", reason: "Replaced by name for i18n")
+
+    email @2 : string
+        @since("1.0.0")
+        @deprecated(since: "1.2.0", reason: "Collected server-side")
+}
+
+# §12.4: Encoding annotations
+message Encoded {
+    count  @0 : u32 @varint
+    delta  @1 : i32 @zigzag
+    offset @2 : u64 @delta
+    smooth @3 : u32 @delta @varint
+    signed @4 : i64 @delta @zigzag
+}
+
+# §12.5: @limit
+message Limited {
+    body    @0 : string @limit(4096)
+    tags    @1 : array<string> @limit(20)
+    headers @2 : map<string, string> @limit(64)
+    data    @3 : bytes @limit(1048576)
+}
+
+# §12.6: Wire protocol annotations
+@type(0xFF) @revision(3) @domain(Render)
+message RenderCommand {
+    op @0 : u8
+}
+
+# §12.2: Repeated @doc
+@doc("First paragraph.")
+@doc("Second paragraph.")
+message Documented {
+    value @0 : u32
+}

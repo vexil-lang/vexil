@@ -1,0 +1,10 @@
+# §2.4/§12.3: Ordinals MUST NOT be reused — @removed tombstones a field ordinal.
+# EXPECTED ERROR: ordinal 1 reused after @removed tombstone
+
+namespace test.removed_reuse
+
+message Foo {
+    x @0 : u32
+    @removed(1, reason: "gone")
+    y @1 : string
+}

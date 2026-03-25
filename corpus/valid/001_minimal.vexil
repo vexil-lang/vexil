@@ -1,0 +1,2 @@
+# §2.1: A schema containing no type declarations MUST be accepted as valid.
+namespace test.minimal

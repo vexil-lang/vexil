@@ -1,0 +1,8 @@
+# §4.6: map<K,V> and result<T,E> are NOT valid config field types.
+# EXPECTED ERROR: result type in config field
+
+namespace test.config_result
+
+config Settings {
+    outcome : result<u32, string> = 0
+}

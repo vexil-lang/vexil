@@ -1,0 +1,25 @@
+# §4.3: Flags — basic, tombstone, high bit positions.
+namespace test.flags
+
+flags Permissions {
+    Read    @0
+    Write   @1
+    Execute @2
+    Delete  @3
+}
+
+# High bit positions force wider wire width
+flags WideFlags {
+    Low  @0
+    Mid  @15
+    High @32
+}
+
+# Tombstone in flags
+flags FileMode {
+    Read    @0
+    Write   @1
+    @removed(2, reason: "Execute split into RunUser and RunGroup")
+    RunUser  @3
+    RunGroup @4
+}

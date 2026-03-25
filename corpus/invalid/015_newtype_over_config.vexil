@@ -1,0 +1,10 @@
+# §4.5: The inner type of newtype MUST NOT be a config type.
+# EXPECTED ERROR: newtype wrapping config
+
+namespace test.newtype_config
+
+config Settings {
+    max : u32 = 100
+}
+
+newtype Wrapped : Settings

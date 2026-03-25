@@ -1,0 +1,11 @@
+# §3.3: All semantic types.
+namespace test.semantic_types
+
+message AllSemantic {
+    a @0 : string
+    b @1 : bytes
+    c @2 : rgb
+    d @3 : uuid
+    e @4 : timestamp
+    f @5 : hash
+}

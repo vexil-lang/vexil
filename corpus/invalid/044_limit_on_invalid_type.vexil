@@ -1,0 +1,8 @@
+# §12.5: @limit valid on string, bytes, array<T>, map<K,V> only.
+# EXPECTED ERROR: @limit on u32
+
+namespace test.limit_bad_type
+
+message Foo {
+    x @0 : u32 @limit(100)
+}

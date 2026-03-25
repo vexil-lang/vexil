@@ -1,0 +1,4 @@
+# §2.2: A namespace MUST contain at least one component.
+# EXPECTED ERROR: empty namespace
+
+namespace

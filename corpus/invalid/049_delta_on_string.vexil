@@ -1,0 +1,8 @@
+# §12.4: @delta valid on u8–u64, i8–i64, uN, iN, f32, f64 only.
+# EXPECTED ERROR: @delta on string type
+
+namespace test.delta_string
+
+message Foo {
+    name @0 : string @delta
+}

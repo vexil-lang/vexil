@@ -1,0 +1,9 @@
+# §2.4: Ordinals MUST NOT be reused within a declaration.
+# EXPECTED ERROR: duplicate ordinal
+
+namespace test.dup_ordinal
+
+message Foo {
+    x @0 : u32
+    y @0 : string
+}

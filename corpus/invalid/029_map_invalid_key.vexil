@@ -1,0 +1,9 @@
+# §3.4: Map K MUST NOT be optional, array, map, result, void, f32, f64,
+#        message, union, newtype, or config.
+# EXPECTED ERROR: invalid map key type (f64)
+
+namespace test.map_bad_key
+
+message Foo {
+    scores @0 : map<f64, string>
+}

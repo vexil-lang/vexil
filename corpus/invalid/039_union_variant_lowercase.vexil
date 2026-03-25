@@ -1,0 +1,8 @@
+# §4.4: Variant names MUST match [A-Z][A-Za-z0-9]*.
+# EXPECTED ERROR: union variant name starts with lowercase
+
+namespace test.union_lowercase
+
+union Shape {
+    circle @0 { r @0 : f32 }
+}

@@ -1,0 +1,8 @@
+# §12.4: @zigzag valid on i8, i16, i32, i64 only.
+# EXPECTED ERROR: @zigzag on unsigned type
+
+namespace test.zigzag_unsigned
+
+message Foo {
+    x @0 : u32 @zigzag
+}

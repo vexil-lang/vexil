@@ -1,0 +1,9 @@
+# §4.5: Newtypes — wrapping various types.
+namespace test.newtypes
+
+newtype SessionId : u64
+newtype PaneId    : u64
+newtype ExitCode  : i32
+newtype Name      : string
+newtype Payload   : bytes
+newtype Color     : rgb

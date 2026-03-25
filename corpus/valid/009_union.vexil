@@ -1,0 +1,22 @@
+# §4.4: Unions — variant fields with ordinals, empty variants, non-exhaustive.
+namespace test.unions
+
+union Shape {
+    Circle    @0 { radius @0 : f32 }
+    Rectangle @1 { width @0 : f32  height @1 : f32 }
+    Point     @2 {}
+}
+
+@non_exhaustive
+union Color {
+    Ansi  @0 { code @0 : u8 }
+    Rgb   @1 { r @0 : u8  g @1 : u8  b @2 : u8 }
+    Reset @2 {}
+}
+
+# Tombstone in union variant body
+union Event {
+    Click @0 { x @0 : u16  y @1 : u16 }
+    @removed(1, reason: "Hover events moved to separate stream")
+    Scroll @2 { delta @0 : i16 }
+}

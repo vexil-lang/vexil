@@ -1,0 +1,7 @@
+# §4.5: The inner type of newtype MUST NOT be another newtype.
+# EXPECTED ERROR: newtype wrapping newtype
+
+namespace test.newtype_chain
+
+newtype Inner : u64
+newtype Outer : Inner

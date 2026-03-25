@@ -1,0 +1,8 @@
+# §2.4: Field names MUST match [a-z][a-z0-9_]*.
+# EXPECTED ERROR: field name starts with uppercase
+
+namespace test.field_name
+
+message Foo {
+    BadField @0 : u32
+}

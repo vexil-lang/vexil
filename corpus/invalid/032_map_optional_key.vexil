@@ -1,0 +1,8 @@
+# §3.4: Map K MUST NOT be optional<T>.
+# EXPECTED ERROR: optional as map key
+
+namespace test.map_optional_key
+
+message Foo {
+    x @0 : map<optional<u32>, string>
+}

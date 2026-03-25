@@ -1,0 +1,26 @@
+# Comments can appear anywhere whitespace is allowed.
+# This is a file-level comment.
+
+namespace test.comments # inline after namespace
+
+# Between namespace and imports
+# Multiple comment lines
+
+# Before declaration
+message Foo { # after opening brace
+    # Before field
+    x @0 : u32 # after field
+    # Between fields
+    y @1 : string
+    # Before closing brace
+} # after closing brace
+
+# Between declarations
+
+enum Bar {
+    # Before variant
+    A @0 # after variant
+    B @1
+}
+
+# Trailing comment at end of file

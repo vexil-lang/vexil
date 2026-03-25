@@ -1,0 +1,8 @@
+# §12.4: @varint MUST NOT be combined with @zigzag.
+# EXPECTED ERROR: @varint and @zigzag on same field
+
+namespace test.varint_zigzag
+
+message Foo {
+    x @0 : i32 @varint @zigzag
+}

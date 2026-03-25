@@ -1,0 +1,8 @@
+# §3.2/§12.4: @varint MUST NOT be applied to sub-byte types.
+# EXPECTED ERROR: @varint on sub-byte type
+
+namespace test.varint_subbyte
+
+message Foo {
+    x @0 : u4 @varint
+}

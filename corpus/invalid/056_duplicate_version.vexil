@@ -1,0 +1,6 @@
+# §12.1: @version MUST NOT appear more than once per schema.
+# EXPECTED ERROR: duplicate @version
+
+@version("1.0.0")
+@version("2.0.0")
+namespace test.dup_version

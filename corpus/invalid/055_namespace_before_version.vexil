@@ -1,0 +1,10 @@
+# §12.1: @version MUST appear before the namespace declaration if present.
+# EXPECTED ERROR: @version after namespace
+
+namespace test.version_order
+
+@version("1.0.0")
+
+message Foo {
+    x @0 : u32
+}

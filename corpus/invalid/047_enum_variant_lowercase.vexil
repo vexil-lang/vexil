@@ -1,0 +1,9 @@
+# §4.2: Enum variant names follow declaration name rules [A-Z][A-Za-z0-9]*.
+# EXPECTED ERROR: enum variant starts with lowercase
+
+namespace test.enum_lowercase
+
+enum Status {
+    ok @0
+    err @1
+}

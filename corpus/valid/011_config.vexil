@@ -1,0 +1,33 @@
+# §4.6: Config — all valid default types, array defaults, none defaults.
+namespace test.config
+
+enum LogLevel {
+    Debug @0
+    Info  @1
+    Warn  @2
+    Error @3
+}
+
+config ServerConfig {
+    max_sessions : u32    = 1024
+    timeout_ms   : u64    = 30000
+    enable_tls   : bool   = false
+    log_level    : string = "info"
+    bind_port    : u16    = 8080
+    pi_approx    : f64    = 3.14159
+}
+
+config WithOptional {
+    nickname : optional<string> = none
+    greeting : optional<string> = "hello"
+}
+
+config WithArrays {
+    tags     : array<string> = []
+    ports    : array<u16>    = [80, 443, 8080]
+    empty    : array<bool>   = []
+}
+
+config Nested {
+    level : LogLevel = Info
+}
