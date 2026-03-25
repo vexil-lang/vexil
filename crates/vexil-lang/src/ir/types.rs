@@ -80,6 +80,12 @@ impl TypeRegistry {
         self.types.is_empty()
     }
 
+    /// Rename a type in the by-name index (used for aliased import qualification).
+    pub fn rename(&mut self, id: TypeId, old_name: &str, new_name: SmolStr) {
+        self.by_name.remove(old_name);
+        self.by_name.insert(new_name, id);
+    }
+
     /// Fill a stub slot with a real type definition.
     pub fn fill_stub(&mut self, id: TypeId, def: TypeDef) {
         let idx = id.0 as usize;

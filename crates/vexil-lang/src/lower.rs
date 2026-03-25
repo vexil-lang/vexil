@@ -146,15 +146,29 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                         ctx.wildcard_imports.insert(SmolStr::new(&ns_key));
                     }
                     ImportKind::Aliased { alias } => {
-                        // Clone all types under qualified names: "Alias.TypeName".
-                        for &id in &dep_compiled.declarations {
-                            if let Some(def) = dep_compiled.registry.get(id) {
-                                let original_name = crate::remap::type_def_name(def);
-                                let qualified = format!("{}.{}", alias.node, original_name);
-                                let mut cloned = crate::remap::remap_type_def(def, &HashMap::new());
-                                set_type_name(&mut cloned, SmolStr::new(&qualified));
-                                ctx.registry.register(SmolStr::new(&qualified), cloned);
+                        // Clone all types with proper ID remapping, then rename
+                        // to qualified "Alias.TypeName" form.
+                        let id_map = crate::remap::clone_types_into(
+                            &dep_compiled.registry,
+                            &dep_compiled.declarations,
+                            &mut ctx.registry,
+                        );
+                        // Collect renames first to avoid borrow conflicts.
+                        let renames: Vec<_> = id_map
+                            .values()
+                            .filter_map(|&new_id| {
+                                ctx.registry.get(new_id).map(|def| {
+                                    let orig = crate::remap::type_def_name(def).to_owned();
+                                    let qualified = format!("{}.{}", alias.node, orig);
+                                    (new_id, orig, qualified)
+                                })
+                            })
+                            .collect();
+                        for (new_id, orig, qualified) in renames {
+                            if let Some(def) = ctx.registry.get_mut(new_id) {
+                                set_type_name(def, SmolStr::new(&qualified));
                             }
+                            ctx.registry.rename(new_id, &orig, SmolStr::new(&qualified));
                         }
                     }
                 }
