@@ -33,7 +33,7 @@ the language specification are held to a higher bar than code changes.
 
 | Name | GitHub | Area |
 |------|--------|------|
-| Furkan Mamuk | @mamukfurkan | Everything |
+| Furkan Mamuk | @furkanmamuk | Everything |
 
 ## Becoming a Maintainer
 
