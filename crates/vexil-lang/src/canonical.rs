@@ -1,4 +1,4 @@
-use crate::ast::{PrimitiveType, SemanticType, SubByteType};
+use crate::ast::{DefaultValue, EnumBacking, PrimitiveType, SemanticType, SubByteType};
 use crate::ir::{
     CompiledSchema, DeprecatedInfo, Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType,
     TombstoneDef, TypeDef, TypeId, TypeRegistry,
@@ -254,7 +254,6 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
             out.push_str(msg.name.as_str());
             out.push_str(" {");
             let mut body = String::new();
-            emit_tombstones(&mut body, &msg.tombstones);
             let mut fields = msg.fields.clone();
             fields.sort_by_key(|f| f.ordinal);
             for field in &fields {
@@ -275,6 +274,7 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
                 body.push_str(&field_str);
                 body.push(' ');
             }
+            emit_tombstones(&mut body, &msg.tombstones);
             let body_trimmed = body.trim_end();
             if body_trimmed.is_empty() {
                 out.push('}');
@@ -293,9 +293,17 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
             }
             out.push_str("enum ");
             out.push_str(enm.name.as_str());
+            if let Some(backing) = &enm.backing {
+                let backing_str = match backing {
+                    EnumBacking::U8 => "u8",
+                    EnumBacking::U16 => "u16",
+                    EnumBacking::U32 => "u32",
+                    EnumBacking::U64 => "u64",
+                };
+                out.push_str(&format!(" : {}", backing_str));
+            }
             out.push_str(" {");
             let mut body = String::new();
-            emit_tombstones(&mut body, &enm.tombstones);
             let mut variants = enm.variants.clone();
             variants.sort_by_key(|v| v.ordinal);
             for v in &variants {
@@ -307,6 +315,7 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
                 }
                 body.push_str(&format!("{} = {} ", v.name.as_str(), v.ordinal));
             }
+            emit_tombstones(&mut body, &enm.tombstones);
             let body_trimmed = body.trim_end();
             if body_trimmed.is_empty() {
                 out.push('}');
@@ -327,7 +336,6 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
             out.push_str(flags.name.as_str());
             out.push_str(" {");
             let mut body = String::new();
-            emit_tombstones(&mut body, &flags.tombstones);
             let mut bits = flags.bits.clone();
             bits.sort_by_key(|b| b.bit);
             for b in &bits {
@@ -339,6 +347,7 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
                 }
                 body.push_str(&format!("{} = {} ", b.name.as_str(), b.bit));
             }
+            emit_tombstones(&mut body, &flags.tombstones);
             let body_trimmed = body.trim_end();
             if body_trimmed.is_empty() {
                 out.push('}');
@@ -359,7 +368,6 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
             out.push_str(u.name.as_str());
             out.push_str(" {");
             let mut body = String::new();
-            emit_tombstones(&mut body, &u.tombstones);
             let mut variants = u.variants.clone();
             variants.sort_by_key(|v| v.ordinal);
             for var in &variants {
@@ -371,10 +379,11 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
                 }
                 body.push_str(&format!("{} @{} {{", var.name.as_str(), var.ordinal));
                 let mut var_body = String::new();
-                emit_tombstones(&mut var_body, &var.tombstones);
                 let mut fields = var.fields.clone();
                 fields.sort_by_key(|f| f.ordinal);
                 for field in &fields {
+                    let mut f_ann = String::new();
+                    emit_annotations(&mut f_ann, &field.annotations);
                     let type_s = type_str(&field.resolved_type, registry);
                     let mut enc_buf = String::new();
                     emit_encoding(&mut enc_buf, &field.encoding);
@@ -384,9 +393,13 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
                         field_str.push(' ');
                         field_str.push_str(enc_buf.trim_end());
                     }
+                    if !f_ann.is_empty() {
+                        field_str = format!("{} {}", f_ann.trim_end(), field_str);
+                    }
                     var_body.push_str(&field_str);
                     var_body.push(' ');
                 }
+                emit_tombstones(&mut var_body, &var.tombstones);
                 let var_body_trimmed = var_body.trim_end();
                 if var_body_trimmed.is_empty() {
                     body.push('}');
@@ -397,6 +410,7 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
                 }
                 body.push(' ');
             }
+            emit_tombstones(&mut body, &u.tombstones);
             let body_trimmed = body.trim_end();
             if body_trimmed.is_empty() {
                 out.push('}');
@@ -427,9 +441,20 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
             out.push_str(cfg.name.as_str());
             out.push_str(" {");
             let mut body = String::new();
-            for field in &cfg.fields {
+            let mut fields = cfg.fields.clone();
+            fields.sort_by(|a, b| a.name.cmp(&b.name));
+            for field in &fields {
+                let mut f_ann = String::new();
+                emit_annotations(&mut f_ann, &field.annotations);
+                if !f_ann.is_empty() {
+                    body.push_str(f_ann.trim_end());
+                    body.push(' ');
+                }
                 let type_s = type_str(&field.resolved_type, registry);
-                body.push_str(&format!("{} : {} ", field.name.as_str(), type_s));
+                body.push_str(&format!("{} : {}", field.name.as_str(), type_s));
+                body.push_str(" = ");
+                emit_default_value(&mut body, &field.default_value);
+                body.push(' ');
             }
             let body_trimmed = body.trim_end();
             if body_trimmed.is_empty() {
@@ -442,6 +467,33 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
         }
         _ => {
             debug_assert!(false, "unknown TypeDef variant in canonical form");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Default value emission (module-private)
+// ---------------------------------------------------------------------------
+
+fn emit_default_value(out: &mut String, val: &DefaultValue) {
+    match val {
+        DefaultValue::None => out.push_str("none"),
+        DefaultValue::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        DefaultValue::Int(n) => out.push_str(&format!("{n}")),
+        DefaultValue::UInt(n) => out.push_str(&format!("{n}")),
+        DefaultValue::Float(f) => out.push_str(&format!("{f:?}")),
+        DefaultValue::Str(s) => out.push_str(&format!("\"{s}\"")),
+        DefaultValue::Ident(s) => out.push_str(s.as_str()),
+        DefaultValue::UpperIdent(s) => out.push_str(s.as_str()),
+        DefaultValue::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                emit_default_value(out, &item.node);
+            }
+            out.push(']');
         }
     }
 }
@@ -655,5 +707,93 @@ mod tests {
             form.contains("e @4 : string @limit(100)"),
             "form was: {form}"
         );
+    }
+
+    #[test]
+    fn canonical_message() {
+        let result = crate::compile("namespace t.m\nmessage Foo { x @0 : u32 y @1 : string }");
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(
+            form.contains("message Foo { x @0 : u32 y @1 : string }"),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn canonical_enum() {
+        let result = crate::compile("namespace t.e\nenum Color { Red @0 Green @1 Blue @2 }");
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(
+            form.contains("enum Color { Red = 0 Green = 1 Blue = 2 }"),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn canonical_enum_with_backing() {
+        let result = crate::compile("namespace t.e\nenum Small : u8 { A @0 B @1 }");
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(
+            form.contains("enum Small : u8 { A = 0 B = 1 }"),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn canonical_flags() {
+        let result = crate::compile("namespace t.f\nflags Perms { Read @0 Write @1 Exec @2 }");
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(
+            form.contains("flags Perms { Read = 0 Write = 1 Exec = 2 }"),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn canonical_union() {
+        let result = crate::compile("namespace t.u\nunion Shape { Circle @0 { radius @0 : f32 } Rect @1 { w @0 : f32 h @1 : f32 } }");
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(
+            form.contains(
+                "union Shape { Circle @0 { radius @0 : f32 } Rect @1 { w @0 : f32 h @1 : f32 } }"
+            ),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn canonical_newtype() {
+        let result = crate::compile("namespace t.n\nnewtype UserId : u64");
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(form.contains("newtype UserId = u64"), "form was: {form}");
+    }
+
+    #[test]
+    fn canonical_config() {
+        let result = crate::compile(
+            "namespace t.c\nconfig Defaults { timeout : u32 = 30 name : string = \"hello\" }",
+        );
+        let form = canonical_form(&result.compiled.unwrap());
+        // Config fields sorted by name: name < timeout
+        assert!(
+            form.contains("config Defaults { name : string = \"hello\" timeout : u32 = 30 }"),
+            "form was: {form}"
+        );
+    }
+
+    #[test]
+    fn canonical_tombstones() {
+        let result = crate::compile(
+            r#"
+            namespace t.t
+            message Evolving {
+                name @0 : string
+                @removed(1, reason: "replaced by full_name")
+                @removed(2, reason: "no longer needed", since: "2.0")
+            }
+        "#,
+        );
+        let form = canonical_form(&result.compiled.unwrap());
+        assert!(form.contains("name @0 : string @removed(1, \"replaced by full_name\") @removed(2, \"no longer needed\", since: \"2.0\")"), "form was: {form}");
     }
 }
