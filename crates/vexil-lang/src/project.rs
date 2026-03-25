@@ -79,7 +79,7 @@ pub fn build_import_graph(
 
     // Parse the root schema.
     let root_schema = parse_source(root_source, "<root>")?;
-    let root_ns = namespace_string(&root_schema);
+    let root_ns = namespace_string(&root_schema)?;
 
     // Insert root before DFS so we have it available.
     graph.schemas.insert(
@@ -182,7 +182,7 @@ fn parse_source(source: &str, namespace_hint: &str) -> Result<Schema, ProjectErr
     })
 }
 
-fn namespace_string(schema: &Schema) -> String {
+fn namespace_string(schema: &Schema) -> Result<String, ProjectError> {
     schema
         .namespace
         .as_ref()
@@ -194,7 +194,10 @@ fn namespace_string(schema: &Schema) -> String {
                 .collect::<Vec<_>>()
                 .join(".")
         })
-        .unwrap_or_default()
+        .ok_or_else(|| ProjectError::ParseError {
+            namespace: "<unknown>".to_owned(),
+            message: "schema must declare a namespace".to_owned(),
+        })
 }
 
 fn import_namespaces(schema: &Schema) -> Vec<String> {
