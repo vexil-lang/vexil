@@ -93,6 +93,36 @@ fn valid_012_imports() {
 }
 
 #[test]
+fn valid_013_annotations() {
+    parse_valid("013_annotations.vexil");
+}
+
+#[test]
+fn valid_014_keywords_as_fields() {
+    parse_valid("014_keywords_as_fields.vexil");
+}
+
+#[test]
+fn valid_015_forward_refs() {
+    parse_valid("015_forward_refs.vexil");
+}
+
+#[test]
+fn valid_016_recursive() {
+    parse_valid("016_recursive.vexil");
+}
+
+#[test]
+fn valid_017_escapes() {
+    parse_valid("017_escapes.vexil");
+}
+
+#[test]
+fn valid_018_comments() {
+    parse_valid("018_comments.vexil");
+}
+
+#[test]
 fn invalid_001_missing_namespace() {
     parse_invalid("001_missing_namespace.vexil", ErrorClass::MissingNamespace);
 }
