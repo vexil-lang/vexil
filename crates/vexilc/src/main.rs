@@ -27,7 +27,7 @@ fn cmd_check(filename: &str) -> i32 {
             return 1;
         }
     };
-    let result = vexil_lang::parse(&source);
+    let result = vexil_lang::compile(&source);
     for diag in &result.diagnostics {
         render_diagnostic(filename, &source, diag);
     }
@@ -37,6 +37,11 @@ fn cmd_check(filename: &str) -> i32 {
         .any(|d| d.severity == Severity::Error)
     {
         return 1;
+    }
+    if let Some(ref compiled) = result.compiled {
+        let hash = vexil_lang::canonical::schema_hash(compiled);
+        let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+        println!("schema hash: {hex}");
     }
     0
 }
