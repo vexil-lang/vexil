@@ -1,1 +1,2 @@
-// AST visitor trait — populated in later tasks.
+// Visitor trait — stub for future passes.
+// Will be populated when IR lowering is implemented.
