@@ -39,8 +39,8 @@ spec → formal grammar → test corpus → reference implementation
 
 ## Git Workflow
 
-- A pre-push hook runs `cargo fmt --all` and aborts if it modifies files.
-- Agents MUST bypass it with `VEXIL_NO_FMT=1 git push origin main` to avoid blocking on fmt.
+- A pre-commit hook runs `cargo fmt --all` and re-stages the result automatically — commits are always formatted.
+- Agents MUST bypass it with `VEXIL_NO_FMT=1 git commit ...` to avoid fmt running during automated commits.
 - Always `git pull origin main` before starting local edits — multiple agents and direct GitHub commits are common.
 
 ## Code Standards (for reference implementation, when it exists)

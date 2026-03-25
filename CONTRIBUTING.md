@@ -41,7 +41,7 @@ By participating, you agree to uphold it.
 ```sh
 git clone https://github.com/vexil-lang/vexil
 cd vexil
-git config core.hooksPath .githooks   # enable the pre-push fmt hook
+git config core.hooksPath .githooks   # enable the pre-commit fmt hook
 cargo build --workspace
 ```
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Auto-format all Rust code before committing and re-stage the result.
+# Commits are always formatted; CI's `cargo fmt --all -- --check` stays green.
+# Set VEXIL_NO_FMT=1 to skip (e.g. for automated agents).
+
+if [ "${VEXIL_NO_FMT}" = "1" ]; then
+    exit 0
+fi
+
+cargo fmt --all
+git add -u
