@@ -1,12 +1,12 @@
-pub mod span;
+pub mod ast;
 pub mod diagnostic;
 pub mod lexer;
-pub mod ast;
 pub mod parser;
+pub mod span;
 pub mod validate;
 
-use diagnostic::Diagnostic;
 use ast::Schema;
+use diagnostic::Diagnostic;
 
 pub struct ParseResult {
     pub schema: Option<Schema>,
@@ -22,5 +22,8 @@ pub fn parse(source: &str) -> ParseResult {
         let validate_diags = validate::validate(schema);
         diagnostics.extend(validate_diags);
     }
-    ParseResult { schema, diagnostics }
+    ParseResult {
+        schema,
+        diagnostics,
+    }
 }

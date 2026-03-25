@@ -14,15 +14,15 @@ use smol_str::SmolStr;
 // Parser state
 // ---------------------------------------------------------------------------
 
-struct Parser<'s> {
-    tokens: Vec<Token>,
-    pos: usize,
+pub(crate) struct Parser<'s> {
+    pub(crate) tokens: Vec<Token>,
+    pub(crate) pos: usize,
     source: &'s str,
-    diagnostics: Vec<Diagnostic>,
+    pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
 impl<'s> Parser<'s> {
-    fn new(source: &'s str, tokens: Vec<Token>) -> Self {
+    pub(crate) fn new(source: &'s str, tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             pos: 0,
@@ -35,17 +35,17 @@ impl<'s> Parser<'s> {
     // Core primitives
     // -----------------------------------------------------------------------
 
-    fn peek(&self) -> &Token {
+    pub(crate) fn peek(&self) -> &Token {
         self.tokens
             .get(self.pos)
             .unwrap_or_else(|| self.tokens.last().unwrap_or(&EOF_TOKEN))
     }
 
-    fn peek_kind(&self) -> &TokenKind {
+    pub(crate) fn peek_kind(&self) -> &TokenKind {
         &self.peek().kind
     }
 
-    fn advance(&mut self) -> Token {
+    pub(crate) fn advance(&mut self) -> Token {
         let tok = self
             .tokens
             .get(self.pos)
@@ -57,21 +57,21 @@ impl<'s> Parser<'s> {
         tok
     }
 
-    fn at(&self, kind: &TokenKind) -> bool {
+    pub(crate) fn at(&self, kind: &TokenKind) -> bool {
         std::mem::discriminant(self.peek_kind()) == std::mem::discriminant(kind)
     }
 
     #[allow(dead_code)]
-    fn at_ident(&self, name: &str) -> bool {
+    pub(crate) fn at_ident(&self, name: &str) -> bool {
         matches!(self.peek_kind(), TokenKind::Ident(s) if s.as_str() == name)
     }
 
-    fn at_eof(&self) -> bool {
+    pub(crate) fn at_eof(&self) -> bool {
         matches!(self.peek_kind(), TokenKind::Eof)
     }
 
     #[allow(dead_code)]
-    fn expect(&mut self, kind: &TokenKind) -> Option<Token> {
+    pub(crate) fn expect(&mut self, kind: &TokenKind) -> Option<Token> {
         if self.at(kind) {
             Some(self.advance())
         } else {
@@ -86,31 +86,37 @@ impl<'s> Parser<'s> {
     }
 
     #[allow(dead_code)]
-    fn checkpoint(&self) -> (usize, usize) {
+    pub(crate) fn checkpoint(&self) -> (usize, usize) {
         (self.pos, self.diagnostics.len())
     }
 
     #[allow(dead_code)]
-    fn backtrack(&mut self, cp: (usize, usize)) {
+    pub(crate) fn backtrack(&mut self, cp: (usize, usize)) {
         self.pos = cp.0;
         self.diagnostics.truncate(cp.1);
     }
 
-    fn span_from(&self, start_offset: usize) -> Span {
+    pub(crate) fn span_from(&self, start_offset: usize) -> Span {
         let end = self.peek().span.offset as usize;
         let len = end.saturating_sub(start_offset);
         Span::new(start_offset, len)
     }
 
-    fn current_offset(&self) -> usize {
+    pub(crate) fn current_offset(&self) -> usize {
         self.peek().span.offset as usize
+    }
+
+    /// Return a slice of the original source text for the given byte range.
+    pub(crate) fn source_text(&self, span: Span) -> &str {
+        let range = span.range();
+        &self.source[range]
     }
 
     // -----------------------------------------------------------------------
     // Error helpers
     // -----------------------------------------------------------------------
 
-    fn emit(&mut self, span: Span, class: ErrorClass, message: impl Into<String>) {
+    pub(crate) fn emit(&mut self, span: Span, class: ErrorClass, message: impl Into<String>) {
         self.diagnostics
             .push(Diagnostic::error(span, class, message));
     }
@@ -181,38 +187,30 @@ fn parse_schema(p: &mut Parser<'_>) -> Schema {
     // Imports.
     let mut imports: Vec<Spanned<ImportDecl>> = Vec::new();
     while p.at(&TokenKind::KwImport) {
-        let import_start = p.current_offset();
-        skip_import(p);
-        let span = p.span_from(import_start);
-        // Placeholder import — will be properly parsed in Task 6.
-        imports.push(Spanned::new(
-            ImportDecl {
-                kind: crate::ast::ImportKind::Wildcard,
-                path: Vec::new(),
-                version: None,
-            },
-            span,
-        ));
+        imports.push(import::parse_import(p));
     }
 
     // Declarations.
     let mut declarations: Vec<Spanned<Decl>> = Vec::new();
-    while is_at_decl_keyword(p) || p.at(&TokenKind::At) {
-        let decl_start = p.current_offset();
+    while is_at_decl_keyword(p) || p.at(&TokenKind::At) || p.at(&TokenKind::KwImport) {
+        // Import-after-decl detection.
+        if p.at(&TokenKind::KwImport) {
+            p.emit(
+                p.peek().span,
+                ErrorClass::ImportAfterDecl,
+                "imports must appear before type declarations",
+            );
+            // Skip the stray import so we don't loop forever.
+            skip_import(p);
+            continue;
+        }
+
+        let _decl_start = p.current_offset();
         // Consume pre-annotations.
-        let _annots = parse_annotations(p);
+        let annots = parse_annotations(p);
         if is_at_decl_keyword(p) {
-            skip_decl(p);
-            let span = p.span_from(decl_start);
-            // Placeholder — will be properly parsed in Tasks 7-9.
-            declarations.push(Spanned::new(
-                Decl::Message(crate::ast::MessageDecl {
-                    annotations: Vec::new(),
-                    name: Spanned::new(SmolStr::new("__placeholder"), span),
-                    body: Vec::new(),
-                }),
-                span,
-            ));
+            let decl_spanned = decl::parse_type_decl(annots, p);
+            declarations.push(decl_spanned);
         } else if !p.at_eof() {
             // Annotations with no following declaration — skip token to avoid infinite loop.
             p.advance();
@@ -243,53 +241,49 @@ fn parse_namespace(p: &mut Parser<'_>) -> Spanned<NamespaceDecl> {
     let mut path: Vec<Spanned<SmolStr>> = Vec::new();
 
     // First component.
-    match p.peek_kind().clone() {
-        TokenKind::Ident(s) => {
-            let tok = p.advance();
-            path.push(Spanned::new(s, tok.span));
-        }
-        TokenKind::UpperIdent(_) => {
-            let tok = p.advance();
-            p.emit(
-                tok.span,
-                ErrorClass::NamespaceInvalidComponent,
-                "namespace components must be lowercase",
-            );
-        }
-        _ => {
-            p.emit(
-                p.peek().span,
-                ErrorClass::NamespaceEmpty,
-                "expected namespace path",
-            );
-            let span = p.span_from(start);
-            return Spanned::new(NamespaceDecl { path }, span);
-        }
-    }
-
-    // Subsequent dot-separated components.
-    while p.at(&TokenKind::Dot) {
-        p.advance(); // consume Dot
-        match p.peek_kind().clone() {
-            TokenKind::Ident(s) => {
-                let tok = p.advance();
-                path.push(Spanned::new(s, tok.span));
-            }
-            TokenKind::UpperIdent(_) => {
+    match consume_namespace_component(p) {
+        Some(comp) => path.push(comp),
+        None => {
+            if matches!(p.peek_kind(), TokenKind::UpperIdent(_)) {
                 let tok = p.advance();
                 p.emit(
                     tok.span,
                     ErrorClass::NamespaceInvalidComponent,
                     "namespace components must be lowercase",
                 );
-            }
-            _ => {
+            } else {
                 p.emit(
                     p.peek().span,
-                    ErrorClass::UnexpectedToken,
-                    "expected namespace component after `.`",
+                    ErrorClass::NamespaceEmpty,
+                    "expected namespace path",
                 );
-                break;
+                let span = p.span_from(start);
+                return Spanned::new(NamespaceDecl { path }, span);
+            }
+        }
+    }
+
+    // Subsequent dot-separated components.
+    while p.at(&TokenKind::Dot) {
+        p.advance(); // consume Dot
+        match consume_namespace_component(p) {
+            Some(comp) => path.push(comp),
+            None => {
+                if matches!(p.peek_kind(), TokenKind::UpperIdent(_)) {
+                    let tok = p.advance();
+                    p.emit(
+                        tok.span,
+                        ErrorClass::NamespaceInvalidComponent,
+                        "namespace components must be lowercase",
+                    );
+                } else {
+                    p.emit(
+                        p.peek().span,
+                        ErrorClass::UnexpectedToken,
+                        "expected namespace component after `.`",
+                    );
+                    break;
+                }
             }
         }
     }
@@ -298,11 +292,30 @@ fn parse_namespace(p: &mut Parser<'_>) -> Spanned<NamespaceDecl> {
     Spanned::new(NamespaceDecl { path }, span)
 }
 
+/// Consume a namespace component: `Ident` or keyword-as-lowercase.
+fn consume_namespace_component(p: &mut Parser<'_>) -> Option<Spanned<SmolStr>> {
+    match p.peek_kind().clone() {
+        TokenKind::Ident(s) => {
+            let tok = p.advance();
+            Some(Spanned::new(s, tok.span))
+        }
+        ref kind if kind.is_keyword() => {
+            if let Some(name) = kind.as_field_name() {
+                let tok = p.advance();
+                Some(Spanned::new(name, tok.span))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Annotations
 // ---------------------------------------------------------------------------
 
-fn parse_annotations(p: &mut Parser<'_>) -> Vec<Annotation> {
+pub(crate) fn parse_annotations(p: &mut Parser<'_>) -> Vec<Annotation> {
     let mut annotations = Vec::new();
 
     while p.at(&TokenKind::At) {
@@ -404,7 +417,7 @@ fn parse_annotation_args(p: &mut Parser<'_>) -> Vec<AnnotationArg> {
     args
 }
 
-fn parse_annotation_value(p: &mut Parser<'_>) -> Option<Spanned<AnnotationValue>> {
+pub(crate) fn parse_annotation_value(p: &mut Parser<'_>) -> Option<Spanned<AnnotationValue>> {
     let tok = p.peek().clone();
     match &tok.kind {
         TokenKind::DecInt(v) => {
@@ -456,7 +469,7 @@ fn parse_annotation_value(p: &mut Parser<'_>) -> Option<Spanned<AnnotationValue>
 // ---------------------------------------------------------------------------
 
 /// Returns true if the current token is a declaration keyword.
-fn is_at_decl_keyword(p: &Parser<'_>) -> bool {
+pub(crate) fn is_at_decl_keyword(p: &Parser<'_>) -> bool {
     matches!(
         p.peek_kind(),
         TokenKind::KwMessage
@@ -472,13 +485,18 @@ fn is_at_decl_keyword(p: &Parser<'_>) -> bool {
 /// the next statement or EOF.
 fn skip_import(p: &mut Parser<'_>) {
     p.advance(); // consume KwImport
-    while !p.at_eof() && !p.at(&TokenKind::KwImport) && !is_at_decl_keyword(p) && !p.at(&TokenKind::At) {
+    while !p.at_eof()
+        && !p.at(&TokenKind::KwImport)
+        && !is_at_decl_keyword(p)
+        && !p.at(&TokenKind::At)
+    {
         p.advance();
     }
 }
 
 /// Skip past a declaration. Advances through nested braces until we hit the
 /// next declaration keyword or EOF.
+#[allow(dead_code)]
 fn skip_decl(p: &mut Parser<'_>) {
     p.advance(); // consume decl keyword
 

@@ -16,7 +16,11 @@ fn main() {
     for diag in &result.diagnostics {
         eprintln!("{:?}", diag);
     }
-    if result.diagnostics.iter().any(|d| d.severity == vexil_lang::diagnostic::Severity::Error) {
+    if result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == vexil_lang::diagnostic::Severity::Error)
+    {
         std::process::exit(1);
     }
 }
