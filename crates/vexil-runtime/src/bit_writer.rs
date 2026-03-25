@@ -105,14 +105,22 @@ impl BitWriter {
     /// Write an f32, canonicalizing NaN to 0x7FC00000.
     pub fn write_f32(&mut self, v: f32) {
         self.align();
-        let bits: u32 = if v.is_nan() { 0x7FC00000u32 } else { v.to_bits() };
+        let bits: u32 = if v.is_nan() {
+            0x7FC00000u32
+        } else {
+            v.to_bits()
+        };
         self.buf.extend_from_slice(&bits.to_le_bytes());
     }
 
     /// Write an f64, canonicalizing NaN to 0x7FF8000000000000.
     pub fn write_f64(&mut self, v: f64) {
         self.align();
-        let bits: u64 = if v.is_nan() { 0x7FF8000000000000u64 } else { v.to_bits() };
+        let bits: u64 = if v.is_nan() {
+            0x7FF8000000000000u64
+        } else {
+            v.to_bits()
+        };
         self.buf.extend_from_slice(&bits.to_le_bytes());
     }
 
@@ -184,7 +192,7 @@ mod tests {
         let mut w = BitWriter::new();
         w.write_bits(5, 3); // 101
         w.write_bits(19, 5); // 10011
-        // LSB-first: byte = 10011_101 = 0x9D
+                             // LSB-first: byte = 10011_101 = 0x9D
         assert_eq!(w.finish(), [0x9D]);
     }
 
@@ -194,7 +202,7 @@ mod tests {
         w.write_bits(5, 3);
         w.write_bits(19, 5);
         w.write_bits(42, 6); // 101010
-        // Byte 0: 0x9D, Byte 1: 00_101010 = 0x2A
+                             // Byte 0: 0x9D, Byte 1: 00_101010 = 0x2A
         assert_eq!(w.finish(), [0x9D, 0x2A]);
     }
 

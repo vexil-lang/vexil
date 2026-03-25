@@ -10,13 +10,27 @@ pub fn detect_boxing(compiled: &CompiledSchema) -> HashSet<(TypeId, usize)> {
         match compiled.registry.get(id) {
             Some(TypeDef::Message(msg)) => {
                 for (fi, field) in msg.fields.iter().enumerate() {
-                    walk_for_boxing(&field.resolved_type, id, fi, &path, compiled, &mut needs_box);
+                    walk_for_boxing(
+                        &field.resolved_type,
+                        id,
+                        fi,
+                        &path,
+                        compiled,
+                        &mut needs_box,
+                    );
                 }
             }
             Some(TypeDef::Union(un)) => {
                 for variant in &un.variants {
                     for (fi, field) in variant.fields.iter().enumerate() {
-                        walk_for_boxing(&field.resolved_type, id, fi, &path, compiled, &mut needs_box);
+                        walk_for_boxing(
+                            &field.resolved_type,
+                            id,
+                            fi,
+                            &path,
+                            compiled,
+                            &mut needs_box,
+                        );
                     }
                 }
             }
@@ -51,13 +65,27 @@ fn walk_for_boxing(
             match compiled.registry.get(*id) {
                 Some(TypeDef::Message(msg)) => {
                     for (fi, field) in msg.fields.iter().enumerate() {
-                        walk_for_boxing(&field.resolved_type, *id, fi, &new_path, compiled, needs_box);
+                        walk_for_boxing(
+                            &field.resolved_type,
+                            *id,
+                            fi,
+                            &new_path,
+                            compiled,
+                            needs_box,
+                        );
                     }
                 }
                 Some(TypeDef::Union(un)) => {
                     for variant in &un.variants {
                         for (fi, field) in variant.fields.iter().enumerate() {
-                            walk_for_boxing(&field.resolved_type, *id, fi, &new_path, compiled, needs_box);
+                            walk_for_boxing(
+                                &field.resolved_type,
+                                *id,
+                                fi,
+                                &new_path,
+                                compiled,
+                                needs_box,
+                            );
                         }
                     }
                 }
@@ -100,34 +128,40 @@ mod tests {
 
     #[test]
     fn no_recursion_no_boxing() {
-        let needs = analyze(r#"
+        let needs = analyze(
+            r#"
             namespace test.box
             message Simple { name @0 : string }
-        "#);
+        "#,
+        );
         assert!(needs.is_empty());
     }
 
     #[test]
     fn optional_self_reference_needs_box() {
-        let needs = analyze(r#"
+        let needs = analyze(
+            r#"
             namespace test.box
             message Node {
                 value @0 : i32
                 next  @1 : optional<Node>
             }
-        "#);
+        "#,
+        );
         assert!(!needs.is_empty());
     }
 
     #[test]
     fn array_self_reference_no_box() {
-        let needs = analyze(r#"
+        let needs = analyze(
+            r#"
             namespace test.box
             message Tree {
                 value    @0 : i32
                 children @1 : array<Tree>
             }
-        "#);
+        "#,
+        );
         assert!(needs.is_empty());
     }
 }

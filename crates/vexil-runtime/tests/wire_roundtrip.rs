@@ -30,7 +30,10 @@ impl Unpack for Hello {
 
 #[test]
 fn hello_round_trip() {
-    let val = Hello { name: "Alice".into(), age: 30 };
+    let val = Hello {
+        name: "Alice".into(),
+        age: 30,
+    };
     let mut w = BitWriter::new();
     val.pack(&mut w).unwrap();
     let buf = w.finish();
@@ -42,7 +45,10 @@ fn hello_round_trip() {
 
 #[test]
 fn hello_exact_bytes() {
-    let val = Hello { name: "hi".into(), age: 7 };
+    let val = Hello {
+        name: "hi".into(),
+        age: 7,
+    };
     let mut w = BitWriter::new();
     val.pack(&mut w).unwrap();
     let buf = w.finish();
@@ -129,8 +135,8 @@ fn optional_absent() {
 #[test]
 fn optional_sub_byte_present() {
     let mut w = BitWriter::new();
-    w.write_bool(true);   // present
-    w.write_bits(5, 3);   // u3 value, no flush
+    w.write_bool(true); // present
+    w.write_bits(5, 3); // u3 value, no flush
     w.flush_to_byte_boundary();
     let buf = w.finish();
     // LSB-first: bit0=1 (present), bit1=1 (lsb of 5), bit2=0, bit3=1 = 0b...1011
@@ -334,9 +340,12 @@ fn encode_limit_exceeded() {
         actual: 3,
     };
     // Just verify the error type is constructable and correct
-    assert_eq!(err, EncodeError::LimitExceeded {
-        field: "name",
-        limit: 2,
-        actual: 3,
-    });
+    assert_eq!(
+        err,
+        EncodeError::LimitExceeded {
+            field: "name",
+            limit: 2,
+            actual: 3,
+        }
+    );
 }

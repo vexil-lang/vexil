@@ -70,7 +70,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 2 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 2] = self.data[self.byte_pos..self.byte_pos + 2].try_into().unwrap();
+        let bytes: [u8; 2] = self.data[self.byte_pos..self.byte_pos + 2]
+            .try_into()
+            .unwrap();
         self.byte_pos += 2;
         Ok(u16::from_le_bytes(bytes))
     }
@@ -80,7 +82,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 4 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4].try_into().unwrap();
+        let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4]
+            .try_into()
+            .unwrap();
         self.byte_pos += 4;
         Ok(u32::from_le_bytes(bytes))
     }
@@ -90,7 +94,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 8 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8].try_into().unwrap();
+        let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8]
+            .try_into()
+            .unwrap();
         self.byte_pos += 8;
         Ok(u64::from_le_bytes(bytes))
     }
@@ -110,7 +116,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 2 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 2] = self.data[self.byte_pos..self.byte_pos + 2].try_into().unwrap();
+        let bytes: [u8; 2] = self.data[self.byte_pos..self.byte_pos + 2]
+            .try_into()
+            .unwrap();
         self.byte_pos += 2;
         Ok(i16::from_le_bytes(bytes))
     }
@@ -120,7 +128,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 4 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4].try_into().unwrap();
+        let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4]
+            .try_into()
+            .unwrap();
         self.byte_pos += 4;
         Ok(i32::from_le_bytes(bytes))
     }
@@ -130,7 +140,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 8 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8].try_into().unwrap();
+        let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8]
+            .try_into()
+            .unwrap();
         self.byte_pos += 8;
         Ok(i64::from_le_bytes(bytes))
     }
@@ -140,7 +152,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 4 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4].try_into().unwrap();
+        let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4]
+            .try_into()
+            .unwrap();
         self.byte_pos += 4;
         Ok(f32::from_le_bytes(bytes))
     }
@@ -150,7 +164,9 @@ impl<'a> BitReader<'a> {
         if self.remaining() < 8 {
             return Err(DecodeError::UnexpectedEof);
         }
-        let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8].try_into().unwrap();
+        let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8]
+            .try_into()
+            .unwrap();
         self.byte_pos += 8;
         Ok(f64::from_le_bytes(bytes))
     }
@@ -158,8 +174,7 @@ impl<'a> BitReader<'a> {
     /// Read a LEB128-encoded u64, consuming at most `max_bytes` bytes.
     pub fn read_leb128(&mut self, max_bytes: u8) -> Result<u64, DecodeError> {
         self.flush_to_byte_boundary();
-        let (value, consumed) =
-            crate::leb128::decode(&self.data[self.byte_pos..], max_bytes)?;
+        let (value, consumed) = crate::leb128::decode(&self.data[self.byte_pos..], max_bytes)?;
         self.byte_pos += consumed;
         Ok(value)
     }

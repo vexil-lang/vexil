@@ -66,7 +66,11 @@ fn primitive_type(p: &PrimitiveType) -> &'static str {
 }
 
 fn sub_byte_type(s: &SubByteType) -> &'static str {
-    if s.signed { "i8" } else { "u8" }
+    if s.signed {
+        "i8"
+    } else {
+        "u8"
+    }
 }
 
 fn semantic_type(s: &SemanticType) -> &'static str {
