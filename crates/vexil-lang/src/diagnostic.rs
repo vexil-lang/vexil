@@ -76,6 +76,11 @@ pub enum ErrorClass {
     VersionDuplicate,
     VersionInvalidSemver,
 
+    // IR / Type checker
+    RecursiveTypeInfinite,
+    EncodingTypeMismatch,
+    UnresolvedType,
+
     // Generic
     UnexpectedToken,
     UnexpectedEof,

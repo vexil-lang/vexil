@@ -4,6 +4,9 @@ pub mod lexer;
 pub mod parser;
 pub mod span;
 pub mod validate;
+pub mod ir;
+pub mod lower;
+pub mod typeck;
 
 use ast::Schema;
 use diagnostic::Diagnostic;
