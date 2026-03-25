@@ -75,9 +75,17 @@ pub fn compile(source: &str) -> CompileResult {
         let check_diags = typeck::check(compiled);
         diagnostics.extend(check_diags);
     }
+    // If any error-severity diagnostics were emitted (lowering or typeck),
+    // still return the CompiledSchema — it may have partial wire_size info.
+    // Consumers must check diagnostics before trusting the IR.
     CompileResult { schema: Some(schema), compiled, diagnostics }
 }
 ```
+
+## Shared Types
+
+`PrimitiveType`, `SubByteType`, and `SemanticType` are re-exported from the AST module.
+The IR does not redefine them.
 
 ## IR Types
 
@@ -129,6 +137,7 @@ pub enum TypeDef {
 ```rust
 pub struct MessageDef {
     pub name: SmolStr,
+    pub span: Span,                   // source location for diagnostics
     pub fields: Vec<FieldDef>,
     pub tombstones: Vec<TombstoneDef>,
     pub annotations: ResolvedAnnotations,
@@ -141,6 +150,7 @@ pub struct MessageDef {
 ```rust
 pub struct FieldDef {
     pub name: SmolStr,
+    pub span: Span,                   // source location for diagnostics
     pub ordinal: u32,
     pub resolved_type: ResolvedType,
     pub encoding: FieldEncoding,
@@ -153,6 +163,7 @@ pub struct FieldDef {
 ```rust
 pub struct EnumDef {
     pub name: SmolStr,
+    pub span: Span,
     pub backing: PrimitiveType,      // resolved: default u32 if unspecified
     pub variants: Vec<EnumVariantDef>,
     pub tombstones: Vec<TombstoneDef>,
@@ -171,10 +182,13 @@ pub struct EnumVariantDef {
 ```rust
 pub struct FlagsDef {
     pub name: SmolStr,
+    pub span: Span,
     pub bits: Vec<FlagsBitDef>,
     pub tombstones: Vec<TombstoneDef>,
     pub annotations: ResolvedAnnotations,
 }
+// Wire size: always Fixed(64 bits). Flags use a u64 bitfield on the wire
+// regardless of how many bits are defined. Configurable width is out of scope.
 
 pub struct FlagsBitDef {
     pub name: SmolStr,
@@ -188,6 +202,7 @@ pub struct FlagsBitDef {
 ```rust
 pub struct UnionDef {
     pub name: SmolStr,
+    pub span: Span,
     pub variants: Vec<UnionVariantDef>,
     pub annotations: ResolvedAnnotations,
     pub wire_size: Option<WireSize>,
@@ -207,6 +222,7 @@ pub struct UnionVariantDef {
 ```rust
 pub struct NewtypeDef {
     pub name: SmolStr,
+    pub span: Span,
     pub inner_type: ResolvedType,
     pub terminal_type: ResolvedType,  // follows newtype chains to base type
     pub annotations: ResolvedAnnotations,
@@ -218,9 +234,13 @@ pub struct NewtypeDef {
 ```rust
 pub struct ConfigDef {
     pub name: SmolStr,
+    pub span: Span,
     pub fields: Vec<ConfigFieldDef>,
     pub annotations: ResolvedAnnotations,
 }
+// ConfigFieldDef.default_value reuses ast::DefaultValue. Named references
+// (Ident/UpperIdent variants) are NOT resolved to TypeIds in the IR — they
+// remain string-based. Resolution to ordinals is a codegen concern (Milestone D).
 
 pub struct ConfigFieldDef {
     pub name: SmolStr,
@@ -303,6 +323,15 @@ pub struct TombstoneDef {
 }
 ```
 
+## New ErrorClass Variants
+
+```rust
+// Added to diagnostic.rs ErrorClass enum:
+RecursiveTypeInfinite,    // direct cycle with no indirection
+EncodingTypeMismatch,     // @varint on non-integer, etc. (defensive re-check)
+UnresolvedType,           // type name not found during lowering (poison)
+```
+
 ## Lowering Pass (lower.rs)
 
 Takes `&Schema` (AST), returns `(Option<CompiledSchema>, Vec<Diagnostic>)`.
@@ -322,14 +351,19 @@ Takes `&Schema` (AST), returns `(Option<CompiledSchema>, Vec<Diagnostic>)`.
 3. **Compute field encodings** — For each field, read annotations and the
    resolved type to produce `FieldEncoding`. Default encoding is inferred from
    the logical type. `@varint` → `Encoding::Varint`, `@zigzag` →
-   `Encoding::ZigZag`, `@delta` wraps the base encoding.
+   `Encoding::ZigZag`. `@delta` wraps whatever base encoding was resolved:
+   `@delta @varint u32` → `Delta(Varint)`, `@delta u32` → `Delta(Default)`.
+   Annotations are processed in order: resolve base encoding first, then wrap
+   with delta if present. `@limit(N)` is extracted into `FieldEncoding.limit`.
 
 4. **Resolve annotations** — Convert `Vec<Annotation>` → `ResolvedAnnotations`.
    Extract known annotations by name, parse their arguments into typed fields.
 
 5. **Build defs** — Assemble `MessageDef`, `EnumDef`, etc. from resolved
-   components. Enum backing defaults to `u32` if unspecified. Tombstones carry
-   ordinal + reason.
+   components. Enum backing defaults to `u32` if unspecified. Tombstones are
+   extracted from `ast::Tombstone.args`: look up `reason` key for
+   `TombstoneDef.reason` (emit diagnostic if missing), look up `since` key for
+   `TombstoneDef.since`. Spans are copied from the AST nodes into each IR def.
 
 **Imports handling (pre-Milestone F):**
 When the AST has imports, lowering registers stub `TypeId`s for imported names
@@ -366,11 +400,11 @@ Compute `WireSize` for each `TypeDef`:
 | `uuid` | Fixed(128 bits) |
 | `timestamp` | Fixed(64 bits) |
 | `hash` | Fixed(256 bits) |
-| `optional<T>` | Variable(min=1 bit, max=1+T.max) |
+| `optional<T>` | Variable(min=1 bit, max=if T.max is Some then Some(1+T.max) else None) |
 | `array<T>` | Variable(min=LEB128 header) |
 | `map<K,V>` | Variable(min=LEB128 header) |
-| `result<T,E>` | Variable(min=1 bit+min(T,E)) |
-| Message | sum of field wire sizes |
+| `result<T,E>` | Variable(min=1 bit + min(T.min_bits, E.min_bits), max=if both have max then Some(1+max(T.max,E.max)) else None) |
+| Message | sum of field wire sizes (pure bitpack concatenation, no framing headers — framing is a transport concern) |
 | Enum | Fixed(backing type size) |
 | Flags | Fixed(64 bits) |
 | Union | Variable (tag + largest variant) |
@@ -383,14 +417,19 @@ Varint/ZigZag encoding makes fixed types become variable:
 ### Recursive Type Detection
 
 Walk the type graph from each `TypeId`, tracking visited IDs. A cycle is valid
-if every path through it passes through `Optional`, `Array`, `Map`, or `Result`
-(these are pointer-indirected on the wire). A cycle through only `Named` (direct
-message embedding) is infinite — emit diagnostic.
+if every path through it passes through an indirection point. Indirection points
+are: `Optional`, `Array`, `Map`, `Result`, and **union dispatch** (because unions
+are tag + variable-size payload — the tag selects a variant, so embedding a union
+is not infinite recursion; a non-recursive variant like `Literal` terminates it).
 
-Algorithm: for each message/union type, DFS through field types. Maintain a
-"direct" flag that starts true and becomes false when passing through
-Optional/Array/Map/Result. If we revisit a TypeId while `direct` is true →
-error.
+A cycle through only direct message embedding (no indirection) is infinite —
+emit diagnostic.
+
+Algorithm: for each message type, DFS through field types. Maintain a "direct"
+flag that starts true and becomes false when passing through any indirection
+point (Optional/Array/Map/Result/Union). If we revisit a TypeId while `direct`
+is true → error. When entering a union's variants, set `direct = false` for the
+recursive walk of variant fields.
 
 ### Newtype Chain Resolution
 
@@ -444,13 +483,16 @@ imported types whose definitions weren't available during AST validation.
 7. **Invalid corpus through compile()** — For each invalid corpus file, call
    `compile()`, assert `compiled.is_none()` (errors prevent IR creation).
 
+8. **Import stub tests** — Compile a schema with imports, verify stub TypeIds
+   are created in the registry, verify typeck skips stub types without error.
+
 ## Exit Criteria
 
 1. `cargo test --workspace` — all tests pass (existing + new)
 2. `cargo clippy --workspace --all-targets -- -D warnings` — clean
 3. `cargo fmt --all -- --check` — clean
 4. All 18 valid corpus files produce `CompiledSchema` with correct type counts
-5. All 56 invalid corpus files produce `None` compiled output
+5. All 56 invalid corpus files produce error diagnostics (parse errors → `None` compiled; validate-only errors caught before lowering → `None`)
 6. Wire size computation correct for primitive, composite, and variable types
 7. Recursive type detection catches direct cycles, allows indirect cycles
 8. `compile()` is a documented public API
