@@ -27,7 +27,7 @@ jobs:
             artifact: vexilc
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Add target
         run: rustup target add ${{ matrix.target }}
@@ -45,7 +45,7 @@ jobs:
           [[ "${{ matrix.artifact }}" == *.exe ]] && OUT="${OUT}.exe"
           cp "$BIN" "$OUT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vexilc-${{ matrix.target }}
           path: vexilc-${{ matrix.target }}*
@@ -54,9 +54,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
