@@ -1,15 +1,16 @@
 pub mod ast;
 pub mod diagnostic;
+pub mod ir;
 pub mod lexer;
+pub mod lower;
 pub mod parser;
 pub mod span;
-pub mod validate;
-pub mod ir;
-pub mod lower;
 pub mod typeck;
+pub mod validate;
 
 use ast::Schema;
-use diagnostic::Diagnostic;
+use diagnostic::{Diagnostic, Severity};
+use ir::CompiledSchema;
 
 pub struct ParseResult {
     pub schema: Option<Schema>,
@@ -27,6 +28,41 @@ pub fn parse(source: &str) -> ParseResult {
     }
     ParseResult {
         schema,
+        diagnostics,
+    }
+}
+
+pub struct CompileResult {
+    pub schema: Option<Schema>,
+    pub compiled: Option<CompiledSchema>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Full pipeline: parse -> validate -> lower -> type-check.
+pub fn compile(source: &str) -> CompileResult {
+    let parse_result = parse(source);
+    if parse_result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::Error)
+    {
+        return CompileResult {
+            schema: parse_result.schema,
+            compiled: None,
+            diagnostics: parse_result.diagnostics,
+        };
+    }
+    let schema = parse_result.schema.unwrap(); // safe: no errors means Some
+    let (mut compiled, lower_diags) = lower::lower(&schema);
+    let mut diagnostics = parse_result.diagnostics;
+    diagnostics.extend(lower_diags);
+    if let Some(ref mut compiled) = compiled {
+        let check_diags = typeck::check(compiled);
+        diagnostics.extend(check_diags);
+    }
+    CompileResult {
+        schema: Some(schema),
+        compiled,
         diagnostics,
     }
 }

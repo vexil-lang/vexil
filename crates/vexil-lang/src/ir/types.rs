@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use smol_str::SmolStr;
-use crate::ast::{PrimitiveType, SubByteType, SemanticType};
+use crate::ast::{PrimitiveType, SemanticType, SubByteType};
 use crate::span::Span;
+use smol_str::SmolStr;
+use std::collections::HashMap;
 
 // Forward-declare TypeDef so TypeRegistry can reference it.
 use super::TypeDef;
@@ -22,6 +22,12 @@ pub(crate) const POISON_TYPE_ID: TypeId = TypeId(u32::MAX);
 pub struct TypeRegistry {
     types: Vec<Option<TypeDef>>,
     by_name: HashMap<SmolStr, TypeId>,
+}
+
+impl Default for TypeRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypeRegistry {
@@ -55,21 +61,30 @@ impl TypeRegistry {
     }
 
     pub fn get_mut(&mut self, id: TypeId) -> Option<&mut TypeDef> {
-        self.types.get_mut(id.0 as usize).and_then(|opt| opt.as_mut())
+        self.types
+            .get_mut(id.0 as usize)
+            .and_then(|opt| opt.as_mut())
     }
 
     pub fn is_stub(&self, id: TypeId) -> bool {
-        self.types.get(id.0 as usize).is_some_and(|opt| opt.is_none())
+        self.types
+            .get(id.0 as usize)
+            .is_some_and(|opt| opt.is_none())
     }
 
     pub fn len(&self) -> usize {
         self.types.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.types.is_empty()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (TypeId, &TypeDef)> {
-        self.types.iter().enumerate().filter_map(|(i, opt)| {
-            opt.as_ref().map(|def| (TypeId(i as u32), def))
-        })
+        self.types
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt)| opt.as_ref().map(|def| (TypeId(i as u32), def)))
     }
 }
 
@@ -123,7 +138,10 @@ impl FieldEncoding {
 #[derive(Debug, Clone, PartialEq)]
 pub enum WireSize {
     Fixed(u64),
-    Variable { min_bits: u64, max_bits: Option<u64> },
+    Variable {
+        min_bits: u64,
+        max_bits: Option<u64>,
+    },
 }
 
 // ---------------------------------------------------------------------------
