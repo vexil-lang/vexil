@@ -8,7 +8,7 @@ body:
       value: |
         Before requesting a feature, please check if it's already been discussed in
         [Discussions](https://github.com/vexil-lang/vexil/discussions) or in the
-        [language specification](https://github.com/vexil-lang/vexil/blob/master/spec/vexil-spec.md).
+        [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md).
 
   - type: dropdown
     id: area
