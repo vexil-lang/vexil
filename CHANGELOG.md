@@ -20,4 +20,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Formal PEG grammar (`spec/vexil-grammar.peg`) derived from the language specification
 - 74-file conformance test corpus: `corpus/valid/` (18 files) and `corpus/invalid/` (56 files)
 
-[Unreleased]: https://github.com/vexil-lang/vexil/commits/master
+[Unreleased]: https://github.com/vexil-lang/vexil/commits/main
