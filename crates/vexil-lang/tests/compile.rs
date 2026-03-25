@@ -1,4 +1,5 @@
 use vexil_lang::diagnostic::Severity;
+use vexil_lang::ir::{Encoding, ResolvedType, TypeDef};
 
 fn read_corpus(dir: &str, file: &str) -> String {
     let path = format!("{}/../../corpus/{dir}/{file}", env!("CARGO_MANIFEST_DIR"));
@@ -59,4 +60,204 @@ fn compile_simple_message() {
     let compiled = result.compiled.as_ref().unwrap();
     assert_eq!(compiled.declarations.len(), 1);
     assert_eq!(compiled.registry.len(), 1);
+}
+
+/// Forward references resolve to correct TypeIds.
+#[test]
+fn type_resolution_forward_ref() {
+    let source = r#"
+namespace test.resolve
+message Container { item @0 : Item }
+message Item { value @0 : u32 }
+"#;
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let container_id = compiled.declarations[0];
+    let item_id = compiled.declarations[1];
+    let container = compiled.registry.get(container_id).unwrap();
+    if let TypeDef::Message(msg) = container {
+        assert_eq!(msg.fields.len(), 1);
+        assert_eq!(msg.fields[0].resolved_type, ResolvedType::Named(item_id));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Newtype inner type resolves to primitive.
+#[test]
+fn newtype_resolution() {
+    let source = "namespace test.nt\nnewtype SessionId : u64";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Newtype(nt) = compiled.registry.get(id).unwrap() {
+        assert_eq!(
+            nt.inner_type,
+            ResolvedType::Primitive(vexil_lang::ast::PrimitiveType::U64)
+        );
+    } else {
+        panic!("expected Newtype");
+    }
+}
+
+/// Enum backing defaults to U32 when unspecified.
+#[test]
+fn enum_default_backing() {
+    let source = "namespace test.en\nenum Dir { North @0  South @1 }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Enum(en) = compiled.registry.get(id).unwrap() {
+        assert_eq!(en.backing, vexil_lang::ast::EnumBacking::U32);
+        assert_eq!(en.variants.len(), 2);
+    } else {
+        panic!("expected Enum");
+    }
+}
+
+/// Encoding annotations are correctly computed.
+#[test]
+fn encoding_varint() {
+    let source = "namespace test.enc\nmessage M { v @0 @varint : u32 }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert_eq!(msg.fields[0].encoding.encoding, Encoding::Varint);
+        assert_eq!(msg.fields[0].encoding.limit, None);
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// @delta wraps the base encoding.
+#[test]
+fn encoding_delta_varint() {
+    let source = "namespace test.dv\nmessage M { v @0 @delta @varint : u32 }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert_eq!(
+            msg.fields[0].encoding.encoding,
+            Encoding::Delta(Box::new(Encoding::Varint))
+        );
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// @limit is extracted correctly.
+#[test]
+fn encoding_limit() {
+    let source = "namespace test.lim\nmessage M { s @0 : string @limit(1024) }";
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert_eq!(msg.fields[0].encoding.encoding, Encoding::Default);
+        assert_eq!(msg.fields[0].encoding.limit, Some(1024));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Annotations are resolved into structured form.
+#[test]
+fn resolved_annotations() {
+    let source = r#"
+namespace test.ann
+@doc("A test") @deprecated(since: "1.0", reason: "use B")
+message A { v @0 : u32 }
+"#;
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().unwrap();
+    let id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
+        assert_eq!(msg.annotations.doc, vec!["A test"]);
+        assert_eq!(msg.annotations.deprecated.as_deref(), Some("use B"));
+    } else {
+        panic!("expected Message");
+    }
+}
+
+/// Import stubs are created in the registry.
+#[test]
+fn import_named_creates_stubs() {
+    let source = r#"
+namespace test.imp
+import { Shape, Color } from test.unions
+message M { s @0 : Shape }
+"#;
+    let result = vexil_lang::compile(source);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "errors: {errors:#?}");
+    let compiled = result.compiled.as_ref().unwrap();
+    assert!(compiled.registry.lookup("Shape").is_some());
+    assert!(compiled.registry.lookup("Color").is_some());
+}
+
+/// Qualified type reference through alias.
+#[test]
+fn import_aliased_qualified_ref() {
+    let source = r#"
+namespace test.alias
+import test.enums as E
+message M { kind @0 : E.ClientKind }
+"#;
+    let result = vexil_lang::compile(source);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "errors: {errors:#?}");
+    assert!(result.compiled.is_some());
+}
+
+/// Wildcard imports suppress unknown type errors.
+#[test]
+fn import_wildcard_suppresses_unknown() {
+    let source = r#"
+namespace test.wild
+import test.newtypes
+message M { id @0 : SessionId }
+"#;
+    let result = vexil_lang::compile(source);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(errors.is_empty(), "errors: {errors:#?}");
+    assert!(result.compiled.is_some());
+}
+
+/// Invalid corpus files produce error diagnostics.
+#[test]
+fn invalid_corpus_produces_errors() {
+    let invalid_dir = format!("{}/../../corpus/invalid", env!("CARGO_MANIFEST_DIR"));
+    let entries = std::fs::read_dir(&invalid_dir).unwrap();
+    for entry in entries {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("vexil") {
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).unwrap();
+        let result = vexil_lang::compile(&source);
+        let has_error = result
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error);
+        assert!(
+            has_error,
+            "expected errors for invalid file {}, got none",
+            path.display()
+        );
+    }
 }
