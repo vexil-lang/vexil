@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/vexil-lang", "crates/vexilc"]
+members = ["crates/vexil-lang", "crates/vexilc", "crates/vexil-runtime"]
 
 [workspace.package]
 version = "0.1.0"
