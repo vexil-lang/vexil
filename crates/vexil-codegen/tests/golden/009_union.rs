@@ -20,7 +20,7 @@ impl vexil_runtime::Pack for Shape {
             Self::Circle { radius } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_f32(radius);
+                payload_w.write_f32(*radius);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -29,8 +29,8 @@ impl vexil_runtime::Pack for Shape {
             Self::Rectangle { width, height } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_f32(width);
-                payload_w.write_f32(height);
+                payload_w.write_f32(*width);
+                payload_w.write_f32(*height);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -96,7 +96,7 @@ impl vexil_runtime::Pack for Color {
             Self::Ansi { code } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_u8(code);
+                payload_w.write_u8(*code);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -105,9 +105,9 @@ impl vexil_runtime::Pack for Color {
             Self::Rgb { r, g, b } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_u8(r);
-                payload_w.write_u8(g);
-                payload_w.write_u8(b);
+                payload_w.write_u8(*r);
+                payload_w.write_u8(*g);
+                payload_w.write_u8(*b);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -180,8 +180,8 @@ impl vexil_runtime::Pack for Event {
             Self::Click { x, y } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_u16(x);
-                payload_w.write_u16(y);
+                payload_w.write_u16(*x);
+                payload_w.write_u16(*y);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -190,7 +190,7 @@ impl vexil_runtime::Pack for Event {
             Self::Scroll { delta } => {
                 w.write_leb128(2_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_i16(delta);
+                payload_w.write_i16(*delta);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);

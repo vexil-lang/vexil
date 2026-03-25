@@ -11,6 +11,15 @@ use crate::types::rust_type;
 // Helpers
 // ---------------------------------------------------------------------------
 
+/// Returns true if a type needs explicit dereference when accessed through a
+/// by-ref pattern binding (e.g. union variant destructuring in `match &self`).
+/// Primitives and sub-byte types are Copy and need `*field` to get the value;
+/// reference types (String, Vec, etc.) work via auto-ref coercion.
+fn needs_deref(ty: &vexil_lang::ir::ResolvedType) -> bool {
+    use vexil_lang::ir::ResolvedType;
+    matches!(ty, ResolvedType::Primitive(_) | ResolvedType::SubByte(_))
+}
+
 /// Collect field-encoding code from `emit_write` or `emit_read` into a
 /// scratch `CodeWriter`, then redirect the reader/writer variable name by
 /// string substitution before emitting into the target writer.
@@ -24,11 +33,21 @@ fn emit_write_to_payload(
     enc: &vexil_lang::ir::FieldEncoding,
     registry: &TypeRegistry,
 ) {
+    // Union variant fields are destructured by-ref (match on &self).
+    // Primitives/sub-byte need deref; String/Bytes/Array/Map/Named work via auto-ref.
+    let access = if needs_deref(ty) {
+        format!("*{field_name}")
+    } else {
+        field_name.to_string()
+    };
     let mut scratch = CodeWriter::new();
-    emit_write(&mut scratch, field_name, ty, enc, registry, field_name);
+    emit_write(&mut scratch, &access, ty, enc, registry, field_name);
     let code = scratch.finish();
-    // Replace standalone `w.` → `payload_w.` (all occurrences on a line-start or after space)
-    let redirected = code.replace("w.", "payload_w.");
+    // Replace `w.` → `payload_w.` for method calls, and `(w)` → `(&mut payload_w)` for
+    // argument passing (e.g. Named types emit `.pack(w)?;`)
+    let redirected = code
+        .replace("w.", "payload_w.")
+        .replace("(w)", "(&mut payload_w)");
     for line in redirected.lines() {
         if !line.trim().is_empty() {
             w.line(line.trim());
@@ -46,8 +65,9 @@ fn emit_read_from_payload(
     let mut scratch = CodeWriter::new();
     emit_read(&mut scratch, var_name, ty, enc, registry, var_name);
     let code = scratch.finish();
-    // Replace standalone `r.` → `pr.`
-    let redirected = code.replace("r.", "pr.");
+    // Replace `r.` → `pr.` for method calls, and `(r)` → `(&mut pr)` for
+    // argument passing (e.g. Named types emit `Unpack::unpack(r)?;`)
+    let redirected = code.replace("r.", "pr.").replace("(r)", "(&mut pr)");
     for line in redirected.lines() {
         if !line.trim().is_empty() {
             w.line(line.trim());

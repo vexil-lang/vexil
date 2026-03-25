@@ -87,8 +87,14 @@ pub fn emit_write(
             w.line(&format!("w.write_zigzag({access} as i64, {type_bits}_u8);"));
             return;
         }
-        Encoding::Delta(_) => {
-            // Delta handled by delta module
+        Encoding::Delta(inner) => {
+            // For standard Pack, write the field using the inner (base) encoding.
+            // The DeltaEncoder handles delta sequences separately.
+            let base_enc = FieldEncoding {
+                encoding: *inner.clone(),
+                limit: enc.limit,
+            };
+            emit_write(w, access, ty, &base_enc, registry, field_name);
             return;
         }
         Encoding::Default => {} // fall through to type dispatch
@@ -254,8 +260,14 @@ pub fn emit_read(
             ));
             return;
         }
-        Encoding::Delta(_) => {
-            // Delta handled by delta module
+        Encoding::Delta(inner) => {
+            // For standard Unpack, read the field using the inner (base) encoding.
+            // The DeltaDecoder handles delta sequences separately.
+            let base_enc = FieldEncoding {
+                encoding: *inner.clone(),
+                limit: enc.limit,
+            };
+            emit_read(w, var_name, ty, &base_enc, registry, field_name);
             return;
         }
         Encoding::Default => {}

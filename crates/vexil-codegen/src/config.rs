@@ -37,7 +37,13 @@ pub fn emit_config(
     w.open_block("fn default() -> Self");
     w.open_block("Self");
     for field in &cfg.fields {
-        let expr = default_value_expr(&field.default_value, field, registry);
+        let mut expr = default_value_expr(&field.default_value, field, registry);
+        // Wrap in Some(...) if the field type is Optional and the default is not None
+        if matches!(&field.resolved_type, ResolvedType::Optional(_))
+            && !matches!(&field.default_value, DefaultValue::None)
+        {
+            expr = format!("Some({expr})");
+        }
         w.line(&format!("{}: {},", field.name, expr));
     }
     w.close_block();

@@ -102,6 +102,7 @@ impl vexil_runtime::Pack for FieldAnnotations {
         w.write_leb128(self.b as u64);
         if (self.c).len() as u64 > 1024_u64 { return Err(vexil_runtime::EncodeError::LimitExceeded { field: "c", limit: 1024_u64, actual: (self.c).len() as u64 }); }
         w.write_string(&self.c);
+        w.write_i32(self.d);
         w.flush_to_byte_boundary();
         Ok(())
     }
@@ -114,6 +115,7 @@ impl vexil_runtime::Unpack for FieldAnnotations {
         let b: u64 = b_raw as u64;
         let c = r.read_string()?;
         if c.len() as u64 > 1024_u64 { return Err(vexil_runtime::DecodeError::LimitExceeded { field: "c", limit: 1024_u64, actual: c.len() as u64 }); }
+        let d = r.read_i32()?;
         r.flush_to_byte_boundary();
         Ok(Self {
             a,

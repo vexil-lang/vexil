@@ -78,7 +78,7 @@ impl Default for WithOptional {
     fn default() -> Self {
         Self {
             nickname: None,
-            greeting: String::from("hello"),
+            greeting: Some(String::from("hello")),
         }
     }
 }

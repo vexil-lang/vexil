@@ -91,7 +91,7 @@ impl vexil_runtime::Unpack for LinkedList {
 // ── Expr ──
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
-    pub kind: ExprKind,
+    pub kind: Box<ExprKind>,
 }
 
 impl vexil_runtime::Pack for Expr {
@@ -119,7 +119,7 @@ impl vexil_runtime::Unpack for Expr {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind {
     Literal { value: i64 },
-    Binary { left: Expr, op: u8, right: Expr },
+    Binary { left: Box<Expr>, op: u8, right: Box<Expr> },
 }
 
 impl vexil_runtime::Pack for ExprKind {
@@ -129,7 +129,7 @@ impl vexil_runtime::Pack for ExprKind {
             Self::Literal { value } => {
                 w.write_leb128(0_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                payload_w.write_i64(value);
+                payload_w.write_i64(*value);
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -138,9 +138,9 @@ impl vexil_runtime::Pack for ExprKind {
             Self::Binary { left, op, right } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
-                left.pack(w)?;
-                payload_w.write_u8(op);
-                right.pack(w)?;
+                left.pack(&mut payload_w)?;
+                payload_w.write_u8(*op);
+                right.pack(&mut payload_w)?;
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);
@@ -168,11 +168,11 @@ impl vexil_runtime::Unpack for ExprKind {
                 let payload = r.read_raw_bytes(len)?;
                 let mut pr = vexil_runtime::BitReader::new(&payload);
                 pr.enter_recursive()?;
-                let left = vexil_runtime::Unpack::unpack(r)?;
+                let left = vexil_runtime::Unpack::unpack(&mut pr)?;
                 pr.leave_recursive();
                 let op = pr.read_u8()?;
                 pr.enter_recursive()?;
-                let right = vexil_runtime::Unpack::unpack(r)?;
+                let right = vexil_runtime::Unpack::unpack(&mut pr)?;
                 pr.leave_recursive();
                 pr.flush_to_byte_boundary();
                 Ok(Self::Binary { left, op, right })

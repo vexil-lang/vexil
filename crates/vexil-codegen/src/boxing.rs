@@ -58,6 +58,9 @@ fn walk_for_boxing(
         }
         ResolvedType::Named(id) => {
             if path.contains(id) {
+                // Direct cycle through a Named type — this field must be boxed
+                // to break infinite struct size (e.g. ExprKind::Binary { left: Expr })
+                needs_box.insert((parent_id, field_index));
                 return;
             }
             let mut new_path = path.to_vec();
@@ -145,6 +148,23 @@ mod tests {
             message Node {
                 value @0 : i32
                 next  @1 : optional<Node>
+            }
+        "#,
+        );
+        assert!(!needs.is_empty());
+    }
+
+    #[test]
+    fn mutual_recursion_needs_box() {
+        let needs = analyze(
+            r#"
+            namespace test.box
+            message Expr {
+                kind @0 : ExprKind
+            }
+            union ExprKind {
+                Literal @0 { value @0 : i64 }
+                Binary  @1 { left @0 : Expr  op @1 : u8  right @2 : Expr }
             }
         "#,
         );
