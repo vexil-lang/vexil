@@ -175,10 +175,38 @@ message A { v @0 : u32 }
     let id = compiled.declarations[0];
     if let TypeDef::Message(msg) = compiled.registry.get(id).unwrap() {
         assert_eq!(msg.annotations.doc, vec!["A test"]);
-        assert_eq!(msg.annotations.deprecated.as_deref(), Some("use B"));
+        let dep = msg.annotations.deprecated.as_ref().unwrap();
+        assert_eq!(dep.reason.as_str(), "use B");
+        assert_eq!(dep.since.as_deref(), Some("1.0"));
     } else {
         panic!("expected Message");
     }
+}
+
+/// @deprecated carries both reason and since fields.
+#[test]
+fn deprecated_info_has_since() {
+    let src = r#"
+        namespace test.deprecated
+        message Old {
+            @deprecated(since: "1.0", reason: "use New")
+            name @0 : string
+        }
+    "#;
+    let result = vexil_lang::compile(src);
+    assert!(result
+        .diagnostics
+        .iter()
+        .all(|d| d.severity != Severity::Error));
+    let compiled = result.compiled.unwrap();
+    let id = compiled.declarations[0];
+    let msg = match compiled.registry.get(id).unwrap() {
+        TypeDef::Message(m) => m,
+        _ => panic!("expected message"),
+    };
+    let dep = msg.fields[0].annotations.deprecated.as_ref().unwrap();
+    assert_eq!(dep.reason.as_str(), "use New");
+    assert_eq!(dep.since.as_deref(), Some("1.0"));
 }
 
 /// Import stubs are created in the registry.

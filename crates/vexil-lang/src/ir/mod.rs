@@ -1,8 +1,8 @@
 pub mod types;
 
 pub use types::{
-    Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType, TombstoneDef, TypeId, TypeRegistry,
-    WireSize,
+    DeprecatedInfo, Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType, TombstoneDef,
+    TypeId, TypeRegistry, WireSize,
 };
 
 use crate::ast::{DefaultValue, EnumBacking};

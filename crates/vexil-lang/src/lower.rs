@@ -408,7 +408,9 @@ fn resolve_annotations_refs(annotations: &[&Annotation]) -> ResolvedAnnotations 
     for ann in annotations {
         match ann.name.node.as_str() {
             "deprecated" => {
-                result.deprecated = extract_string_arg(ann, "reason");
+                let reason = extract_string_arg(ann, "reason").unwrap_or_default();
+                let since = extract_string_arg(ann, "since");
+                result.deprecated = Some(ir::DeprecatedInfo { reason, since });
             }
             "since" => {
                 result.since = extract_first_string_arg(ann);

@@ -151,9 +151,15 @@ pub enum WireSize {
 // ResolvedAnnotations
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeprecatedInfo {
+    pub reason: SmolStr,
+    pub since: Option<SmolStr>,
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ResolvedAnnotations {
-    pub deprecated: Option<SmolStr>,
+    pub deprecated: Option<DeprecatedInfo>,
     pub since: Option<SmolStr>,
     pub doc: Vec<SmolStr>,
     pub revision: Option<u64>,
