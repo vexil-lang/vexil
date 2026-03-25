@@ -45,7 +45,16 @@ pub fn generate(compiled: &CompiledSchema) -> Result<String, CodegenError> {
     // Step 7: Emit blank line.
     w.blank();
 
-    // Step 8: Emit schema version constant if set.
+    // Emit SCHEMA_HASH (always present — every schema has a hash).
+    let hash = vexil_lang::canonical::schema_hash(compiled);
+    let hash_str = hash
+        .iter()
+        .map(|b| format!("0x{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    w.line(&format!("pub const SCHEMA_HASH: [u8; 32] = [{hash_str}];"));
+
+    // Emit SCHEMA_VERSION if present (after SCHEMA_HASH per spec §8.2).
     if let Some(ref version) = compiled.annotations.version {
         w.line(&format!("pub const SCHEMA_VERSION: &str = \"{version}\";"));
     }
