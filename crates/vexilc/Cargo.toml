@@ -14,4 +14,5 @@ categories = ["compilers", "development-tools", "command-line-utilities"]
 [dependencies]
 vexil-lang = { path = "../vexil-lang", version = "0.1.0" }
 vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "0.1.0" }
+vexil-store = { path = "../vexil-store", version = "0.1.0" }
 ariadne = "0.6"
