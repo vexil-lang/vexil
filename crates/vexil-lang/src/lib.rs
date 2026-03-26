@@ -56,6 +56,7 @@ pub fn compile(source: &str) -> CompileResult {
 /// Full pipeline for internal/meta schemas that may use the reserved `vexil`
 /// namespace prefix. Skips the namespace-reservation check only; all other
 /// validation, lowering, and type-checking still applies.
+#[doc(hidden)]
 pub fn compile_internal(source: &str) -> CompileResult {
     compile_impl(source, true)
 }

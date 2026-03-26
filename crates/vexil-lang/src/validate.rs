@@ -56,6 +56,7 @@ pub fn validate(schema: &Schema) -> Vec<Diagnostic> {
 /// This is intended for internal/meta schemas that are part of the
 /// implementation itself (e.g. `vexil.schema`, `vexil.pack`), not for
 /// user-authored schemas.
+#[doc(hidden)]
 pub fn validate_allow_reserved(schema: &Schema) -> Vec<Diagnostic> {
     validate_impl(schema, true)
 }
