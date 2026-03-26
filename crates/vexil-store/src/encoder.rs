@@ -519,6 +519,7 @@ fn value_type_name(value: &Value) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use vexil_lang::diagnostic::Severity;
 
     fn compile_schema(source: &str) -> CompiledSchema {
