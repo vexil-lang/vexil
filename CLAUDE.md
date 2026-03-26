@@ -128,6 +128,10 @@ Corpus files are named `NNN_description.vexil`. Check the highest existing numbe
 Wire format changes require RFC (14-day comment period per GOVERNANCE.md).
 Corpus file additions are non-breaking; modifications to existing files are breaking.
 
+**Tooling:** `cargo-smart-release` manages version bumps, CHANGELOG generation, and tagging.
+Release branch → `cargo smart-release --no-push --no-publish` → PR → merge → push tag.
+Never edit `Cargo.toml` versions by hand. See `mamuk-rust-workspace-release` skill for the full workflow.
+
 ## Git Workflow
 
 - Pre-commit hook runs `cargo fmt --all` and re-stages with `git add -u` — commits are always formatted
