@@ -260,12 +260,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "vexil-store"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "smol_str",
+ "test-case",
+ "thiserror",
+ "vexil-lang",
+ "vexil-runtime",
+]
+
+[[package]]
 name = "vexilc"
 version = "0.1.0"
 dependencies = [
  "ariadne",
  "vexil-codegen-rust",
  "vexil-lang",
+ "vexil-store",
 ]
 
 [[package]]

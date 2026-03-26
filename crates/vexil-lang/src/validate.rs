@@ -48,6 +48,19 @@ impl ValidationContext<'_> {
 
 /// Validate a parsed Schema, returning any semantic diagnostics.
 pub fn validate(schema: &Schema) -> Vec<Diagnostic> {
+    validate_impl(schema, false)
+}
+
+/// Validate a parsed Schema, skipping the reserved-namespace check.
+///
+/// This is intended for internal/meta schemas that are part of the
+/// implementation itself (e.g. `vexil.schema`, `vexil.pack`), not for
+/// user-authored schemas.
+pub(crate) fn validate_allow_reserved(schema: &Schema) -> Vec<Diagnostic> {
+    validate_impl(schema, true)
+}
+
+fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
 
     // Build declaration map: name -> (kind, span)
@@ -90,7 +103,9 @@ pub fn validate(schema: &Schema) -> Vec<Diagnostic> {
         has_wildcard_import,
     };
 
-    check_namespace_reserved(schema, &mut diags);
+    if !allow_reserved {
+        check_namespace_reserved(schema, &mut diags);
+    }
     check_decl_name_duplicate(schema, &mut diags);
     check_schema_annotations(schema, &mut diags);
 

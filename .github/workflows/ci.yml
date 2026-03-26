@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
   pull_request:
     branches: [main]
 
@@ -18,13 +18,22 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # ── Cross-platform tests ────────────────────────────────────────────────────
+  # Wire golden tests (wire_golden.rs) run on every platform/arch combination
+  # below to prove encoding → bytes and bytes → decoding are identical everywhere.
+  # A failure that is platform-specific but not universal indicates an endianness
+  # or integer-representation bug in the encoder/decoder.
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os:
+          - ubuntu-latest      # Linux x86-64
+          - ubuntu-24.04-arm   # Linux arm64
+          - windows-latest     # Windows x86-64
+          - macos-latest       # macOS arm64 (Apple Silicon)
 
     steps:
       - uses: actions/checkout@v6
@@ -43,3 +52,28 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all -- --check
+
+  # ── MSRV check ──────────────────────────────────────────────────────────────
+  # Ensures the workspace compiles on the declared minimum supported Rust version.
+  # MSRV is 1.94 (see CLAUDE.md). Only build+test; clippy/fmt use stable toolchain.
+  msrv:
+    name: MSRV (1.94)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust 1.94
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94"
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-1.94
+
+      - name: Build (MSRV)
+        run: cargo build --workspace
+
+      - name: Test (MSRV)
+        run: cargo test --workspace
