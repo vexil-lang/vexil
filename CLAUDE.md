@@ -121,16 +121,21 @@ Corpus files are named `NNN_description.vexil`. Check the highest existing numbe
 
 ## Release Lifecycle
 
-- **Patch (v0.1.x)** — bug fix only; must not change wire format; no audit needed
+- **Patch (v0.x.y)** — bug fix only; must not change wire format; no audit needed
 - **Minor (v0.x.0)** — milestone complete; full pre-release audit; spec revision tagged if language changed
 - **Major (v1.0.0)** — Tier 1 API frozen, spec at v1.0, corpus contract stable
 
 Wire format changes require RFC (14-day comment period per GOVERNANCE.md).
 Corpus file additions are non-breaking; modifications to existing files are breaking.
 
-**Tooling:** `cargo-smart-release` manages version bumps, CHANGELOG generation, and tagging.
-Release branch → `cargo smart-release --no-push --no-publish` → PR → merge → push tag.
-Never edit `Cargo.toml` versions by hand. See `mamuk-rust-workspace-release` skill for the full workflow.
+**Tooling:** Releases are fully automated via release-plz + cargo-dist.
+
+- On every push to `main`, release-plz opens/updates a Release PR with version bumps and changelogs
+- Merging the Release PR triggers: crates.io publish (all crates, correct dependency order) → git tag → cargo-dist binary builds → GitHub Release with artifacts + checksums
+- `release-plz.toml` configures lockstep version groups — all crates share the same version
+- `cliff.toml` configures changelog generation from conventional commits
+- `dist-workspace.toml` configures cargo-dist targets and installers
+- Never edit `Cargo.toml` versions by hand — release-plz manages them via the Release PR
 
 ## Git Workflow
 

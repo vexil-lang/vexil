@@ -1,0 +1,46 @@
+# release-plz configuration
+# https://release-plz.dev/docs/config
+
+[workspace]
+# Use git-cliff for changelog generation
+changelog_config = "cliff.toml"
+# Update changelogs in Release PRs
+changelog_update = true
+# Update workspace dependency versions when bumping
+dependencies_update = true
+# Create git tags on release
+git_tag_enable = true
+# Don't create GitHub Releases — cargo-dist handles that
+git_release_enable = false
+# Label Release PRs for easy filtering
+pr_labels = ["release"]
+# Disable semver checking pre-1.0 (enable post-1.0)
+semver_check = false
+# PR name format
+pr_name = "chore(release): v{{ version }}"
+
+# ── Lockstep version group ──────────────────────────────────────────────────
+# All crates bump together. When any crate has unreleased changes,
+# all crates in the group get the same version bump.
+
+[[package]]
+name = "vexil-lang"
+version_group = "vexil"
+
+[[package]]
+name = "vexil-runtime"
+version_group = "vexil"
+
+[[package]]
+name = "vexil-codegen-rust"
+version_group = "vexil"
+
+[[package]]
+name = "vexil-store"
+version_group = "vexil"
+
+[[package]]
+name = "vexilc"
+version_group = "vexil"
+# vexilc is a CLI binary — don't generate a changelog for it separately
+changelog_update = false
