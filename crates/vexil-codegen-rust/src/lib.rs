@@ -142,7 +142,7 @@ pub fn generate_mod_file(module_names: &[&str]) -> String {
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.
-fn type_name_of(typedef: &TypeDef) -> &str {
+pub(crate) fn type_name_of(typedef: &TypeDef) -> &str {
     match typedef {
         TypeDef::Message(m) => m.name.as_str(),
         TypeDef::Enum(e) => e.name.as_str(),
@@ -237,6 +237,30 @@ mod tests {
         let backend = crate::backend::RustBackend;
         let trait_fn = backend.generate(&compiled).unwrap();
         assert_eq!(free_fn, trait_fn);
+    }
+
+    #[test]
+    fn generate_project_emits_cross_file_use_statements() {
+        use vexil_lang::codegen::CodegenBackend;
+        use vexil_lang::resolve::InMemoryLoader;
+        let root_src = "namespace proj.root\nimport proj.dep\nmessage Foo { d @0 : Bar }";
+        let dep_src = "namespace proj.dep\nmessage Bar { y @0 : string }";
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert("proj.dep".into(), dep_src.into());
+        let root_path = std::path::PathBuf::from("proj/root.vexil");
+        let result = vexil_lang::compile_project(root_src, &root_path, &loader).unwrap();
+        let backend = crate::backend::RustBackend;
+        let files = backend.generate_project(&result).unwrap();
+        // Find root.rs — it should contain a `use crate::proj::dep::Bar;` statement
+        let root_code = files
+            .iter()
+            .find(|(p, _)| p.to_string_lossy().contains("root.rs"))
+            .map(|(_, code)| code.as_str())
+            .expect("missing root.rs");
+        assert!(
+            root_code.contains("use crate::proj::dep::Bar;"),
+            "root.rs should contain cross-file use statement for Bar, got:\n{root_code}"
+        );
     }
 
     #[test]
