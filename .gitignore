@@ -6,4 +6,5 @@
 Thumbs.db
 
 .idea
-.worktrees/
+.worktrees/docs/superpowers/
+.claude/
