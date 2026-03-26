@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme.workspace = true
 description = "The Vexil schema compiler CLI"
 keywords = ["schema", "codegen", "compiler", "protocol", "cli"]
 categories = ["compilers", "development-tools", "command-line-utilities"]

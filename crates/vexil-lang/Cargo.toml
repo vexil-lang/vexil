@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme.workspace = true
 description = "Compiler library for the Vexil schema definition language — lexer, parser, IR, and type checker"
 keywords = ["schema", "serialization", "codegen", "protocol", "compiler"]
 categories = ["compilers", "encoding", "development-tools"]

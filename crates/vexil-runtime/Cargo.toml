@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+readme.workspace = true
 description = "Runtime support for Vexil generated code — bit-level I/O, Pack/Unpack traits, wire encoding primitives"
 keywords = ["schema", "serialization", "binary", "protocol"]
 categories = ["encoding"]
