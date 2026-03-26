@@ -66,7 +66,7 @@ fn compile_and_generate(project_name: &str, root_ns: &str, expected_schema_count
 
     // Generate code for each schema — assert no codegen errors.
     for (ns, compiled) in &result.schemas {
-        let code = vexil_codegen::generate(compiled)
+        let code = vexil_codegen_rust::generate(compiled)
             .unwrap_or_else(|e| panic!("codegen failed for {ns}: {e}"));
         assert!(!code.is_empty(), "empty codegen output for {ns}");
         assert!(

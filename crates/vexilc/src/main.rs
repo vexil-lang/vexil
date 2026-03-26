@@ -72,7 +72,7 @@ fn cmd_codegen(filename: &str, output: Option<&str>) -> i32 {
             return 1;
         }
     };
-    let code = match vexil_codegen::generate(&compiled) {
+    let code = match vexil_codegen_rust::generate(&compiled) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("error: codegen failed: {e}");
@@ -194,7 +194,7 @@ fn cmd_build(
         }
         file_path.push(format!("{file_name}.rs"));
 
-        let code = match vexil_codegen::generate_with_imports(compiled, None) {
+        let code = match vexil_codegen_rust::generate_with_imports(compiled, None) {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("error: codegen for `{ns}` failed: {e}");
@@ -224,7 +224,7 @@ fn cmd_build(
         mod_path.push("mod.rs");
 
         let child_refs: Vec<&str> = children.iter().map(|s| s.as_str()).collect();
-        let mod_content = vexil_codegen::generate_mod_file(&child_refs);
+        let mod_content = vexil_codegen_rust::generate_mod_file(&child_refs);
 
         if let Err(e) = std::fs::write(&mod_path, &mod_content) {
             eprintln!("error: writing {}: {e}", mod_path.display());

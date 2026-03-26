@@ -12,7 +12,7 @@ fn check_compiles(corpus_name: &str) {
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", corpus_path.display()));
     let result = vexil_lang::compile(&source);
     let compiled = result.compiled.expect("corpus file should compile");
-    let code = vexil_codegen::generate(&compiled).expect("codegen should succeed");
+    let code = vexil_codegen_rust::generate(&compiled).expect("codegen should succeed");
 
     let tmp = std::env::temp_dir().join(format!("vexil-codegen-check-{corpus_name}"));
     let _ = std::fs::remove_dir_all(&tmp);

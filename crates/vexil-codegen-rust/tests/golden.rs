@@ -26,7 +26,7 @@ fn golden_test(corpus_name: &str) {
         result.diagnostics
     );
     let compiled = result.compiled.expect("no compiled schema");
-    let generated = vexil_codegen::generate(&compiled).expect("codegen failed");
+    let generated = vexil_codegen_rust::generate(&compiled).expect("codegen failed");
 
     if std::env::var("UPDATE_GOLDEN").is_ok() {
         fs::create_dir_all(&golden_dir).ok();

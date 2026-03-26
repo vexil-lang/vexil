@@ -10,6 +10,6 @@ description = "The Vexil schema compiler CLI"
 publish = false
 
 [dependencies]
-vexil-lang = { path = "../vexil-lang" }
-vexil-codegen = { path = "../vexil-codegen" }
+vexil-lang = { path = "../vexil-lang", version = "0.1.0" }
+vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "0.1.0" }
 ariadne = "0.6"

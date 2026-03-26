@@ -1,5 +1,5 @@
 [package]
-name = "vexil-codegen"
+name = "vexil-codegen-rust"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,7 @@ keywords = ["schema", "codegen", "serialization"]
 categories = ["compilers", "development-tools"]
 
 [dependencies]
-vexil-lang = { path = "../vexil-lang" }
+vexil-lang = { path = "../vexil-lang", version = "0.1.0" }
 thiserror = "2"
 
 [dev-dependencies]
