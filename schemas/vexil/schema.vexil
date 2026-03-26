@@ -1,0 +1,131 @@
+namespace vexil.schema
+
+enum PrimitiveType {
+    Bool @0  U8 @1  U16 @2  U32 @3  U64 @4
+    I8 @5  I16 @6  I32 @7  I64 @8
+    F32 @9  F64 @10  Void @11
+}
+
+enum SemanticType {
+    String @0  Bytes @1  Rgb @2  Uuid @3  Timestamp @4  Hash @5
+}
+
+union ResolvedType {
+    Primitive @0 { kind @0 : PrimitiveType }
+    SubByte   @1 { bits @0 : u8  signed @1 : bool }
+    Semantic  @2 { kind @0 : SemanticType }
+    Named     @3 { type_id @0 : u32 }
+    Optional  @4 { inner @0 : ResolvedType }
+    Array     @5 { inner @0 : ResolvedType }
+    Map       @6 { key @0 : ResolvedType  value @1 : ResolvedType }
+    Result    @7 { ok @0 : ResolvedType  err @1 : ResolvedType }
+}
+
+enum Encoding {
+    Default @0  Varint @1  ZigZag @2
+}
+
+message FieldEncoding {
+    encoding @0 : Encoding
+    limit    @1 : optional<u64>
+}
+
+message Annotations {
+    deprecated     @0 : optional<string>
+    since          @1 : optional<string>
+    doc            @2 : array<string>
+    revision       @3 : optional<u64>
+    non_exhaustive @4 : bool
+    version        @5 : optional<string>
+}
+
+message TombstoneDef {
+    ordinal @0 : u32
+    reason  @1 : string
+    since   @2 : optional<string>
+}
+
+message FieldDef {
+    name          @0 : string
+    ordinal       @1 : u32
+    resolved_type @2 : ResolvedType
+    encoding      @3 : FieldEncoding
+    annotations   @4 : Annotations
+}
+
+message MessageDef {
+    name        @0 : string
+    fields      @1 : array<FieldDef>
+    tombstones  @2 : array<TombstoneDef>
+    annotations @3 : Annotations
+}
+
+message EnumVariantDef {
+    name        @0 : string
+    ordinal     @1 : u32
+    annotations @2 : Annotations
+}
+
+message EnumDef {
+    name        @0 : string
+    wire_bits   @1 : u8
+    variants    @2 : array<EnumVariantDef>
+    tombstones  @3 : array<TombstoneDef>
+    annotations @4 : Annotations
+}
+
+message FlagsBitDef {
+    name        @0 : string
+    ordinal     @1 : u32
+    annotations @2 : Annotations
+}
+
+message FlagsDef {
+    name        @0 : string
+    wire_bytes  @1 : u8
+    bits        @2 : array<FlagsBitDef>
+    tombstones  @3 : array<TombstoneDef>
+    annotations @4 : Annotations
+}
+
+message UnionVariantDef {
+    name        @0 : string
+    ordinal     @1 : u32
+    fields      @2 : array<FieldDef>
+    tombstones  @3 : array<TombstoneDef>
+    annotations @4 : Annotations
+}
+
+message UnionDef {
+    name        @0 : string
+    variants    @1 : array<UnionVariantDef>
+    tombstones  @2 : array<TombstoneDef>
+    annotations @3 : Annotations
+}
+
+message NewtypeDef {
+    name          @0 : string
+    inner_type    @1 : ResolvedType
+    terminal_type @2 : ResolvedType
+    annotations   @3 : Annotations
+}
+
+union TypeDef {
+    Message @0 { def @0 : MessageDef }
+    Enum    @1 { def @0 : EnumDef }
+    Flags   @2 { def @0 : FlagsDef }
+    Union   @3 { def @0 : UnionDef }
+    Newtype @4 { def @0 : NewtypeDef }
+}
+
+message CompiledSchema {
+    namespace    @0 : array<string>
+    types        @1 : array<TypeDef>
+    declarations @2 : array<u32>
+    schema_hash  @3 : hash
+    annotations  @4 : Annotations
+}
+
+message SchemaStore {
+    schemas @0 : array<CompiledSchema>
+}

@@ -50,27 +50,43 @@ pub struct CompileResult {
 
 /// Full pipeline: parse -> validate -> lower -> type-check.
 pub fn compile(source: &str) -> CompileResult {
-    let parse_result = parse(source);
-    if parse_result
-        .diagnostics
-        .iter()
-        .any(|d| d.severity == Severity::Error)
-    {
+    compile_impl(source, false)
+}
+
+/// Full pipeline for internal/meta schemas that may use the reserved `vexil`
+/// namespace prefix. Skips the namespace-reservation check only; all other
+/// validation, lowering, and type-checking still applies.
+pub fn compile_internal(source: &str) -> CompileResult {
+    compile_impl(source, true)
+}
+
+fn compile_impl(source: &str, allow_reserved: bool) -> CompileResult {
+    let (tokens, mut diagnostics) = lexer::lex(source);
+    let (schema, parse_diags) = parser::parse(source, tokens);
+    diagnostics.extend(parse_diags);
+    if let Some(ref schema) = schema {
+        let validate_diags = if allow_reserved {
+            validate::validate_allow_reserved(schema)
+        } else {
+            validate::validate(schema)
+        };
+        diagnostics.extend(validate_diags);
+    }
+    if diagnostics.iter().any(|d| d.severity == Severity::Error) {
         return CompileResult {
-            schema: parse_result.schema,
+            schema,
             compiled: None,
-            diagnostics: parse_result.diagnostics,
+            diagnostics,
         };
     }
-    let Some(schema) = parse_result.schema else {
+    let Some(schema) = schema else {
         return CompileResult {
             schema: None,
             compiled: None,
-            diagnostics: parse_result.diagnostics,
+            diagnostics,
         };
     };
     let (mut compiled, lower_diags) = lower::lower(&schema);
-    let mut diagnostics = parse_result.diagnostics;
     diagnostics.extend(lower_diags);
     if let Some(ref mut compiled) = compiled {
         let check_diags = typeck::check(compiled);
