@@ -46,7 +46,7 @@ fn cmd_check(filename: &str) -> i32 {
     0
 }
 
-fn cmd_codegen(filename: &str, output: Option<&str>) -> i32 {
+fn cmd_codegen(filename: &str, output: Option<&str>, target: &str) -> i32 {
     let source = match std::fs::read_to_string(filename) {
         Ok(s) => s,
         Err(e) => {
@@ -72,7 +72,14 @@ fn cmd_codegen(filename: &str, output: Option<&str>) -> i32 {
             return 1;
         }
     };
-    let code = match vexil_codegen_rust::generate(&compiled) {
+    let backend: Box<dyn vexil_lang::codegen::CodegenBackend> = match target {
+        "rust" => Box::new(vexil_codegen_rust::RustBackend),
+        other => {
+            eprintln!("error: unknown target `{other}` (available: rust)");
+            return 1;
+        }
+    };
+    let code = match backend.generate(&compiled) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("error: codegen failed: {e}");
@@ -188,18 +195,37 @@ fn main() {
             std::process::exit(cmd_check(&args[2]));
         }
         Some("codegen") => {
-            // vexilc codegen <file.vexil> [--output <path>]
+            // vexilc codegen <file.vexil> [--output <path>] [--target <rust>]
             if args.len() < 3 {
-                eprintln!("Usage: vexilc codegen <file.vexil> [--output <path>]");
+                eprintln!("Usage: vexilc codegen <file.vexil> [--output <path>] [--target <rust>]");
                 std::process::exit(1);
             }
             let filename = &args[2];
-            let output = if args.len() >= 5 && args[3] == "--output" {
-                Some(args[4].as_str())
-            } else {
-                None
-            };
-            std::process::exit(cmd_codegen(filename, output));
+            let mut output = None;
+            let mut target = "rust";
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--output" => {
+                        i += 1;
+                        if i < args.len() {
+                            output = Some(args[i].as_str());
+                        }
+                    }
+                    "--target" => {
+                        i += 1;
+                        if i < args.len() {
+                            target = args[i].as_str();
+                        }
+                    }
+                    other => {
+                        eprintln!("unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            std::process::exit(cmd_codegen(filename, output, target));
         }
         Some("build") => {
             // vexilc build <root.vexil> --include <dir> [--include ...] --output <dir> [--target <rust>]
@@ -251,7 +277,7 @@ fn main() {
         _ => {
             eprintln!("Usage: vexilc <subcommand> [args]");
             eprintln!("  vexilc check <file.vexil>");
-            eprintln!("  vexilc codegen <file.vexil> [--output <path>]");
+            eprintln!("  vexilc codegen <file.vexil> [--output <path>] [--target <rust>]");
             eprintln!(
                 "  vexilc build <root.vexil> --include <dir> --output <dir> [--target <rust>]"
             );
