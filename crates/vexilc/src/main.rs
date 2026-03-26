@@ -389,6 +389,7 @@ fn cmd_unpack(vxb_file: &str, schema_file: &str, type_name: &str, output: Option
             }
             println!("wrote {path}");
         }
+        // lgtm[rs/cleartext-logging] — decoded user data printed by request; not a credential.
         None => print!("{text}"),
     }
     0
@@ -454,6 +455,7 @@ fn cmd_format_vx(vx_file: &str, schema_file: &str, type_name: &str) -> i32 {
             }
         }
     }
+    // lgtm[rs/cleartext-logging] — formatted user data printed by request; not a credential.
     print!("{output}");
     0
 }
