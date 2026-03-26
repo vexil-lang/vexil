@@ -57,7 +57,7 @@ fn encode_resolved(
 ) -> Result<(), StoreEncodeError> {
     match ty {
         ResolvedType::Primitive(p) => encode_primitive(value, *p, w),
-        ResolvedType::SubByte(sbt) => encode_sub_byte(value, sbt.bits, w),
+        ResolvedType::SubByte(sbt) => encode_sub_byte(value, sbt.bits, sbt.signed, w),
         ResolvedType::Semantic(s) => encode_semantic(value, *s, w),
         ResolvedType::Named(type_id) => {
             let td = registry
@@ -133,7 +133,38 @@ fn encode_primitive(
     }
 }
 
-fn encode_sub_byte(value: &Value, bits: u8, w: &mut BitWriter) -> Result<(), StoreEncodeError> {
+fn encode_sub_byte(
+    value: &Value,
+    bits: u8,
+    signed: bool,
+    w: &mut BitWriter,
+) -> Result<(), StoreEncodeError> {
+    let mask: u64 = if bits == 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    };
+
+    if signed {
+        // iN: two's complement in exactly N bits (spec §3.2).
+        // Accept any signed integer Value; mask to the low N bits.
+        let raw: u64 = match value {
+            Value::I8(v) => (*v as i64 as u64) & mask,
+            Value::I16(v) => (*v as i64 as u64) & mask,
+            Value::I32(v) => (*v as i64 as u64) & mask,
+            Value::I64(v) => (*v as u64) & mask,
+            _ => {
+                return Err(StoreEncodeError::TypeMismatch {
+                    expected: format!("i{bits}"),
+                    actual: value_type_name(value).to_string(),
+                })
+            }
+        };
+        w.write_bits(raw, bits);
+        return Ok(());
+    }
+
+    // uN: unsigned N bits.
     match value {
         Value::Bits { value: v, width } => {
             if *width != bits {
@@ -142,12 +173,7 @@ fn encode_sub_byte(value: &Value, bits: u8, w: &mut BitWriter) -> Result<(), Sto
                     bits,
                 });
             }
-            let max = if bits == 64 {
-                u64::MAX
-            } else {
-                (1u64 << bits) - 1
-            };
-            if *v > max {
+            if *v > mask {
                 return Err(StoreEncodeError::Overflow {
                     value: v.to_string(),
                     bits,

@@ -57,11 +57,28 @@ fn decode_resolved(
     match ty {
         ResolvedType::Primitive(p) => decode_primitive(*p, r),
         ResolvedType::SubByte(sbt) => {
-            let value = r.read_bits(sbt.bits)?;
-            Ok(Value::Bits {
-                value,
-                width: sbt.bits,
-            })
+            let raw = r.read_bits(sbt.bits)?;
+            if sbt.signed {
+                // iN: sign-extend the N-bit two's-complement value (spec §3.2).
+                let sign_bit = 1u64 << (sbt.bits - 1);
+                let extended: i64 = if raw & sign_bit != 0 {
+                    // Negative: fill upper bits with ones.
+                    (raw | (!0u64 << sbt.bits)) as i64
+                } else {
+                    raw as i64
+                };
+                Ok(match sbt.bits {
+                    1..=8 => Value::I8(extended as i8),
+                    9..=16 => Value::I16(extended as i16),
+                    17..=32 => Value::I32(extended as i32),
+                    _ => Value::I64(extended),
+                })
+            } else {
+                Ok(Value::Bits {
+                    value: raw,
+                    width: sbt.bits,
+                })
+            }
         }
         ResolvedType::Semantic(s) => decode_semantic(*s, r),
         ResolvedType::Named(type_id) => {

@@ -257,6 +257,74 @@ fn multi_field_three_sub_byte_fields() {
     assert_eq!(decode(&bytes, "Packed2", &schema).unwrap(), v);
 }
 
+// ── Signed sub-byte types (iN = two's complement in N bits) ─────────────────
+
+#[test]
+fn signed_sub_byte_all_widths_roundtrip() {
+    for bits in [2u8, 3, 4, 5, 6, 7] {
+        let type_str = format!("i{bits}");
+        let schema_src = format!(
+            r#"
+            namespace test.bc.isb{bits}
+            message W {{ v @0 : {type_str} }}
+        "#
+        );
+        let schema = compile(&schema_src);
+        let min: i64 = -(1i64 << (bits - 1));
+        let max: i64 = (1i64 << (bits - 1)) - 1;
+
+        for raw in [0i64, 1, -1, min, max] {
+            let val = if bits <= 8 {
+                Value::I8(raw as i8)
+            } else {
+                Value::I16(raw as i16)
+            };
+            let mut fields = BTreeMap::new();
+            fields.insert("v".to_string(), val);
+            let v = Value::Message(fields);
+            assert_eq!(roundtrip(v.clone(), "W", &schema), v, "i{bits} value={raw}");
+        }
+    }
+}
+
+#[test]
+fn signed_sub_byte_negative_one_packs_as_all_ones() {
+    // i3=-1 is 0b111 in two's complement → packs into 3 bits as all-ones.
+    // Combined with i5=-1 (0b11111), total byte = 0xFF.
+    let schema = compile(
+        r#"
+        namespace test.bc.ineg
+        message W { a @0 : i3  b @1 : i5 }
+    "#,
+    );
+    let mut fields = BTreeMap::new();
+    fields.insert("a".to_string(), Value::I8(-1));
+    fields.insert("b".to_string(), Value::I8(-1));
+    let v = Value::Message(fields);
+    let bytes = encode(&v, "W", &schema).unwrap();
+    assert_eq!(bytes, vec![0xFF], "i3=-1 + i5=-1 must be 0xFF");
+    assert_eq!(decode(&bytes, "W", &schema).unwrap(), v);
+}
+
+#[test]
+fn signed_sub_byte_min_value() {
+    // i3 min = -4 = 0b100 in three-bit two's complement.
+    // Combined with i5 min = -16 = 0b10000 → byte = 0b10000_100 = 0x84.
+    let schema = compile(
+        r#"
+        namespace test.bc.imin
+        message W { a @0 : i3  b @1 : i5 }
+    "#,
+    );
+    let mut fields = BTreeMap::new();
+    fields.insert("a".to_string(), Value::I8(-4));
+    fields.insert("b".to_string(), Value::I8(-16));
+    let v = Value::Message(fields);
+    let bytes = encode(&v, "W", &schema).unwrap();
+    assert_eq!(bytes, vec![0x84], "i3=-4 + i5=-16 must be 0x84");
+    assert_eq!(decode(&bytes, "W", &schema).unwrap(), v);
+}
+
 // ── Flags edge cases ─────────────────────────────────────────────────────────
 
 #[test]
