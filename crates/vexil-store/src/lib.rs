@@ -7,6 +7,7 @@ pub mod header;
 pub mod lexer;
 pub mod meta;
 pub mod parser;
+pub mod validate;
 pub mod value;
 
 pub use decoder::decode;
@@ -18,4 +19,5 @@ pub use header::{read_header, write_header, Magic, VxbHeader, FORMAT_VERSION};
 pub use lexer::{Lexer, Span, Spanned, Token};
 pub use meta::{meta_schema, pack_schema};
 pub use parser::parse;
+pub use validate::validate;
 pub use value::Value;
