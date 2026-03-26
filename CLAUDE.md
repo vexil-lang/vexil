@@ -97,14 +97,40 @@ vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust.
 
 - Rust edition 2021, MSRV 1.94
 - `thiserror` for error types
-- `#[derive(Debug, Clone, PartialEq)]` on data types, `serde::Serialize, Deserialize` on wire types
+- `#[derive(Debug, Clone, PartialEq)]` on data types
 - No `unwrap()` or `expect()` in non-test code
 - All `unsafe` blocks require `// SAFETY:` comments
 - Explicit re-exports only — no `pub use foo::*`
 
+## Golden Files
+
+Codegen golden tests live in `crates/vexil-codegen-rust/tests/golden/`.
+To regenerate after intentional codegen changes:
+
+```bash
+UPDATE_GOLDEN=1 cargo test -p vexil-codegen-rust
+```
+
+## Corpus Contribution
+
+Adding a corpus file requires two things:
+1. The `.vexil` file in `corpus/valid/` or `corpus/invalid/`
+2. A corresponding entry in `corpus/MANIFEST.md` with spec reference
+
+Corpus files are named `NNN_description.vexil`. Check the highest existing number before adding.
+
+## Release Lifecycle
+
+- **Patch (v0.1.x)** — bug fix only; must not change wire format; no audit needed
+- **Minor (v0.x.0)** — milestone complete; full pre-release audit; spec revision tagged if language changed
+- **Major (v1.0.0)** — Tier 1 API frozen, spec at v1.0, corpus contract stable
+
+Wire format changes require RFC (14-day comment period per GOVERNANCE.md).
+Corpus file additions are non-breaking; modifications to existing files are breaking.
+
 ## Git Workflow
 
-- Pre-commit hook runs `cargo fmt --check` and rejects unformatted code
+- Pre-commit hook runs `cargo fmt --all` and re-stages with `git add -u` — commits are always formatted
 - `VEXIL_NO_FMT=1` to bypass format check; `VEXIL_COMMIT_TASK=1` for task commits
 - Always `cargo fmt --all` before committing
 - Always `git pull origin main` before starting — multi-agent sessions are common
