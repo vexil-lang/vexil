@@ -42,6 +42,7 @@ spec → formal grammar → test corpus → reference implementation
 - A pre-commit hook runs `cargo fmt --all` and re-stages the result automatically — commits are always formatted.
 - Agents MUST bypass it with `VEXIL_NO_FMT=1 git commit ...` to avoid fmt running during automated commits.
 - Always `git pull origin main` before starting local edits — multiple agents and direct GitHub commits are common.
+- CI/release workflow changes MUST be done on a branch, not directly on `main`. Iterate on the branch, then squash-merge as one clean commit before tagging. Learned the hard way: iterating on `main` spams the log with workflow-fix commits.
 
 ## Code Standards (for reference implementation, when it exists)
 
