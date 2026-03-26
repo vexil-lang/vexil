@@ -10,3 +10,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/vexil-lang/vexil"
 authors = ["Orix Systems contributors"]
 readme = "README.md"
+
+# Profile used by cargo-dist for release builds
+[profile.dist]
+inherits = "release"
+lto = "thin"
