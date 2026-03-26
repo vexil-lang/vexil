@@ -105,12 +105,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install git-cliff
+        run: cargo install git-cliff
+
       - name: Generate changelog
-        uses: orhun/git-cliff-action@v4
-        with:
-          args: --latest --strip header
-        env:
-          OUTPUT: RELEASE_NOTES.md
+        run: git-cliff --latest --strip header -o RELEASE_NOTES.md
 
       - uses: actions/download-artifact@v4
         with:
