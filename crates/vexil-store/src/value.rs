@@ -54,6 +54,92 @@ pub enum Value {
     },
 }
 
+impl Value {
+    pub fn default_for_type(
+        ty: &vexil_lang::ResolvedType,
+        registry: &vexil_lang::TypeRegistry,
+    ) -> Self {
+        use vexil_lang::ast::{PrimitiveType, SemanticType};
+        use vexil_lang::ResolvedType;
+        match ty {
+            ResolvedType::Primitive(p) => match p {
+                PrimitiveType::Bool => Value::Bool(false),
+                PrimitiveType::U8 => Value::U8(0),
+                PrimitiveType::U16 => Value::U16(0),
+                PrimitiveType::U32 => Value::U32(0),
+                PrimitiveType::U64 => Value::U64(0),
+                PrimitiveType::I8 => Value::I8(0),
+                PrimitiveType::I16 => Value::I16(0),
+                PrimitiveType::I32 => Value::I32(0),
+                PrimitiveType::I64 => Value::I64(0),
+                PrimitiveType::F32 => Value::F32(0.0),
+                PrimitiveType::F64 => Value::F64(0.0),
+                PrimitiveType::Void => Value::Bool(false),
+            },
+            ResolvedType::SubByte(sbt) => Value::Bits {
+                value: 0,
+                width: sbt.bits,
+            },
+            ResolvedType::Semantic(s) => match s {
+                SemanticType::String => Value::String(String::new()),
+                SemanticType::Bytes => Value::Bytes(Vec::new()),
+                SemanticType::Rgb => Value::Rgb([0, 0, 0]),
+                SemanticType::Uuid => Value::Uuid([0; 16]),
+                SemanticType::Timestamp => Value::Timestamp(0),
+                SemanticType::Hash => Value::Hash([0; 32]),
+            },
+            ResolvedType::Named(type_id) => {
+                if let Some(type_def) = registry.get(*type_id) {
+                    Self::default_for_typedef(type_def, registry)
+                } else {
+                    Value::None
+                }
+            }
+            ResolvedType::Optional(_) => Value::None,
+            ResolvedType::Array(_) => Value::Array(Vec::new()),
+            ResolvedType::Map(_, _) => Value::Map(Vec::new()),
+            ResolvedType::Result(ok_ty, _) => {
+                Value::Ok(Box::new(Self::default_for_type(ok_ty, registry)))
+            }
+            _ => Value::None,
+        }
+    }
+
+    fn default_for_typedef(
+        type_def: &vexil_lang::TypeDef,
+        registry: &vexil_lang::TypeRegistry,
+    ) -> Self {
+        use vexil_lang::TypeDef;
+        match type_def {
+            TypeDef::Message(_) => Value::Message(std::collections::BTreeMap::new()),
+            TypeDef::Enum(e) => {
+                if let Some(first) = e.variants.first() {
+                    Value::Enum(first.name.to_string())
+                } else {
+                    Value::Enum(String::new())
+                }
+            }
+            TypeDef::Flags(_) => Value::Flags(Vec::new()),
+            TypeDef::Union(u) => {
+                if let Some(first) = u.variants.first() {
+                    Value::Union {
+                        variant: first.name.to_string(),
+                        fields: std::collections::BTreeMap::new(),
+                    }
+                } else {
+                    Value::Union {
+                        variant: String::new(),
+                        fields: std::collections::BTreeMap::new(),
+                    }
+                }
+            }
+            TypeDef::Newtype(nt) => Self::default_for_type(&nt.terminal_type, registry),
+            TypeDef::Config(_) => Value::Message(std::collections::BTreeMap::new()),
+            _ => Value::None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
