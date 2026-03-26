@@ -235,7 +235,7 @@ checksum = "b4ac048d71ede7ee76d585517add45da530660ef4390e49b098733c6e897f254"
 
 [[package]]
 name = "vexil-codegen-rust"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "test-case",
  "thiserror",
@@ -244,7 +244,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-lang"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "smol_str",
@@ -254,7 +254,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-runtime"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "thiserror",
 ]
@@ -273,7 +273,7 @@ dependencies = [
 
 [[package]]
 name = "vexilc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ariadne",
  "vexil-codegen-rust",
