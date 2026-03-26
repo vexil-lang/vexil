@@ -1,0 +1,22 @@
+[package]
+name = "vexil-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme.workspace = true
+description = "Human-readable and binary file formats for Vexil schemas and data"
+keywords = ["schema", "serialization", "format", "store"]
+categories = ["encoding", "parser-implementations"]
+
+[dependencies]
+vexil-lang = { path = "../vexil-lang", version = "0.1.0" }
+vexil-runtime = { path = "../vexil-runtime", version = "0.1.0" }
+thiserror = "2"
+blake3 = "1"
+smol_str = "0.3"
+
+[dev-dependencies]
+test-case = "3"
