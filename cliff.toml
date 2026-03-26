@@ -16,10 +16,16 @@ trim = true
 conventional_commits = true
 filter_unconventional = true
 commit_parsers = [
+    # Skip infrastructure/internal commits by scope regardless of type
+    { scope = "release", skip = true },
+    { scope = "ci", skip = true },
+    # Skip commit types that are never user-facing
+    { message = "^docs", skip = true },
+    { message = "^test", skip = true },
+    { message = "^chore", skip = true },
+    # User-facing changes
     { message = "^feat", group = "Features" },
     { message = "^fix", group = "Bug Fixes" },
-    { message = "^docs", group = "Documentation" },
     { message = "^refactor", group = "Refactoring" },
-    { message = "^test", group = "Testing" },
-    { message = "^chore", skip = true },
+    { message = "^perf", group = "Performance" },
 ]
