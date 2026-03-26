@@ -14,13 +14,13 @@ pub mod typeck;
 pub mod validate;
 
 pub use codegen::{CodegenBackend, CodegenError};
+pub use ir::{CompiledSchema, ResolvedType, TypeDef, TypeId, TypeRegistry};
 pub use project::compile_project;
 pub use project::ProjectResult;
 pub use resolve::SchemaLoader;
 
 use ast::Schema;
 use diagnostic::{Diagnostic, Severity};
-use ir::CompiledSchema;
 
 pub struct ParseResult {
     pub schema: Option<Schema>,

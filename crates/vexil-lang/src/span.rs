@@ -1,3 +1,6 @@
+//! # Stability: Tier 2
+//!
+
 /// A byte-offset range in source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {

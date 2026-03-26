@@ -35,7 +35,7 @@ pub fn generate(compiled: &CompiledSchema) -> Result<String, CodegenError> {
 ///
 /// `import_paths` maps TypeIds of imported types to their Rust module paths
 /// (e.g., `"crate::foo::bar::types::Baz"` for a type `Baz` from namespace `foo.bar.types`).
-pub fn generate_with_imports(
+pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
     import_paths: Option<&HashMap<TypeId, String>>,
 ) -> Result<String, CodegenError> {
