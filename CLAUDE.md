@@ -91,7 +91,7 @@ vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust.
 - **Wire encoding:** LSB-first bit packing, LEB128 varints, ZigZag signed, BLAKE3 schema hash
 - **Build sequence:** spec → grammar → corpus → reference implementation (spec-driven + TDD)
 - **Lockstep versioning** — all workspace crates share version (v0.MILESTONE.PATCH)
-- **Trunk-based development** — all work on main, releases are tags (tag-triggered CI)
+- **Trunk-based development** — small fixes and patches go directly on main; milestone-sized features use a `feature/<name>` branch and merge via PR
 
 ## Code Standards
 
@@ -135,3 +135,4 @@ Corpus file additions are non-breaking; modifications to existing files are brea
 - Always `cargo fmt --all` before committing
 - Always `git pull origin main` before starting — multi-agent sessions are common
 - CI/release workflow changes MUST go on a branch, not main
+- Milestone-sized features use `feature/<name>` branches; worktrees live in `.worktrees/`
