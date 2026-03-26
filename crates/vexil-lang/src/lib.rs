@@ -5,6 +5,7 @@ pub mod diagnostic;
 pub mod ir;
 pub mod lexer;
 pub mod lower;
+pub mod meta;
 pub mod parser;
 pub mod project;
 pub mod remap;
@@ -15,6 +16,7 @@ pub mod validate;
 
 pub use codegen::{CodegenBackend, CodegenError};
 pub use ir::{CompiledSchema, ResolvedType, TypeDef, TypeId, TypeRegistry};
+pub use meta::{meta_schema, pack_schema};
 pub use project::compile_project;
 pub use project::ProjectResult;
 pub use resolve::SchemaLoader;
@@ -51,14 +53,6 @@ pub struct CompileResult {
 /// Full pipeline: parse -> validate -> lower -> type-check.
 pub fn compile(source: &str) -> CompileResult {
     compile_impl(source, false)
-}
-
-/// Full pipeline for internal/meta schemas that may use the reserved `vexil`
-/// namespace prefix. Skips the namespace-reservation check only; all other
-/// validation, lowering, and type-checking still applies.
-#[doc(hidden)]
-pub fn compile_internal(source: &str) -> CompileResult {
-    compile_impl(source, true)
 }
 
 fn compile_impl(source: &str, allow_reserved: bool) -> CompileResult {

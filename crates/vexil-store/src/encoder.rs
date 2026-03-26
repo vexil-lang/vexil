@@ -126,6 +126,8 @@ fn encode_primitive(
             w.write_f64(*v);
             Ok(())
         }
+        // Void fields carry no wire bits; accept the canonical default value.
+        (Value::Bool(false), PrimitiveType::Void) => Ok(()),
         _ => Err(StoreEncodeError::TypeMismatch {
             expected: format!("{prim:?}"),
             actual: value_type_name(value).to_string(),
@@ -168,9 +170,9 @@ fn encode_sub_byte(
     match value {
         Value::Bits { value: v, width } => {
             if *width != bits {
-                return Err(StoreEncodeError::Overflow {
-                    value: v.to_string(),
-                    bits,
+                return Err(StoreEncodeError::TypeMismatch {
+                    expected: format!("u{bits}"),
+                    actual: format!("u{width}"),
                 });
             }
             if *v > mask {

@@ -4,25 +4,13 @@ use vexil_store::{decode, encode, meta_schema, pack_schema, Value};
 
 #[test]
 fn meta_schema_compiles() {
-    let source = include_str!("../../../schemas/vexil/schema.vexil");
-    let result = vexil_lang::compile_internal(source);
-    let has_errors = result
-        .diagnostics
+    let compiled = vexil_lang::meta_schema();
+    let ns: Vec<&str> = compiled
+        .namespace
         .iter()
-        .any(|d| d.severity == Severity::Error);
-    assert!(
-        !has_errors,
-        "meta-schema compilation errors: {:?}",
-        result.diagnostics
-    );
-    let compiled = result
-        .compiled
-        .expect("meta-schema should produce a CompiledSchema");
-    // namespace is Vec<SmolStr> — compare via iterator
-    let ns: Vec<&str> = compiled.namespace.iter().map(|s| s.as_str()).collect();
+        .map(|s: &smol_str::SmolStr| s.as_str())
+        .collect();
     assert_eq!(ns, vec!["vexil", "schema"]);
-
-    // Verify key types exist
     assert!(compiled.registry.lookup("CompiledSchema").is_some());
     assert!(compiled.registry.lookup("TypeDef").is_some());
     assert!(compiled.registry.lookup("ResolvedType").is_some());
@@ -31,21 +19,12 @@ fn meta_schema_compiles() {
 
 #[test]
 fn pack_schema_compiles() {
-    let source = include_str!("../../../schemas/vexil/pack.vexil");
-    let result = vexil_lang::compile_internal(source);
-    let has_errors = result
-        .diagnostics
+    let compiled = vexil_lang::pack_schema();
+    let ns: Vec<&str> = compiled
+        .namespace
         .iter()
-        .any(|d| d.severity == Severity::Error);
-    assert!(
-        !has_errors,
-        "pack schema compilation errors: {:?}",
-        result.diagnostics
-    );
-    let compiled = result
-        .compiled
-        .expect("pack schema should produce a CompiledSchema");
-    let ns: Vec<&str> = compiled.namespace.iter().map(|s| s.as_str()).collect();
+        .map(|s: &smol_str::SmolStr| s.as_str())
+        .collect();
     assert_eq!(ns, vec!["vexil", "pack"]);
     assert!(compiled.registry.lookup("DataPack").is_some());
     assert!(compiled.registry.lookup("DataEntry").is_some());

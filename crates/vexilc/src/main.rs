@@ -440,14 +440,21 @@ fn cmd_format_vx(vx_file: &str, schema_file: &str, type_name: &str) -> i32 {
     };
 
     let opts = vexil_store::FormatOptions::default();
-    let text = match vexil_store::format(&values, type_name, &schema, &opts) {
-        Ok(t) => t,
-        Err(e) => {
-            eprintln!("error: formatting failed: {e}");
-            return 1;
+    // Format each value individually. A .vx file may contain multiple records
+    // of the same type; if any value fails to format under `type_name` the user
+    // needs to check whether the file contains mixed types (use --type correctly).
+    let mut output = String::new();
+    for (i, value) in values.iter().enumerate() {
+        match vexil_store::format(std::slice::from_ref(value), type_name, &schema, &opts) {
+            Ok(t) => output.push_str(&t),
+            Err(e) => {
+                eprintln!("error: value {i} could not be formatted as `{type_name}`: {e}");
+                eprintln!("hint: if the file contains mixed types, re-run with the correct --type");
+                return 1;
+            }
         }
-    };
-    print!("{text}");
+    }
+    print!("{output}");
     0
 }
 

@@ -148,6 +148,14 @@ fn read_leb128_string(data: &[u8]) -> Result<(String, usize), VxbError> {
             });
         }
     }
+    // Reject implausibly large strings in header fields (namespace, version).
+    // The largest realistic namespace is well under 1 KiB; 65535 is generous.
+    const MAX_HEADER_STRING: u64 = 65535;
+    if len > MAX_HEADER_STRING {
+        return Err(VxbError::Io {
+            message: format!("header string length {len} exceeds maximum {MAX_HEADER_STRING}"),
+        });
+    }
     let str_len = len as usize;
     if pos + str_len > data.len() {
         return Err(VxbError::Io {

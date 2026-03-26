@@ -1,14 +1,14 @@
-pub mod decoder;
-pub mod detect;
-pub mod encoder;
-pub mod error;
-pub mod formatter;
-pub mod header;
-pub mod lexer;
-pub mod meta;
-pub mod parser;
-pub mod validate;
-pub mod value;
+pub(crate) mod decoder;
+pub(crate) mod detect;
+pub(crate) mod encoder;
+pub(crate) mod error;
+pub(crate) mod formatter;
+pub(crate) mod header;
+pub(crate) mod lexer;
+pub(crate) mod meta;
+pub(crate) mod parser;
+pub(crate) mod validate;
+pub(crate) mod value;
 
 pub use decoder::decode;
 pub use detect::{detect_format, FileFormat};
