@@ -18,7 +18,7 @@ static PACK_SCHEMA: OnceLock<CompiledSchema> = OnceLock::new();
 /// be a build-time bug in the language implementation, not a runtime error.
 pub fn meta_schema() -> &'static CompiledSchema {
     META_SCHEMA.get_or_init(|| {
-        let source = include_str!("../../../schemas/vexil/schema.vexil");
+        let source = include_str!("../schemas/schema.vexil");
         let result = super::compile_impl(source, true);
         let has_errors = result
             .diagnostics
@@ -41,7 +41,7 @@ pub fn meta_schema() -> &'static CompiledSchema {
 /// Panics at first call if the embedded source fails to compile.
 pub fn pack_schema() -> &'static CompiledSchema {
     PACK_SCHEMA.get_or_init(|| {
-        let source = include_str!("../../../schemas/vexil/pack.vexil");
+        let source = include_str!("../schemas/pack.vexil");
         let result = super::compile_impl(source, true);
         let has_errors = result
             .diagnostics

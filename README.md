@@ -126,6 +126,7 @@ crates/
   vexil-codegen-rust/  # Rust code generation backend
   vexil-runtime/       # Runtime support: bit I/O, Pack/Unpack traits, LEB128, ZigZag
   vexilc/              # CLI frontend with ariadne error rendering
+  vexil-store/         # .vx text format and .vxb binary format for schemas and data
 ```
 
 ## Contributing
