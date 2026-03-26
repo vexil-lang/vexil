@@ -11,7 +11,7 @@ as the contributor base grows.
 ### Architectural decisions
 
 Made by the project lead. Significant decisions are documented in
-`docs/decisions/` with rationale. Community input is welcome via
+`GitHub issues labeled `decision`` with rationale. Community input is welcome via
 GitHub issues labeled `rfc`.
 
 ### Bug fixes and small improvements
@@ -45,7 +45,7 @@ over time. There is no formal application process at this stage.
 1. Open a GitHub issue with the `rfc` label
 2. Describe: the problem, the proposed solution, and alternatives considered
 3. **14-day comment period** — the community may raise concerns or propose amendments
-4. The project lead makes the final decision and documents the rationale in `docs/decisions/`
+4. The project lead makes the final decision and documents the rationale in `GitHub issues labeled `decision``
 
 RFCs are required for: new language features, changes to encoding semantics,
 wire format modifications, and changes to the conformance corpus contract.

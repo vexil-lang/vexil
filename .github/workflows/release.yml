@@ -17,11 +17,11 @@ jobs:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --workspace
@@ -32,7 +32,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
@@ -44,7 +44,7 @@ jobs:
     needs: [test, lint]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Publish vexil-lang
         run: cargo publish -p vexil-lang --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Wait for crates.io index
@@ -55,7 +55,6 @@ jobs:
         run: sleep 30
       - name: Publish vexil-runtime
         run: cargo publish -p vexil-runtime --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
       - name: Wait for crates.io index
         run: sleep 30
       - name: Publish vexilc
@@ -79,7 +78,7 @@ jobs:
             target: aarch64-apple-darwin
             artifact: vexilc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Add target
         run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
@@ -102,7 +101,7 @@ jobs:
     needs: [build-binaries, publish-crates]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

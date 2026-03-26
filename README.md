@@ -50,10 +50,22 @@ cargo build --release --bin vexilc
 
 ### CLI
 
-Validate and compile a `.vexil` schema file:
+Check a schema for errors:
 
 ```sh
-vexilc schema.vexil
+vexilc check schema.vexil
+```
+
+Generate Rust code from a schema:
+
+```sh
+vexilc codegen schema.vexil --output out.rs
+```
+
+Compile a multi-file project:
+
+```sh
+vexilc build root.vexil --include ./schemas --output ./generated
 ```
 
 Errors are rendered with source spans and structured diagnostics:
@@ -72,7 +84,7 @@ Add `vexil-lang` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-vexil-lang = { git = "https://github.com/vexil-lang/vexil" }
+vexil-lang = "0.1"
 ```
 
 Parse and compile a schema programmatically:
@@ -96,8 +108,11 @@ spec/
 corpus/
   valid/               # 18 conformant schemas — all must be accepted
   invalid/             # 56 invalid schemas — all must be rejected
+  projects/            # Multi-file project fixtures for integration tests
 crates/
-  vexil-lang/          # Compiler library: lexer, parser, IR, type checker
+  vexil-lang/          # Compiler library: lexer, parser, IR, type checker, canonical hash
+  vexil-codegen-rust/  # Rust code generation backend
+  vexil-runtime/       # Runtime support: bit I/O, Pack/Unpack traits, LEB128, ZigZag
   vexilc/              # CLI frontend with ariadne error rendering
 ```
 
