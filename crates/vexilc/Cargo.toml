@@ -7,7 +7,6 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 description = "The Vexil schema compiler CLI"
-publish = false
 
 [dependencies]
 vexil-lang = { path = "../vexil-lang", version = "0.1.0" }
