@@ -1,0 +1,11 @@
+namespace vexil.pack
+
+message DataEntry {
+    schema_hash @0 : hash
+    type_name   @1 : string
+    payload     @2 : bytes
+}
+
+message DataPack {
+    entries @0 : array<DataEntry>
+}
