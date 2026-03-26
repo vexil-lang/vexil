@@ -5,6 +5,12 @@
   <a href="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml">
     <img src="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
+  <a href="https://crates.io/crates/vexilc">
+    <img src="https://img.shields.io/crates/v/vexilc" alt="vexilc on crates.io">
+  </a>
+  <a href="https://crates.io/crates/vexil-lang">
+    <img src="https://img.shields.io/crates/v/vexil-lang?label=vexil-lang" alt="vexil-lang on crates.io">
+  </a>
   <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0">
   <img src="https://img.shields.io/badge/rust-1.94%2B-orange" alt="Rust 1.94+">
 </p>
@@ -29,6 +35,12 @@ Vexil (Validated Exchange Language) is a schema definition language (SDL) in the
 - **74-file conformance corpus** — 18 valid schemas and 56 invalid schemas; a conformant implementation must accept all valid and reject all invalid
 
 ## Installation
+
+### cargo install
+
+```sh
+cargo install vexilc
+```
 
 ### Pre-built binaries
 
