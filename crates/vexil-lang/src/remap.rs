@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ir::{
     ConfigDef, ConfigFieldDef, FieldDef, MessageDef, NewtypeDef, ResolvedType, TypeDef, TypeId,
@@ -7,33 +7,120 @@ use crate::ir::{
 
 /// Clone type definitions from `source` into `target`, assigning fresh `TypeId`s.
 ///
+/// Transitively discovers all `TypeId`s referenced by the given `declarations`
+/// and clones them too, so that internal cross-references remain valid.
+///
 /// Returns a map from old (source) `TypeId`s to new (target) `TypeId`s.
 pub fn clone_types_into(
     source: &TypeRegistry,
     declarations: &[TypeId],
     target: &mut TypeRegistry,
 ) -> HashMap<TypeId, TypeId> {
+    // Phase 0: collect all transitively referenced TypeIds.
+    let all_ids = collect_transitive_ids(source, declarations);
+
     // Phase 1: register stubs in target, building the id map.
     let mut id_map = HashMap::new();
-    for &old_id in declarations {
+    for &old_id in &all_ids {
         if let Some(def) = source.get(old_id) {
+            // Skip if already in target by name (diamond dedup).
             let name = type_def_name(def);
-            let new_id = target.register_stub(name.into());
-            id_map.insert(old_id, new_id);
+            if let Some(existing_id) = target.lookup(name) {
+                id_map.insert(old_id, existing_id);
+            } else {
+                let new_id = target.register_stub(name.into());
+                id_map.insert(old_id, new_id);
+            }
         }
     }
 
-    // Phase 2: remap and fill each stub.
-    for &old_id in declarations {
+    // Phase 2: remap and fill each stub (skip already-filled from diamond dedup).
+    for &old_id in &all_ids {
         if let Some(def) = source.get(old_id) {
-            let remapped = remap_type_def(def, &id_map);
             if let Some(&new_id) = id_map.get(&old_id) {
-                target.fill_stub(new_id, remapped);
+                if target.is_stub(new_id) {
+                    let remapped = remap_type_def(def, &id_map);
+                    target.fill_stub(new_id, remapped);
+                }
             }
         }
     }
 
     id_map
+}
+
+/// Walk all types transitively referenced by `declarations` in the source registry.
+fn collect_transitive_ids(source: &TypeRegistry, declarations: &[TypeId]) -> Vec<TypeId> {
+    let mut visited = HashSet::new();
+    let mut order = Vec::new();
+
+    for &id in declarations {
+        collect_ids_recursive(source, id, &mut visited, &mut order);
+    }
+
+    order
+}
+
+fn collect_ids_recursive(
+    source: &TypeRegistry,
+    id: TypeId,
+    visited: &mut HashSet<TypeId>,
+    order: &mut Vec<TypeId>,
+) {
+    if !visited.insert(id) {
+        return;
+    }
+    // Visit dependencies first (depth-first) so they get stubs before dependents.
+    if let Some(def) = source.get(id) {
+        for referenced_id in referenced_type_ids(def) {
+            collect_ids_recursive(source, referenced_id, visited, order);
+        }
+    }
+    order.push(id);
+}
+
+/// Extract all `TypeId`s directly referenced by a `TypeDef`.
+fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
+    let mut ids = Vec::new();
+    match def {
+        TypeDef::Message(m) => {
+            for f in &m.fields {
+                collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
+            }
+        }
+        TypeDef::Union(u) => {
+            for v in &u.variants {
+                for f in &v.fields {
+                    collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
+                }
+            }
+        }
+        TypeDef::Newtype(n) => {
+            collect_type_ids_from_resolved(&n.inner_type, &mut ids);
+            collect_type_ids_from_resolved(&n.terminal_type, &mut ids);
+        }
+        TypeDef::Config(c) => {
+            for f in &c.fields {
+                collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
+            }
+        }
+        TypeDef::Enum(_) | TypeDef::Flags(_) => {}
+    }
+    ids
+}
+
+fn collect_type_ids_from_resolved(ty: &ResolvedType, ids: &mut Vec<TypeId>) {
+    match ty {
+        ResolvedType::Named(id) => ids.push(*id),
+        ResolvedType::Optional(inner) | ResolvedType::Array(inner) => {
+            collect_type_ids_from_resolved(inner, ids);
+        }
+        ResolvedType::Map(k, v) | ResolvedType::Result(k, v) => {
+            collect_type_ids_from_resolved(k, ids);
+            collect_type_ids_from_resolved(v, ids);
+        }
+        ResolvedType::Primitive(_) | ResolvedType::SubByte(_) | ResolvedType::Semantic(_) => {}
+    }
 }
 
 /// Recursively remap `TypeId` references within a `ResolvedType`.
@@ -202,5 +289,66 @@ mod tests {
         } else {
             panic!("expected Message");
         }
+    }
+
+    #[test]
+    fn remap_transitively_clones_referenced_types() {
+        // Compile a schema where Bar references Foo — cloning only [Bar]
+        // should transitively pull in Foo.
+        let source = "namespace test.trans\nmessage Foo { x @0 : u32 }\nmessage Bar { f @0 : Foo }";
+        let result = crate::compile(source);
+        let compiled = result.compiled.unwrap();
+
+        // Find Bar's TypeId (second declaration).
+        let bar_id = compiled.declarations[1];
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let id_map = clone_types_into(&compiled.registry, &[bar_id], &mut target);
+
+        // Both Bar and Foo should be cloned.
+        assert_eq!(id_map.len(), 2, "expected Foo + Bar, got {:?}", id_map);
+
+        // Bar's field should reference the new Foo, not the old one.
+        let new_bar_id = id_map[&bar_id];
+        if let Some(crate::ir::TypeDef::Message(m)) = target.get(new_bar_id) {
+            assert_eq!(m.name.as_str(), "Bar");
+            if let ResolvedType::Named(ref_id) = &m.fields[0].resolved_type {
+                assert!(
+                    id_map.values().any(|v| v == ref_id),
+                    "Bar's field should reference the new Foo TypeId, not the old one"
+                );
+                assert!(!target.is_stub(*ref_id), "Foo should not be a stub");
+            } else {
+                panic!("expected Named type for Bar.f");
+            }
+        } else {
+            panic!("expected Message Bar");
+        }
+    }
+
+    #[test]
+    fn remap_diamond_dedup_skips_existing() {
+        // Simulate diamond: target already has Foo, cloning Bar that references Foo
+        // should reuse the existing Foo.
+        let source =
+            "namespace test.diamond\nmessage Foo { x @0 : u32 }\nmessage Bar { f @0 : Foo }";
+        let result = crate::compile(source);
+        let compiled = result.compiled.unwrap();
+        let foo_id = compiled.declarations[0];
+        let bar_id = compiled.declarations[1];
+
+        let mut target = crate::ir::TypeRegistry::new();
+        // Pre-populate target with Foo (simulating first import path in diamond).
+        let first_map = clone_types_into(&compiled.registry, &[foo_id], &mut target);
+        let existing_foo_id = first_map[&foo_id];
+
+        // Now clone Bar — transitive discovery finds Foo, but it already exists.
+        let second_map = clone_types_into(&compiled.registry, &[bar_id], &mut target);
+
+        // Foo should map to the existing ID, not a new one.
+        assert_eq!(
+            second_map[&foo_id], existing_foo_id,
+            "diamond dedup should reuse existing Foo"
+        );
     }
 }

@@ -420,7 +420,7 @@ mod tests {
         let mut loader = InMemoryLoader::new();
         loader.schemas.insert(
             "d".to_string(),
-            "namespace d\nenum Base : u8 { X @0 }".to_string(),
+            "namespace d\nmessage Base { z @0 : u32 }".to_string(),
         );
         loader.schemas.insert(
             "b".to_string(),
