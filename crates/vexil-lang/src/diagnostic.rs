@@ -1,3 +1,5 @@
+//! # Stability: Tier 2
+//!
 use crate::span::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,3 +1,5 @@
+//! # Stability: Tier 2
+//!
 pub mod visit;
 
 use crate::span::{Span, Spanned};

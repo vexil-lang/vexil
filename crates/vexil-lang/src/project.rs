@@ -1,3 +1,5 @@
+//! # Stability: Tier 1
+//!
 //! Import graph discovery and topological ordering for multi-file compilation.
 //!
 //! [`build_import_graph`] performs a depth-first traversal starting from a root

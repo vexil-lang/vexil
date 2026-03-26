@@ -1,3 +1,5 @@
+//! # Stability: Tier 3 (internal)
+//!
 use crate::ast::{DefaultValue, EnumBacking, PrimitiveType, SemanticType, SubByteType};
 use crate::ir::{
     CompiledSchema, DeprecatedInfo, Encoding, FieldEncoding, ResolvedAnnotations, ResolvedType,

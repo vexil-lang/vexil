@@ -1,3 +1,5 @@
+//! # Stability: Tier 1
+//!
 pub mod types;
 
 pub use types::{

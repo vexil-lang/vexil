@@ -1,3 +1,5 @@
+//! # Stability: Tier 2
+//!
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{

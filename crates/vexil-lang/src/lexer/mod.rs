@@ -1,3 +1,5 @@
+//! # Stability: Tier 3 (internal)
+//!
 pub mod token;
 
 use crate::diagnostic::{Diagnostic, ErrorClass};

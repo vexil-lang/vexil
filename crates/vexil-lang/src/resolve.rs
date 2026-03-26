@@ -1,3 +1,5 @@
+//! # Stability: Tier 1
+//!
 //! Schema resolution: load schema source text by namespace.
 //!
 //! A *namespace* is an ordered slice of identifier segments, e.g.

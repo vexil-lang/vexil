@@ -1,3 +1,5 @@
+//! # Stability: Tier 3 (internal)
+//!
 pub mod decl;
 pub mod expr;
 pub mod import;
