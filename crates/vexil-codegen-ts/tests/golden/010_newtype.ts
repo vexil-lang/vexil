@@ -8,23 +8,82 @@ export const SCHEMA_HASH = new Uint8Array([0xc1, 0x54, 0xec, 0x4c, 0xc3, 0xc5, 0
 // ── SessionId ──
 export type SessionId = bigint;
 
+export function encodeSessionId(v: SessionId, w: BitWriter): void {
+  w.writeU64(v);
+}
+
+export function decodeSessionId(r: BitReader): SessionId {
+  const value = r.readU64();
+  return value;
+}
+
 
 // ── PaneId ──
 export type PaneId = bigint;
+
+export function encodePaneId(v: PaneId, w: BitWriter): void {
+  w.writeU64(v);
+}
+
+export function decodePaneId(r: BitReader): PaneId {
+  const value = r.readU64();
+  return value;
+}
 
 
 // ── ExitCode ──
 export type ExitCode = number;
 
+export function encodeExitCode(v: ExitCode, w: BitWriter): void {
+  w.writeI32(v);
+}
+
+export function decodeExitCode(r: BitReader): ExitCode {
+  const value = r.readI32();
+  return value;
+}
+
 
 // ── Name ──
 export type Name = string;
+
+export function encodeName(v: Name, w: BitWriter): void {
+  w.writeString(v);
+}
+
+export function decodeName(r: BitReader): Name {
+  const value = r.readString();
+  return value;
+}
 
 
 // ── Payload ──
 export type Payload = Uint8Array;
 
+export function encodePayload(v: Payload, w: BitWriter): void {
+  w.writeBytes(v);
+}
+
+export function decodePayload(r: BitReader): Payload {
+  const value = r.readBytes();
+  return value;
+}
+
 
 // ── Color ──
 export type Color = [number, number, number];
+
+export function encodeColor(v: Color, w: BitWriter): void {
+  w.writeU8(v[0]);
+  w.writeU8(v[1]);
+  w.writeU8(v[2]);
+}
+
+export function decodeColor(r: BitReader): Color {
+  const value_0 = r.readU8();
+  const value_1 = r.readU8();
+  const value_2 = r.readU8();
+  const value: [number, number, number] = [value_0, value_1, value_2];
+  return value;
+}
 

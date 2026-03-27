@@ -200,6 +200,83 @@ describe('BitReader', () => {
     });
   });
 
+  describe('readLeb12864', () => {
+    it('round-trips 0n', () => {
+      const w = new BitWriter();
+      w.writeLeb12864(0n);
+      const r = new BitReader(w.finish());
+      expect(r.readLeb12864()).toBe(0n);
+    });
+
+    it('round-trips 300n', () => {
+      const w = new BitWriter();
+      w.writeLeb12864(300n);
+      const r = new BitReader(w.finish());
+      expect(r.readLeb12864()).toBe(300n);
+    });
+
+    it('round-trips large value', () => {
+      const w = new BitWriter();
+      const big = 1234567890123456789n;
+      w.writeLeb12864(big);
+      const r = new BitReader(w.finish());
+      expect(r.readLeb12864()).toBe(big);
+    });
+  });
+
+  describe('readZigZag', () => {
+    it('decodes 0', () => {
+      const w = new BitWriter();
+      w.writeZigZag(0, 32);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag(32)).toBe(0);
+    });
+
+    it('decodes -1', () => {
+      const w = new BitWriter();
+      w.writeZigZag(-1, 32);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag(32)).toBe(-1);
+    });
+
+    it('decodes 1', () => {
+      const w = new BitWriter();
+      w.writeZigZag(1, 32);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag(32)).toBe(1);
+    });
+
+    it('round-trips -42', () => {
+      const w = new BitWriter();
+      w.writeZigZag(-42, 32);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag(32)).toBe(-42);
+    });
+  });
+
+  describe('readZigZag64', () => {
+    it('round-trips 0n', () => {
+      const w = new BitWriter();
+      w.writeZigZag64(0n);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag64()).toBe(0n);
+    });
+
+    it('round-trips -1n', () => {
+      const w = new BitWriter();
+      w.writeZigZag64(-1n);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag64()).toBe(-1n);
+    });
+
+    it('round-trips large negative', () => {
+      const w = new BitWriter();
+      w.writeZigZag64(-123456789n);
+      const r = new BitReader(w.finish());
+      expect(r.readZigZag64()).toBe(-123456789n);
+    });
+  });
+
   describe('recursion depth', () => {
     it('allows up to 64 levels', () => {
       const r = new BitReader(new Uint8Array([]));

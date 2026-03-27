@@ -27,29 +27,29 @@ export function encodeShape(v: Shape, w: BitWriter): void {
   w.flushToByteBoundary();
   switch (v.tag) {
     case 'Circle': {
-      w.writeLeb128(BigInt(0));
+      w.writeLeb128(0);
       const payloadW = new BitWriter();
       payloadW.writeF32(v.radius);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
     case 'Rectangle': {
-      w.writeLeb128(BigInt(1));
+      w.writeLeb128(1);
       const payloadW = new BitWriter();
       payloadW.writeF32(v.width);
       payloadW.writeF32(v.height);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
     case 'Point': {
-      w.writeLeb128(BigInt(2));
-      w.writeLeb128(0n);
+      w.writeLeb128(2);
+      w.writeLeb128(0);
       break;
     }
   }
@@ -57,8 +57,8 @@ export function encodeShape(v: Shape, w: BitWriter): void {
 
 export function decodeShape(r: BitReader): Shape {
   r.flushToByteBoundary();
-  const disc = Number(r.readLeb128());
-  const len = Number(r.readLeb128());
+  const disc = r.readLeb128();
+  const len = r.readLeb128();
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
@@ -115,35 +115,35 @@ export function encodeColor(v: Color, w: BitWriter): void {
   w.flushToByteBoundary();
   switch (v.tag) {
     case 'Ansi': {
-      w.writeLeb128(BigInt(0));
+      w.writeLeb128(0);
       const payloadW = new BitWriter();
       payloadW.writeU8(v.code);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
     case 'Rgb': {
-      w.writeLeb128(BigInt(1));
+      w.writeLeb128(1);
       const payloadW = new BitWriter();
       payloadW.writeU8(v.r);
       payloadW.writeU8(v.g);
       payloadW.writeU8(v.b);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
     case 'Reset': {
-      w.writeLeb128(BigInt(2));
-      w.writeLeb128(0n);
+      w.writeLeb128(2);
+      w.writeLeb128(0);
       break;
     }
     case '__unknown': {
-      w.writeLeb128(BigInt(v.discriminant));
-      w.writeLeb128(BigInt(v.data.length));
+      w.writeLeb128(v.discriminant);
+      w.writeLeb128(v.data.length);
       w.writeRawBytes(v.data);
       break;
     }
@@ -152,8 +152,8 @@ export function encodeColor(v: Color, w: BitWriter): void {
 
 export function decodeColor(r: BitReader): Color {
   r.flushToByteBoundary();
-  const disc = Number(r.readLeb128());
-  const len = Number(r.readLeb128());
+  const disc = r.readLeb128();
+  const len = r.readLeb128();
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
@@ -201,23 +201,23 @@ export function encodeEvent(v: Event, w: BitWriter): void {
   w.flushToByteBoundary();
   switch (v.tag) {
     case 'Click': {
-      w.writeLeb128(BigInt(0));
+      w.writeLeb128(0);
       const payloadW = new BitWriter();
       payloadW.writeU16(v.x);
       payloadW.writeU16(v.y);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
     case 'Scroll': {
-      w.writeLeb128(BigInt(2));
+      w.writeLeb128(2);
       const payloadW = new BitWriter();
       payloadW.writeI16(v.delta);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
@@ -226,8 +226,8 @@ export function encodeEvent(v: Event, w: BitWriter): void {
 
 export function decodeEvent(r: BitReader): Event {
   r.flushToByteBoundary();
-  const disc = Number(r.readLeb128());
-  const len = Number(r.readLeb128());
+  const disc = r.readLeb128();
+  const len = r.readLeb128();
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);

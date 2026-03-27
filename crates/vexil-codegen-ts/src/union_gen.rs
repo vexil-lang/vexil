@@ -60,10 +60,10 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         let ordinal = variant.ordinal;
 
         w.open_block(&format!("case '{vname}':"));
-        w.line(&format!("w.writeLeb128(BigInt({ordinal}));"));
+        w.line(&format!("w.writeLeb128({ordinal});"));
 
         if variant.fields.is_empty() {
-            w.line("w.writeLeb128(0n);");
+            w.line("w.writeLeb128(0);");
         } else {
             w.line("const payloadW = new BitWriter();");
             for field in &variant.fields {
@@ -79,7 +79,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             }
             w.line("payloadW.flushToByteBoundary();");
             w.line("const payload = payloadW.finish();");
-            w.line("w.writeLeb128(BigInt(payload.length));");
+            w.line("w.writeLeb128(payload.length);");
             w.line("w.writeRawBytes(payload);");
         }
         w.line("break;");
@@ -88,8 +88,8 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
     if non_exhaustive {
         w.open_block("case '__unknown':");
-        w.line("w.writeLeb128(BigInt(v.discriminant));");
-        w.line("w.writeLeb128(BigInt(v.data.length));");
+        w.line("w.writeLeb128(v.discriminant);");
+        w.line("w.writeLeb128(v.data.length);");
         w.line("w.writeRawBytes(v.data);");
         w.line("break;");
         w.close_block();
@@ -104,8 +104,8 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         "export function decode{name}(r: BitReader): {name}"
     ));
     w.line("r.flushToByteBoundary();");
-    w.line("const disc = Number(r.readLeb128());");
-    w.line("const len = Number(r.readLeb128());");
+    w.line("const disc = r.readLeb128();");
+    w.line("const len = r.readLeb128();");
     w.open_block("switch (disc)");
 
     for variant in &un.variants {

@@ -265,6 +265,48 @@ export class BitReader {
   }
 
   /**
+   * Read a LEB128-encoded unsigned 64-bit integer as bigint.
+   */
+  readLeb12864(): bigint {
+    this.flushToByteBoundary();
+    let result = 0n;
+    let shift = 0n;
+    for (let i = 0; i < 10; i++) {
+      if (this.bytePos >= this.data.length) {
+        throw new Error('Unexpected end of data');
+      }
+      const byte = this.data[this.bytePos];
+      this.bytePos++;
+      result |= BigInt(byte & 0x7f) << shift;
+      shift += 7n;
+      if ((byte & 0x80) === 0) {
+        if (i > 0 && byte === 0) {
+          throw new Error('Invalid varint: overlong encoding');
+        }
+        return result;
+      }
+    }
+    throw new Error('Invalid varint: exceeds maximum length');
+  }
+
+  /**
+   * Read a ZigZag + LEB128 encoded signed integer (up to 32-bit).
+   */
+  readZigZag(typeBits: number): number {
+    void typeBits; // type_bits not needed for decode
+    const raw = this.readLeb128();
+    return (raw >>> 1) ^ -(raw & 1);
+  }
+
+  /**
+   * Read a ZigZag + LEB128 encoded signed 64-bit integer as bigint.
+   */
+  readZigZag64(): bigint {
+    const raw = this.readLeb12864();
+    return (raw >> 1n) ^ -(raw & 1n);
+  }
+
+  /**
    * Read a length-prefixed UTF-8 string.
    */
   readString(): string {

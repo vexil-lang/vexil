@@ -199,6 +199,67 @@ describe('BitWriter', () => {
     });
   });
 
+  describe('writeLeb12864', () => {
+    it('encodes 0n', () => {
+      const w = new BitWriter();
+      w.writeLeb12864(0n);
+      expect(toHex(w.finish())).toBe('00');
+    });
+
+    it('encodes 300n', () => {
+      const w = new BitWriter();
+      w.writeLeb12864(300n);
+      // 300 = 0x12C → LEB128: ac 02
+      expect(toHex(w.finish())).toBe('ac02');
+    });
+  });
+
+  describe('writeZigZag', () => {
+    it('encodes 0 as 0', () => {
+      const w = new BitWriter();
+      w.writeZigZag(0, 32);
+      expect(toHex(w.finish())).toBe('00');
+    });
+
+    it('encodes -1 as 1', () => {
+      const w = new BitWriter();
+      w.writeZigZag(-1, 32);
+      expect(toHex(w.finish())).toBe('01');
+    });
+
+    it('encodes 1 as 2', () => {
+      const w = new BitWriter();
+      w.writeZigZag(1, 32);
+      expect(toHex(w.finish())).toBe('02');
+    });
+
+    it('encodes -2 as 3', () => {
+      const w = new BitWriter();
+      w.writeZigZag(-2, 32);
+      expect(toHex(w.finish())).toBe('03');
+    });
+  });
+
+  describe('writeZigZag64', () => {
+    it('encodes 0n as 0', () => {
+      const w = new BitWriter();
+      w.writeZigZag64(0n);
+      expect(toHex(w.finish())).toBe('00');
+    });
+
+    it('encodes -1n as 1', () => {
+      const w = new BitWriter();
+      w.writeZigZag64(-1n);
+      expect(toHex(w.finish())).toBe('01');
+    });
+
+    it('encodes 1n as 2', () => {
+      const w = new BitWriter();
+      w.writeZigZag64(1n);
+      expect(toHex(w.finish())).toBe('02');
+    });
+  });
+
   describe('recursion depth', () => {
     it('allows up to 64 levels', () => {
       const w = new BitWriter();

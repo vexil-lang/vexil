@@ -60,7 +60,15 @@ pub fn emit_write(
     // Check non-default encoding first
     match &enc.encoding {
         Encoding::Varint => {
-            w.line(&format!("{writer}.writeLeb128(BigInt({access}));"));
+            let is_64 = matches!(
+                ty,
+                ResolvedType::Primitive(PrimitiveType::U64 | PrimitiveType::I64)
+            );
+            if is_64 {
+                w.line(&format!("{writer}.writeLeb12864({access});"));
+            } else {
+                w.line(&format!("{writer}.writeLeb128({access});"));
+            }
             return;
         }
         Encoding::ZigZag => {
@@ -68,9 +76,11 @@ pub fn emit_write(
                 ResolvedType::Primitive(p) => primitive_bits(p),
                 _ => 64,
             };
-            w.line(&format!(
-                "{writer}.writeZigZag(BigInt({access}), {type_bits});",
-            ));
+            if type_bits == 64 {
+                w.line(&format!("{writer}.writeZigZag64({access});"));
+            } else {
+                w.line(&format!("{writer}.writeZigZag({access}, {type_bits});",));
+            }
             return;
         }
         Encoding::Delta(inner) => {
@@ -153,13 +163,13 @@ fn emit_write_type(
             w.close_block();
         }
         ResolvedType::Array(inner) => {
-            w.line(&format!("{writer}.writeLeb128(BigInt({access}.length));"));
+            w.line(&format!("{writer}.writeLeb128({access}.length);"));
             w.open_block(&format!("for (const item of {access})"));
             emit_write_type(w, "item", inner, registry, writer);
             w.close_block();
         }
         ResolvedType::Map(k, v) => {
-            w.line(&format!("{writer}.writeLeb128(BigInt({access}.size));"));
+            w.line(&format!("{writer}.writeLeb128({access}.size);"));
             w.open_block(&format!("for (const [mapK, mapV] of {access})"));
             emit_write_type(w, "mapK", k, registry, writer);
             emit_write_type(w, "mapV", v, registry, writer);
@@ -197,8 +207,15 @@ pub fn emit_read(
 ) {
     match &enc.encoding {
         Encoding::Varint => {
-            let cast = varint_cast(ty);
-            w.line(&format!("const {var_name} = {cast}{reader}.readLeb128());"));
+            let is_64 = matches!(
+                ty,
+                ResolvedType::Primitive(PrimitiveType::U64 | PrimitiveType::I64)
+            );
+            if is_64 {
+                w.line(&format!("const {var_name} = {reader}.readLeb12864();"));
+            } else {
+                w.line(&format!("const {var_name} = {reader}.readLeb128();"));
+            }
             return;
         }
         Encoding::ZigZag => {
@@ -206,10 +223,13 @@ pub fn emit_read(
                 ResolvedType::Primitive(p) => primitive_bits(p),
                 _ => 64,
             };
-            let cast = zigzag_cast(ty);
-            w.line(&format!(
-                "const {var_name} = {cast}{reader}.readZigZag({type_bits}));",
-            ));
+            if type_bits == 64 {
+                w.line(&format!("const {var_name} = {reader}.readZigZag64();",));
+            } else {
+                w.line(&format!(
+                    "const {var_name} = {reader}.readZigZag({type_bits});",
+                ));
+            }
             return;
         }
         Encoding::Delta(inner) => {
@@ -225,20 +245,6 @@ pub fn emit_read(
     }
 
     emit_read_type(w, var_name, ty, registry, reader);
-}
-
-fn varint_cast(ty: &ResolvedType) -> &'static str {
-    match ty {
-        ResolvedType::Primitive(PrimitiveType::U64 | PrimitiveType::I64) => "(",
-        _ => "Number(",
-    }
-}
-
-fn zigzag_cast(ty: &ResolvedType) -> &'static str {
-    match ty {
-        ResolvedType::Primitive(PrimitiveType::I64) => "(",
-        _ => "Number(",
-    }
 }
 
 fn emit_read_type(
@@ -357,9 +363,7 @@ fn emit_read_type(
             w.close_block();
         }
         ResolvedType::Array(inner) => {
-            w.line(&format!(
-                "const {var_name}_len = Number({reader}.readLeb128());"
-            ));
+            w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
             let inner_ts = ts_type(inner, registry);
             w.line(&format!("const {var_name}: {inner_ts}[] = [];"));
             w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
@@ -368,9 +372,7 @@ fn emit_read_type(
             w.close_block();
         }
         ResolvedType::Map(k, v) => {
-            w.line(&format!(
-                "const {var_name}_len = Number({reader}.readLeb128());"
-            ));
+            w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
             let k_ts = ts_type(k, registry);
             let v_ts = ts_type(v, registry);
             w.line(&format!("const {var_name} = new Map<{k_ts}, {v_ts}>();"));

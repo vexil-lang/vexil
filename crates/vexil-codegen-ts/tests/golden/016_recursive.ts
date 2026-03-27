@@ -13,7 +13,7 @@ export interface TreeNode {
 
 export function encodeTreeNode(v: TreeNode, w: BitWriter): void {
   w.writeI32(v.value);
-  w.writeLeb128(BigInt(v.children.length));
+  w.writeLeb128(v.children.length);
   for (const item of v.children) {
     w.enterNested();
     encodeTreeNode(item, w);
@@ -24,7 +24,7 @@ export function encodeTreeNode(v: TreeNode, w: BitWriter): void {
 
 export function decodeTreeNode(r: BitReader): TreeNode {
   const value = r.readI32();
-  const children_len = Number(r.readLeb128());
+  const children_len = r.readLeb128();
   const children: TreeNode[] = [];
   for (let i = 0; i < children_len; i++) {
     r.enterNested();
@@ -113,17 +113,17 @@ export function encodeExprKind(v: ExprKind, w: BitWriter): void {
   w.flushToByteBoundary();
   switch (v.tag) {
     case 'Literal': {
-      w.writeLeb128(BigInt(0));
+      w.writeLeb128(0);
       const payloadW = new BitWriter();
       payloadW.writeI64(v.value);
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
     case 'Binary': {
-      w.writeLeb128(BigInt(1));
+      w.writeLeb128(1);
       const payloadW = new BitWriter();
       payloadW.enterNested();
       encodeExpr(v.left, payloadW);
@@ -134,7 +134,7 @@ export function encodeExprKind(v: ExprKind, w: BitWriter): void {
       payloadW.leaveNested();
       payloadW.flushToByteBoundary();
       const payload = payloadW.finish();
-      w.writeLeb128(BigInt(payload.length));
+      w.writeLeb128(payload.length);
       w.writeRawBytes(payload);
       break;
     }
@@ -143,8 +143,8 @@ export function encodeExprKind(v: ExprKind, w: BitWriter): void {
 
 export function decodeExprKind(r: BitReader): ExprKind {
   r.flushToByteBoundary();
-  const disc = Number(r.readLeb128());
-  const len = Number(r.readLeb128());
+  const disc = r.readLeb128();
+  const len = r.readLeb128();
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);

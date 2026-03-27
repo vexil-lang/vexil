@@ -69,7 +69,7 @@ export interface FieldAnnotations {
 
 export function encodeFieldAnnotations(v: FieldAnnotations, w: BitWriter): void {
   w.writeU32(v.a);
-  w.writeLeb128(BigInt(v.b));
+  w.writeLeb12864(v.b);
   w.writeString(v.c);
   w.writeI32(v.d);
   w.flushToByteBoundary();
@@ -77,7 +77,7 @@ export function encodeFieldAnnotations(v: FieldAnnotations, w: BitWriter): void 
 
 export function decodeFieldAnnotations(r: BitReader): FieldAnnotations {
   const a = r.readU32();
-  const b = (r.readLeb128());
+  const b = r.readLeb12864();
   const c = r.readString();
   const d = r.readI32();
   r.flushToByteBoundary();

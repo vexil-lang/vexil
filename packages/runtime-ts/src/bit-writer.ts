@@ -212,6 +212,39 @@ export class BitWriter {
   }
 
   /**
+   * Write a LEB128-encoded unsigned 64-bit integer (bigint).
+   */
+  writeLeb12864(value: bigint): void {
+    this.align();
+    let v = value < 0n ? value + (1n << 64n) : value; // treat as unsigned
+    do {
+      let byte = Number(v & 0x7fn);
+      v >>= 7n;
+      if (v !== 0n) {
+        byte |= 0x80;
+      }
+      this.buf.push(byte);
+    } while (v !== 0n);
+  }
+
+  /**
+   * Write a ZigZag + LEB128 encoded signed integer (up to 32-bit).
+   */
+  writeZigZag(value: number, typeBits: number): void {
+    // ZigZag encode: (n << 1) ^ (n >> (bits - 1))
+    const zigzag = (value << 1) ^ (value >> (typeBits - 1));
+    this.writeLeb128(zigzag >>> 0); // treat as unsigned
+  }
+
+  /**
+   * Write a ZigZag + LEB128 encoded signed 64-bit integer (bigint).
+   */
+  writeZigZag64(value: bigint): void {
+    const zigzag = (value << 1n) ^ (value >> 63n);
+    this.writeLeb12864(zigzag < 0n ? zigzag + (1n << 64n) : zigzag);
+  }
+
+  /**
    * Write a UTF-8 string with a LEB128 length prefix.
    */
   writeString(s: string): void {

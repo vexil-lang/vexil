@@ -38,6 +38,10 @@ name = "vexil-codegen-rust"
 version_group = "vexil"
 
 [[package]]
+name = "vexil-codegen-ts"
+version_group = "vexil"
+
+[[package]]
 name = "vexil-store"
 version_group = "vexil"
 
