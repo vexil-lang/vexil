@@ -4,39 +4,53 @@
 
 Vexil (Validated Exchange Language) is a typed schema definition language with first-class encoding semantics. It describes the shape, constraints, and wire encoding of data crossing system boundaries. LSB-first bit packing, no self-description on the wire — the schema is the contract.
 
-This repo contains the language spec, formal PEG grammar, conformance corpus, and the reference implementation (5-crate Rust workspace, v0.2.0).
+This repo contains the language spec, formal PEG grammar, conformance corpus, compliance vectors, and the reference implementation (7-crate Rust workspace + TypeScript runtime).
 
 ## Repo Structure
 
 ```
 spec/
-  vexil-spec.md              # Language specification (normative, v0.1.0-draft-r2)
+  vexil-spec.md              # Language specification (normative, §1–§14 + appendices)
   vexil-grammar.peg           # Formal PEG grammar derived from spec
 corpus/
   MANIFEST.md                 # Index of all test files with spec references
-  valid/                      # Conformant impl MUST accept all
-  invalid/                    # Conformant impl MUST reject all
+  valid/                      # Conformant impl MUST accept all (26 files)
+  invalid/                    # Conformant impl MUST reject all (56 files)
   projects/                   # Multi-file project tests (simple, diamond, mixed)
+compliance/
+  vectors/                    # Golden byte vectors (JSON) — cross-implementation contract
 crates/
   vexil-lang/                 # Core: lexer, parser, AST, IR, type checker, canonical, project compiler
   vexil-codegen-rust/         # Rust backend: CodegenBackend impl, struct/enum/encode/decode generation
+  vexil-codegen-ts/           # TypeScript backend: CodegenBackend impl, interfaces/encode/decode generation
   vexil-runtime/              # Runtime support: Pack/Unpack traits, BitWriter/BitReader
   vexil-store/                # Schema-driven .vx text and .vxb binary file formats
+  vexil-bench/                # Benchmark suite (Criterion, publish = false)
   vexilc/                     # CLI: check, codegen, build subcommands
-docs/superpowers/specs/       # Design specs (SDK, TS backend, LSP, release model)
-docs/superpowers/plans/       # Implementation plans (milestones C–F, v0.1.0 release)
+packages/
+  runtime-ts/                 # @vexil/runtime npm package: TypeScript BitWriter/BitReader
+docs/
+  limitations-and-gaps.md     # Wire format limitations, gaps, room for improvement
+  superpowers/specs/          # Design specs (SDK, TS backend, LSP, release model)
+  superpowers/plans/          # Implementation plans
+examples/
+  cross-language/             # Rust ↔ Node interop via binary files
+  system-monitor/             # Real-time dashboard: Rust → browser via Vexil WebSocket
 ```
 
 ## Build Commands
 
 ```bash
 cargo build --workspace              # build everything
-cargo test --workspace               # all tests (~258)
+cargo test --workspace               # all tests (~500)
 cargo test -p vexil-lang             # core crate only
-cargo test -p vexil-codegen-rust     # codegen + project integration tests
+cargo test -p vexil-codegen-rust     # Rust codegen + golden + compliance tests
+cargo test -p vexil-codegen-ts       # TypeScript codegen + golden tests
 cargo clippy --workspace -- -D warnings  # must be clean
 cargo fmt --all                      # format
 cargo fmt --all -- --check           # CI format check
+cargo bench -p vexil-bench           # encode/decode benchmarks
+cd packages/runtime-ts && npx vitest run  # TypeScript runtime tests (120)
 ```
 
 ## Crate Architecture
@@ -51,14 +65,26 @@ vexil-codegen-rust  Rust code generation. Depends on vexil-lang.
                     Implements CodegenBackend trait. Generates structs, enums, encode/decode.
                     generate() for single-file, generate_project() for multi-file with imports.
 
+vexil-codegen-ts    TypeScript code generation. Depends on vexil-lang.
+                    Implements CodegenBackend trait. Generates interfaces, encode/decode functions.
+                    Barrel index.ts files for namespace directories. Cross-file relative imports.
+
 vexil-runtime       Pack/Unpack traits + BitWriter/BitReader.
-                    No workspace deps. Used by generated code.
+                    No workspace deps. Used by generated Rust code.
+
+@vexil/runtime      TypeScript npm package at packages/runtime-ts/.
+                    BitWriter/BitReader matching Rust wire format byte-for-byte.
+                    Zero dependencies. Used by generated TypeScript code.
 
 vexil-store         Schema-driven encoder/decoder with .vx text and .vxb binary formats.
                     Depends on vexil-lang + vexil-runtime.
 
-vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust.
+vexil-bench         Benchmark suite (Criterion). publish = false.
+                    Envelope, DrawText, OutputChunk, batch benchmarks.
+
+vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust + vexil-codegen-ts.
                     Subcommands: check, codegen (--target), build (--target, --include, --output)
+                    Targets: rust (default), typescript
 ```
 
 ## SDK Architecture (v0.2.0)
@@ -86,8 +112,8 @@ vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust.
 - **F** Multi-file import resolution (transitive remap, diamond dedup) — DONE
 - **v0.1.0** SDK architecture, release CI, CodegenBackend trait — RELEASED
 - **v0.2.0** vexil-store, release-plz + cargo-dist pipeline — RELEASED
+- **v0.3.0** TypeScript backend, compliance vectors, benchmarks — RELEASED
 - **G** Package manager (registry, lockfile, fetch/publish) — PLANNED
-- **TS backend** — SPECCED (docs/superpowers/specs/2026-03-26-typescript-backend-design.md)
 - **LSP** — SPECCED (docs/superpowers/specs/2026-03-26-lsp-editor-tooling-design.md)
 
 ## Design Decisions
@@ -109,12 +135,20 @@ vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust.
 
 ## Golden Files
 
-Codegen golden tests live in `crates/vexil-codegen-rust/tests/golden/`.
+Codegen golden tests live in `crates/vexil-codegen-rust/tests/golden/` (Rust) and `crates/vexil-codegen-ts/tests/golden/` (TypeScript).
 To regenerate after intentional codegen changes:
 
 ```bash
 UPDATE_GOLDEN=1 cargo test -p vexil-codegen-rust
+UPDATE_GOLDEN=1 cargo test -p vexil-codegen-ts
 ```
+
+## Compliance Vectors
+
+Cross-implementation golden byte vectors live in `compliance/vectors/*.json`.
+Both Rust and TypeScript implementations must produce identical bytes for each vector.
+Rust validator: `crates/vexil-codegen-rust/tests/golden_bytes.rs`.
+TypeScript validator: `packages/runtime-ts/tests/compliance.test.ts`.
 
 ## Corpus Contribution
 
