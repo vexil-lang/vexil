@@ -53,6 +53,32 @@ jobs:
       - name: Format check
         run: cargo fmt --all -- --check
 
+  # ── TypeScript runtime tests ─────────────────────────────────────────────────
+  # Runs @vexil/runtime tests including compliance vectors.
+  # Only needs one platform — Node.js is cross-platform.
+  ts-runtime:
+    name: TypeScript runtime
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/runtime-ts
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.
   # MSRV is 1.94 (see CLAUDE.md). Only build+test; clippy/fmt use stable toolchain.

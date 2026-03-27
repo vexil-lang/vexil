@@ -10,50 +10,44 @@ changelog_update = true
 dependencies_update = true
 # Create git tags on release
 git_tag_enable = true
-# Per-crate tag format (e.g. vexil-lang-v0.2.1)
+# Per-crate tag format (e.g. vexil-lang-v0.2.4)
 git_tag_name = "{{ package }}-v{{ version }}"
-# Don't create GitHub Releases — cargo-dist handles that
+# Don't create GitHub Releases — cargo-dist handles that for vexilc
 git_release_enable = false
 # Label Release PRs for easy filtering
 pr_labels = ["release"]
 # Disable semver checking pre-1.0 (enable post-1.0)
 semver_check = false
 # PR name format
-pr_name = "chore(release): v{{ version }}"
+pr_name = "chore(release): bump crate versions"
 
-# ── Lockstep version group ──────────────────────────────────────────────────
-# All crates bump together. When any crate has unreleased changes,
-# all crates in the group get the same version bump.
+# ── Per-crate versioning ─────────────────────────────────────────────────────
+# Each crate versions independently. Only crates with actual changes get bumped.
+# No version_group — crates are NOT locked in step.
 
 [[package]]
 name = "vexil-lang"
-version_group = "vexil"
 
 [[package]]
 name = "vexil-runtime"
-version_group = "vexil"
 
 [[package]]
 name = "vexil-codegen-rust"
-version_group = "vexil"
 
 [[package]]
 name = "vexil-codegen-ts"
-version_group = "vexil"
 
 [[package]]
 name = "vexil-store"
-version_group = "vexil"
 
 [[package]]
 name = "vexilc"
-version_group = "vexil"
 # vexilc is a CLI binary — don't generate a changelog for it separately
 changelog_update = false
 
 [[package]]
 name = "vexil-bench"
-# Excluded from lockstep version group — publish = false, benchmarks only
+# Excluded — publish = false, benchmarks only
 publish = false
 release = false
 changelog_update = false

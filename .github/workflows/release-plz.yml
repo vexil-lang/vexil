@@ -10,11 +10,16 @@ on:
       - main
 
 jobs:
+  # ── Publish crates + create tags ────────────────────────────────────────────
+  # Only runs when a Release PR is merged (commit message starts with
+  # "chore(release):"). This prevents accidental releases from docs commits,
+  # CI fixes, or other non-release pushes to main.
   release-plz-release:
     name: Release
     runs-on: ubuntu-latest
-    # Only run on direct pushes (not on PRs merging into main from forks)
-    if: github.repository == 'vexil-lang/vexil'
+    if: >-
+      github.repository == 'vexil-lang/vexil' &&
+      startsWith(github.event.head_commit.message, 'chore(release):')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -33,6 +38,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+  # ── Create/update Release PR ────────────────────────────────────────────────
+  # Runs on every push to main. Proposes version bumps for crates that have
+  # unreleased changes. Each crate is versioned independently.
   release-plz-pr:
     name: Release PR
     runs-on: ubuntu-latest
