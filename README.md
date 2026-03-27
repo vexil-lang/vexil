@@ -67,14 +67,33 @@ let decoded = SensorReading::unpack(&mut r).unwrap();
 assert_eq!(decoded.value, 2350);
 ```
 
+The same schema generates TypeScript with identical wire output:
+
+```typescript
+import { BitWriter, BitReader } from '@vexil/runtime';
+
+const w = new BitWriter();
+encodeSensorReading({
+  channel: 0, kind: 'Temperature',
+  value: 2350, sequence: 1, delta_ts: -50,
+}, w);
+const bytes = w.finish();  // identical bytes as Rust
+
+const r = new BitReader(bytes);
+const decoded = decodeSensorReading(r);
+// decoded.value === 2350
+```
+
 ## Features
 
 - **Sub-byte integer types** — `u1`..`u7` and `i1`..`i7`; each occupies exactly N bits on the wire with LSB-first bit packing
 - **Encoding annotations** — `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), `@delta` (delta from previous value) directly in the schema
 - **Rich type vocabulary** — `message`, `enum`, `flags`, `union`, `newtype`, and `config` declarations
 - **Schema versioning** — BLAKE3 hash of the canonical schema form; mismatch is detectable at the protocol boundary
+- **Multi-language code generation** — Rust and TypeScript backends from the same schema, with byte-identical wire output verified by compliance vectors
+- **Deterministic encoding** — same data always produces identical bytes, enabling content addressing and replay detection
 - **Structured error model** — every invalid input produces a distinct error class with file, line, column, and a human-readable description
-- **74-file conformance corpus** — 18 valid schemas and 56 invalid schemas; a conformant implementation must accept all valid and reject all invalid
+- **82-file conformance corpus** — 26 valid schemas and 56 invalid schemas; a conformant implementation must accept all valid and reject all invalid
 
 ## Comparison
 
@@ -86,8 +105,9 @@ assert_eq!(decoded.value, 2350);
 | LSB-first bit packing | **Yes** | — | — | — |
 | Self-describing wire format | No | Optional | No | Optional |
 | Zero-copy decode | No | No | **Yes** | **Yes** |
-| Schema evolution | Planned | **Yes** | **Yes** | **Yes** |
-| Language targets | Rust | **Many** | **Many** | **Many** |
+| Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
+| Schema evolution | **Yes** | **Yes** | **Yes** | **Yes** |
+| Language targets | Rust, TypeScript | **Many** | **Many** | **Many** |
 
 ## Installation
 
@@ -123,16 +143,18 @@ Check a schema for errors:
 vexilc check schema.vexil
 ```
 
-Generate Rust code from a schema:
+Generate code from a schema:
 
 ```sh
-vexilc codegen schema.vexil --output out.rs
+vexilc codegen schema.vexil --output out.rs                    # Rust (default)
+vexilc codegen schema.vexil --output out.ts --target typescript # TypeScript
 ```
 
 Compile a multi-file project:
 
 ```sh
 vexilc build root.vexil --include ./schemas --output ./generated
+vexilc build root.vexil --include ./schemas --output ./generated --target typescript
 ```
 
 Errors are rendered with source spans and structured diagnostics:
@@ -170,18 +192,27 @@ if let Some(compiled) = result.compiled {
 
 ```
 spec/
-  vexil-spec.md        # Language specification (normative)
-  vexil-grammar.peg    # Formal PEG grammar derived from spec
+  vexil-spec.md          # Language specification (normative, §1-§14)
+  vexil-grammar.peg      # Formal PEG grammar derived from spec
 corpus/
-  valid/               # 18 conformant schemas — all must be accepted
-  invalid/             # 56 invalid schemas — all must be rejected
-  projects/            # Multi-file project fixtures for integration tests
+  valid/                 # 26 conformant schemas — all must be accepted
+  invalid/               # 56 invalid schemas — all must be rejected
+  projects/              # Multi-file project fixtures for integration tests
+compliance/
+  vectors/               # Golden byte vectors (JSON) — cross-implementation contract
 crates/
-  vexil-lang/          # Compiler library: lexer, parser, IR, type checker, canonical hash
-  vexil-codegen-rust/  # Rust code generation backend
-  vexil-runtime/       # Runtime support: bit I/O, Pack/Unpack traits, LEB128, ZigZag
-  vexilc/              # CLI frontend with ariadne error rendering
-  vexil-store/         # .vx text format and .vxb binary format for schemas and data
+  vexil-lang/            # Compiler library: lexer, parser, IR, type checker, canonical hash
+  vexil-codegen-rust/    # Rust code generation backend
+  vexil-codegen-ts/      # TypeScript code generation backend
+  vexil-runtime/         # Rust runtime: bit I/O, Pack/Unpack traits, LEB128, ZigZag
+  vexilc/                # CLI frontend with ariadne error rendering
+  vexil-store/           # .vx text format and .vxb binary format for schemas and data
+  vexil-bench/           # Encode/decode benchmarks (Criterion)
+packages/
+  runtime-ts/            # @vexil/runtime npm package: TypeScript BitWriter/BitReader
+examples/
+  cross-language/        # Rust <-> Node.js interop demo
+  system-monitor/        # Real-time dashboard: Rust -> browser via Vexil WebSocket
 ```
 
 ## Documentation
@@ -189,7 +220,8 @@ crates/
 - [Language Specification](spec/vexil-spec.md)
 - [FAQ](FAQ.md)
 - [Examples](examples/)
-- API reference: [vexil-lang](https://docs.rs/vexil-lang) · [vexil-runtime](https://docs.rs/vexil-runtime) · [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) · [vexil-store](https://docs.rs/vexil-store)
+- [Limitations and Gaps](docs/limitations-and-gaps.md)
+- API reference: [vexil-lang](https://docs.rs/vexil-lang) · [vexil-runtime](https://docs.rs/vexil-runtime) · [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) · [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) · [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
 
