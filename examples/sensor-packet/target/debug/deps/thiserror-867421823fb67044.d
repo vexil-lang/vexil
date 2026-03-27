@@ -1,0 +1,14 @@
+C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\deps\thiserror-867421823fb67044.d: C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\lib.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\aserror.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\display.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\var.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\private.rs C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\build\thiserror-538ec6d06a9d4a0b\out/private.rs
+
+C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\deps\libthiserror-867421823fb67044.rlib: C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\lib.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\aserror.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\display.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\var.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\private.rs C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\build\thiserror-538ec6d06a9d4a0b\out/private.rs
+
+C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\deps\libthiserror-867421823fb67044.rmeta: C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\lib.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\aserror.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\display.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\var.rs C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\private.rs C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\build\thiserror-538ec6d06a9d4a0b\out/private.rs
+
+C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\lib.rs:
+C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\aserror.rs:
+C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\display.rs:
+C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\var.rs:
+C:\Users\mamuk\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\thiserror-2.0.18\src\private.rs:
+C:\Users\mamuk\projects\orix\vexil-lang\examples\sensor-packet\target\debug\build\thiserror-538ec6d06a9d4a0b\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\mamuk\\projects\\orix\\vexil-lang\\examples\\sensor-packet\\target\\debug\\build\\thiserror-538ec6d06a9d4a0b\\out

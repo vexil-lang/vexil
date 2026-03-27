@@ -1,0 +1,22 @@
+namespace sensor.packet
+
+enum SensorKind : u8 {
+    Temperature @0
+    Humidity    @1
+    Pressure    @2
+    Light       @3
+}
+
+message SensorReading {
+    channel  @0 : u4
+    kind     @1 : SensorKind
+    value    @2 : u16
+    sequence @3 : u32 @varint
+    delta_ts @4 : i32 @zigzag
+}
+
+message TelemetryPacket {
+    device_id @0 : u32
+    readings  @1 : array<SensorReading>
+    battery   @2 : u7
+}

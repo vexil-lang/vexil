@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/vexil-lang", "crates/vexilc", "crates/vexil-runtime", "crates/vexil-codegen-rust", "crates/vexil-store"]
+exclude = ["examples/sensor-packet"]
 
 [workspace.package]
 version = "0.2.0"
