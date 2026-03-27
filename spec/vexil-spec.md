@@ -67,7 +67,7 @@ A conformant Vexil implementation:
 2. MUST reject all programs in the invalid corpus with structured errors (§1.4).
 3. MUST produce wire-compatible output: a conformant encoder and conformant
    decoder for the same schema MUST round-trip all valid values identically.
-4. MUST produce output satisfying the codegen contract (§11) for at least one
+4. MUST produce output satisfying the codegen contract (§12) for at least one
    normative target language. The normative target language for this version
    is Rust.
 
@@ -154,7 +154,7 @@ message Point {
 
 Ordinals are the stable **wire identity** of a field. Field names MAY be renamed
 without affecting wire compatibility. Ordinals MUST NOT be reused within a
-declaration, even after a field is removed (see `@removed`, §12.3). Wire
+declaration, even after a field is removed (see `@removed`, §13.3). Wire
 encoding order is ascending ordinal order, regardless of source declaration
 order. Ordinals MUST NOT exceed 65535.
 
@@ -190,7 +190,7 @@ string literal (`"..."`), identifier (`[A-Za-z][A-Za-z0-9_]*`), boolean
 Multiple annotations on the same element are permitted. The same annotation MUST
 NOT appear more than once on the same element unless the annotation definition
 explicitly permits repetition. `@doc` is the only standard annotation that
-permits repetition (§12.2).
+permits repetition (§13.2).
 
 Unknown annotations — annotations not defined in this specification or by the
 active backend — MUST NOT cause a parse or type error. Code generation backends
@@ -754,7 +754,7 @@ silently continue decoding.
 
 The schema hash is NOT a cryptographic authenticity guarantee — BLAKE3 without a
 key is not a MAC. For authenticity, callers MUST apply a separate signature (see
-§13.2).
+§14.2).
 
 ---
 
@@ -811,9 +811,119 @@ decode messages encoded with the old schema, and vice versa.
 
 ---
 
-## §11  Codegen Contract
+## §11  Encoding Edge Cases
 
-### 11.1  Required output (all backends)
+These rules are normative.  A conformant implementation MUST handle each
+case exactly as specified.  Behaviour on violation is "decode error" or
+"encode error" unless stated otherwise.
+
+### 11.1  Empty optionals
+
+An `optional<T>` with no value encodes as a single `0` bit.  No payload
+follows.  An `optional<T>` with a value encodes as a `1` bit followed by
+`T`'s encoding.
+
+For nested optionals (`optional<optional<T>>`):
+- None → `0` (1 bit)
+- Some(None) → `1 0` (2 bits)
+- Some(Some(v)) → `1 1` followed by v's encoding
+
+### 11.2  Zero-length payloads
+
+A message with zero fields encodes as zero bytes (empty payload).
+A union variant with no fields encodes as: discriminant (LEB128) +
+length `0` (LEB128).
+
+### 11.3  Maximum recursion depth
+
+Recursive types (self-referencing messages via `optional` or `array`)
+have a maximum nesting depth of **64** at encode and decode time.
+
+- Encoder: returns `EncodeError::RecursionLimitExceeded`.
+- Decoder: returns `DecodeError::RecursionLimitExceeded`.
+
+Implementations MUST NOT rely on stack overflow for enforcement.
+
+### 11.4  Trailing bytes
+
+When a decoder has consumed all declared fields of a message, any
+remaining bytes in the payload are **ignored**.  This enables forward
+compatibility — a v2 encoder may append new fields that a v1 decoder
+simply skips.
+
+Decoders MUST NOT reject messages with trailing bytes after the last
+known field.  Decoders MUST NOT interpret trailing bytes.
+
+### 11.5  Sub-byte boundary at message end
+
+After encoding all fields, the encoder calls `flush_to_byte_boundary()`.
+Padding bits MUST be zero.  The decoder calls `flush_to_byte_boundary()`
+after reading all known fields, before checking for trailing bytes.
+
+### 11.6  Union discriminant overflow
+
+If a decoder encounters a union discriminant value that does not match
+any known variant:
+
+- If the union is `@non_exhaustive`: skip the length-prefixed payload.
+  The application receives an opaque discriminant + raw bytes.
+- If the union is exhaustive: return `DecodeError::UnknownUnionVariant`.
+
+The length-prefixed payload enables skipping unknown variants without
+knowing their structure.
+
+### 11.7  NaN canonicalization
+
+All `f32` NaN values encode as `0x7FC00000` (canonical quiet NaN).
+All `f64` NaN values encode as `0x7FF8000000000000` (canonical quiet NaN).
+
+Signaling NaN, negative NaN, and NaN with payload are all mapped to
+the canonical quiet NaN **before** encoding.  This ensures bit-identical
+encoding for any NaN input.
+
+### 11.8  Negative zero
+
+`-0.0` is preserved on the wire (distinct from `+0.0`).  IEEE 754
+defines `-0.0 == +0.0`, but their bit patterns differ.  Vexil preserves
+the bit pattern for deterministic encoding.
+
+### 11.9  String encoding errors
+
+String fields use UTF-8.  An encoder receiving non-UTF-8 data returns
+`EncodeError::InvalidUtf8`.  A decoder encountering invalid UTF-8 in a
+string field returns `DecodeError::InvalidUtf8`.
+
+`bytes` fields have no encoding restriction.
+
+### 11.10  Schema evolution compatibility rules
+
+**Adding a field** (new ordinal, appended in declaration order):
+- v1 encoder → v2 decoder: v2 decoder reads known fields, new field gets
+  its default value (zero / empty / None depending on type).
+- v2 encoder → v1 decoder: v1 decoder reads its known fields, ignores
+  trailing bytes (§11.4).
+
+**Adding a variant** to a `@non_exhaustive` union:
+- v2 encoder → v1 decoder: v1 decoder reads discriminant, does not
+  recognise it, skips length-prefixed payload (§11.6).
+- v1 encoder → v2 decoder: works unchanged (old variants still valid).
+
+**Deprecating a field** (marking `@deprecated`):
+- No wire change.  `@deprecated` is a source-level annotation only — the
+  field is still encoded and decoded normally.  The ordinal remains
+  reserved and MUST NOT be reused.
+
+**Changing a required field to `optional<T>`** (**BREAKING**):
+- This changes the wire encoding (a 1-bit presence flag is inserted
+  before `T`'s encoding).  A v1 decoder reading v2-encoded data would
+  misinterpret the presence flag as part of the field value.
+- This is classified as a breaking change in §10.
+
+---
+
+## §12  Codegen Contract
+
+### 12.1  Required output (all backends)
 
 For each schema, every conformant backend MUST generate:
 
@@ -829,7 +939,7 @@ For each schema, every conformant backend MUST generate:
 3. `SCHEMA_HASH: [u8; 32]` constant.
 4. `SCHEMA_VERSION: &str` constant.
 
-### 11.2  Rust backend (normative)
+### 12.2  Rust backend (normative)
 
 The Rust backend MUST additionally:
 
@@ -840,9 +950,9 @@ The Rust backend MUST additionally:
 - Generate doc comments from `@doc` annotations and `///` schema comments.
 - Emit `SCHEMA_HASH` and `SCHEMA_VERSION` as `pub const` items.
 - Emit `@removed` tombstones as `// REMOVED @N (since vX.Y.Z): reason` comments
-  and populate the `REMOVED_ORDINALS` constant (see §12.3).
+  and populate the `REMOVED_ORDINALS` constant (see §13.3).
 
-### 11.3  All backends (prohibitions)
+### 12.3  All backends (prohibitions)
 
 Backends MUST NOT:
 
@@ -853,16 +963,16 @@ Backends MUST NOT:
 
 ---
 
-## §12  Standard Annotations
+## §13  Standard Annotations
 
-### 12.1  Schema-level
+### 13.1  Schema-level
 
 **`@version("semver")`**
 Declares the schema's semantic version (SemVer 2.0.0 string). MUST appear
 before the `namespace` declaration if present. MUST NOT appear more than once
 per schema.
 
-### 12.2  Declaration-level
+### 13.2  Declaration-level
 
 **`@non_exhaustive`**
 Valid on `enum` and `union`. Instructs decoders not to reject unknown variants.
@@ -879,7 +989,7 @@ Marks a declaration as deprecated. `reason` MUST be provided. `since` is
 OPTIONAL. Backends MUST emit a deprecation marker in generated code. All
 usages of a deprecated type SHOULD produce a compiler warning.
 
-### 12.3  Field lifecycle annotations
+### 13.3  Field lifecycle annotations
 
 **`@since("version")`**
 Marks the schema version in which this field was introduced. Backends MUST
@@ -934,7 +1044,7 @@ DecodeError::RemovedField { ordinal: N, removed_in: "1.1.0", reason: "..." }
 ```
 where `removed_in` is an empty string if `since` was not specified.
 
-### 12.4  Encoding annotations (field-level)
+### 13.4  Encoding annotations (field-level)
 
 **`@varint`**
 Valid on: `u8`, `u16`, `u32`, `u64`.
@@ -980,7 +1090,7 @@ Backends MUST generate a stateful encoder/decoder structure that tracks the
 running previous value per `@delta` field. The byte-count limits for
 `@varint`/`@zigzag` apply to the encoded delta value, not the raw field value.
 
-### 12.5  Validation annotations (field-level)
+### 13.5  Validation annotations (field-level)
 
 **`@limit(N)`**
 Valid on: `string`, `bytes`, `array<T>`, `map<K, V>`.
@@ -1003,10 +1113,10 @@ encoding. Backends MUST generate validation logic that enforces the limit at
 both encode and decode time.
 
 `@limit` is a schema-level constraint, not a transport-level one. It narrows
-the global limits defined in §13.1. If `@limit(N)` and the global limit both
+the global limits defined in §14.1. If `@limit(N)` and the global limit both
 apply, the smaller of the two governs.
 
-### 12.6  Wire protocol annotations (message/declaration-level)
+### 13.6  Wire protocol annotations (message/declaration-level)
 
 **`@type(0xNN)`**
 Assigns a wire type discriminant for message dispatch. Value MUST be a
@@ -1024,9 +1134,9 @@ protocol that may carry multiple revisions simultaneously.
 
 ---
 
-## §13  Security Considerations
+## §14  Security Considerations
 
-### 13.1  Malformed input
+### 14.1  Malformed input
 
 Vexil decoders process untrusted data from the network. A conformant decoder
 MUST enforce all of the following limits:
@@ -1052,7 +1162,7 @@ Decoders MUST NOT allocate memory proportional to an untrusted length prefix
 before validating that the underlying data is available. Allocating based on an
 attacker-controlled length field without bounding is a denial-of-service vector.
 
-### 13.2  Schema hash authenticity
+### 14.2  Schema hash authenticity
 
 The schema hash (§8) is a content hash (BLAKE3 without a key). It detects
 accidental schema version skew. It does NOT prevent an attacker who controls the
@@ -1060,7 +1170,7 @@ network from forging a valid-looking message for a different schema version.
 If message authenticity is required, callers MUST apply a separate signature
 (e.g. HMAC-BLAKE3 or Ed25519) over the full wire payload.
 
-### 13.3  Code generation safety
+### 14.3  Code generation safety
 
 The Vexil compiler generates code that is compiled into production systems. The
 compiler MUST NOT execute any code derived from schema content. Schema
@@ -1072,7 +1182,7 @@ MUST validate unknown annotation arguments before acting on them. Annotation
 arguments MUST NOT cause shell execution, file system access outside the declared
 output directory, or network access during code generation.
 
-### 13.4  Dependency supply chain
+### 14.4  Dependency supply chain
 
 Schema imports reference external schemas by namespace path. The compiler MUST
 resolve imports from a declared, bounded set of schema paths (e.g. a workspace
@@ -1115,7 +1225,7 @@ continue reading the next header.
 
 ### A.3  Relationship to `@delta` stream context
 
-A `@delta` stream context (§12.4) spans the lifetime of the transport connection
+A `@delta` stream context (§13.4) spans the lifetime of the transport connection
 or until an explicit reset. A transport MAY define a reset mechanism (e.g. a
 reserved `type` value) that resets all `@delta` running values to their initial
 states.
