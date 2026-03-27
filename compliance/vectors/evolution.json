@@ -1,0 +1,22 @@
+[
+  {
+    "name": "v1_encode_v2_decode_appended_field",
+    "schema_v1": "namespace test.evo\nmessage M { x @0 : u32 }",
+    "schema_v2": "namespace test.evo\nmessage M { x @0 : u32  y @1 : u16 }",
+    "type": "M",
+    "value_v1": { "x": 42 },
+    "encoded_v1": "2a000000",
+    "decoded_as_v2": { "x": 42, "y": 0 },
+    "notes": "v2 decoder fills y with default (0) when reading v1-encoded bytes"
+  },
+  {
+    "name": "v2_encode_v1_decode_trailing_ignored",
+    "schema_v1": "namespace test.evo\nmessage M { x @0 : u32 }",
+    "schema_v2": "namespace test.evo\nmessage M { x @0 : u32  y @1 : u16 }",
+    "type": "M",
+    "value_v2": { "x": 42, "y": 99 },
+    "encoded_v2": "2a0000006300",
+    "decoded_as_v1": { "x": 42 },
+    "notes": "v1 decoder reads x, ignores trailing bytes (y=99)"
+  }
+]

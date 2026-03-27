@@ -1,0 +1,26 @@
+[
+  {
+    "name": "array_empty",
+    "schema": "namespace test.arr\nmessage M { v @0 : array<u32> }",
+    "type": "M",
+    "value": { "v": [] },
+    "expected_bytes": "00",
+    "notes": "LEB128 count = 0"
+  },
+  {
+    "name": "array_three_u32",
+    "schema": "namespace test.arr\nmessage M { v @0 : array<u32> }",
+    "type": "M",
+    "value": { "v": [1, 2, 3] },
+    "expected_bytes": "03010000000200000003000000",
+    "notes": "LEB128 count 3 + three u32 LE values"
+  },
+  {
+    "name": "map_one_entry",
+    "schema": "namespace test.mp\nmessage M { v @0 : map<string, u32> }",
+    "type": "M",
+    "value": { "v": { "key": 42 } },
+    "expected_bytes": "01036b65792a000000",
+    "notes": "LEB128 count 1 + string('key', len 3) + u32 LE(42)"
+  }
+]

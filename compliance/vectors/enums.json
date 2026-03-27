@@ -1,0 +1,18 @@
+[
+  {
+    "name": "enum_first_variant",
+    "schema": "namespace test.enm\nenum Status { Active @0  Inactive @1 }\nmessage M { v @0 : Status }",
+    "type": "M",
+    "value": { "v": "Active" },
+    "expected_bytes": "00",
+    "notes": "Enum with 2 variants uses 1 bit. Active = 0."
+  },
+  {
+    "name": "enum_second_variant",
+    "schema": "namespace test.enm\nenum Status { Active @0  Inactive @1 }\nmessage M { v @0 : Status }",
+    "type": "M",
+    "value": { "v": "Inactive" },
+    "expected_bytes": "01",
+    "notes": "Inactive = 1, 1 bit, flush"
+  }
+]
