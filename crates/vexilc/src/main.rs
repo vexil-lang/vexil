@@ -460,6 +460,95 @@ fn cmd_format_vx(vx_file: &str, schema_file: &str, type_name: &str) -> i32 {
     0
 }
 
+fn cmd_compile(schema_file: &str, output: &str) -> i32 {
+    let source = match std::fs::read_to_string(schema_file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: {schema_file}: {e}");
+            return 1;
+        }
+    };
+    let result = vexil_lang::compile(&source);
+    for diag in &result.diagnostics {
+        render_diagnostic(schema_file, &source, diag);
+    }
+    if result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::Error)
+    {
+        return 1;
+    }
+    let compiled = match result.compiled {
+        Some(ref c) => c,
+        None => {
+            eprintln!("error: compilation produced no result");
+            return 1;
+        }
+    };
+
+    let meta = vexil_store::meta_schema();
+    let schema_hash = vexil_lang::canonical::schema_hash(compiled);
+    let ns = compiled
+        .namespace
+        .iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join(".");
+
+    // Determine output format from extension: .vxcp -> SchemaStore, else .vxc single
+    let is_store = output.ends_with(".vxcp");
+
+    let (value, type_name) = if is_store {
+        (
+            vexil_store::schema_store_to_value(&[compiled]),
+            "SchemaStore",
+        )
+    } else {
+        (
+            vexil_store::compiled_schema_to_value(compiled),
+            "CompiledSchema",
+        )
+    };
+
+    let payload = match vexil_store::encode(&value, type_name, meta) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            eprintln!("error: failed to encode {type_name}: {e}");
+            return 1;
+        }
+    };
+
+    let magic = if is_store {
+        vexil_store::Magic::Vxcp
+    } else {
+        vexil_store::Magic::Vxc
+    };
+
+    let meta_hash = vexil_lang::canonical::schema_hash(meta);
+    let header = vexil_store::VxbHeader {
+        magic,
+        format_version: vexil_store::FORMAT_VERSION,
+        compressed: false,
+        schema_hash: meta_hash,
+        namespace: "vexil.schema".to_string(),
+        schema_version: String::new(),
+    };
+
+    let mut buf = Vec::new();
+    vexil_store::write_header(&header, &mut buf);
+    buf.extend_from_slice(&payload);
+
+    if let Err(e) = std::fs::write(output, &buf) {
+        eprintln!("error: {output}: {e}");
+        return 1;
+    }
+
+    let hex: String = schema_hash.iter().map(|b| format!("{b:02x}")).collect();
+    eprintln!("compiled {ns} -> {output} (hash: {hex})");
+    0
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -470,6 +559,36 @@ fn main() {
                 std::process::exit(1);
             }
             std::process::exit(cmd_check(&args[2]));
+        }
+        Some("compile") => {
+            // vexilc compile <file.vexil> -o <out.vxc|out.vxcp>
+            if args.len() < 5 {
+                eprintln!("Usage: vexilc compile <file.vexil> -o <output.vxc|output.vxcp>");
+                std::process::exit(1);
+            }
+            let filename = &args[2];
+            let mut output = None;
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "-o" | "--output" => {
+                        i += 1;
+                        if i < args.len() {
+                            output = Some(args[i].as_str());
+                        }
+                    }
+                    other => {
+                        eprintln!("unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            let output = output.unwrap_or_else(|| {
+                eprintln!("-o required");
+                std::process::exit(1);
+            });
+            std::process::exit(cmd_compile(filename, output));
         }
         Some("codegen") => {
             // vexilc codegen <file.vexil> [--output <path>] [--target <rust>]
@@ -701,6 +820,7 @@ fn main() {
         _ => {
             eprintln!("Usage: vexilc <subcommand> [args]");
             eprintln!("  vexilc check <file.vexil>");
+            eprintln!("  vexilc compile <file.vexil> -o <output.vxc|output.vxcp>");
             eprintln!("  vexilc codegen <file.vexil> [--output <path>] [--target <rust>]");
             eprintln!(
                 "  vexilc build <root.vexil> --include <dir> --output <dir> [--target <rust>]"

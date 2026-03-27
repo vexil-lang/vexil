@@ -1,3 +1,4 @@
+pub mod convert;
 pub(crate) mod decoder;
 pub(crate) mod detect;
 pub(crate) mod encoder;
@@ -10,6 +11,7 @@ pub(crate) mod parser;
 pub(crate) mod validate;
 pub(crate) mod value;
 
+pub use convert::{compiled_schema_to_value, schema_store_to_value};
 pub use decoder::decode;
 pub use detect::{detect_format, FileFormat};
 pub use encoder::encode;

@@ -14,6 +14,13 @@ use super::TypeDef;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeId(pub(crate) u32);
 
+impl TypeId {
+    /// Returns the underlying registry index.
+    pub fn index(self) -> u32 {
+        self.0
+    }
+}
+
 /// Sentinel for unresolvable types (poison value).
 pub(crate) const POISON_TYPE_ID: TypeId = TypeId(u32::MAX);
 
