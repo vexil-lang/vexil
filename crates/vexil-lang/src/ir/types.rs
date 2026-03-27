@@ -222,4 +222,5 @@ pub struct TombstoneDef {
     pub ordinal: u32,
     pub reason: SmolStr,
     pub since: Option<SmolStr>,
+    pub original_type: Option<ResolvedType>,
 }

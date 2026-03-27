@@ -1,0 +1,7 @@
+namespace test.typed.tombstone
+
+message Config {
+    name    @0 : string
+    @removed(1, reason: "migrated to timeout_ms") : u32
+    timeout_ms @2 : u64
+}
