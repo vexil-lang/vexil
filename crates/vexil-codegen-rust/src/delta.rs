@@ -136,6 +136,9 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
         }
     }
     w.line("w.flush_to_byte_boundary();");
+    w.open_block("if !val._unknown.is_empty()");
+    w.line("w.write_raw_bytes(&val._unknown);");
+    w.close_block();
     w.line("Ok(())");
     w.close_block();
     w.blank();
@@ -215,10 +218,12 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
         }
     }
     w.line("r.flush_to_byte_boundary();");
+    w.line("let _unknown = r.read_remaining();");
     w.open_block(&format!("Ok({name}"));
     for field in &msg.fields {
         w.line(&format!("{},", field.name));
     }
+    w.line("_unknown,");
     w.dedent();
     w.line("})");
 

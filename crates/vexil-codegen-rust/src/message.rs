@@ -540,6 +540,7 @@ pub fn emit_message(
         );
         w.line(&format!("pub {}: {},", field.name, field_rust_type));
     }
+    w.line("pub _unknown: Vec<u8>,");
     w.close_block();
     w.blank();
 
@@ -558,6 +559,9 @@ pub fn emit_message(
         );
     }
     w.line("w.flush_to_byte_boundary();");
+    w.open_block("if !self._unknown.is_empty()");
+    w.line("w.write_raw_bytes(&self._unknown);");
+    w.close_block();
     w.line("Ok(())");
     w.close_block();
     w.close_block();
@@ -578,10 +582,12 @@ pub fn emit_message(
         );
     }
     w.line("r.flush_to_byte_boundary();");
+    w.line("let _unknown = r.read_remaining();");
     w.open_block("Ok(Self");
     for field in &msg.fields {
         w.line(&format!("{},", field.name));
     }
+    w.line("_unknown,");
     w.dedent();
     w.line("})");
 
