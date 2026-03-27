@@ -121,7 +121,7 @@ vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust + vex
 - **Separate AST and IR** — AST is source-faithful (errors, LSP), IR is resolved (type checking, codegen)
 - **Wire encoding:** LSB-first bit packing, LEB128 varints, ZigZag signed, BLAKE3 schema hash
 - **Build sequence:** spec → grammar → corpus → reference implementation (spec-driven + TDD)
-- **Lockstep versioning** — all workspace crates share version (v0.MILESTONE.PATCH)
+- **Per-crate versioning** — each crate versions independently; only crates with actual changes get bumped
 - **Trunk-based development** — small fixes and patches go directly on main; milestone-sized features use a `feature/<name>` branch and merge via PR
 
 ## Code Standards
@@ -167,11 +167,13 @@ Corpus files are named `NNN_description.vexil`. Check the highest existing numbe
 Wire format changes require RFC (14-day comment period per GOVERNANCE.md).
 Corpus file additions are non-breaking; modifications to existing files are breaking.
 
-**Tooling:** Releases are fully automated via release-plz + cargo-dist.
+**Tooling:** Releases are fully automated via release-plz + cargo-dist + npm publish.
 
 - On every push to `main`, release-plz opens/updates a Release PR with version bumps and changelogs
-- Merging the Release PR triggers: crates.io publish (all crates, correct dependency order) → git tag → cargo-dist binary builds → GitHub Release with artifacts + checksums
-- `release-plz.toml` configures lockstep version groups — all crates share the same version
+- Merging the Release PR triggers: crates.io publish (only changed crates) → git tags → cargo-dist binary builds → GitHub Release with artifacts + checksums
+- The `release` job ONLY runs when the commit message starts with `chore(release):` — docs/CI changes won't trigger accidental releases
+- `vexil-runtime-v*` tags also trigger npm publish of `@vexil/runtime` (same version)
+- `release-plz.toml` configures per-crate independent versioning — only crates with changes get bumped
 - `cliff.toml` configures changelog generation from conventional commits
 - `dist-workspace.toml` configures cargo-dist targets and installers
 - Never edit `Cargo.toml` versions by hand — release-plz manages them via the Release PR
