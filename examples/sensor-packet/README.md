@@ -4,7 +4,7 @@ Demonstrates Vexil's core strengths for embedded telemetry:
 
 - **Sub-byte types** — `u4` channel ID (4 bits), `u7` battery level (7 bits)
 - **Encoding annotations** — `@varint` for variable-length sequence numbers, `@zigzag` for signed deltas
-- **Compact enums** — `SensorKind` uses 2 bits on the wire (4 variants)
+- **Compact enums** — `SensorKind` maps to `u8` on the wire with named variants
 
 ## Run
 
