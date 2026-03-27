@@ -8,3 +8,7 @@ Thumbs.db
 .idea
 .worktrees/
 .claude/
+
+# Node.js
+node_modules/
+packages/runtime-ts/dist/
