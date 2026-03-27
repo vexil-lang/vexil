@@ -74,8 +74,9 @@ fn cmd_codegen(filename: &str, output: Option<&str>, target: &str) -> i32 {
     };
     let backend: Box<dyn vexil_lang::codegen::CodegenBackend> = match target {
         "rust" => Box::new(vexil_codegen_rust::RustBackend),
+        "typescript" => Box::new(vexil_codegen_ts::TypeScriptBackend),
         other => {
-            eprintln!("error: unknown target `{other}` (available: rust)");
+            eprintln!("error: unknown target `{other}` (available: rust, typescript)");
             return 1;
         }
     };
@@ -147,8 +148,9 @@ fn cmd_build(root_file: &str, include_paths: &[String], output_dir: &str, target
     // Resolve backend
     let backend: Box<dyn vexil_lang::codegen::CodegenBackend> = match target {
         "rust" => Box::new(vexil_codegen_rust::RustBackend),
+        "typescript" => Box::new(vexil_codegen_ts::TypeScriptBackend),
         other => {
-            eprintln!("error: unknown target `{other}` (available: rust)");
+            eprintln!("error: unknown target `{other}` (available: rust, typescript)");
             return 1;
         }
     };
