@@ -1,0 +1,56 @@
+name: Publish @vexil/runtime to npm
+
+# Triggered when release-plz creates a vexil-runtime tag.
+# This keeps the npm package version in lockstep with the Rust crate.
+
+on:
+  push:
+    tags:
+      - "vexil-runtime-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: npm publish
+    runs-on: ubuntu-latest
+    if: github.repository == 'vexil-lang/vexil'
+    defaults:
+      run:
+        working-directory: packages/runtime-ts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Tag format: vexil-runtime-v0.2.4
+          TAG="${GITHUB_REF#refs/tags/vexil-runtime-v}"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing @vexil/runtime@$TAG"
+
+      - name: Set package version
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Publish
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
