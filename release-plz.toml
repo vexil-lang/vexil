@@ -54,5 +54,6 @@ changelog_update = false
 [[package]]
 name = "vexil-bench"
 # Excluded from lockstep version group — publish = false, benchmarks only
+publish = false
 release = false
 changelog_update = false
