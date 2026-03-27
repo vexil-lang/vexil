@@ -9,17 +9,22 @@ export const SCHEMA_VERSION = '1.2.0';
 // ── OldMessage ──
 export interface OldMessage {
   value: number;
+  _unknown: Uint8Array;
 }
 
 export function encodeOldMessage(v: OldMessage, w: BitWriter): void {
   w.writeU32(v.value);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeOldMessage(r: BitReader): OldMessage {
   const value = r.readU32();
   r.flushToByteBoundary();
-  return { value };
+  const _unknown = r.readRemaining();
+  return { value, _unknown };
 }
 
 
@@ -27,19 +32,24 @@ export function decodeOldMessage(r: BitReader): OldMessage {
 export interface Lifecycle {
   name: string;
   email: string;
+  _unknown: Uint8Array;
 }
 
 export function encodeLifecycle(v: Lifecycle, w: BitWriter): void {
   w.writeString(v.name);
   w.writeString(v.email);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeLifecycle(r: BitReader): Lifecycle {
   const name = r.readString();
   const email = r.readString();
   r.flushToByteBoundary();
-  return { name, email };
+  const _unknown = r.readRemaining();
+  return { name, email, _unknown };
 }
 
 
@@ -50,6 +60,7 @@ export interface Encoded {
   offset: bigint;
   smooth: number;
   signed: bigint;
+  _unknown: Uint8Array;
 }
 
 export function encodeEncoded(v: Encoded, w: BitWriter): void {
@@ -59,6 +70,9 @@ export function encodeEncoded(v: Encoded, w: BitWriter): void {
   w.writeLeb128(v.smooth);
   w.writeZigZag64(v.signed);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeEncoded(r: BitReader): Encoded {
@@ -68,7 +82,8 @@ export function decodeEncoded(r: BitReader): Encoded {
   const smooth = r.readLeb128();
   const signed = r.readZigZag64();
   r.flushToByteBoundary();
-  return { count, delta, offset, smooth, signed };
+  const _unknown = r.readRemaining();
+  return { count, delta, offset, smooth, signed, _unknown };
 }
 
 export class EncodedEncoder {
@@ -89,6 +104,9 @@ export class EncodedEncoder {
     w.writeZigZag64(delta_signed);
     this.prevsigned = v.signed;
     w.flushToByteBoundary();
+    if (v._unknown.length > 0) {
+      w.writeRawBytes(v._unknown);
+    }
   }
 
   reset(): void {
@@ -116,7 +134,8 @@ export class EncodedDecoder {
     const signed = this.prevsigned + delta_signed;
     this.prevsigned = signed;
     r.flushToByteBoundary();
-    return { count, delta, offset, smooth, signed };
+    const _unknown = r.readRemaining();
+    return { count, delta, offset, smooth, signed, _unknown };
   }
 
   reset(): void {
@@ -133,6 +152,7 @@ export interface Limited {
   tags: string[];
   headers: Map<string, string>;
   data: Uint8Array;
+  _unknown: Uint8Array;
 }
 
 export function encodeLimited(v: Limited, w: BitWriter): void {
@@ -148,6 +168,9 @@ export function encodeLimited(v: Limited, w: BitWriter): void {
   }
   w.writeBytes(v.data);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeLimited(r: BitReader): Limited {
@@ -167,40 +190,51 @@ export function decodeLimited(r: BitReader): Limited {
   }
   const data = r.readBytes();
   r.flushToByteBoundary();
-  return { body, tags, headers, data };
+  const _unknown = r.readRemaining();
+  return { body, tags, headers, data, _unknown };
 }
 
 
 // ── RenderCommand ──
 export interface RenderCommand {
   op: number;
+  _unknown: Uint8Array;
 }
 
 export function encodeRenderCommand(v: RenderCommand, w: BitWriter): void {
   w.writeU8(v.op);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeRenderCommand(r: BitReader): RenderCommand {
   const op = r.readU8();
   r.flushToByteBoundary();
-  return { op };
+  const _unknown = r.readRemaining();
+  return { op, _unknown };
 }
 
 
 // ── Documented ──
 export interface Documented {
   value: number;
+  _unknown: Uint8Array;
 }
 
 export function encodeDocumented(v: Documented, w: BitWriter): void {
   w.writeU32(v.value);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeDocumented(r: BitReader): Documented {
   const value = r.readU32();
   r.flushToByteBoundary();
-  return { value };
+  const _unknown = r.readRemaining();
+  return { value, _unknown };
 }
 

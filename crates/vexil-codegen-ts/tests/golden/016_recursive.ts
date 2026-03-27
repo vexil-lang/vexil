@@ -9,6 +9,7 @@ export const SCHEMA_HASH = new Uint8Array([0xa1, 0x25, 0xcb, 0x50, 0x29, 0x3e, 0
 export interface TreeNode {
   value: number;
   children: TreeNode[];
+  _unknown: Uint8Array;
 }
 
 export function encodeTreeNode(v: TreeNode, w: BitWriter): void {
@@ -20,6 +21,9 @@ export function encodeTreeNode(v: TreeNode, w: BitWriter): void {
     w.leaveNested();
   }
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeTreeNode(r: BitReader): TreeNode {
@@ -33,7 +37,8 @@ export function decodeTreeNode(r: BitReader): TreeNode {
     children.push(children_item);
   }
   r.flushToByteBoundary();
-  return { value, children };
+  const _unknown = r.readRemaining();
+  return { value, children, _unknown };
 }
 
 
@@ -41,6 +46,7 @@ export function decodeTreeNode(r: BitReader): TreeNode {
 export interface LinkedList {
   value: string;
   next: LinkedList | null;
+  _unknown: Uint8Array;
 }
 
 export function encodeLinkedList(v: LinkedList, w: BitWriter): void {
@@ -53,6 +59,9 @@ export function encodeLinkedList(v: LinkedList, w: BitWriter): void {
     w.leaveNested();
   }
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeLinkedList(r: BitReader): LinkedList {
@@ -69,13 +78,15 @@ export function decodeLinkedList(r: BitReader): LinkedList {
     next = null;
   }
   r.flushToByteBoundary();
-  return { value, next };
+  const _unknown = r.readRemaining();
+  return { value, next, _unknown };
 }
 
 
 // ── Expr ──
 export interface Expr {
   kind: ExprKind;
+  _unknown: Uint8Array;
 }
 
 export function encodeExpr(v: Expr, w: BitWriter): void {
@@ -83,6 +94,9 @@ export function encodeExpr(v: Expr, w: BitWriter): void {
   encodeExprKind(v.kind, w);
   w.leaveNested();
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeExpr(r: BitReader): Expr {
@@ -90,7 +104,8 @@ export function decodeExpr(r: BitReader): Expr {
   const kind = decodeExprKind(r);
   r.leaveNested();
   r.flushToByteBoundary();
-  return { kind };
+  const _unknown = r.readRemaining();
+  return { kind, _unknown };
 }
 
 

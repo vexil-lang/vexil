@@ -7,15 +7,20 @@ export const SCHEMA_HASH = new Uint8Array([0x97, 0xbc, 0xeb, 0x17, 0x56, 0x6b, 0
 
 // ── Empty ──
 export interface Empty {
+  _unknown: Uint8Array;
 }
 
 export function encodeEmpty(v: Empty, w: BitWriter): void {
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeEmpty(r: BitReader): Empty {
   r.flushToByteBoundary();
-  return {  };
+  const _unknown = r.readRemaining();
+  return { _unknown };
 }
 
 
@@ -24,6 +29,7 @@ export interface WithGaps {
   first: number;
   third: number;
   tenth: string;
+  _unknown: Uint8Array;
 }
 
 export function encodeWithGaps(v: WithGaps, w: BitWriter): void {
@@ -31,6 +37,9 @@ export function encodeWithGaps(v: WithGaps, w: BitWriter): void {
   w.writeU32(v.third);
   w.writeString(v.tenth);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeWithGaps(r: BitReader): WithGaps {
@@ -38,24 +47,30 @@ export function decodeWithGaps(r: BitReader): WithGaps {
   const third = r.readU32();
   const tenth = r.readString();
   r.flushToByteBoundary();
-  return { first, third, tenth };
+  const _unknown = r.readRemaining();
+  return { first, third, tenth, _unknown };
 }
 
 
 // ── Annotated ──
 export interface Annotated {
   version: number;
+  _unknown: Uint8Array;
 }
 
 export function encodeAnnotated(v: Annotated, w: BitWriter): void {
   w.writeU8(v.version);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeAnnotated(r: BitReader): Annotated {
   const version = r.readU8();
   r.flushToByteBoundary();
-  return { version };
+  const _unknown = r.readRemaining();
+  return { version, _unknown };
 }
 
 
@@ -65,6 +80,7 @@ export interface FieldAnnotations {
   b: bigint;
   c: string;
   d: number;
+  _unknown: Uint8Array;
 }
 
 export function encodeFieldAnnotations(v: FieldAnnotations, w: BitWriter): void {
@@ -73,6 +89,9 @@ export function encodeFieldAnnotations(v: FieldAnnotations, w: BitWriter): void 
   w.writeString(v.c);
   w.writeI32(v.d);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeFieldAnnotations(r: BitReader): FieldAnnotations {
@@ -81,7 +100,8 @@ export function decodeFieldAnnotations(r: BitReader): FieldAnnotations {
   const c = r.readString();
   const d = r.readI32();
   r.flushToByteBoundary();
-  return { a, b, c, d };
+  const _unknown = r.readRemaining();
+  return { a, b, c, d, _unknown };
 }
 
 export class FieldAnnotationsEncoder {
@@ -95,6 +115,9 @@ export class FieldAnnotationsEncoder {
     w.writeI32(delta_d);
     this.prevd = v.d;
     w.flushToByteBoundary();
+    if (v._unknown.length > 0) {
+      w.writeRawBytes(v._unknown);
+    }
   }
 
   reset(): void {
@@ -113,7 +136,8 @@ export class FieldAnnotationsDecoder {
     const d = (this.prevd + delta_d) | 0;
     this.prevd = d;
     r.flushToByteBoundary();
-    return { a, b, c, d };
+    const _unknown = r.readRemaining();
+    return { a, b, c, d, _unknown };
   }
 
   reset(): void {

@@ -417,6 +417,7 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         let field_ts = ts_type(&field.resolved_type, registry);
         w.line(&format!("{}: {};", field.name, field_ts));
     }
+    w.line("_unknown: Uint8Array;");
     w.close_block();
     w.blank();
 
@@ -436,6 +437,9 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         );
     }
     w.line("w.flushToByteBoundary();");
+    w.open_block("if (v._unknown.length > 0)");
+    w.line("w.writeRawBytes(v._unknown);");
+    w.close_block();
     w.close_block();
     w.blank();
 
@@ -454,8 +458,11 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         );
     }
     w.line("r.flushToByteBoundary();");
+    w.line("const _unknown = r.readRemaining();");
     let field_names: Vec<&str> = msg.fields.iter().map(|f| f.name.as_str()).collect();
-    w.line(&format!("return {{ {} }};", field_names.join(", ")));
+    let mut all_names = field_names;
+    all_names.push("_unknown");
+    w.line(&format!("return {{ {} }};", all_names.join(", ")));
     w.close_block();
     w.blank();
 }
