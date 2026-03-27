@@ -1,0 +1,38 @@
+namespace cmd.protocol
+
+flags Permissions {
+    Read    @0
+    Write   @1
+    Execute @2
+    Admin   @3
+}
+
+enum Status : u8 {
+    Ok      @0
+    Error   @1
+    Pending @2
+}
+
+union Command {
+    Ping @0 {}
+    Auth @1 {
+        token @0 : string @limit(256)
+        perms @1 : Permissions
+    }
+    Query @2 {
+        table  @0 : string @limit(128)
+        limit  @1 : u32 @varint
+        offset @2 : u32 @varint
+    }
+}
+
+message Request {
+    id      @0 : u64 @varint
+    command @1 : Command
+}
+
+message Response {
+    id     @0 : u64 @varint
+    status @1 : Status
+    body   @2 : bytes @limit(65536)
+}
