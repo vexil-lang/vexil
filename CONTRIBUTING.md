@@ -1,8 +1,5 @@
 # Contributing to Vexil
 
-Thank you for your interest in contributing! This document explains how to get
-involved, what we expect, and how to get your changes merged.
-
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
@@ -51,7 +48,7 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-The test suite includes corpus-driven tests. All 18 valid corpus schemas must
+The test suite includes corpus-driven tests. All 27 valid corpus schemas must
 be accepted and all 56 invalid schemas must be rejected.
 
 ### Lint & Format

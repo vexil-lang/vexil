@@ -1,31 +1,38 @@
 # vexil-store
 
-Human-readable (`.vx`) and binary (`.vxb`) file formats for Vexil schemas and data.
+Schema-driven file formats for [Vexil](https://github.com/vexil-lang/vexil) data.
 
-Part of the [Vexil](https://github.com/vexil-lang/vexil) project.
-
-## Overview
-
-`vexil-store` provides encode/decode for Vexil values against a compiled schema,
-a human-readable text format (`.vx`), and a compact binary format (`.vxb`) with
-a typed file header.
+Encodes and decodes Vexil `Value`s against a compiled schema in two formats:
+- `.vx` -- human-readable text, inspectable and diffable
+- `.vxb` -- compact binary with a typed file header (magic bytes + schema hash)
 
 ## Usage
 
 ```toml
 [dependencies]
-vexil-store = "0.1"
-vexil-lang = "0.1"
+vexil-store = "0.2"
+vexil-lang = "0.2"
 ```
 
 ```rust
-use vexil_store::{encode, decode, meta_schema, Value};
+use vexil_store::{encode, decode, Value};
 
-let schema = meta_schema();
-let value = Value::String("hello".to_string());
-let bytes = encode(&value, "MyType", schema).unwrap();
-let decoded = decode(&bytes, "MyType", schema).unwrap();
+// encode a value against a compiled schema
+let bytes = encode(&value, "SensorReading", &compiled)?;
+
+// decode it back
+let decoded = decode(&bytes, "SensorReading", &compiled)?;
 assert_eq!(value, decoded);
+```
+
+## CLI
+
+`vexilc` wraps this crate for command-line use:
+
+```sh
+vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
+vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
+vexilc format data.vx  --schema s.vexil --type T              # pretty-print text
 ```
 
 ## License

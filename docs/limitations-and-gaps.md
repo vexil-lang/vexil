@@ -3,7 +3,7 @@
 A living document tracking what has been validated, what is known to be
 limited, and where improvements would have the most impact.
 
-Last updated: 2026-03-27
+Last updated: 2026-03-28
 
 ## What Was Validated
 
@@ -21,6 +21,10 @@ Last updated: 2026-03-27
   pass the same golden byte vector suite.
 - **TypeScript backend:** Full code generation for all 6 declaration kinds
   (message, enum, flags, union, newtype, config) with cross-file imports.
+- **Delta encoding:** `@delta` annotation generates stateful encoder/decoder
+  pairs in both Rust and TypeScript. Numeric fields transmit deltas from the
+  previous frame; non-numeric fields are sent in full. Verified in the
+  system-monitor example with live WebSocket streaming.
 
 ## Known Limitations
 
@@ -58,7 +62,6 @@ Last updated: 2026-03-27
   than byte-aligned formats). Equivalent for byte-aligned fields. No overhead
   for field tags or type descriptors.
 - **Encode/decode throughput:** Benchmarks available via `cargo bench -p vexil-bench`.
-  Baseline numbers to be recorded after first benchmark run.
 - **Comparison with protobuf:** Vexil's deterministic encoding enables content
   addressing (BLAKE3 hash) which protobuf cannot guarantee. Throughput
   comparison pending formal benchmarks.
