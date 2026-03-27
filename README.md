@@ -17,11 +17,17 @@
 
 ---
 
-Vexil describes both the shape *and* the wire encoding of data crossing system boundaries. The type `u4` occupies exactly 4 bits. The annotation `@varint` switches a field to LEB128. The schema is the wire contract, not just the shape contract.
+## What is Vexil?
 
-Each schema produces a deterministic BLAKE3 hash, embedded in generated code at compile time. If a sender and receiver compile against different schemas, the mismatch is detectable before any data is read.
+Vexil (Validated Exchange Language) is a schema definition language (SDL) in the tradition of Protocol Buffers and Cap'n Proto, distinguished by two properties:
 
-## Quick look
+**Encoding semantics are part of the type system.** The type `u4` means exactly 4 bits on the wire — not "an integer that fits in 4 bits." The annotation `@varint` on a `u64` field changes the wire encoding to unsigned LEB128. The schema is the wire contract, not just the shape contract.
+
+**The schema is the single source of truth.** Each schema has a deterministic BLAKE3 hash. That hash is embedded in generated code as a compile-time constant. A mismatch between the schema a sender compiled against and the schema a receiver compiled against is detectable at runtime, before any data corruption occurs.
+
+## Quick Look
+
+A sensor telemetry schema:
 
 ```vexil
 namespace sensor.packet
@@ -34,7 +40,7 @@ enum SensorKind : u8 {
 }
 
 message SensorReading {
-    channel  @0 : u4              # 4 bits, values 0..15
+    channel  @0 : u4              # 4 bits — values 0..15
     kind     @1 : SensorKind
     value    @2 : u16
     sequence @3 : u32 @varint     # variable-length encoding
@@ -42,7 +48,7 @@ message SensorReading {
 }
 ```
 
-Generated Rust:
+Generated Rust code encodes and decodes in a few lines:
 
 ```rust
 use vexil_runtime::{BitWriter, BitReader, Pack, Unpack};
@@ -61,7 +67,7 @@ let decoded = SensorReading::unpack(&mut r).unwrap();
 assert_eq!(decoded.value, 2350);
 ```
 
-The same schema generates TypeScript that produces identical bytes:
+The same schema generates TypeScript with identical wire output:
 
 ```typescript
 import { BitWriter, BitReader } from '@vexil/runtime';
@@ -78,69 +84,80 @@ const decoded = decodeSensorReading(r);
 // decoded.value === 2350
 ```
 
-## What Vexil does
+## Features
 
-- `u1`..`u63` and `i2`..`i63` occupy exactly N bits on the wire, LSB-first
-- `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), and `@delta` (per-field delta from previous value) are declared in the schema
-- Six declaration kinds: `message`, `enum`, `flags`, `union`, `newtype`, `config`
-- BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
-- Rust and TypeScript backends from the same schema, byte-identical output verified by compliance vectors
-- Same data always produces the same bytes, enabling content addressing and replay detection
-- Every invalid input yields a distinct error with file, line, column, and a human-readable description
-- 83-file conformance corpus (27 valid, 56 invalid) that any implementation must pass
+- **Sub-byte integer types** — `u1`..`u7` and `i1`..`i7`; each occupies exactly N bits on the wire with LSB-first bit packing
+- **Encoding annotations** — `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), `@delta` (delta from previous value) directly in the schema
+- **Rich type vocabulary** — `message`, `enum`, `flags`, `union`, `newtype`, and `config` declarations
+- **Schema versioning** — BLAKE3 hash of the canonical schema form; mismatch is detectable at the protocol boundary
+- **Multi-language code generation** — Rust and TypeScript backends from the same schema, with byte-identical wire output verified by compliance vectors
+- **Deterministic encoding** — same data always produces identical bytes, enabling content addressing and replay detection
+- **Structured error model** — every invalid input produces a distinct error class with file, line, column, and a human-readable description
+- **83-file conformance corpus** — 27 valid schemas and 56 invalid schemas; a conformant implementation must accept all valid and reject all invalid
 
 ## Comparison
 
 | | Vexil | Protobuf | Cap'n Proto | FlatBuffers |
 |---|:---:|:---:|:---:|:---:|
-| Sub-byte types (`u1`..`u63`) | **Yes** | -- | -- | -- |
-| Encoding annotations in schema | **Yes** | -- | -- | -- |
-| Schema hash (mismatch detection) | **BLAKE3** | -- | -- | -- |
-| LSB-first bit packing | **Yes** | -- | -- | -- |
+| Sub-byte types (`u1`..`u63`) | **Yes** | — | — | — |
+| Encoding annotations in schema | **Yes** | — | — | — |
+| Schema hash (mismatch detection) | **BLAKE3** | — | — | — |
+| LSB-first bit packing | **Yes** | — | — | — |
 | Self-describing wire format | No | Optional | No | Optional |
 | Zero-copy decode | No | No | **Yes** | **Yes** |
 | Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
 | Schema evolution | Partial | **Yes** | **Yes** | **Yes** |
-| Language targets | Rust, TS | **Many** | **Many** | **Many** |
+| Language targets | Rust, TypeScript | **Many** | **Many** | **Many** |
 
-## Install
+## Installation
+
+### cargo install
 
 ```sh
 cargo install vexilc
 ```
 
-Pre-built binaries for Linux, Windows, and macOS are on the [Releases page](https://github.com/vexil-lang/vexil/releases).
+### Pre-built binaries
 
-To build from source (requires Rust 1.94+):
+Pre-built binaries for Linux, Windows, and macOS are available on the
+[Releases page](https://github.com/vexil-lang/vexil/releases).
+
+### From source
+
+Requires Rust 1.94 or later ([install via rustup](https://rustup.rs)).
 
 ```sh
 git clone https://github.com/vexil-lang/vexil
 cd vexil
 cargo build --release --bin vexilc
+# Binary is at target/release/vexilc
 ```
 
 ## Usage
 
 ### CLI
 
+Check a schema for errors:
+
 ```sh
-# Check a schema for errors (prints BLAKE3 hash on success)
 vexilc check schema.vexil
-
-# Generate code
-vexilc codegen schema.vexil --output out.rs                    # Rust (default)
-vexilc codegen schema.vexil --output out.ts --target typescript # TypeScript
-
-# Compile a multi-file project
-vexilc build root.vexil --include ./schemas --output ./generated
-vexilc build root.vexil --include ./schemas --output ./generated --target typescript
-
-# Schema-driven data tools
-vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
-vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
 ```
 
-Errors render with source spans:
+Generate code from a schema:
+
+```sh
+vexilc codegen schema.vexil --output out.rs                    # Rust (default)
+vexilc codegen schema.vexil --output out.ts --target typescript # TypeScript
+```
+
+Compile a multi-file project:
+
+```sh
+vexilc build root.vexil --include ./schemas --output ./generated
+vexilc build root.vexil --include ./schemas --output ./generated --target typescript
+```
+
+Errors are rendered with source spans and structured diagnostics:
 
 ```
 Error: duplicate field name
@@ -152,52 +169,53 @@ Error: duplicate field name
 
 ### Library
 
+Add `vexil-lang` to your `Cargo.toml`:
+
 ```toml
 [dependencies]
 vexil-lang = "0.2"
 ```
 
-```rust
-use vexil_lang::{compile, Severity};
+Parse and compile a schema programmatically:
 
-let result = compile(source);
+```rust
+let result = vexil_lang::compile(source);
 if result.diagnostics.iter().any(|d| d.severity == Severity::Error) {
     // handle errors
 }
 if let Some(compiled) = result.compiled {
-    let hash = vexil_lang::canonical::schema_hash(&compiled);
-    // pass compiled to a CodegenBackend
+    // use compiled schema
 }
 ```
 
-## Repository layout
+## Repository Structure
 
 ```
 spec/
-  vexil-spec.md          # Language specification (normative, S1-S14)
-  vexil-grammar.peg      # Formal PEG grammar
+  vexil-spec.md          # Language specification (normative, §1-§14)
+  vexil-grammar.peg      # Formal PEG grammar derived from spec
 corpus/
-  valid/                 # 27 schemas -- conformant impl must accept all
-  invalid/               # 56 schemas -- conformant impl must reject all
-  projects/              # Multi-file integration tests
+  valid/                 # 26 conformant schemas — all must be accepted
+  invalid/               # 56 invalid schemas — all must be rejected
+  projects/              # Multi-file project fixtures for integration tests
 compliance/
-  vectors/               # Golden byte vectors (JSON), cross-implementation contract
+  vectors/               # Golden byte vectors (JSON) — cross-implementation contract
 crates/
-  vexil-lang/            # Compiler: lexer, parser, IR, type checker, canonical hash
-  vexil-codegen-rust/    # Rust code generation
-  vexil-codegen-ts/      # TypeScript code generation
-  vexil-runtime/         # Rust runtime: BitWriter/BitReader, Pack/Unpack, LEB128, ZigZag
-  vexilc/                # CLI with ariadne error rendering
-  vexil-store/           # .vx text and .vxb binary file formats
+  vexil-lang/            # Compiler library: lexer, parser, IR, type checker, canonical hash
+  vexil-codegen-rust/    # Rust code generation backend
+  vexil-codegen-ts/      # TypeScript code generation backend
+  vexil-runtime/         # Rust runtime: bit I/O, Pack/Unpack traits, LEB128, ZigZag
+  vexilc/                # CLI frontend with ariadne error rendering
+  vexil-store/           # .vx text format and .vxb binary format for schemas and data
   vexil-bench/           # Encode/decode benchmarks (Criterion)
 packages/
-  runtime-ts/            # @vexil/runtime -- TypeScript BitWriter/BitReader (npm)
+  runtime-ts/            # @vexil/runtime npm package: TypeScript BitWriter/BitReader
 examples/
   sensor-packet/         # Sub-byte types, encoding annotations, compact enums
-  command-protocol/      # Unions, flags, limits -- RPC-style protocol
+  command-protocol/      # Unions, flags, limits — RPC-style protocol design
   multi-file-project/    # Cross-file imports and project compilation
   cross-language/        # Rust <-> Node.js interop via binary files
-  system-monitor/        # Live dashboard: Rust -> browser via @delta WebSocket
+  system-monitor/        # Real-time dashboard: Rust -> browser via @delta WebSocket
 ```
 
 ## Documentation
@@ -206,12 +224,18 @@ examples/
 - [FAQ](FAQ.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
-- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-store](https://docs.rs/vexil-store)
+- API reference: [vexil-lang](https://docs.rs/vexil-lang) · [vexil-runtime](https://docs.rs/vexil-runtime) · [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) · [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) · [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). Language changes and protocol modifications go through the RFC process in [GOVERNANCE.md](./GOVERNANCE.md).
+Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
+For architectural decisions, language changes, and protocol modifications, see [GOVERNANCE.md](./GOVERNANCE.md).
 
 ## License
 
-Licensed under either of [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE) at your option.
+Licensed under either of
+
+- [MIT License](./LICENSE-MIT)
+- [Apache License, Version 2.0](./LICENSE-APACHE)
+
+at your option.

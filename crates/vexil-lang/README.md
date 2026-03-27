@@ -37,6 +37,7 @@ let project = compile_project(&root_source, &root_path, &loader)?;
 
 ## Code generation
 
+<<<<<<< Updated upstream
 Pass a `CompiledSchema` or `ProjectResult` to any `CodegenBackend`:
 
 ```rust
@@ -58,6 +59,14 @@ let files: Vec<(PathBuf, String)> = RustBackend.generate_project(&project)?;
 | [`vexil-codegen-rust`](https://crates.io/crates/vexil-codegen-rust) | Rust code generation |
 | [`vexil-codegen-ts`](https://crates.io/crates/vexil-codegen-ts) | TypeScript code generation |
 | [`vexil-runtime`](https://crates.io/crates/vexil-runtime) | Rust runtime for generated code |
+=======
+| Crate | Purpose |
+|-------|---------|
+| `vexil-lang` | This crate — compiler library |
+| [`vexil-codegen-rust`](https://crates.io/crates/vexil-codegen-rust) | Rust code generation backend |
+| [`vexil-codegen-ts`](https://crates.io/crates/vexil-codegen-ts) | TypeScript code generation backend |
+| [`vexil-runtime`](https://crates.io/crates/vexil-runtime) | Runtime support for generated Rust code |
+>>>>>>> Stashed changes
 | [`vexil-store`](https://crates.io/crates/vexil-store) | `.vx` text and `.vxb` binary file formats |
 | [`vexilc`](https://crates.io/crates/vexilc) | CLI compiler |
 

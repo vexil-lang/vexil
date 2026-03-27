@@ -43,6 +43,4 @@ Yes to all. The wire encoding is deterministic, compact, and does not include me
 
 ## What is `@delta` encoding?
 
-The `@delta` annotation on a message causes the code generator to emit stateful encoder/decoder pairs. Numeric fields are transmitted as deltas from the previous frame rather than absolute values. Non-numeric fields (strings, arrays, enums) are sent in full each frame.
-
-In the system-monitor example, a full `SystemSnapshot` frame is ~42 bytes. Steady-state delta frames drop to ~25-30 bytes because most deltas are small or zero.
+The `@delta` annotation on a message causes the code generator to emit stateful encoder/decoder pairs. Numeric fields are transmitted as deltas from the previous frame rather than absolute values. Non-numeric fields (strings, arrays, enums) are sent in full each frame. This reduces wire size significantly for streaming scenarios where values change incrementally — for example, a system monitoring dashboard sending CPU and memory readings every second.

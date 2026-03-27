@@ -18,7 +18,11 @@ Pre-built binaries: [Releases page](https://github.com/vexil-lang/vexil/releases
 vexilc check schema.vexil
 ```
 
+<<<<<<< Updated upstream
 **codegen** -- generate code from a single schema:
+=======
+**Generate code from a schema:**
+>>>>>>> Stashed changes
 
 ```sh
 vexilc codegen schema.vexil --output out.rs                     # Rust (default)
@@ -32,6 +36,7 @@ vexilc build root.vexil --include ./schemas --output ./generated
 vexilc build root.vexil --include ./schemas --output ./generated --target typescript
 ```
 
+<<<<<<< Updated upstream
 Writes one file per schema plus a `mod.rs` (Rust) or `index.ts` (TypeScript).
 
 **pack / unpack** -- convert between `.vx` text and `.vxb` binary:
@@ -64,6 +69,10 @@ Error: duplicate field name
   8 |     value: u32,
     |     ^^^^^ field "value" was already declared on line 5
 ```
+=======
+On success, `check` prints the BLAKE3 schema hash. `build` writes one output file per
+schema into the output directory, plus a `mod.rs` (Rust) or `index.ts` (TypeScript).
+>>>>>>> Stashed changes
 
 ## License
 

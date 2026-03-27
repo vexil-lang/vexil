@@ -14,7 +14,7 @@ spec/
   vexil-grammar.peg           # Formal PEG grammar derived from spec
 corpus/
   MANIFEST.md                 # Index of all test files with spec references
-  valid/                      # Conformant impl MUST accept all (26 files)
+  valid/                      # Conformant impl MUST accept all (27 files)
   invalid/                    # Conformant impl MUST reject all (56 files)
   projects/                   # Multi-file project tests (simple, diamond, mixed)
 compliance/
