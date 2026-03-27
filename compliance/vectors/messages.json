@@ -4,8 +4,8 @@
     "schema": "namespace test.msg\nmessage Empty {}",
     "type": "Empty",
     "value": {},
-    "expected_bytes": "",
-    "notes": "Zero fields = zero bytes"
+    "expected_bytes": "00",
+    "notes": "Zero fields, flush_to_byte_boundary produces one zero byte"
   },
   {
     "name": "two_u32_fields",

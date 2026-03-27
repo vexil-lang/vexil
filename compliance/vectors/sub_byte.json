@@ -12,8 +12,8 @@
     "schema": "namespace test.sub\nmessage M { a @0 : u3  b @1 : u5  c @2 : u6 }",
     "type": "M",
     "value": { "a": 7, "b": 31, "c": 63 },
-    "expected_bytes": "fffc",
-    "notes": "a=111 b=11111 c=111111 LSB-first: 11111_111 | 00_111111 = FF FC"
+    "expected_bytes": "ff3f",
+    "notes": "a=111 b=11111 c=111111 LSB-first: 11111_111 | 00_111111 = FF 3F"
   },
   {
     "name": "u1_one",
