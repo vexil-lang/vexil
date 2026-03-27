@@ -17,7 +17,9 @@ impl vexil_runtime::Pack for TreeNode {
         w.write_i32(self.value);
         w.write_leb128(self.children.len() as u64);
         for item in &self.children {
+            w.enter_recursive()?;
             item.pack(w)?;
+            w.leave_recursive();
         }
         w.flush_to_byte_boundary();
         Ok(())
@@ -57,7 +59,9 @@ impl vexil_runtime::Pack for LinkedList {
         w.write_bool(self.next.is_some());
         w.flush_to_byte_boundary();
         if let Some(ref inner_val) = self.next {
+            w.enter_recursive()?;
             inner_val.pack(w)?;
+            w.leave_recursive();
         }
         w.flush_to_byte_boundary();
         Ok(())
@@ -96,7 +100,9 @@ pub struct Expr {
 
 impl vexil_runtime::Pack for Expr {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
+        w.enter_recursive()?;
         self.kind.pack(w)?;
+        w.leave_recursive();
         w.flush_to_byte_boundary();
         Ok(())
     }
@@ -138,9 +144,13 @@ impl vexil_runtime::Pack for ExprKind {
             Self::Binary { left, op, right } => {
                 w.write_leb128(1_u64);
                 let mut payload_w = vexil_runtime::BitWriter::new();
+                payload_w.enter_recursive()?;
                 left.pack(&mut payload_w)?;
+                payload_w.leave_recursive();
                 payload_w.write_u8(*op);
+                payload_w.enter_recursive()?;
                 right.pack(&mut payload_w)?;
+                payload_w.leave_recursive();
                 payload_w.flush_to_byte_boundary();
                 let payload = payload_w.finish();
                 w.write_leb128(payload.len() as u64);

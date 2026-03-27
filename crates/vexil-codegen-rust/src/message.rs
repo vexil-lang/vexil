@@ -163,7 +163,9 @@ fn emit_write_type(
             SemanticType::Hash => w.line(&format!("w.write_raw_bytes(&{access});")),
         },
         ResolvedType::Named(_) => {
+            w.line("w.enter_recursive()?;");
             w.line(&format!("{access}.pack(w)?;"));
+            w.line("w.leave_recursive();");
         }
         ResolvedType::Optional(inner) => {
             // Presence bit
