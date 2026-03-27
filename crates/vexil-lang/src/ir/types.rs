@@ -31,6 +31,7 @@ impl Default for TypeRegistry {
 }
 
 impl TypeRegistry {
+    /// Create an empty type registry.
     pub fn new() -> Self {
         Self {
             types: Vec::new(),
@@ -38,6 +39,7 @@ impl TypeRegistry {
         }
     }
 
+    /// Register a complete type definition, returning its [`TypeId`].
     pub fn register(&mut self, name: SmolStr, def: TypeDef) -> TypeId {
         let id = TypeId(self.types.len() as u32);
         self.types.push(Some(def));
@@ -45,6 +47,7 @@ impl TypeRegistry {
         id
     }
 
+    /// Register a stub (forward declaration) that will be filled later via [`fill_stub`](Self::fill_stub).
     pub fn register_stub(&mut self, name: SmolStr) -> TypeId {
         let id = TypeId(self.types.len() as u32);
         self.types.push(None);
@@ -52,30 +55,36 @@ impl TypeRegistry {
         id
     }
 
+    /// Look up a type by name, returning its [`TypeId`] if registered.
     pub fn lookup(&self, name: &str) -> Option<TypeId> {
         self.by_name.get(name).copied()
     }
 
+    /// Get a reference to the type definition for `id`, if it exists and is not a stub.
     pub fn get(&self, id: TypeId) -> Option<&TypeDef> {
         self.types.get(id.0 as usize).and_then(|opt| opt.as_ref())
     }
 
+    /// Get a mutable reference to the type definition for `id`.
     pub fn get_mut(&mut self, id: TypeId) -> Option<&mut TypeDef> {
         self.types
             .get_mut(id.0 as usize)
             .and_then(|opt| opt.as_mut())
     }
 
+    /// Returns `true` if `id` is a registered stub that has not yet been filled.
     pub fn is_stub(&self, id: TypeId) -> bool {
         self.types
             .get(id.0 as usize)
             .is_some_and(|opt| opt.is_none())
     }
 
+    /// Returns the total number of slots (filled + stubs) in the registry.
     pub fn len(&self) -> usize {
         self.types.len()
     }
 
+    /// Returns `true` if the registry contains no types.
     pub fn is_empty(&self) -> bool {
         self.types.is_empty()
     }
@@ -94,6 +103,7 @@ impl TypeRegistry {
         }
     }
 
+    /// Iterate over all filled type definitions and their IDs.
     pub fn iter(&self) -> impl Iterator<Item = (TypeId, &TypeDef)> {
         self.types
             .iter()
@@ -106,6 +116,10 @@ impl TypeRegistry {
 // ResolvedType
 // ---------------------------------------------------------------------------
 
+/// A fully resolved type reference in the IR.
+///
+/// All named types have been resolved to [`TypeId`] handles. Container types
+/// (optional, array, map, result) wrap their inner types recursively.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum ResolvedType {
@@ -123,6 +137,7 @@ pub enum ResolvedType {
 // Encoding
 // ---------------------------------------------------------------------------
 
+/// Wire encoding strategy for a field or type.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Encoding {
@@ -132,6 +147,7 @@ pub enum Encoding {
     Delta(Box<Encoding>),
 }
 
+/// Per-field encoding configuration (encoding strategy and optional element limit).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldEncoding {
     pub encoding: Encoding,
@@ -139,6 +155,7 @@ pub struct FieldEncoding {
 }
 
 impl FieldEncoding {
+    /// Create a default field encoding (no varint, no limit).
     pub fn default_encoding() -> Self {
         Self {
             encoding: Encoding::Default,
@@ -151,6 +168,10 @@ impl FieldEncoding {
 // WireSize
 // ---------------------------------------------------------------------------
 
+/// The computed wire size of a type, in bits.
+///
+/// Fixed-size types have a known bit count. Variable-size types (containing
+/// arrays, optionals, or varints) have a minimum and optional maximum.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum WireSize {
@@ -165,12 +186,14 @@ pub enum WireSize {
 // ResolvedAnnotations
 // ---------------------------------------------------------------------------
 
+/// Information attached to a `@deprecated` annotation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeprecatedInfo {
     pub reason: SmolStr,
     pub since: Option<SmolStr>,
 }
 
+/// Annotations resolved from source and available on any IR node.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ResolvedAnnotations {
     pub deprecated: Option<DeprecatedInfo>,
@@ -185,6 +208,7 @@ pub struct ResolvedAnnotations {
 // TombstoneDef
 // ---------------------------------------------------------------------------
 
+/// A tombstoned (removed) field or variant ordinal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TombstoneDef {
     pub span: Span,

@@ -1,5 +1,11 @@
 //! # Stability: Tier 3 (internal)
 //!
+//! Lexer: tokenises Vexil source text into a flat token stream.
+//!
+//! The lexer is intentionally simple -- it produces tokens without
+//! any lookahead beyond single-character peek. All error recovery
+//! happens in the parser.
+
 pub mod token;
 
 use crate::diagnostic::{Diagnostic, ErrorClass};

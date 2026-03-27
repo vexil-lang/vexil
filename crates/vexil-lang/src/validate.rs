@@ -1,5 +1,11 @@
 //! # Stability: Tier 2
 //!
+//! Semantic validation of parsed schemas.
+//!
+//! Checks naming conventions, ordinal constraints, annotation validity,
+//! and other structural rules that go beyond syntax. Runs on the AST
+//! before lowering to IR.
+
 use std::collections::{HashMap, HashSet};
 
 use smol_str::SmolStr;

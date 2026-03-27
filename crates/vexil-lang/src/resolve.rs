@@ -4,7 +4,7 @@
 //!
 //! A *namespace* is an ordered slice of identifier segments, e.g.
 //! `["foo", "bar", "types"]`.  A [`SchemaLoader`] knows how to
-//! translate that into source text and a canonical [`PathBuf`] that
+//! translate that into source text and a canonical `PathBuf` that
 //! the rest of the compiler can use for diagnostics and cycle detection.
 
 use std::collections::HashMap;

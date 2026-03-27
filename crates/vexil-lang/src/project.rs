@@ -2,7 +2,7 @@
 //!
 //! Import graph discovery and topological ordering for multi-file compilation.
 //!
-//! [`build_import_graph`] performs a depth-first traversal starting from a root
+//! [`build_import_graph()`](crate::project::build_import_graph) performs a depth-first traversal starting from a root
 //! schema, recursively loading all transitive imports via a [`SchemaLoader`].
 //! Cycles are detected eagerly; diamond dependencies are deduplicated.
 
@@ -69,7 +69,7 @@ pub struct ImportGraph {
 /// The root schema is pre-parsed from `root_source` / `root_path`; all
 /// transitive imports are fetched via `loader`.
 ///
-/// Returns an [`ImportGraph`] whose [`topo_order`] lists namespaces in
+/// Returns an [`ImportGraph`] whose `topo_order` lists namespaces in
 /// dependency-first order, suitable for driving compilation.
 pub fn build_import_graph(
     root_source: &str,

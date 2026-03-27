@@ -1,5 +1,11 @@
 //! # Stability: Tier 2
 //!
+//! Type checker: validates the IR and computes wire sizes.
+//!
+//! Detects infinite recursion, verifies encoding annotations match their
+//! target types, and fills in `wire_size` / `wire_bits` / `wire_bytes`
+//! fields on messages, enums, flags, and unions.
+
 use std::collections::HashSet;
 
 use crate::ast::{EnumBacking, PrimitiveType, SemanticType};

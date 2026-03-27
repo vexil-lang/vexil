@@ -1,5 +1,10 @@
 //! # Stability: Tier 2
 //!
+//! Type remapping utilities for cloning type definitions between registries.
+//!
+//! Used during multi-file compilation to copy imported types into a
+//! dependent schema's registry while maintaining internal cross-references.
+
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{

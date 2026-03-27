@@ -1,5 +1,12 @@
 //! # Stability: Tier 2
 //!
+//! Abstract syntax tree types produced by the parser.
+//!
+//! The AST is source-faithful: it preserves all syntactic structure
+//! from the original `.vexil` file. It is consumed by the validator
+//! and the lowering pass, and can also serve as the basis for LSP
+//! features and source-level tooling.
+
 pub mod visit;
 
 use crate::span::{Span, Spanned};

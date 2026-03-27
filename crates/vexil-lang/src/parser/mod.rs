@@ -1,5 +1,12 @@
 //! # Stability: Tier 3 (internal)
 //!
+//! Recursive-descent parser: builds an AST from a token stream.
+//!
+//! The parser consumes tokens produced by the lexer and constructs
+//! source-faithful AST nodes. It performs error recovery at the
+//! declaration level so that a single syntax error does not prevent
+//! parsing the rest of the file.
+
 pub mod decl;
 pub mod expr;
 pub mod import;

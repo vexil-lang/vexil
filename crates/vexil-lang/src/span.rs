@@ -1,5 +1,6 @@
 //! # Stability: Tier 2
 //!
+//! Source span types for mapping compiler outputs back to source locations.
 
 /// A byte-offset range in source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

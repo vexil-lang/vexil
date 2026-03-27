@@ -1,5 +1,10 @@
 //! # Stability: Tier 2
 //!
+//! Lowering pass: transforms the source-faithful AST into the compiler IR.
+//!
+//! Resolves type references, registers declarations in a [`TypeRegistry`],
+//! and populates import types from an optional `DependencyContext`.
+
 use std::collections::{HashMap, HashSet};
 
 use smol_str::SmolStr;
@@ -50,10 +55,15 @@ impl LowerCtx {
     }
 }
 
+/// Lower a parsed AST into the IR without any dependency context.
+///
+/// This is the single-file entry point. For multi-file compilation with
+/// import resolution, use [`lower_with_deps`].
 pub fn lower(schema: &Schema) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
     lower_with_deps(schema, None)
 }
 
+/// Lower a parsed AST into the IR, resolving imports against the given dependencies.
 pub fn lower_with_deps(
     schema: &Schema,
     deps: Option<&DependencyContext>,
