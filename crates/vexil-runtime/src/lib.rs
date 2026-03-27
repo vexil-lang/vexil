@@ -19,6 +19,7 @@
 pub mod bit_reader;
 pub mod bit_writer;
 pub mod error;
+pub mod handshake;
 pub mod leb128;
 pub mod traits;
 pub mod zigzag;
@@ -26,6 +27,7 @@ pub mod zigzag;
 pub use bit_reader::BitReader;
 pub use bit_writer::BitWriter;
 pub use error::{DecodeError, EncodeError};
+pub use handshake::{HandshakeResult, SchemaHandshake};
 pub use traits::{Pack, Unpack};
 
 /// Maximum allowed byte length for strings and byte arrays (64 MiB).
