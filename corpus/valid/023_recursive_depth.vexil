@@ -1,0 +1,11 @@
+namespace test.recursive.depth
+
+message TreeNode {
+    value    @0 : u32
+    children @1 : array<TreeNode>
+}
+
+message LinkedList {
+    value @0 : i64
+    next  @1 : optional<LinkedList>
+}

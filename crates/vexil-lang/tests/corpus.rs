@@ -122,6 +122,46 @@ fn valid_018_comments() {
     parse_valid("018_comments.vexil");
 }
 
+#[test]
+fn valid_019_evolution_append_field() {
+    parse_valid("019_evolution_append_field.vexil");
+}
+
+#[test]
+fn valid_020_evolution_add_variant() {
+    parse_valid("020_evolution_add_variant.vexil");
+}
+
+#[test]
+fn valid_021_empty_optionals() {
+    parse_valid("021_empty_optionals.vexil");
+}
+
+#[test]
+fn valid_022_nested_schemas() {
+    parse_valid("022_nested_schemas.vexil");
+}
+
+#[test]
+fn valid_023_recursive_depth() {
+    parse_valid("023_recursive_depth.vexil");
+}
+
+#[test]
+fn valid_024_zero_length_payload() {
+    parse_valid("024_zero_length_payload.vexil");
+}
+
+#[test]
+fn valid_025_evolution_deprecate() {
+    parse_valid("025_evolution_deprecate.vexil");
+}
+
+#[test]
+fn valid_026_required_to_optional() {
+    parse_valid("026_required_to_optional.vexil");
+}
+
 // Structure errors
 #[test]
 fn invalid_001_missing_namespace() {

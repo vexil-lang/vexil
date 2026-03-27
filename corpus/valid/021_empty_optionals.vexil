@@ -1,0 +1,17 @@
+namespace test.empty.optionals
+
+message WithOptionals {
+    name  @0 : optional<string>
+    value @1 : optional<u32>
+    flag  @2 : optional<bool>
+}
+
+message NestedOptional {
+    inner @0 : optional<optional<u32>>
+}
+
+message AllEmpty {
+    a @0 : optional<string>
+    b @1 : optional<u32>
+    c @2 : optional<bool>
+}

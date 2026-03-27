@@ -1,0 +1,15 @@
+@version("1.0.0")
+namespace test.evolution.variant
+
+@non_exhaustive
+union ShapeV1 {
+    Circle @0 { radius @0 : f32 }
+    Rect   @1 { w @0 : f32  h @1 : f32 }
+}
+
+@non_exhaustive
+union ShapeV2 {
+    Circle   @0 { radius @0 : f32 }
+    Rect     @1 { w @0 : f32  h @1 : f32 }
+    Triangle @2 { base @0 : f32  height @1 : f32 }
+}

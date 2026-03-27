@@ -1,0 +1,14 @@
+namespace test.zero.payload
+
+message Empty {}
+
+message Wrapper {
+    inner @0 : Empty
+    tag   @1 : u8
+}
+
+union Event {
+    Ping @0 {}
+    Pong @1 {}
+    Data @2 { payload @0 : bytes }
+}
