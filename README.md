@@ -25,6 +25,48 @@ Vexil (Validated Exchange Language) is a schema definition language (SDL) in the
 
 **The schema is the single source of truth.** Each schema has a deterministic BLAKE3 hash. That hash is embedded in generated code as a compile-time constant. A mismatch between the schema a sender compiled against and the schema a receiver compiled against is detectable at runtime, before any data corruption occurs.
 
+## Quick Look
+
+A sensor telemetry schema:
+
+```vexil
+namespace sensor.packet
+
+enum SensorKind : u8 {
+    Temperature @0
+    Humidity    @1
+    Pressure    @2
+    Light       @3
+}
+
+message SensorReading {
+    channel  @0 : u4              # 4 bits — values 0..15
+    kind     @1 : SensorKind
+    value    @2 : u16
+    sequence @3 : u32 @varint     # variable-length encoding
+    delta_ts @4 : i32 @zigzag    # signed, ZigZag-encoded
+}
+```
+
+Generated Rust code encodes and decodes in a few lines:
+
+```rust
+use vexil_runtime::{BitWriter, BitReader, Pack, Unpack};
+
+let reading = SensorReading {
+    channel: 0, kind: SensorKind::Temperature,
+    value: 2350, sequence: 1, delta_ts: -50,
+};
+
+let mut w = BitWriter::new();
+reading.pack(&mut w).unwrap();
+let bytes = w.finish();   // compact, bit-packed
+
+let mut r = BitReader::new(&bytes);
+let decoded = SensorReading::unpack(&mut r).unwrap();
+assert_eq!(decoded.value, 2350);
+```
+
 ## Features
 
 - **Sub-byte integer types** — `u1`..`u7` and `i1`..`i7`; each occupies exactly N bits on the wire with LSB-first bit packing
@@ -33,6 +75,19 @@ Vexil (Validated Exchange Language) is a schema definition language (SDL) in the
 - **Schema versioning** — BLAKE3 hash of the canonical schema form; mismatch is detectable at the protocol boundary
 - **Structured error model** — every invalid input produces a distinct error class with file, line, column, and a human-readable description
 - **74-file conformance corpus** — 18 valid schemas and 56 invalid schemas; a conformant implementation must accept all valid and reject all invalid
+
+## Comparison
+
+| | Vexil | Protobuf | Cap'n Proto | FlatBuffers |
+|---|:---:|:---:|:---:|:---:|
+| Sub-byte types (`u1`..`u63`) | **Yes** | — | — | — |
+| Encoding annotations in schema | **Yes** | — | — | — |
+| Schema hash (mismatch detection) | **BLAKE3** | — | — | — |
+| LSB-first bit packing | **Yes** | — | — | — |
+| Self-describing wire format | No | Optional | No | Optional |
+| Zero-copy decode | No | No | **Yes** | **Yes** |
+| Schema evolution | Planned | **Yes** | **Yes** | **Yes** |
+| Language targets | Rust | **Many** | **Many** | **Many** |
 
 ## Installation
 
@@ -96,7 +151,7 @@ Add `vexil-lang` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-vexil-lang = "0.1"
+vexil-lang = "0.2"
 ```
 
 Parse and compile a schema programmatically:
@@ -128,6 +183,13 @@ crates/
   vexilc/              # CLI frontend with ariadne error rendering
   vexil-store/         # .vx text format and .vxb binary format for schemas and data
 ```
+
+## Documentation
+
+- [Language Specification](spec/vexil-spec.md)
+- [FAQ](FAQ.md)
+- [Examples](examples/)
+- API reference: [vexil-lang](https://docs.rs/vexil-lang) · [vexil-runtime](https://docs.rs/vexil-runtime) · [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) · [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
 
