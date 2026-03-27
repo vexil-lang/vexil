@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vexil System Monitor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  h1 { font-size: 1.5rem; color: #fff; margin-bottom: 0.25rem; }
+  .subtitle { color: #888; font-size: 0.85rem; margin-bottom: 2rem; }
+  .subtitle code {
+    color: #6ee7b7; background: #1a1a2e;
+    padding: 2px 6px; border-radius: 3px; font-size: 0.8rem;
+  }
+  #connection { margin-left: 0.5rem; }
+  #connection.ok { color: #6ee7b7; }
+  #connection.err { color: #ef4444; }
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1.5rem; max-width: 960px;
+  }
+  .card {
+    background: #12121a; border: 1px solid #2a2a3a;
+    border-radius: 12px; padding: 1.25rem;
+  }
+  .card h2 {
+    font-size: 0.8rem; color: #666; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 1rem;
+  }
+  .big-number { font-size: 3rem; font-weight: 700; line-height: 1; }
+  .unit { font-size: 1rem; color: #888; font-weight: 400; }
+  .bar-bg {
+    background: #1a1a2e; border-radius: 6px;
+    height: 8px; margin: 6px 0; overflow: hidden;
+  }
+  .bar {
+    height: 100%; border-radius: 6px;
+    transition: width 0.8s cubic-bezier(.4,0,.2,1);
+  }
+  .bar.cpu { background: linear-gradient(90deg, #6ee7b7, #3b82f6); }
+  .bar.mem { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+  .bar.core { background: #6ee7b7; transition: width 0.8s ease; }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  }
+  .badge-Normal   { background: #064e3b; color: #6ee7b7; }
+  .badge-Degraded { background: #78350f; color: #fbbf24; }
+  .badge-Critical { background: #7f1d1d; color: #fca5a5; }
+  .cores {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 6px;
+  }
+  .core-lbl {
+    font-size: 0.7rem; color: #666;
+    display: flex; justify-content: space-between;
+  }
+  .card.full { grid-column: 1 / -1; }
+  .meta {
+    font-size: 0.8rem; color: #555; margin-top: 1.5rem; max-width: 960px;
+  }
+  .meta span { color: #888; }
+  .wire {
+    color: #444; font-size: 0.75rem; margin-top: 0.5rem;
+  }
+  .wire span { color: #6ee7b7; }
+  .detail { font-size: 0.85rem; color: #888; margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<h1>System Monitor</h1>
+<p class="subtitle">
+  Real-time telemetry via <code>Vexil</code> bitpack &mdash; Rust encodes, browser decodes
+  <span id="connection" class="err">connecting...</span>
+</p>
+
+<div class="grid">
+  <div class="card">
+    <h2>CPU Usage</h2>
+    <div class="big-number"><span id="cpu-val">--</span><span class="unit">%</span></div>
+    <div class="bar-bg"><div class="bar cpu" id="cpu-bar" style="width:0%"></div></div>
+    <div style="margin-top:0.5rem">
+      <span class="badge badge-Normal" id="cpu-status">--</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Memory</h2>
+    <div class="big-number"><span id="mem-val">--</span><span class="unit"> MB</span></div>
+    <div class="bar-bg"><div class="bar mem" id="mem-bar" style="width:0%"></div></div>
+    <div class="detail" id="mem-detail">-- / -- MB</div>
+  </div>
+
+  <div class="card full">
+    <h2>Per-Core Usage</h2>
+    <div class="cores" id="cores"></div>
+  </div>
+</div>
+
+<div class="meta">
+  Host: <span id="hostname">--</span> &bull;
+  Cores: <span id="core-count">--</span> &bull;
+  Updated: <span id="timestamp">--</span>
+  <div class="wire">
+    Wire frame: <span id="wire-size">--</span> bytes
+    (Vexil bitpack, binary WebSocket)
+  </div>
+</div>
+
+<script>
+// ─── Minimal BitReader matching @vexil/runtime ───
+class BitReader {
+  constructor(buf) {
+    this.d = buf;
+    this.v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    this.p = 0;   // byte position
+    this.b = 0;   // bit offset within byte
+  }
+  readBits(n) {
+    let r = 0, done = 0;
+    while (done < n) {
+      const avail = 8 - this.b;
+      const take = Math.min(n - done, avail);
+      r |= ((this.d[this.p] >>> this.b) & ((1 << take) - 1)) << done;
+      done += take;
+      this.b += take;
+      if (this.b >= 8) { this.b = 0; this.p++; }
+    }
+    return r;
+  }
+  flush() { if (this.b > 0) { this.b = 0; this.p++; } }
+  readU8()  { this.flush(); return this.d[this.p++]; }
+  readU32() { this.flush(); const x = this.v.getUint32(this.p, true); this.p += 4; return x; }
+  readI64() {
+    this.flush();
+    const lo = BigInt(this.v.getUint32(this.p, true));
+    const hi = BigInt(this.v.getInt32(this.p + 4, true));
+    this.p += 8;
+    return (hi << 32n) | lo;
+  }
+  readLeb128() {
+    this.flush();
+    let r = 0, s = 0;
+    for (;;) {
+      const b = this.d[this.p++];
+      r |= (b & 0x7f) << s;
+      if (!(b & 0x80)) return r;
+      s += 7;
+    }
+  }
+  readString() {
+    const len = this.readLeb128();
+    const bytes = this.d.slice(this.p, this.p + len);
+    this.p += len;
+    return new TextDecoder().decode(bytes);
+  }
+}
+
+// ─── Decode SystemSnapshot (matches generated Pack impl) ───
+// Field order: i64, string, u8, u8, leb128+array<u8>, u32, u32, 2-bit enum, flush
+const CPU_STATUS = ['Normal', 'Degraded', 'Critical'];
+
+function decode(buf) {
+  const r = new BitReader(buf);
+  const timestamp_ms  = r.readI64();
+  const hostname      = r.readString();
+  const cpu_usage     = r.readU8();
+  const cpu_count     = r.readU8();
+  const n             = r.readLeb128();
+  const per_core = [];
+  for (let i = 0; i < n; i++) per_core.push(r.readU8());
+  const memory_used   = r.readU32();
+  const memory_total  = r.readU32();
+  const status_bits   = r.readBits(2);
+  r.flush();
+  return {
+    timestamp_ms, hostname, cpu_usage, cpu_count,
+    per_core, memory_used, memory_total,
+    status: CPU_STATUS[status_bits] || 'Normal'
+  };
+}
+
+// ─── WebSocket + render ───
+function connect() {
+  const el = document.getElementById('connection');
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => { el.textContent = 'live'; el.className = 'ok'; };
+  ws.onclose = () => {
+    el.textContent = 'reconnecting...'; el.className = 'err';
+    setTimeout(connect, 2000);
+  };
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (e) => {
+    const bytes = new Uint8Array(e.data);
+    document.getElementById('wire-size').textContent = bytes.length;
+    try { render(decode(bytes)); }
+    catch (err) { console.error('decode error', err); }
+  };
+}
+
+function render(s) {
+  document.getElementById('cpu-val').textContent = s.cpu_usage;
+  document.getElementById('cpu-bar').style.width = s.cpu_usage + '%';
+
+  const badge = document.getElementById('cpu-status');
+  badge.textContent = s.status;
+  badge.className = 'badge badge-' + s.status;
+
+  document.getElementById('mem-val').textContent = s.memory_used;
+  const pct = s.memory_total > 0 ? (s.memory_used / s.memory_total * 100) : 0;
+  document.getElementById('mem-bar').style.width = pct.toFixed(1) + '%';
+  document.getElementById('mem-detail').textContent =
+    s.memory_used + ' / ' + s.memory_total + ' MB (' + pct.toFixed(1) + '%)';
+
+  document.getElementById('hostname').textContent = s.hostname;
+  document.getElementById('core-count').textContent = s.cpu_count;
+  document.getElementById('timestamp').textContent =
+    new Date(Number(s.timestamp_ms)).toLocaleTimeString();
+
+  const box = document.getElementById('cores');
+  // Reuse existing DOM nodes when possible
+  while (box.children.length > s.per_core.length) box.lastChild.remove();
+  s.per_core.forEach((u, i) => {
+    let div = box.children[i];
+    if (!div) {
+      div = document.createElement('div');
+      div.innerHTML =
+        '<div class="core-lbl"><span></span><span></span></div>' +
+        '<div class="bar-bg"><div class="bar core"></div></div>';
+      box.appendChild(div);
+    }
+    const spans = div.querySelectorAll('.core-lbl span');
+    spans[0].textContent = 'Core ' + i;
+    spans[1].textContent = u + '%';
+    div.querySelector('.bar').style.width = u + '%';
+  });
+}
+
+connect();
+</script>
+</body>
+</html>

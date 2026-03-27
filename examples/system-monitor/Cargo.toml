@@ -1,0 +1,11 @@
+[package]
+name = "system-monitor"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+vexil-runtime = { path = "../../crates/vexil-runtime" }
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+sysinfo = "0.34"
