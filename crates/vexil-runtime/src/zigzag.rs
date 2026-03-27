@@ -1,7 +1,12 @@
+/// Encode a signed integer using ZigZag encoding.
+///
+/// Maps signed values to unsigned: 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, etc.
+/// `type_bits` is the bit width of the source type (e.g. 32 for `i32`, 64 for `i64`).
 pub fn zigzag_encode(n: i64, type_bits: u8) -> u64 {
     ((n << 1) ^ (n >> (u32::from(type_bits) - 1))) as u64
 }
 
+/// Decode a ZigZag-encoded unsigned integer back to its signed value.
 pub fn zigzag_decode(n: u64) -> i64 {
     ((n >> 1) as i64) ^ -((n & 1) as i64)
 }

@@ -1,6 +1,15 @@
 use crate::error::DecodeError;
 use crate::{MAX_BYTES_LENGTH, MAX_RECURSION_DEPTH};
 
+/// A cursor over a byte slice that reads fields LSB-first at the bit level.
+///
+/// Created with [`BitReader::new`], consumed with `read_*` methods. Tracks
+/// a byte position and a sub-byte bit offset, plus a recursion depth counter
+/// for safely decoding recursive types.
+///
+/// Sub-byte reads pull individual bits from the current byte. Multi-byte reads
+/// (e.g. [`read_u16`](Self::read_u16)) first align to the next byte boundary,
+/// then interpret the bytes as little-endian.
 pub struct BitReader<'a> {
     data: &'a [u8],
     byte_pos: usize,
@@ -9,6 +18,7 @@ pub struct BitReader<'a> {
 }
 
 impl<'a> BitReader<'a> {
+    /// Create a new `BitReader` over the given byte slice.
     pub fn new(data: &'a [u8]) -> Self {
         Self {
             data,
@@ -55,6 +65,7 @@ impl<'a> BitReader<'a> {
         self.data.len().saturating_sub(self.byte_pos)
     }
 
+    /// Read a `u8`, aligning to a byte boundary first.
     pub fn read_u8(&mut self) -> Result<u8, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 1 {
@@ -65,6 +76,7 @@ impl<'a> BitReader<'a> {
         Ok(v)
     }
 
+    /// Read a little-endian `u16`, aligning to a byte boundary first.
     pub fn read_u16(&mut self) -> Result<u16, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 2 {
@@ -77,6 +89,7 @@ impl<'a> BitReader<'a> {
         Ok(u16::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `u32`, aligning to a byte boundary first.
     pub fn read_u32(&mut self) -> Result<u32, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 4 {
@@ -89,6 +102,7 @@ impl<'a> BitReader<'a> {
         Ok(u32::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `u64`, aligning to a byte boundary first.
     pub fn read_u64(&mut self) -> Result<u64, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 8 {
@@ -101,6 +115,7 @@ impl<'a> BitReader<'a> {
         Ok(u64::from_le_bytes(bytes))
     }
 
+    /// Read an `i8`, aligning to a byte boundary first.
     pub fn read_i8(&mut self) -> Result<i8, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 1 {
@@ -111,6 +126,7 @@ impl<'a> BitReader<'a> {
         Ok(i8::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `i16`, aligning to a byte boundary first.
     pub fn read_i16(&mut self) -> Result<i16, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 2 {
@@ -123,6 +139,7 @@ impl<'a> BitReader<'a> {
         Ok(i16::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `i32`, aligning to a byte boundary first.
     pub fn read_i32(&mut self) -> Result<i32, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 4 {
@@ -135,6 +152,7 @@ impl<'a> BitReader<'a> {
         Ok(i32::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `i64`, aligning to a byte boundary first.
     pub fn read_i64(&mut self) -> Result<i64, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 8 {
@@ -147,6 +165,7 @@ impl<'a> BitReader<'a> {
         Ok(i64::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `f32`, aligning to a byte boundary first.
     pub fn read_f32(&mut self) -> Result<f32, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 4 {
@@ -159,6 +178,7 @@ impl<'a> BitReader<'a> {
         Ok(f32::from_le_bytes(bytes))
     }
 
+    /// Read a little-endian `f64`, aligning to a byte boundary first.
     pub fn read_f64(&mut self) -> Result<f64, DecodeError> {
         self.flush_to_byte_boundary();
         if self.remaining() < 8 {

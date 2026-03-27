@@ -1,3 +1,12 @@
+/// A byte-buffer builder that packs fields LSB-first at the bit level.
+///
+/// Created with [`BitWriter::new`], written to with `write_*` methods, and
+/// finalized with [`BitWriter::finish`] which flushes any partial byte and
+/// returns the completed buffer.
+///
+/// Sub-byte fields are accumulated in a single byte; once 8 bits are filled
+/// the byte is flushed. Multi-byte writes (e.g. [`write_u16`](Self::write_u16))
+/// first align to a byte boundary, then append little-endian bytes directly.
 pub struct BitWriter {
     buf: Vec<u8>,
     current_byte: u8,
@@ -5,6 +14,7 @@ pub struct BitWriter {
 }
 
 impl BitWriter {
+    /// Create a new, empty `BitWriter`.
     pub fn new() -> Self {
         Self {
             buf: Vec::new(),
@@ -62,41 +72,49 @@ impl BitWriter {
         }
     }
 
+    /// Write a `u8`, aligning to a byte boundary first.
     pub fn write_u8(&mut self, v: u8) {
         self.align();
         self.buf.push(v);
     }
 
+    /// Write a `u16` in little-endian byte order, aligning first.
     pub fn write_u16(&mut self, v: u16) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// Write a `u32` in little-endian byte order, aligning first.
     pub fn write_u32(&mut self, v: u32) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// Write a `u64` in little-endian byte order, aligning first.
     pub fn write_u64(&mut self, v: u64) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// Write an `i8`, aligning to a byte boundary first.
     pub fn write_i8(&mut self, v: i8) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// Write an `i16` in little-endian byte order, aligning first.
     pub fn write_i16(&mut self, v: i16) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// Write an `i32` in little-endian byte order, aligning first.
     pub fn write_i32(&mut self, v: i32) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());
     }
 
+    /// Write an `i64` in little-endian byte order, aligning first.
     pub fn write_i64(&mut self, v: i64) {
         self.align();
         self.buf.extend_from_slice(&v.to_le_bytes());

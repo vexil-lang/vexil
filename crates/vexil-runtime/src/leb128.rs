@@ -1,5 +1,6 @@
 use crate::error::DecodeError;
 
+/// Encode `value` as an unsigned LEB128 varint, appending bytes to `buf`.
 pub fn encode(buf: &mut Vec<u8>, mut value: u64) {
     loop {
         let mut byte = (value & 0x7F) as u8;
@@ -14,6 +15,12 @@ pub fn encode(buf: &mut Vec<u8>, mut value: u64) {
     }
 }
 
+/// Decode an unsigned LEB128 varint from `data`, consuming at most `max_bytes`.
+///
+/// Returns `(value, bytes_consumed)` on success. Returns
+/// [`DecodeError::InvalidVarint`] for overlong encodings or if the varint
+/// exceeds `max_bytes`, and [`DecodeError::UnexpectedEof`] if the input ends
+/// before a terminating byte.
 pub fn decode(data: &[u8], max_bytes: u8) -> Result<(u64, usize), DecodeError> {
     let mut result: u64 = 0;
     let mut shift: u32 = 0;
