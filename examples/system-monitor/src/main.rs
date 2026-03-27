@@ -3,7 +3,7 @@
 mod generated;
 
 use generated::*;
-use vexil_runtime::BitWriter;
+use vexil_runtime::{BitWriter, HandshakeResult, SchemaHandshake};
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
@@ -49,6 +49,48 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
 }
 
 async fn handle_ws(mut socket: WebSocket) {
+    // Wait for schema handshake from client
+    let local_hs = SchemaHandshake::new(SCHEMA_HASH, "1.0.0");
+
+    let remote_hs = loop {
+        match socket.recv().await {
+            Some(Ok(Message::Binary(bytes))) => {
+                match SchemaHandshake::decode(&bytes) {
+                    Ok(hs) => break hs,
+                    Err(e) => {
+                        let _ = socket
+                            .send(Message::Text(format!("handshake decode error: {e}").into()))
+                            .await;
+                        return;
+                    }
+                }
+            }
+            Some(Ok(Message::Close(_))) | None => return,
+            Some(Err(_)) => return,
+            // Ignore text or ping/pong, keep waiting for binary handshake
+            _ => continue,
+        }
+    };
+
+    match local_hs.check(&remote_hs) {
+        HandshakeResult::Match => {} // proceed
+        HandshakeResult::VersionMismatch {
+            local_version,
+            remote_version,
+            ..
+        } => {
+            let _ = socket
+                .send(Message::Text(
+                    format!(
+                        "schema mismatch: server={local_version}, client={remote_version}"
+                    )
+                    .into(),
+                ))
+                .await;
+            return;
+        }
+    }
+
     let mut sys = System::new_all();
     // Initial refresh to get baseline CPU readings
     sys.refresh_all();
