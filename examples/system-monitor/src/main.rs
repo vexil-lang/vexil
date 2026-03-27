@@ -3,7 +3,7 @@
 mod generated;
 
 use generated::*;
-use vexil_runtime::{BitWriter, Pack};
+use vexil_runtime::BitWriter;
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
@@ -16,11 +16,13 @@ use sysinfo::System;
 use tokio::time::{interval, Duration};
 
 static INDEX_HTML: &str = include_str!("../static/index.html");
+static BUNDLE_JS: &str = include_str!("../static/bundle.js");
 
 #[tokio::main]
 async fn main() {
     let app = Router::new()
         .route("/", get(index))
+        .route("/bundle.js", get(bundle_js))
         .route("/ws", get(ws_handler));
 
     let addr = "127.0.0.1:3000";
@@ -35,6 +37,13 @@ async fn index() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
+async fn bundle_js() -> ([(axum::http::header::HeaderName, &'static str); 1], &'static str) {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/javascript")],
+        BUNDLE_JS,
+    )
+}
+
 async fn ws_handler(ws: WebSocketUpgrade) -> impl axum::response::IntoResponse {
     ws.on_upgrade(handle_ws)
 }
@@ -45,6 +54,7 @@ async fn handle_ws(mut socket: WebSocket) {
     sys.refresh_all();
     tokio::time::sleep(Duration::from_millis(500)).await;
 
+    let mut encoder = SystemSnapshotEncoder::new();
     let mut tick = interval(Duration::from_secs(1));
 
     loop {
@@ -85,7 +95,7 @@ async fn handle_ws(mut socket: WebSocket) {
         };
 
         let mut w = BitWriter::new();
-        if snapshot.pack(&mut w).is_err() {
+        if encoder.pack(&snapshot, &mut w).is_err() {
             continue;
         }
         let bytes = w.finish();

@@ -6,6 +6,7 @@ enum CpuStatus {
     Critical @2
 }
 
+@delta
 message SystemSnapshot {
     timestamp_ms    @0 : i64
     hostname        @1 : string

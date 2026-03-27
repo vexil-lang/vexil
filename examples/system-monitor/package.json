@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "scripts": {
+    "codegen:ts": "cargo run -p vexilc -- codegen schema/telemetry.vexil --target typescript > ts/generated.ts",
+    "bundle": "esbuild ts/index.ts --bundle --format=esm --outfile=static/bundle.js",
+    "build": "npm run codegen:ts && npm run bundle"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "@vexil/runtime": "file:../../packages/runtime-ts"
+  }
+}

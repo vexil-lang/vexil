@@ -3,7 +3,7 @@
 
 use vexil_runtime::*;
 
-pub const SCHEMA_HASH: [u8; 32] = [0x73, 0xdd, 0xeb, 0xf5, 0xfc, 0x46, 0x72, 0x36, 0xc1, 0x42, 0x71, 0x3f, 0x69, 0x79, 0xd9, 0x54, 0x06, 0xd9, 0x43, 0xdb, 0xa9, 0x89, 0x34, 0x29, 0xa8, 0xf9, 0xa0, 0x2d, 0xb9, 0xf3, 0xef, 0x4e];
+pub const SCHEMA_HASH: [u8; 32] = [0x69, 0xf2, 0x09, 0x25, 0xdd, 0x55, 0x12, 0x8a, 0x7e, 0x6c, 0xab, 0x71, 0x7e, 0xc0, 0x94, 0xd6, 0x9b, 0x3f, 0xc3, 0xef, 0xc1, 0xb0, 0xf4, 0x93, 0xb3, 0x67, 0xcb, 0x20, 0x03, 0x79, 0xd2, 0x59];
 
 // ── CpuStatus ──
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -100,6 +100,129 @@ impl vexil_runtime::Unpack for SystemSnapshot {
             memory_total_mb,
             cpu_status,
         })
+    }
+}
+
+pub struct SystemSnapshotEncoder {
+    prev_timestamp_ms: i64,
+    prev_cpu_usage: u8,
+    prev_cpu_count: u8,
+    prev_memory_used_mb: u32,
+    prev_memory_total_mb: u32,
+}
+
+impl SystemSnapshotEncoder {
+    pub fn new() -> Self {
+        Self {
+            prev_timestamp_ms: 0,
+            prev_cpu_usage: 0,
+            prev_cpu_count: 0,
+            prev_memory_used_mb: 0,
+            prev_memory_total_mb: 0,
+        }
+    }
+
+    pub fn pack(&mut self, val: &SystemSnapshot, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
+        let delta_timestamp_ms = val.timestamp_ms.wrapping_sub(self.prev_timestamp_ms);
+        w.write_i64(delta_timestamp_ms);
+        self.prev_timestamp_ms = val.timestamp_ms;
+        w.write_string(&val.hostname);
+        let delta_cpu_usage = val.cpu_usage.wrapping_sub(self.prev_cpu_usage);
+        w.write_u8(delta_cpu_usage);
+        self.prev_cpu_usage = val.cpu_usage;
+        let delta_cpu_count = val.cpu_count.wrapping_sub(self.prev_cpu_count);
+        w.write_u8(delta_cpu_count);
+        self.prev_cpu_count = val.cpu_count;
+        w.write_leb128(val.per_core_usage.len() as u64);
+        for item in &val.per_core_usage {
+            w.write_u8(*item);
+        }
+        let delta_memory_used_mb = val.memory_used_mb.wrapping_sub(self.prev_memory_used_mb);
+        w.write_u32(delta_memory_used_mb);
+        self.prev_memory_used_mb = val.memory_used_mb;
+        let delta_memory_total_mb = val.memory_total_mb.wrapping_sub(self.prev_memory_total_mb);
+        w.write_u32(delta_memory_total_mb);
+        self.prev_memory_total_mb = val.memory_total_mb;
+        w.enter_recursive()?;
+        val.cpu_status.pack(w)?;
+        w.leave_recursive();
+        w.flush_to_byte_boundary();
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.prev_timestamp_ms = 0;
+        self.prev_cpu_usage = 0;
+        self.prev_cpu_count = 0;
+        self.prev_memory_used_mb = 0;
+        self.prev_memory_total_mb = 0;
+    }
+}
+
+pub struct SystemSnapshotDecoder {
+    prev_timestamp_ms: i64,
+    prev_cpu_usage: u8,
+    prev_cpu_count: u8,
+    prev_memory_used_mb: u32,
+    prev_memory_total_mb: u32,
+}
+
+impl SystemSnapshotDecoder {
+    pub fn new() -> Self {
+        Self {
+            prev_timestamp_ms: 0,
+            prev_cpu_usage: 0,
+            prev_cpu_count: 0,
+            prev_memory_used_mb: 0,
+            prev_memory_total_mb: 0,
+        }
+    }
+
+    pub fn unpack(&mut self, r: &mut vexil_runtime::BitReader<'_>) -> Result<SystemSnapshot, vexil_runtime::DecodeError> {
+        let delta_timestamp_ms = r.read_i64()?;
+        let timestamp_ms = self.prev_timestamp_ms.wrapping_add(delta_timestamp_ms);
+        self.prev_timestamp_ms = timestamp_ms;
+        let hostname = r.read_string()?;
+        let delta_cpu_usage = r.read_u8()?;
+        let cpu_usage = self.prev_cpu_usage.wrapping_add(delta_cpu_usage);
+        self.prev_cpu_usage = cpu_usage;
+        let delta_cpu_count = r.read_u8()?;
+        let cpu_count = self.prev_cpu_count.wrapping_add(delta_cpu_count);
+        self.prev_cpu_count = cpu_count;
+        let per_core_usage_len = r.read_leb128(10_u8)? as usize;
+        let mut per_core_usage = Vec::with_capacity(per_core_usage_len);
+        for _ in 0..per_core_usage_len {
+            let per_core_usage_item = r.read_u8()?;
+            per_core_usage.push(per_core_usage_item);
+        }
+        let delta_memory_used_mb = r.read_u32()?;
+        let memory_used_mb = self.prev_memory_used_mb.wrapping_add(delta_memory_used_mb);
+        self.prev_memory_used_mb = memory_used_mb;
+        let delta_memory_total_mb = r.read_u32()?;
+        let memory_total_mb = self.prev_memory_total_mb.wrapping_add(delta_memory_total_mb);
+        self.prev_memory_total_mb = memory_total_mb;
+        r.enter_recursive()?;
+        let cpu_status = vexil_runtime::Unpack::unpack(r)?;
+        r.leave_recursive();
+        r.flush_to_byte_boundary();
+        Ok(SystemSnapshot {
+            timestamp_ms,
+            hostname,
+            cpu_usage,
+            cpu_count,
+            per_core_usage,
+            memory_used_mb,
+            memory_total_mb,
+            cpu_status,
+        })
+    }
+
+    pub fn reset(&mut self) {
+        self.prev_timestamp_ms = 0;
+        self.prev_cpu_usage = 0;
+        self.prev_cpu_count = 0;
+        self.prev_memory_used_mb = 0;
+        self.prev_memory_total_mb = 0;
     }
 }
 
