@@ -10,6 +10,8 @@ changelog_update = true
 dependencies_update = true
 # Create git tags on release
 git_tag_enable = true
+# Per-crate tag format (e.g. vexil-lang-v0.2.1)
+git_tag_name = "{{ package }}-v{{ version }}"
 # Don't create GitHub Releases — cargo-dist handles that
 git_release_enable = false
 # Label Release PRs for easy filtering
