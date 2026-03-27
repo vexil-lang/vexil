@@ -3,7 +3,7 @@
 
 import { BitReader, BitWriter } from '@vexil/runtime';
 
-export const SCHEMA_HASH = new Uint8Array([0x69, 0xf2, 0x09, 0x25, 0xdd, 0x55, 0x12, 0x8a, 0x7e, 0x6c, 0xab, 0x71, 0x7e, 0xc0, 0x94, 0xd6, 0x9b, 0x3f, 0xc3, 0xef, 0xc1, 0xb0, 0xf4, 0x93, 0xb3, 0x67, 0xcb, 0x20, 0x03, 0x79, 0xd2, 0x59]);
+export const SCHEMA_HASH = new Uint8Array([0xd1, 0x99, 0x01, 0x6f, 0xc1, 0x41, 0x5a, 0x38, 0x25, 0x81, 0xb1, 0x2c, 0x68, 0xf6, 0x15, 0x3b, 0x0d, 0x84, 0xd0, 0xea, 0x42, 0x2c, 0x6b, 0x53, 0xe4, 0x77, 0x7d, 0x1a, 0x61, 0xad, 0x02, 0x92]);
 
 // ── CpuStatus ──
 export type CpuStatus = 'Normal' | 'Degraded' | 'Critical';
@@ -48,16 +48,16 @@ export interface SystemSnapshot {
 }
 
 export function encodeSystemSnapshot(v: SystemSnapshot, w: BitWriter): void {
-  w.writeI64(v.timestamp_ms);
+  w.writeZigZag64(v.timestamp_ms);
   w.writeString(v.hostname);
-  w.writeU8(v.cpu_usage);
-  w.writeU8(v.cpu_count);
+  w.writeLeb128(v.cpu_usage);
+  w.writeLeb128(v.cpu_count);
   w.writeLeb128(v.per_core_usage.length);
   for (const item of v.per_core_usage) {
     w.writeU8(item);
   }
-  w.writeU32(v.memory_used_mb);
-  w.writeU32(v.memory_total_mb);
+  w.writeLeb128(v.memory_used_mb);
+  w.writeLeb128(v.memory_total_mb);
   w.enterNested();
   encodeCpuStatus(v.cpu_status, w);
   w.leaveNested();
@@ -65,18 +65,18 @@ export function encodeSystemSnapshot(v: SystemSnapshot, w: BitWriter): void {
 }
 
 export function decodeSystemSnapshot(r: BitReader): SystemSnapshot {
-  const timestamp_ms = r.readI64();
+  const timestamp_ms = r.readZigZag64();
   const hostname = r.readString();
-  const cpu_usage = r.readU8();
-  const cpu_count = r.readU8();
+  const cpu_usage = r.readLeb128();
+  const cpu_count = r.readLeb128();
   const per_core_usage_len = r.readLeb128();
   const per_core_usage: number[] = [];
   for (let i = 0; i < per_core_usage_len; i++) {
     const per_core_usage_item = r.readU8();
     per_core_usage.push(per_core_usage_item);
   }
-  const memory_used_mb = r.readU32();
-  const memory_total_mb = r.readU32();
+  const memory_used_mb = r.readLeb128();
+  const memory_total_mb = r.readLeb128();
   r.enterNested();
   const cpu_status = decodeCpuStatus(r);
   r.leaveNested();
@@ -93,24 +93,24 @@ export class SystemSnapshotEncoder {
 
   encode(v: SystemSnapshot, w: BitWriter): void {
     const delta_timestamp_ms = v.timestamp_ms - this.prevtimestampMs;
-    w.writeI64(delta_timestamp_ms);
+    w.writeZigZag64(delta_timestamp_ms);
     this.prevtimestampMs = v.timestamp_ms;
     w.writeString(v.hostname);
     const delta_cpu_usage = (v.cpu_usage - this.prevcpuUsage) & 0xFF;
-    w.writeU8(delta_cpu_usage);
+    w.writeLeb128(delta_cpu_usage);
     this.prevcpuUsage = v.cpu_usage;
     const delta_cpu_count = (v.cpu_count - this.prevcpuCount) & 0xFF;
-    w.writeU8(delta_cpu_count);
+    w.writeLeb128(delta_cpu_count);
     this.prevcpuCount = v.cpu_count;
     w.writeLeb128(v.per_core_usage.length);
     for (const item of v.per_core_usage) {
       w.writeU8(item);
     }
     const delta_memory_used_mb = (v.memory_used_mb - this.prevmemoryUsedMb) >>> 0;
-    w.writeU32(delta_memory_used_mb);
+    w.writeLeb128(delta_memory_used_mb);
     this.prevmemoryUsedMb = v.memory_used_mb;
     const delta_memory_total_mb = (v.memory_total_mb - this.prevmemoryTotalMb) >>> 0;
-    w.writeU32(delta_memory_total_mb);
+    w.writeLeb128(delta_memory_total_mb);
     this.prevmemoryTotalMb = v.memory_total_mb;
     w.enterNested();
     encodeCpuStatus(v.cpu_status, w);
@@ -135,14 +135,14 @@ export class SystemSnapshotDecoder {
   private prevmemoryTotalMb: number = 0;
 
   decode(r: BitReader): SystemSnapshot {
-    const delta_timestamp_ms = r.readI64();
+    const delta_timestamp_ms = r.readZigZag64();
     const timestamp_ms = this.prevtimestampMs + delta_timestamp_ms;
     this.prevtimestampMs = timestamp_ms;
     const hostname = r.readString();
-    const delta_cpu_usage = r.readU8();
+    const delta_cpu_usage = r.readLeb128();
     const cpu_usage = (this.prevcpuUsage + delta_cpu_usage) & 0xFF;
     this.prevcpuUsage = cpu_usage;
-    const delta_cpu_count = r.readU8();
+    const delta_cpu_count = r.readLeb128();
     const cpu_count = (this.prevcpuCount + delta_cpu_count) & 0xFF;
     this.prevcpuCount = cpu_count;
     const per_core_usage_len = r.readLeb128();
@@ -151,10 +151,10 @@ export class SystemSnapshotDecoder {
       const per_core_usage_item = r.readU8();
       per_core_usage.push(per_core_usage_item);
     }
-    const delta_memory_used_mb = r.readU32();
+    const delta_memory_used_mb = r.readLeb128();
     const memory_used_mb = (this.prevmemoryUsedMb + delta_memory_used_mb) >>> 0;
     this.prevmemoryUsedMb = memory_used_mb;
-    const delta_memory_total_mb = r.readU32();
+    const delta_memory_total_mb = r.readLeb128();
     const memory_total_mb = (this.prevmemoryTotalMb + delta_memory_total_mb) >>> 0;
     this.prevmemoryTotalMb = memory_total_mb;
     r.enterNested();

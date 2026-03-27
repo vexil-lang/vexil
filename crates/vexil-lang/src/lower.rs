@@ -292,12 +292,16 @@ fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) 
         }
     }
 
-    // Desugar @delta on message: apply to all eligible fields that don't already have @delta
+    // Desugar @delta on message: apply to all eligible fields that don't already have @delta.
+    // Message-level @delta implies optimal variable-length inner encoding:
+    //   unsigned integers → Delta(Varint)
+    //   signed integers   → Delta(ZigZag)
+    //   floats            → Delta(Default)  (varint doesn't apply to floats)
     if has_message_delta {
         for field in &mut fields {
             if is_delta_eligible(&field.resolved_type) && !is_already_delta(&field.encoding) {
-                field.encoding.encoding =
-                    Encoding::Delta(Box::new(field.encoding.encoding.clone()));
+                let inner = optimal_delta_inner(&field.resolved_type, &field.encoding);
+                field.encoding.encoding = Encoding::Delta(Box::new(inner));
             }
         }
     }
@@ -602,6 +606,27 @@ fn is_delta_eligible(ty: &ResolvedType) -> bool {
 /// Returns true if the encoding is already Delta-wrapped.
 fn is_already_delta(enc: &FieldEncoding) -> bool {
     matches!(enc.encoding, Encoding::Delta(_))
+}
+
+/// Pick the optimal inner encoding for message-level @delta desugaring.
+/// Unsigned integers get Varint (small deltas → 1-2 bytes).
+/// Signed integers get ZigZag (small +/- deltas → 1-2 bytes).
+/// Floats keep the field's existing encoding (varint doesn't apply).
+/// Sub-byte types keep Default (already compact).
+fn optimal_delta_inner(ty: &ResolvedType, enc: &FieldEncoding) -> Encoding {
+    match ty {
+        ResolvedType::Primitive(p) => match p {
+            PrimitiveType::U8 | PrimitiveType::U16 | PrimitiveType::U32 | PrimitiveType::U64 => {
+                Encoding::Varint
+            }
+            PrimitiveType::I8 | PrimitiveType::I16 | PrimitiveType::I32 | PrimitiveType::I64 => {
+                Encoding::ZigZag
+            }
+            _ => enc.encoding.clone(), // f32, f64 — keep existing
+        },
+        ResolvedType::SubByte(_) => enc.encoding.clone(), // already sub-byte
+        _ => enc.encoding.clone(),
+    }
 }
 
 fn resolve_annotations(annotations: &[Annotation]) -> ResolvedAnnotations {

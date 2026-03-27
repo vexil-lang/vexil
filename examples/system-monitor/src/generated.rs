@@ -3,7 +3,7 @@
 
 use vexil_runtime::*;
 
-pub const SCHEMA_HASH: [u8; 32] = [0x69, 0xf2, 0x09, 0x25, 0xdd, 0x55, 0x12, 0x8a, 0x7e, 0x6c, 0xab, 0x71, 0x7e, 0xc0, 0x94, 0xd6, 0x9b, 0x3f, 0xc3, 0xef, 0xc1, 0xb0, 0xf4, 0x93, 0xb3, 0x67, 0xcb, 0x20, 0x03, 0x79, 0xd2, 0x59];
+pub const SCHEMA_HASH: [u8; 32] = [0xd1, 0x99, 0x01, 0x6f, 0xc1, 0x41, 0x5a, 0x38, 0x25, 0x81, 0xb1, 0x2c, 0x68, 0xf6, 0x15, 0x3b, 0x0d, 0x84, 0xd0, 0xea, 0x42, 0x2c, 0x6b, 0x53, 0xe4, 0x77, 0x7d, 0x1a, 0x61, 0xad, 0x02, 0x92];
 
 // ── CpuStatus ──
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -54,16 +54,16 @@ pub struct SystemSnapshot {
 
 impl vexil_runtime::Pack for SystemSnapshot {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        w.write_i64(self.timestamp_ms);
+        w.write_zigzag(self.timestamp_ms as i64, 64_u8);
         w.write_string(&self.hostname);
-        w.write_u8(self.cpu_usage);
-        w.write_u8(self.cpu_count);
+        w.write_leb128(self.cpu_usage as u64);
+        w.write_leb128(self.cpu_count as u64);
         w.write_leb128(self.per_core_usage.len() as u64);
         for item in &self.per_core_usage {
             w.write_u8(*item);
         }
-        w.write_u32(self.memory_used_mb);
-        w.write_u32(self.memory_total_mb);
+        w.write_leb128(self.memory_used_mb as u64);
+        w.write_leb128(self.memory_total_mb as u64);
         w.enter_recursive()?;
         self.cpu_status.pack(w)?;
         w.leave_recursive();
@@ -74,18 +74,23 @@ impl vexil_runtime::Pack for SystemSnapshot {
 
 impl vexil_runtime::Unpack for SystemSnapshot {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
-        let timestamp_ms = r.read_i64()?;
+        let timestamp_ms_raw = r.read_zigzag(64_u8, 10_u8)?;
+        let timestamp_ms: i64 = timestamp_ms_raw as i64;
         let hostname = r.read_string()?;
-        let cpu_usage = r.read_u8()?;
-        let cpu_count = r.read_u8()?;
+        let cpu_usage_raw = r.read_leb128(10_u8)?;
+        let cpu_usage: u8 = cpu_usage_raw as u8;
+        let cpu_count_raw = r.read_leb128(10_u8)?;
+        let cpu_count: u8 = cpu_count_raw as u8;
         let per_core_usage_len = r.read_leb128(10_u8)? as usize;
         let mut per_core_usage = Vec::with_capacity(per_core_usage_len);
         for _ in 0..per_core_usage_len {
             let per_core_usage_item = r.read_u8()?;
             per_core_usage.push(per_core_usage_item);
         }
-        let memory_used_mb = r.read_u32()?;
-        let memory_total_mb = r.read_u32()?;
+        let memory_used_mb_raw = r.read_leb128(10_u8)?;
+        let memory_used_mb: u32 = memory_used_mb_raw as u32;
+        let memory_total_mb_raw = r.read_leb128(10_u8)?;
+        let memory_total_mb: u32 = memory_total_mb_raw as u32;
         r.enter_recursive()?;
         let cpu_status = vexil_runtime::Unpack::unpack(r)?;
         r.leave_recursive();
@@ -124,24 +129,24 @@ impl SystemSnapshotEncoder {
 
     pub fn pack(&mut self, val: &SystemSnapshot, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         let delta_timestamp_ms = val.timestamp_ms.wrapping_sub(self.prev_timestamp_ms);
-        w.write_i64(delta_timestamp_ms);
+        w.write_zigzag(delta_timestamp_ms as i64, 64_u8);
         self.prev_timestamp_ms = val.timestamp_ms;
         w.write_string(&val.hostname);
         let delta_cpu_usage = val.cpu_usage.wrapping_sub(self.prev_cpu_usage);
-        w.write_u8(delta_cpu_usage);
+        w.write_leb128(delta_cpu_usage as u64);
         self.prev_cpu_usage = val.cpu_usage;
         let delta_cpu_count = val.cpu_count.wrapping_sub(self.prev_cpu_count);
-        w.write_u8(delta_cpu_count);
+        w.write_leb128(delta_cpu_count as u64);
         self.prev_cpu_count = val.cpu_count;
         w.write_leb128(val.per_core_usage.len() as u64);
         for item in &val.per_core_usage {
             w.write_u8(*item);
         }
         let delta_memory_used_mb = val.memory_used_mb.wrapping_sub(self.prev_memory_used_mb);
-        w.write_u32(delta_memory_used_mb);
+        w.write_leb128(delta_memory_used_mb as u64);
         self.prev_memory_used_mb = val.memory_used_mb;
         let delta_memory_total_mb = val.memory_total_mb.wrapping_sub(self.prev_memory_total_mb);
-        w.write_u32(delta_memory_total_mb);
+        w.write_leb128(delta_memory_total_mb as u64);
         self.prev_memory_total_mb = val.memory_total_mb;
         w.enter_recursive()?;
         val.cpu_status.pack(w)?;
@@ -179,14 +184,17 @@ impl SystemSnapshotDecoder {
     }
 
     pub fn unpack(&mut self, r: &mut vexil_runtime::BitReader<'_>) -> Result<SystemSnapshot, vexil_runtime::DecodeError> {
-        let delta_timestamp_ms = r.read_i64()?;
+        let delta_timestamp_ms_raw = r.read_zigzag(64_u8, 10_u8)?;
+        let delta_timestamp_ms: i64 = delta_timestamp_ms_raw as i64;
         let timestamp_ms = self.prev_timestamp_ms.wrapping_add(delta_timestamp_ms);
         self.prev_timestamp_ms = timestamp_ms;
         let hostname = r.read_string()?;
-        let delta_cpu_usage = r.read_u8()?;
+        let delta_cpu_usage_raw = r.read_leb128(10_u8)?;
+        let delta_cpu_usage: u8 = delta_cpu_usage_raw as u8;
         let cpu_usage = self.prev_cpu_usage.wrapping_add(delta_cpu_usage);
         self.prev_cpu_usage = cpu_usage;
-        let delta_cpu_count = r.read_u8()?;
+        let delta_cpu_count_raw = r.read_leb128(10_u8)?;
+        let delta_cpu_count: u8 = delta_cpu_count_raw as u8;
         let cpu_count = self.prev_cpu_count.wrapping_add(delta_cpu_count);
         self.prev_cpu_count = cpu_count;
         let per_core_usage_len = r.read_leb128(10_u8)? as usize;
@@ -195,10 +203,12 @@ impl SystemSnapshotDecoder {
             let per_core_usage_item = r.read_u8()?;
             per_core_usage.push(per_core_usage_item);
         }
-        let delta_memory_used_mb = r.read_u32()?;
+        let delta_memory_used_mb_raw = r.read_leb128(10_u8)?;
+        let delta_memory_used_mb: u32 = delta_memory_used_mb_raw as u32;
         let memory_used_mb = self.prev_memory_used_mb.wrapping_add(delta_memory_used_mb);
         self.prev_memory_used_mb = memory_used_mb;
-        let delta_memory_total_mb = r.read_u32()?;
+        let delta_memory_total_mb_raw = r.read_leb128(10_u8)?;
+        let delta_memory_total_mb: u32 = delta_memory_total_mb_raw as u32;
         let memory_total_mb = self.prev_memory_total_mb.wrapping_add(delta_memory_total_mb);
         self.prev_memory_total_mb = memory_total_mb;
         r.enter_recursive()?;

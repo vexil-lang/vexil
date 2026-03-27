@@ -3,7 +3,7 @@
 
 import { BitReader, BitWriter } from '@vexil/runtime';
 
-export const SCHEMA_HASH = new Uint8Array([0xa5, 0x1b, 0x46, 0xba, 0xa4, 0x74, 0xfe, 0xeb, 0x3c, 0xc0, 0x72, 0xbc, 0x57, 0x86, 0x93, 0x24, 0x6a, 0x16, 0xfe, 0x90, 0x21, 0xa4, 0xd3, 0xf4, 0x1c, 0xac, 0x15, 0xbb, 0x49, 0x88, 0x91, 0x9a]);
+export const SCHEMA_HASH = new Uint8Array([0x07, 0x20, 0xc0, 0x79, 0x18, 0xe4, 0x24, 0xcf, 0xdb, 0xde, 0x48, 0xe0, 0xdb, 0x86, 0xb5, 0xb2, 0x2e, 0x55, 0x23, 0x7f, 0xf9, 0x9c, 0xe5, 0xd7, 0x95, 0x14, 0x35, 0x9e, 0x8f, 0xab, 0x99, 0x67]);
 
 // ── Telemetry ──
 export interface Telemetry {
@@ -14,18 +14,18 @@ export interface Telemetry {
 }
 
 export function encodeTelemetry(v: Telemetry, w: BitWriter): void {
-  w.writeI64(v.timestamp);
+  w.writeZigZag64(v.timestamp);
   w.writeF32(v.value);
   w.writeString(v.label);
-  w.writeU32(v.count);
+  w.writeLeb128(v.count);
   w.flushToByteBoundary();
 }
 
 export function decodeTelemetry(r: BitReader): Telemetry {
-  const timestamp = r.readI64();
+  const timestamp = r.readZigZag64();
   const value = r.readF32();
   const label = r.readString();
-  const count = r.readU32();
+  const count = r.readLeb128();
   r.flushToByteBoundary();
   return { timestamp, value, label, count };
 }
@@ -37,14 +37,14 @@ export class TelemetryEncoder {
 
   encode(v: Telemetry, w: BitWriter): void {
     const delta_timestamp = v.timestamp - this.prevtimestamp;
-    w.writeI64(delta_timestamp);
+    w.writeZigZag64(delta_timestamp);
     this.prevtimestamp = v.timestamp;
     const delta_value = v.value - this.prevvalue;
     w.writeF32(delta_value);
     this.prevvalue = v.value;
     w.writeString(v.label);
     const delta_count = (v.count - this.prevcount) >>> 0;
-    w.writeU32(delta_count);
+    w.writeLeb128(delta_count);
     this.prevcount = v.count;
     w.flushToByteBoundary();
   }
@@ -62,14 +62,14 @@ export class TelemetryDecoder {
   private prevcount: number = 0;
 
   decode(r: BitReader): Telemetry {
-    const delta_timestamp = r.readI64();
+    const delta_timestamp = r.readZigZag64();
     const timestamp = this.prevtimestamp + delta_timestamp;
     this.prevtimestamp = timestamp;
     const delta_value = r.readF32();
     const value = this.prevvalue + delta_value;
     this.prevvalue = value;
     const label = r.readString();
-    const delta_count = r.readU32();
+    const delta_count = r.readLeb128();
     const count = (this.prevcount + delta_count) >>> 0;
     this.prevcount = count;
     r.flushToByteBoundary();
