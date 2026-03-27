@@ -116,80 +116,11 @@
   </div>
 </div>
 
-<script>
-// ─── Minimal BitReader matching @vexil/runtime ───
-class BitReader {
-  constructor(buf) {
-    this.d = buf;
-    this.v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    this.p = 0;   // byte position
-    this.b = 0;   // bit offset within byte
-  }
-  readBits(n) {
-    let r = 0, done = 0;
-    while (done < n) {
-      const avail = 8 - this.b;
-      const take = Math.min(n - done, avail);
-      r |= ((this.d[this.p] >>> this.b) & ((1 << take) - 1)) << done;
-      done += take;
-      this.b += take;
-      if (this.b >= 8) { this.b = 0; this.p++; }
-    }
-    return r;
-  }
-  flush() { if (this.b > 0) { this.b = 0; this.p++; } }
-  readU8()  { this.flush(); return this.d[this.p++]; }
-  readU32() { this.flush(); const x = this.v.getUint32(this.p, true); this.p += 4; return x; }
-  readI64() {
-    this.flush();
-    const lo = BigInt(this.v.getUint32(this.p, true));
-    const hi = BigInt(this.v.getInt32(this.p + 4, true));
-    this.p += 8;
-    return (hi << 32n) | lo;
-  }
-  readLeb128() {
-    this.flush();
-    let r = 0, s = 0;
-    for (;;) {
-      const b = this.d[this.p++];
-      r |= (b & 0x7f) << s;
-      if (!(b & 0x80)) return r;
-      s += 7;
-    }
-  }
-  readString() {
-    const len = this.readLeb128();
-    const bytes = this.d.slice(this.p, this.p + len);
-    this.p += len;
-    return new TextDecoder().decode(bytes);
-  }
-}
+<script type="module">
+import { SystemSnapshotDecoder, BitReader } from './bundle.js';
 
-// ─── Decode SystemSnapshot (matches generated Pack impl) ───
-// Field order: i64, string, u8, u8, leb128+array<u8>, u32, u32, 2-bit enum, flush
-const CPU_STATUS = ['Normal', 'Degraded', 'Critical'];
+const decoder = new SystemSnapshotDecoder();
 
-function decode(buf) {
-  const r = new BitReader(buf);
-  const timestamp_ms  = r.readI64();
-  const hostname      = r.readString();
-  const cpu_usage     = r.readU8();
-  const cpu_count     = r.readU8();
-  const n             = r.readLeb128();
-  const per_core = [];
-  for (let i = 0; i < n; i++) per_core.push(r.readU8());
-  const memory_used   = r.readU32();
-  const memory_total  = r.readU32();
-  const status_bits   = r.readBits(2);
-  r.flush();
-  return {
-    timestamp_ms, hostname, cpu_usage, cpu_count,
-    per_core, memory_used, memory_total,
-    status: CPU_STATUS[status_bits] || 'Normal'
-  };
-}
-
-// ─── WebSocket + render ───
 function connect() {
   const el = document.getElementById('connection');
   const ws = new WebSocket(`ws://${location.host}/ws`);
@@ -198,6 +129,7 @@ function connect() {
   ws.onopen = () => { el.textContent = 'live'; el.className = 'ok'; };
   ws.onclose = () => {
     el.textContent = 'reconnecting...'; el.className = 'err';
+    decoder.reset();
     setTimeout(connect, 2000);
   };
   ws.onerror = () => ws.close();
@@ -205,8 +137,11 @@ function connect() {
   ws.onmessage = (e) => {
     const bytes = new Uint8Array(e.data);
     document.getElementById('wire-size').textContent = bytes.length;
-    try { render(decode(bytes)); }
-    catch (err) { console.error('decode error', err); }
+    try {
+      const r = new BitReader(bytes);
+      const s = decoder.decode(r);
+      render(s);
+    } catch(err) { console.error('decode error', err); }
   };
 }
 
@@ -214,25 +149,28 @@ function render(s) {
   document.getElementById('cpu-val').textContent = s.cpu_usage;
   document.getElementById('cpu-bar').style.width = s.cpu_usage + '%';
 
+  const status = s.cpu_status;
   const badge = document.getElementById('cpu-status');
-  badge.textContent = s.status;
-  badge.className = 'badge badge-' + s.status;
+  badge.textContent = status;
+  badge.className = 'badge badge-' + status;
 
-  document.getElementById('mem-val').textContent = s.memory_used;
-  const pct = s.memory_total > 0 ? (s.memory_used / s.memory_total * 100) : 0;
-  document.getElementById('mem-bar').style.width = pct.toFixed(1) + '%';
+  document.getElementById('mem-val').textContent = s.memory_used_mb;
+  const memTotal = s.memory_total_mb;
+  const memPct = memTotal > 0 ? (s.memory_used_mb / memTotal * 100) : 0;
+  document.getElementById('mem-bar').style.width = memPct.toFixed(1) + '%';
   document.getElementById('mem-detail').textContent =
-    s.memory_used + ' / ' + s.memory_total + ' MB (' + pct.toFixed(1) + '%)';
+    s.memory_used_mb + ' / ' + memTotal + ' MB (' + memPct.toFixed(1) + '%)';
 
   document.getElementById('hostname').textContent = s.hostname;
   document.getElementById('core-count').textContent = s.cpu_count;
-  document.getElementById('timestamp').textContent =
-    new Date(Number(s.timestamp_ms)).toLocaleTimeString();
+
+  // timestamp_ms is a BigInt from the decoder
+  const ts = typeof s.timestamp_ms === 'bigint' ? Number(s.timestamp_ms) : s.timestamp_ms;
+  document.getElementById('timestamp').textContent = new Date(ts).toLocaleTimeString();
 
   const box = document.getElementById('cores');
-  // Reuse existing DOM nodes when possible
-  while (box.children.length > s.per_core.length) box.lastChild.remove();
-  s.per_core.forEach((u, i) => {
+  while (box.children.length > s.per_core_usage.length) box.lastChild.remove();
+  s.per_core_usage.forEach((u, i) => {
     let div = box.children[i];
     if (!div) {
       div = document.createElement('div');

@@ -11,7 +11,7 @@ use smol_str::SmolStr;
 
 use crate::ast::{
     Annotation, AnnotationValue, Decl, EnumBodyItem, FlagsBodyItem, ImportKind, MessageBodyItem,
-    MessageField, Schema, TypeExpr, UnionBodyItem,
+    MessageField, PrimitiveType, Schema, TypeExpr, UnionBodyItem,
 };
 use crate::diagnostic::{Diagnostic, ErrorClass};
 use crate::ir::{
@@ -281,6 +281,8 @@ fn lower_decl(decl: &Decl, span: Span, ctx: &mut LowerCtx) -> TypeDef {
 }
 
 fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) -> MessageDef {
+    let has_message_delta = msg.annotations.iter().any(|a| a.name.node == "delta");
+
     let mut fields = Vec::new();
     let mut tombstones = Vec::new();
     for item in &msg.body {
@@ -289,6 +291,17 @@ fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) 
             MessageBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span)),
         }
     }
+
+    // Desugar @delta on message: apply to all eligible fields that don't already have @delta
+    if has_message_delta {
+        for field in &mut fields {
+            if is_delta_eligible(&field.resolved_type) && !is_already_delta(&field.encoding) {
+                field.encoding.encoding =
+                    Encoding::Delta(Box::new(field.encoding.encoding.clone()));
+            }
+        }
+    }
+
     MessageDef {
         name: msg.name.node.clone(),
         span,
@@ -563,6 +576,32 @@ fn compute_field_encoding(annotations: &[&Annotation]) -> FieldEncoding {
         }
     });
     FieldEncoding { encoding, limit }
+}
+
+/// Returns true if the type is eligible for @delta encoding.
+fn is_delta_eligible(ty: &ResolvedType) -> bool {
+    match ty {
+        ResolvedType::Primitive(p) => matches!(
+            p,
+            PrimitiveType::U8
+                | PrimitiveType::U16
+                | PrimitiveType::U32
+                | PrimitiveType::U64
+                | PrimitiveType::I8
+                | PrimitiveType::I16
+                | PrimitiveType::I32
+                | PrimitiveType::I64
+                | PrimitiveType::F32
+                | PrimitiveType::F64
+        ),
+        ResolvedType::SubByte(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if the encoding is already Delta-wrapped.
+fn is_already_delta(enc: &FieldEncoding) -> bool {
+    matches!(enc.encoding, Encoding::Delta(_))
 }
 
 fn resolve_annotations(annotations: &[Annotation]) -> ResolvedAnnotations {

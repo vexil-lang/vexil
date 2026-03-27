@@ -99,6 +99,16 @@ fn test_011_config() {
 }
 
 #[test]
+fn test_013_annotations() {
+    golden_test("013_annotations");
+}
+
+#[test]
 fn test_016_recursive() {
     golden_test("016_recursive");
+}
+
+#[test]
+fn test_027_delta_on_message() {
+    golden_test("027_delta_on_message");
 }

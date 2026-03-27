@@ -1090,6 +1090,13 @@ Backends MUST generate a stateful encoder/decoder structure that tracks the
 running previous value per `@delta` field. The byte-count limits for
 `@varint`/`@zigzag` apply to the encoded delta value, not the raw field value.
 
+`@delta` may also be applied to a `message` declaration.  This is equivalent
+to annotating every eligible field with `@delta`.  Fields whose types are not
+valid for `@delta` are silently skipped — no error is produced.  If a field
+already carries an explicit `@delta` annotation, the message-level annotation
+does not double-wrap it.  The desugaring happens during IR lowering; the wire
+format is identical to per-field `@delta` annotations.
+
 ### 13.5  Validation annotations (field-level)
 
 **`@limit(N)`**

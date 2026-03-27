@@ -1,0 +1,45 @@
+[
+  {
+    "name": "delta_u32_two_frames",
+    "schema": "namespace test.delta\nmessage M {\n  @delta\n  v @0 : u32\n}",
+    "type": "M",
+    "frames": [
+      { "value": { "v": 100 }, "expected_bytes": "64000000" },
+      { "value": { "v": 110 }, "expected_bytes": "0a000000" }
+    ],
+    "notes": "Delta 0->100=100, 100->110=10"
+  },
+  {
+    "name": "delta_i64_three_frames",
+    "schema": "namespace test.delta\nmessage M {\n  @delta\n  v @0 : i64\n}",
+    "type": "M",
+    "frames": [
+      { "value": { "v": 1000 }, "expected_bytes": "e803000000000000" },
+      { "value": { "v": 2000 }, "expected_bytes": "e803000000000000" },
+      { "value": { "v": 2005 }, "expected_bytes": "0500000000000000" }
+    ],
+    "notes": "Delta from 0->1000, 1000->2000, 2000->2005"
+  },
+  {
+    "name": "delta_mixed_message",
+    "schema": "namespace test.delta\nmessage M {\n  @delta\n  ts @0 : i64\n  label @1 : string\n  @delta\n  count @2 : u32\n}",
+    "type": "M",
+    "frames": [
+      { "value": { "ts": 1000, "label": "hello", "count": 50 }, "expected_bytes": "e8030000000000000568656c6c6f32000000" },
+      { "value": { "ts": 2000, "label": "hello", "count": 55 }, "expected_bytes": "e8030000000000000568656c6c6f05000000" }
+    ],
+    "notes": "ts and count are delta-encoded. label is written normally each frame."
+  },
+  {
+    "name": "delta_reset",
+    "schema": "namespace test.delta\nmessage M {\n  @delta\n  v @0 : u32\n}",
+    "type": "M",
+    "frames": [
+      { "value": { "v": 100 }, "expected_bytes": "64000000" },
+      { "value": { "v": 150 }, "expected_bytes": "32000000" },
+      { "reset": true },
+      { "value": { "v": 100 }, "expected_bytes": "64000000" }
+    ],
+    "notes": "After reset, encoder state returns to zero."
+  }
+]
