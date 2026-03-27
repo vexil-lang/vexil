@@ -1,6 +1,7 @@
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{
-    ConfigDef, Encoding, FieldEncoding, MessageDef, ResolvedType, TypeDef, TypeRegistry,
+    ConfigDef, Encoding, FieldEncoding, MessageDef, ResolvedType, TombstoneDef, TypeDef,
+    TypeRegistry,
 };
 
 use crate::emit::CodeWriter;
@@ -404,6 +405,104 @@ fn emit_read_type(
 }
 
 // ---------------------------------------------------------------------------
+// emit_tombstone_read — read-and-discard for typed tombstones (TypeScript)
+// ---------------------------------------------------------------------------
+
+/// Emit TypeScript code to read and discard bytes for a typed tombstone during decode.
+fn emit_tombstone_read(
+    w: &mut CodeWriter,
+    ty: &ResolvedType,
+    registry: &TypeRegistry,
+    reader: &str,
+    idx: usize,
+) {
+    match ty {
+        ResolvedType::Primitive(p) => match p {
+            PrimitiveType::Bool => w.line(&format!("{reader}.readBool();")),
+            PrimitiveType::U8 => w.line(&format!("{reader}.readU8();")),
+            PrimitiveType::U16 => w.line(&format!("{reader}.readU16();")),
+            PrimitiveType::U32 => w.line(&format!("{reader}.readU32();")),
+            PrimitiveType::U64 => w.line(&format!("{reader}.readU64();")),
+            PrimitiveType::I8 => w.line(&format!("{reader}.readI8();")),
+            PrimitiveType::I16 => w.line(&format!("{reader}.readI16();")),
+            PrimitiveType::I32 => w.line(&format!("{reader}.readI32();")),
+            PrimitiveType::I64 => w.line(&format!("{reader}.readI64();")),
+            PrimitiveType::F32 => w.line(&format!("{reader}.readF32();")),
+            PrimitiveType::F64 => w.line(&format!("{reader}.readF64();")),
+            PrimitiveType::Void => {} // 0 bits — nothing to read
+        },
+        ResolvedType::SubByte(s) => {
+            w.line(&format!("{reader}.readBits({});", s.bits));
+        }
+        ResolvedType::Semantic(s) => match s {
+            SemanticType::String => w.line(&format!("{reader}.readString();")),
+            SemanticType::Bytes => w.line(&format!("{reader}.readBytes();")),
+            SemanticType::Rgb => {
+                w.line(&format!("{reader}.readU8();"));
+                w.line(&format!("{reader}.readU8();"));
+                w.line(&format!("{reader}.readU8();"));
+            }
+            SemanticType::Uuid => w.line(&format!("{reader}.readRawBytes(16);")),
+            SemanticType::Timestamp => w.line(&format!("{reader}.readI64();")),
+            SemanticType::Hash => w.line(&format!("{reader}.readRawBytes(32);")),
+        },
+        ResolvedType::Named(id) => {
+            let type_name = match registry.get(*id) {
+                Some(def) => match def {
+                    TypeDef::Message(m) => m.name.to_string(),
+                    TypeDef::Enum(e) => e.name.to_string(),
+                    TypeDef::Flags(f) => f.name.to_string(),
+                    TypeDef::Union(u) => u.name.to_string(),
+                    TypeDef::Newtype(n) => n.name.to_string(),
+                    _ => "Unknown".to_string(),
+                },
+                None => "Unknown".to_string(),
+            };
+            w.line(&format!("{reader}.enterNested();"));
+            w.line(&format!("decode{type_name}({reader});"));
+            w.line(&format!("{reader}.leaveNested();"));
+        }
+        ResolvedType::Optional(inner) => {
+            let var = format!("_tombstone_{idx}_present");
+            w.line(&format!("const {var} = {reader}.readBool();"));
+            if is_byte_aligned(inner, registry) {
+                w.line(&format!("{reader}.flushToByteBoundary();"));
+            }
+            w.open_block(&format!("if ({var})"));
+            emit_tombstone_read(w, inner, registry, reader, idx);
+            w.close_block();
+        }
+        ResolvedType::Array(inner) => {
+            let len_var = format!("_tombstone_{idx}_len");
+            w.line(&format!("const {len_var} = {reader}.readLeb128();"));
+            w.open_block(&format!("for (let i = 0; i < {len_var}; i++)"));
+            emit_tombstone_read(w, inner, registry, reader, idx);
+            w.close_block();
+        }
+        ResolvedType::Map(k, v) => {
+            let len_var = format!("_tombstone_{idx}_len");
+            w.line(&format!("const {len_var} = {reader}.readLeb128();"));
+            w.open_block(&format!("for (let i = 0; i < {len_var}; i++)"));
+            emit_tombstone_read(w, k, registry, reader, idx);
+            emit_tombstone_read(w, v, registry, reader, idx);
+            w.close_block();
+        }
+        ResolvedType::Result(ok, err) => {
+            let var = format!("_tombstone_{idx}_isOk");
+            w.line(&format!("const {var} = {reader}.readBool();"));
+            w.open_block(&format!("if ({var})"));
+            emit_tombstone_read(w, ok, registry, reader, idx);
+            w.dedent();
+            w.line("} else {");
+            w.indent();
+            emit_tombstone_read(w, err, registry, reader, idx);
+            w.close_block();
+        }
+        _ => {} // non_exhaustive guard
+    }
+}
+
+// ---------------------------------------------------------------------------
 // emit_message
 // ---------------------------------------------------------------------------
 
@@ -447,15 +546,46 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
     w.open_block(&format!(
         "export function decode{name}(r: BitReader): {name}"
     ));
+
+    // Build a sorted sequence of decode actions: live fields + typed tombstones
+    // ordered by ordinal so tombstone bytes are read-and-discarded at the correct position.
+    enum DecodeAction<'a> {
+        Field(&'a vexil_lang::ir::FieldDef),
+        Tombstone(&'a TombstoneDef),
+    }
+    let mut actions: Vec<(u32, DecodeAction<'_>)> = Vec::new();
     for field in &msg.fields {
-        emit_read(
-            w,
-            field.name.as_str(),
-            &field.resolved_type,
-            &field.encoding,
-            registry,
-            "r",
-        );
+        actions.push((field.ordinal, DecodeAction::Field(field)));
+    }
+    for tombstone in &msg.tombstones {
+        if tombstone.original_type.is_some() {
+            actions.push((tombstone.ordinal, DecodeAction::Tombstone(tombstone)));
+        }
+    }
+    actions.sort_by_key(|(ord, _)| *ord);
+
+    for (idx, (_ord, action)) in actions.iter().enumerate() {
+        match action {
+            DecodeAction::Field(field) => {
+                emit_read(
+                    w,
+                    field.name.as_str(),
+                    &field.resolved_type,
+                    &field.encoding,
+                    registry,
+                    "r",
+                );
+            }
+            DecodeAction::Tombstone(tombstone) => {
+                if let Some(ref ty) = tombstone.original_type {
+                    w.line(&format!(
+                        "// discard @removed ordinal {}",
+                        tombstone.ordinal
+                    ));
+                    emit_tombstone_read(w, ty, registry, "r", idx);
+                }
+            }
+        }
     }
     w.line("r.flushToByteBoundary();");
     w.line("const _unknown = r.readRemaining();");

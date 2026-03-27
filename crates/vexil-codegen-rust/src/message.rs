@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{
-    Encoding, FieldEncoding, MessageDef, ResolvedType, TypeDef, TypeId, TypeRegistry,
+    Encoding, FieldEncoding, MessageDef, ResolvedType, TombstoneDef, TypeDef, TypeId, TypeRegistry,
 };
 
 use crate::annotations::{emit_field_annotations, emit_tombstones, emit_type_annotations};
@@ -481,6 +481,95 @@ fn emit_read_type(
     }
 }
 
+// ---------------------------------------------------------------------------
+// emit_tombstone_read — read-and-discard for typed tombstones
+// ---------------------------------------------------------------------------
+
+/// Emit code to read and discard bytes for a typed tombstone during decode.
+///
+/// This advances the `BitReader` cursor past the tombstone's wire data without
+/// binding the value to any live field.
+fn emit_tombstone_read(w: &mut CodeWriter, ty: &ResolvedType, registry: &TypeRegistry, idx: usize) {
+    match ty {
+        ResolvedType::Primitive(p) => match p {
+            PrimitiveType::Bool => w.line("let _ = r.read_bool()?;"),
+            PrimitiveType::U8 => w.line("let _ = r.read_u8()?;"),
+            PrimitiveType::U16 => w.line("let _ = r.read_u16()?;"),
+            PrimitiveType::U32 => w.line("let _ = r.read_u32()?;"),
+            PrimitiveType::U64 => w.line("let _ = r.read_u64()?;"),
+            PrimitiveType::I8 => w.line("let _ = r.read_i8()?;"),
+            PrimitiveType::I16 => w.line("let _ = r.read_i16()?;"),
+            PrimitiveType::I32 => w.line("let _ = r.read_i32()?;"),
+            PrimitiveType::I64 => w.line("let _ = r.read_i64()?;"),
+            PrimitiveType::F32 => w.line("let _ = r.read_f32()?;"),
+            PrimitiveType::F64 => w.line("let _ = r.read_f64()?;"),
+            PrimitiveType::Void => {} // 0 bits — nothing to read
+        },
+        ResolvedType::SubByte(s) => {
+            w.line(&format!("let _ = r.read_bits({}_u8)?;", s.bits));
+        }
+        ResolvedType::Semantic(s) => match s {
+            SemanticType::String => w.line("let _ = r.read_string()?;"),
+            SemanticType::Bytes => w.line("let _ = r.read_bytes()?;"),
+            SemanticType::Rgb => {
+                w.line("let _ = r.read_u8()?;");
+                w.line("let _ = r.read_u8()?;");
+                w.line("let _ = r.read_u8()?;");
+            }
+            SemanticType::Uuid => {
+                w.line("let _ = r.read_raw_bytes(16_usize)?;");
+            }
+            SemanticType::Timestamp => w.line("let _ = r.read_i64()?;"),
+            SemanticType::Hash => {
+                w.line("let _ = r.read_raw_bytes(32_usize)?;");
+            }
+        },
+        ResolvedType::Named(_) => {
+            let var = format!("_tombstone_{idx}");
+            w.line("r.enter_recursive()?;");
+            w.line(&format!(
+                "let {var}: () = {{ let _ = vexil_runtime::Unpack::unpack(r)?; }};"
+            ));
+            w.line("r.leave_recursive();");
+        }
+        ResolvedType::Optional(inner) => {
+            w.line("let _tombstone_present = r.read_bool()?;");
+            if is_byte_aligned(inner, registry) {
+                w.line("r.flush_to_byte_boundary();");
+            }
+            w.open_block("if _tombstone_present");
+            emit_tombstone_read(w, inner, registry, idx);
+            w.close_block();
+        }
+        ResolvedType::Array(inner) => {
+            let len_var = format!("_tombstone_{idx}_len");
+            w.line(&format!("let {len_var} = r.read_leb128(10_u8)? as usize;"));
+            w.open_block(&format!("for _ in 0..{len_var}"));
+            emit_tombstone_read(w, inner, registry, idx);
+            w.close_block();
+        }
+        ResolvedType::Map(k, v) => {
+            let len_var = format!("_tombstone_{idx}_len");
+            w.line(&format!("let {len_var} = r.read_leb128(10_u8)? as usize;"));
+            w.open_block(&format!("for _ in 0..{len_var}"));
+            emit_tombstone_read(w, k, registry, idx);
+            emit_tombstone_read(w, v, registry, idx);
+            w.close_block();
+        }
+        ResolvedType::Result(ok, err) => {
+            w.line("let _tombstone_is_ok = r.read_bool()?;");
+            w.open_block("if _tombstone_is_ok");
+            emit_tombstone_read(w, ok, registry, idx);
+            w.dedent();
+            w.line("} else {");
+            w.indent();
+            emit_tombstone_read(w, err, registry, idx);
+            w.close_block();
+        }
+        _ => {} // non_exhaustive guard
+    }
+}
+
 fn read_cast_for_varint(ty: &ResolvedType) -> &'static str {
     match ty {
         ResolvedType::Primitive(p) => match p {
@@ -570,16 +659,47 @@ pub fn emit_message(
     // Unpack impl
     w.open_block(&format!("impl vexil_runtime::Unpack for {name}"));
     w.open_block("fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError>");
+
+    // Build a sorted sequence of decode actions: live fields + typed tombstones
+    // ordered by ordinal so tombstone bytes are read-and-discarded at the correct position.
+    enum DecodeAction<'a> {
+        Field(&'a vexil_lang::ir::FieldDef),
+        Tombstone(&'a TombstoneDef),
+    }
+    let mut actions: Vec<(u32, DecodeAction<'_>)> = Vec::new();
     for field in &msg.fields {
-        let var_name = field.name.as_str();
-        emit_read(
-            w,
-            var_name,
-            &field.resolved_type,
-            &field.encoding,
-            registry,
-            var_name,
-        );
+        actions.push((field.ordinal, DecodeAction::Field(field)));
+    }
+    for tombstone in &msg.tombstones {
+        if tombstone.original_type.is_some() {
+            actions.push((tombstone.ordinal, DecodeAction::Tombstone(tombstone)));
+        }
+    }
+    actions.sort_by_key(|(ord, _)| *ord);
+
+    for (idx, (_ord, action)) in actions.iter().enumerate() {
+        match action {
+            DecodeAction::Field(field) => {
+                let var_name = field.name.as_str();
+                emit_read(
+                    w,
+                    var_name,
+                    &field.resolved_type,
+                    &field.encoding,
+                    registry,
+                    var_name,
+                );
+            }
+            DecodeAction::Tombstone(tombstone) => {
+                if let Some(ref ty) = tombstone.original_type {
+                    w.line(&format!(
+                        "// discard @removed ordinal {}",
+                        tombstone.ordinal
+                    ));
+                    emit_tombstone_read(w, ty, registry, idx);
+                }
+            }
+        }
     }
     w.line("r.flush_to_byte_boundary();");
     w.line("let _unknown = r.read_remaining();");

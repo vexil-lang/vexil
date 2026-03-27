@@ -112,3 +112,8 @@ fn test_016_recursive() {
 fn test_027_delta_on_message() {
     golden_test("027_delta_on_message");
 }
+
+#[test]
+fn test_028_typed_tombstone() {
+    golden_test("028_typed_tombstone");
+}

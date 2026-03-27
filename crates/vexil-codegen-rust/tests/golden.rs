@@ -102,3 +102,8 @@ fn test_011_config() {
 fn test_016_recursive() {
     golden_test("016_recursive");
 }
+
+#[test]
+fn test_028_typed_tombstone() {
+    golden_test("028_typed_tombstone");
+}
