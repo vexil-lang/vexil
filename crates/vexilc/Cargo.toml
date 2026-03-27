@@ -1,6 +1,6 @@
 [package]
 name = "vexilc"
-version = "0.2.4"
+version = "0.2.5"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -12,8 +12,8 @@ keywords = ["schema", "codegen", "compiler", "protocol", "cli"]
 categories = ["compilers", "development-tools", "command-line-utilities"]
 
 [dependencies]
-vexil-lang = { path = "../vexil-lang", version = "^0.2.4" }
-vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "^0.2.4" }
-vexil-codegen-ts = { path = "../vexil-codegen-ts", version = "^0.2.4" }
-vexil-store = { path = "../vexil-store", version = "^0.2.4" }
+vexil-lang = { path = "../vexil-lang", version = "^0.2.5" }
+vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "^0.2.5" }
+vexil-codegen-ts = { path = "../vexil-codegen-ts", version = "^0.2.5" }
+vexil-store = { path = "../vexil-store", version = "^0.2.5" }
 ariadne = "0.6"
