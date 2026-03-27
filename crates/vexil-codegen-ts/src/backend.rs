@@ -1,0 +1,187 @@
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::path::PathBuf;
+
+use vexil_lang::codegen::{CodegenBackend, CodegenError};
+use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
+use vexil_lang::project::ProjectResult;
+
+/// TypeScript code-generation backend for Vexil schemas.
+///
+/// Generates TypeScript interfaces, encode/decode functions, and type-safe
+/// discriminated unions using the `@vexil/runtime` package.
+#[derive(Debug, Clone, Copy)]
+pub struct TypeScriptBackend;
+
+impl CodegenBackend for TypeScriptBackend {
+    fn name(&self) -> &str {
+        "typescript"
+    }
+
+    fn file_extension(&self) -> &str {
+        "ts"
+    }
+
+    fn generate(&self, compiled: &CompiledSchema) -> Result<String, CodegenError> {
+        crate::generate(compiled).map_err(|e| CodegenError::BackendSpecific(Box::new(e)))
+    }
+
+    fn generate_project(
+        &self,
+        result: &ProjectResult,
+    ) -> Result<BTreeMap<PathBuf, String>, CodegenError> {
+        let mut files = BTreeMap::new();
+        let mut index_tree: BTreeMap<String, Vec<String>> = BTreeMap::new();
+
+        // Step 1: Build a global type_name -> TS module path map.
+        let mut global_type_map: HashMap<String, String> = HashMap::new();
+        for (ns, compiled) in &result.schemas {
+            let segments: Vec<&str> = ns.split('.').collect();
+            let ts_module = format!("./{}", segments.join("/"));
+            for &type_id in &compiled.declarations {
+                if let Some(typedef) = compiled.registry.get(type_id) {
+                    let name = crate::type_name_of(typedef);
+                    global_type_map.insert(name.to_string(), ts_module.clone());
+                }
+            }
+        }
+
+        for (ns, compiled) in &result.schemas {
+            let segments: Vec<&str> = ns.split('.').collect();
+            if segments.is_empty() {
+                continue;
+            }
+            let file_name = segments[segments.len() - 1];
+            let dir_segments = &segments[..segments.len() - 1];
+
+            // Track index.ts entries
+            for i in 0..segments.len() - 1 {
+                let parent_key = segments[..i].join("/");
+                let child = segments[i].to_string();
+                let entry = index_tree.entry(parent_key).or_default();
+                if !entry.contains(&child) {
+                    entry.push(child);
+                }
+            }
+            if segments.len() >= 2 {
+                let parent_key = dir_segments.join("/");
+                let child = file_name.to_string();
+                let entry = index_tree.entry(parent_key).or_default();
+                if !entry.contains(&child) {
+                    entry.push(child);
+                }
+            } else {
+                let entry = index_tree.entry(String::new()).or_default();
+                let child = file_name.to_string();
+                if !entry.contains(&child) {
+                    entry.push(child);
+                }
+            }
+
+            // Step 2: Build import_paths for this schema.
+            let declared_ids: HashSet<TypeId> = compiled.declarations.iter().copied().collect();
+
+            let mut import_paths: HashMap<String, String> = HashMap::new();
+            for &type_id in &compiled.declarations {
+                if let Some(typedef) = compiled.registry.get(type_id) {
+                    collect_named_ids_from_typedef(typedef, &declared_ids, |imported_id| {
+                        if let Some(imported_def) = compiled.registry.get(imported_id) {
+                            let name = crate::type_name_of(imported_def);
+                            if let Some(ts_path) = global_type_map.get(name) {
+                                import_paths.insert(name.to_string(), ts_path.clone());
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Generate code with cross-file imports.
+            let imports = if import_paths.is_empty() {
+                None
+            } else {
+                Some(&import_paths)
+            };
+            let code = crate::generate_with_imports(compiled, imports)
+                .map_err(|e| CodegenError::BackendSpecific(Box::new(e)))?;
+
+            let mut file_path = PathBuf::new();
+            for seg in dir_segments {
+                file_path.push(seg);
+            }
+            file_path.push(format!("{file_name}.ts"));
+            files.insert(file_path, code);
+        }
+
+        // Generate index.ts files
+        for (dir_key, children) in &index_tree {
+            let mut index_path = PathBuf::new();
+            if !dir_key.is_empty() {
+                for seg in dir_key.split('/') {
+                    index_path.push(seg);
+                }
+            }
+            index_path.push("index.ts");
+
+            let mut content = String::from("// Code generated by vexilc. DO NOT EDIT.\n\n");
+            for child in children {
+                content.push_str(&format!("export * from './{child}';\n"));
+            }
+            files.insert(index_path, content);
+        }
+
+        Ok(files)
+    }
+}
+
+/// Collect all `ResolvedType::Named(id)` from a TypeDef where `id` is NOT in
+/// the declared set (i.e., it's an imported type).
+fn collect_named_ids_from_typedef(
+    typedef: &TypeDef,
+    declared: &HashSet<TypeId>,
+    mut on_import: impl FnMut(TypeId),
+) {
+    match typedef {
+        TypeDef::Message(msg) => {
+            for f in &msg.fields {
+                collect_named_ids_from_resolved(&f.resolved_type, declared, &mut on_import);
+            }
+        }
+        TypeDef::Union(un) => {
+            for v in &un.variants {
+                for f in &v.fields {
+                    collect_named_ids_from_resolved(&f.resolved_type, declared, &mut on_import);
+                }
+            }
+        }
+        TypeDef::Newtype(nt) => {
+            collect_named_ids_from_resolved(&nt.inner_type, declared, &mut on_import);
+        }
+        TypeDef::Config(cfg) => {
+            for f in &cfg.fields {
+                collect_named_ids_from_resolved(&f.resolved_type, declared, &mut on_import);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_named_ids_from_resolved(
+    ty: &ResolvedType,
+    declared: &HashSet<TypeId>,
+    on_import: &mut impl FnMut(TypeId),
+) {
+    match ty {
+        ResolvedType::Named(id) => {
+            if !declared.contains(id) {
+                on_import(*id);
+            }
+        }
+        ResolvedType::Optional(inner) | ResolvedType::Array(inner) => {
+            collect_named_ids_from_resolved(inner, declared, on_import);
+        }
+        ResolvedType::Map(k, v) | ResolvedType::Result(k, v) => {
+            collect_named_ids_from_resolved(k, declared, on_import);
+            collect_named_ids_from_resolved(v, declared, on_import);
+        }
+        _ => {}
+    }
+}

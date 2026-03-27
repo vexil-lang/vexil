@@ -244,6 +244,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vexil-codegen-ts"
+version = "0.2.1"
+dependencies = [
+ "test-case",
+ "thiserror",
+ "vexil-lang",
+]
+
+[[package]]
 name = "vexil-lang"
 version = "0.2.2"
 dependencies = [
