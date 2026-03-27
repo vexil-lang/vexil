@@ -31,6 +31,8 @@ pub mod ast;
 pub mod canonical;
 /// Code generation backend trait and error types.
 pub mod codegen;
+/// Schema compatibility checker (spec section 10).
+pub mod compat;
 /// Diagnostic types for errors and warnings.
 pub mod diagnostic;
 /// Intermediate representation: compiled schema, type registry, and type definitions.
