@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod delta;
 pub mod emit;
 pub mod enum_gen;
 pub mod flags;
@@ -89,6 +90,7 @@ pub(crate) fn generate_with_imports(
         match typedef {
             TypeDef::Message(msg) => {
                 message::emit_message(&mut w, msg, &compiled.registry);
+                delta::emit_delta(&mut w, msg, &compiled.registry);
             }
             TypeDef::Enum(en) => {
                 enum_gen::emit_enum(&mut w, en, &compiled.registry);

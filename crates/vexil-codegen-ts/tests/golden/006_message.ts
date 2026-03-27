@@ -84,3 +84,40 @@ export function decodeFieldAnnotations(r: BitReader): FieldAnnotations {
   return { a, b, c, d };
 }
 
+export class FieldAnnotationsEncoder {
+  private prevd: number = 0;
+
+  encode(v: FieldAnnotations, w: BitWriter): void {
+    w.writeU32(v.a);
+    w.writeLeb12864(v.b);
+    w.writeString(v.c);
+    const delta_d = (v.d - this.prevd) | 0;
+    w.writeI32(delta_d);
+    this.prevd = v.d;
+    w.flushToByteBoundary();
+  }
+
+  reset(): void {
+    this.prevd = 0;
+  }
+}
+
+export class FieldAnnotationsDecoder {
+  private prevd: number = 0;
+
+  decode(r: BitReader): FieldAnnotations {
+    const a = r.readU32();
+    const b = r.readLeb12864();
+    const c = r.readString();
+    const delta_d = r.readI32();
+    const d = (this.prevd + delta_d) | 0;
+    this.prevd = d;
+    r.flushToByteBoundary();
+    return { a, b, c, d };
+  }
+
+  reset(): void {
+    this.prevd = 0;
+  }
+}
+
