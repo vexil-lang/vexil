@@ -1,0 +1,8 @@
+[package]
+name = "multi-file-project-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+vexil-runtime = { path = "../../crates/vexil-runtime" }

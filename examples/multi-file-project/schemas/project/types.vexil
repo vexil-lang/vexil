@@ -1,0 +1,12 @@
+namespace project.types
+
+enum Priority : u8 {
+    Low    @0
+    Medium @1
+    High   @2
+}
+
+message Timestamp {
+    seconds @0 : u64
+    nanos   @1 : u32
+}

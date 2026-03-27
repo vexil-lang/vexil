@@ -1,0 +1,14 @@
+namespace project.messages
+
+import { Priority, Timestamp } from project.types
+
+message Task {
+    id          @0 : u64 @varint
+    title       @1 : string @limit(256)
+    priority    @2 : Priority
+    created_at  @3 : Timestamp
+}
+
+message TaskList {
+    tasks @0 : array<Task>
+}
