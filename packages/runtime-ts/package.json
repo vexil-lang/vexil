@@ -1,0 +1,20 @@
+{
+  "name": "@vexil/runtime",
+  "version": "0.2.0",
+  "description": "Runtime support for Vexil generated code — bit-level I/O and wire encoding primitives",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": ["vexil", "schema", "serialization", "binary", "protocol"],
+  "license": "MIT OR Apache-2.0"
+}

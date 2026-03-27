@@ -1,0 +1,18 @@
+namespace system.monitor
+
+enum CpuStatus {
+    Normal   @0
+    Degraded @1
+    Critical @2
+}
+
+message SystemSnapshot {
+    timestamp_ms    @0 : i64
+    hostname        @1 : string
+    cpu_usage       @2 : u8
+    cpu_count       @3 : u8
+    per_core_usage  @4 : array<u8>
+    memory_used_mb  @5 : u32
+    memory_total_mb @6 : u32
+    cpu_status      @7 : CpuStatus
+}

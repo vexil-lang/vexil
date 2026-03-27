@@ -11,6 +11,7 @@ pub struct BitWriter {
     buf: Vec<u8>,
     current_byte: u8,
     bit_offset: u8,
+    recursion_depth: u32,
 }
 
 impl BitWriter {
@@ -20,6 +21,7 @@ impl BitWriter {
             buf: Vec::new(),
             current_byte: 0,
             bit_offset: 0,
+            recursion_depth: 0,
         }
     }
 
@@ -174,6 +176,20 @@ impl BitWriter {
         self.buf.extend_from_slice(data);
     }
 
+    /// Increment recursion depth; return error if limit exceeded.
+    pub fn enter_recursive(&mut self) -> Result<(), crate::error::EncodeError> {
+        self.recursion_depth += 1;
+        if self.recursion_depth > crate::MAX_RECURSION_DEPTH {
+            return Err(crate::error::EncodeError::RecursionLimitExceeded);
+        }
+        Ok(())
+    }
+
+    /// Decrement recursion depth.
+    pub fn leave_recursive(&mut self) {
+        self.recursion_depth = self.recursion_depth.saturating_sub(1);
+    }
+
     /// Flush any partial byte and return the finished buffer.
     pub fn finish(mut self) -> Vec<u8> {
         self.flush_to_byte_boundary();
@@ -325,5 +341,35 @@ mod tests {
         let mut w = BitWriter::new();
         w.flush_to_byte_boundary();
         assert_eq!(w.finish(), [0x00]);
+    }
+
+    #[test]
+    fn recursion_depth_increment_decrement() {
+        let mut w = BitWriter::new();
+        w.enter_recursive().unwrap();
+        w.enter_recursive().unwrap();
+        w.leave_recursive();
+        w.leave_recursive();
+    }
+
+    #[test]
+    fn recursion_depth_max_64_succeeds() {
+        let mut w = BitWriter::new();
+        for _ in 0..64 {
+            w.enter_recursive().unwrap();
+        }
+    }
+
+    #[test]
+    fn recursion_depth_65_exceeds_limit() {
+        use crate::error::EncodeError;
+        let mut w = BitWriter::new();
+        for _ in 0..64 {
+            w.enter_recursive().unwrap();
+        }
+        assert_eq!(
+            w.enter_recursive().unwrap_err(),
+            EncodeError::RecursionLimitExceeded
+        );
     }
 }

@@ -1,0 +1,13 @@
+namespace test.evolution.reqopt
+
+# V1: required field
+message SettingsV1 {
+    timeout @0 : u32
+    name    @1 : string
+}
+
+# V2: timeout becomes optional (BREAKING - wire layout changes)
+message SettingsV2 {
+    timeout @0 : optional<u32>
+    name    @1 : string
+}

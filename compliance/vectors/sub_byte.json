@@ -1,0 +1,25 @@
+[
+  {
+    "name": "u3_u5_packed",
+    "schema": "namespace test.sub\nmessage M { a @0 : u3  b @1 : u5 }",
+    "type": "M",
+    "value": { "a": 5, "b": 18 },
+    "expected_bytes": "95",
+    "notes": "a=101(3bit) b=10010(5bit) LSB-first in byte: 10010_101 = 0x95"
+  },
+  {
+    "name": "u3_u5_u6_cross_byte",
+    "schema": "namespace test.sub\nmessage M { a @0 : u3  b @1 : u5  c @2 : u6 }",
+    "type": "M",
+    "value": { "a": 7, "b": 31, "c": 63 },
+    "expected_bytes": "ff3f",
+    "notes": "a=111 b=11111 c=111111 LSB-first: 11111_111 | 00_111111 = FF 3F"
+  },
+  {
+    "name": "u1_one",
+    "schema": "namespace test.sub\nmessage M { v @0 : u1 }",
+    "type": "M",
+    "value": { "v": 1 },
+    "expected_bytes": "01"
+  }
+]

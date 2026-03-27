@@ -1,0 +1,28 @@
+namespace sensor.telemetry
+
+enum DeviceStatus {
+    Online    @0
+    Degraded  @1
+    Offline   @2
+    Error     @3
+}
+
+message SensorReading {
+    device_id   @0 : u32
+    battery     @1 : u7
+    signal      @2 : u4
+    status      @3 : DeviceStatus
+    temperature @4 : f32
+    humidity    @5 : f32
+    label       @6 : string
+    gps_lat     @7 : optional<f64>
+    gps_lon     @8 : optional<f64>
+}
+
+message DeviceConfig {
+    device_id        @0 : u32
+    report_interval  @1 : u16
+    high_temp_alert  @2 : f32
+    low_temp_alert   @3 : f32
+    label            @4 : string
+}

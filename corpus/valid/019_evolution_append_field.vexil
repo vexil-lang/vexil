@@ -1,0 +1,15 @@
+@version("1.0.0")
+namespace test.evolution.append
+
+# V1 message - baseline
+message HeaderV1 {
+    kind   @0 : u8
+    status @1 : u8
+}
+
+# V2 message - field appended (compatible change)
+message HeaderV2 {
+    kind   @0 : u8
+    status @1 : u8
+    flags  @2 : u16
+}

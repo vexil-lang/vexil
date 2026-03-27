@@ -396,6 +396,19 @@ mod tests {
     }
 
     #[test]
+    fn trailing_bytes_not_rejected() {
+        // Simulate v2-encoded message read by v1 decoder:
+        // v2 wrote u32(42) + u16(99), v1 only reads u32(42)
+        let data = [0x2a, 0x00, 0x00, 0x00, 0x63, 0x00];
+        let mut r = BitReader::new(&data);
+        let x = r.read_u32().unwrap();
+        assert_eq!(x, 42);
+        r.flush_to_byte_boundary();
+        // Remaining bytes (0x63, 0x00) must not cause error.
+        // BitReader can be dropped with unread data — no panic.
+    }
+
+    #[test]
     fn flush_reader() {
         let mut w = BitWriter::new();
         w.write_bits(0b101, 3);

@@ -48,6 +48,17 @@ fn primitive_bits(p: &PrimitiveType) -> u8 {
 }
 
 // ---------------------------------------------------------------------------
+// Copy-type helper
+// ---------------------------------------------------------------------------
+
+/// Returns true if the type is `Copy` in Rust — primitives and sub-byte types.
+/// Used to determine whether array/optional/result items need dereferencing
+/// when accessed through a reference (`*item` vs `item`).
+fn is_copy_type(ty: &ResolvedType) -> bool {
+    matches!(ty, ResolvedType::Primitive(_) | ResolvedType::SubByte(_))
+}
+
+// ---------------------------------------------------------------------------
 // emit_write
 // ---------------------------------------------------------------------------
 
@@ -163,7 +174,9 @@ fn emit_write_type(
             SemanticType::Hash => w.line(&format!("w.write_raw_bytes(&{access});")),
         },
         ResolvedType::Named(_) => {
+            w.line("w.enter_recursive()?;");
             w.line(&format!("{access}.pack(w)?;"));
+            w.line("w.leave_recursive();");
         }
         ResolvedType::Optional(inner) => {
             // Presence bit
@@ -177,31 +190,49 @@ fn emit_write_type(
                 // only when needed.
             }
             w.open_block(&format!("if let Some(ref inner_val) = {access}"));
-            emit_write_type(w, "inner_val", inner, registry, field_name);
+            let inner_access = if is_copy_type(inner) {
+                "*inner_val"
+            } else {
+                "inner_val"
+            };
+            emit_write_type(w, inner_access, inner, registry, field_name);
             w.close_block();
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
             w.open_block(&format!("for item in &{access}"));
-            emit_write_type(w, "item", inner, registry, field_name);
+            let item_access = if is_copy_type(inner) { "*item" } else { "item" };
+            emit_write_type(w, item_access, inner, registry, field_name);
             w.close_block();
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
             w.open_block(&format!("for (map_k, map_v) in &{access}"));
-            emit_write_type(w, "map_k", k, registry, field_name);
-            emit_write_type(w, "map_v", v, registry, field_name);
+            let k_access = if is_copy_type(k) { "*map_k" } else { "map_k" };
+            let v_access = if is_copy_type(v) { "*map_v" } else { "map_v" };
+            emit_write_type(w, k_access, k, registry, field_name);
+            emit_write_type(w, v_access, v, registry, field_name);
             w.close_block();
         }
         ResolvedType::Result(ok, err) => {
             w.open_block(&format!("match &{access}"));
             w.open_block("Ok(ok_val) =>");
             w.line("w.write_bool(true);");
-            emit_write_type(w, "ok_val", ok, registry, field_name);
+            let ok_access = if is_copy_type(ok) {
+                "*ok_val"
+            } else {
+                "ok_val"
+            };
+            emit_write_type(w, ok_access, ok, registry, field_name);
             w.close_block();
             w.open_block("Err(err_val) =>");
             w.line("w.write_bool(false);");
-            emit_write_type(w, "err_val", err, registry, field_name);
+            let err_access = if is_copy_type(err) {
+                "*err_val"
+            } else {
+                "err_val"
+            };
+            emit_write_type(w, err_access, err, registry, field_name);
             w.close_block();
             w.close_block();
         }

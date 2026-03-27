@@ -1,0 +1,25 @@
+[
+  {
+    "name": "empty_message",
+    "schema": "namespace test.msg\nmessage Empty {}",
+    "type": "Empty",
+    "value": {},
+    "expected_bytes": "00",
+    "notes": "Zero fields, flush_to_byte_boundary produces one zero byte"
+  },
+  {
+    "name": "two_u32_fields",
+    "schema": "namespace test.msg\nmessage M { x @0 : u32  y @1 : u32 }",
+    "type": "M",
+    "value": { "x": 1, "y": 2 },
+    "expected_bytes": "0100000002000000"
+  },
+  {
+    "name": "mixed_bool_u16_string",
+    "schema": "namespace test.msg\nmessage M { flag @0 : bool  count @1 : u16  name @2 : string }",
+    "type": "M",
+    "value": { "flag": true, "count": 42, "name": "test" },
+    "expected_bytes": "012a000474657374",
+    "notes": "bool(1 bit, flush to 0x01) + u16(LE 0x002A) + string(LEB128 len 4 + 'test')"
+  }
+]

@@ -11,6 +11,9 @@ pub enum EncodeError {
         limit: u64,
         actual: u64,
     },
+    /// Recursive type nesting exceeded [`MAX_RECURSION_DEPTH`](crate::MAX_RECURSION_DEPTH).
+    #[error("recursive type nesting exceeded 64 levels")]
+    RecursionLimitExceeded,
 }
 
 /// Errors that can occur while decoding (unpacking) a value from wire format.

@@ -6,7 +6,7 @@ Generated: 2026-03-25
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (18 files)
+## Valid Corpus (26 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -28,6 +28,14 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 016_recursive.vexil | §3.5 | Self-recursive (tree, linked list) and mutual recursion |
 | 017_escapes.vexil | §5.1 | All valid escape sequences: \", \\, \n, \t, \r; empty string |
 | 018_comments.vexil | Lexer | Comments in all positions: file-level, inline, between elements |
+| 019_evolution_append_field.vexil | §11.10 | Schema evolution: field appended to message |
+| 020_evolution_add_variant.vexil  | §11.10 | Schema evolution: variant added to `@non_exhaustive` union |
+| 021_empty_optionals.vexil        | §11.1  | Empty and nested optional encoding |
+| 022_nested_schemas.vexil         | §4.1   | Nested message references, arrays of messages |
+| 023_recursive_depth.vexil        | §11.3  | Self-recursive and mutual recursive types |
+| 024_zero_length_payload.vexil    | §11.2  | Empty messages, empty union variants |
+| 025_evolution_deprecate.vexil    | §11.10 | Schema evolution: deprecated field (no wire change) |
+| 026_required_to_optional.vexil   | §11.10 | Breaking change: required→optional wire layout difference |
 
 ## Invalid Corpus (56 files)
 

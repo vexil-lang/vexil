@@ -1,0 +1,17 @@
+namespace test.nested.schemas
+
+message Coord {
+    x @0 : i32
+    y @1 : i32
+}
+
+message Rect {
+    origin @0 : Coord
+    size   @1 : Coord
+}
+
+message Canvas {
+    bounds @0 : Rect
+    name   @1 : string
+    layers @2 : array<Rect>
+}

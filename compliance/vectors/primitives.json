@@ -1,0 +1,88 @@
+[
+  {
+    "name": "bool_false",
+    "schema": "namespace test.prim\nmessage M { v @0 : bool }",
+    "type": "M",
+    "value": { "v": false },
+    "expected_bytes": "00",
+    "notes": "bool false = 0 bit, flush to byte = 0x00"
+  },
+  {
+    "name": "bool_true",
+    "schema": "namespace test.prim\nmessage M { v @0 : bool }",
+    "type": "M",
+    "value": { "v": true },
+    "expected_bytes": "01",
+    "notes": "bool true = 1 bit, flush to byte = 0x01"
+  },
+  {
+    "name": "u8_zero",
+    "schema": "namespace test.prim\nmessage M { v @0 : u8 }",
+    "type": "M",
+    "value": { "v": 0 },
+    "expected_bytes": "00"
+  },
+  {
+    "name": "u8_max",
+    "schema": "namespace test.prim\nmessage M { v @0 : u8 }",
+    "type": "M",
+    "value": { "v": 255 },
+    "expected_bytes": "ff"
+  },
+  {
+    "name": "u16_le",
+    "schema": "namespace test.prim\nmessage M { v @0 : u16 }",
+    "type": "M",
+    "value": { "v": 258 },
+    "expected_bytes": "0201",
+    "notes": "258 = 0x0102, little-endian = 02 01"
+  },
+  {
+    "name": "u32_le",
+    "schema": "namespace test.prim\nmessage M { v @0 : u32 }",
+    "type": "M",
+    "value": { "v": 305419896 },
+    "expected_bytes": "78563412",
+    "notes": "0x12345678, little-endian = 78 56 34 12"
+  },
+  {
+    "name": "i32_negative",
+    "schema": "namespace test.prim\nmessage M { v @0 : i32 }",
+    "type": "M",
+    "value": { "v": -1 },
+    "expected_bytes": "ffffffff",
+    "notes": "-1 in two's complement i32"
+  },
+  {
+    "name": "f32_nan_canonical",
+    "schema": "namespace test.prim\nmessage M { v @0 : f32 }",
+    "type": "M",
+    "value": { "v": "NaN" },
+    "expected_bytes": "0000c07f",
+    "notes": "canonical qNaN 0x7FC00000, little-endian = 00 00 C0 7F"
+  },
+  {
+    "name": "f64_negative_zero",
+    "schema": "namespace test.prim\nmessage M { v @0 : f64 }",
+    "type": "M",
+    "value": { "v": "-0.0" },
+    "expected_bytes": "0000000000000080",
+    "notes": "-0.0 = 0x8000000000000000, little-endian"
+  },
+  {
+    "name": "string_hello",
+    "schema": "namespace test.prim\nmessage M { v @0 : string }",
+    "type": "M",
+    "value": { "v": "hello" },
+    "expected_bytes": "0568656c6c6f",
+    "notes": "LEB128 length 5 + UTF-8 'hello'"
+  },
+  {
+    "name": "string_empty",
+    "schema": "namespace test.prim\nmessage M { v @0 : string }",
+    "type": "M",
+    "value": { "v": "" },
+    "expected_bytes": "00",
+    "notes": "LEB128 length 0, no payload"
+  }
+]

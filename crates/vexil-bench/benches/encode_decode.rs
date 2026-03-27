@@ -1,0 +1,147 @@
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use vexil_bench::messages::{DrawText, Envelope, OutputChunk};
+use vexil_runtime::{BitReader, BitWriter};
+
+fn bench_envelope(c: &mut Criterion) {
+    let env = Envelope {
+        version: 1,
+        domain: 3,
+        msg_type: 42,
+        session_id: 1,
+        timestamp: 1_234_567_890_123,
+        msg_id: Some(99),
+    };
+    let mut w = BitWriter::new();
+    env.encode(&mut w).unwrap();
+    let bytes = w.finish();
+
+    c.bench_function("Envelope encode", |b| {
+        b.iter(|| {
+            let mut w = BitWriter::new();
+            black_box(&env).encode(&mut w).unwrap();
+            black_box(w.finish());
+        })
+    });
+    c.bench_function("Envelope decode", |b| {
+        b.iter(|| {
+            let mut r = BitReader::new(black_box(&bytes));
+            black_box(Envelope::decode(&mut r).unwrap());
+        })
+    });
+}
+
+fn bench_draw_text(c: &mut Criterion) {
+    let dt = DrawText {
+        x: 80,
+        y: 24,
+        fg: [255, 128, 0],
+        bg: [0, 0, 0],
+        bold: true,
+        italic: false,
+        text: "Hello, Vexil! This is a medium-length terminal draw command.".into(),
+    };
+    let mut w = BitWriter::new();
+    dt.encode(&mut w).unwrap();
+    let bytes = w.finish();
+
+    c.bench_function("DrawText encode", |b| {
+        b.iter(|| {
+            let mut w = BitWriter::new();
+            black_box(&dt).encode(&mut w).unwrap();
+            black_box(w.finish());
+        })
+    });
+    c.bench_function("DrawText decode", |b| {
+        b.iter(|| {
+            let mut r = BitReader::new(black_box(&bytes));
+            black_box(DrawText::decode(&mut r).unwrap());
+        })
+    });
+}
+
+fn bench_output_chunk(c: &mut Criterion) {
+    let chunk = OutputChunk {
+        session_id: 42,
+        pane_id: 7,
+        sequence: 1_000_000,
+        data: vec![0xAB; 4096], // 4 KiB payload
+        command_tag: Some("cargo build --release".into()),
+    };
+    let mut w = BitWriter::new();
+    chunk.encode(&mut w).unwrap();
+    let bytes = w.finish();
+
+    c.bench_function("OutputChunk encode (4KiB)", |b| {
+        b.iter(|| {
+            let mut w = BitWriter::new();
+            black_box(&chunk).encode(&mut w).unwrap();
+            black_box(w.finish());
+        })
+    });
+    c.bench_function("OutputChunk decode (4KiB)", |b| {
+        b.iter(|| {
+            let mut r = BitReader::new(black_box(&bytes));
+            black_box(OutputChunk::decode(&mut r).unwrap());
+        })
+    });
+}
+
+fn bench_batch(c: &mut Criterion) {
+    // Simulate a realistic batch: 1 Envelope + 50 DrawText commands
+    let env = Envelope {
+        version: 1,
+        domain: 3,
+        msg_type: 42,
+        session_id: 1,
+        timestamp: 1_234_567_890_123,
+        msg_id: Some(99),
+    };
+    let commands: Vec<DrawText> = (0..50)
+        .map(|i| DrawText {
+            x: i * 2,
+            y: i,
+            fg: [255, 200, 100],
+            bg: [0, 0, 0],
+            bold: i % 3 == 0,
+            italic: i % 5 == 0,
+            text: format!("line {i}: some terminal output text here"),
+        })
+        .collect();
+
+    // Pre-encode to get the bytes for decode benchmark
+    let mut w = BitWriter::new();
+    env.encode(&mut w).unwrap();
+    for cmd in &commands {
+        cmd.encode(&mut w).unwrap();
+    }
+    let bytes = w.finish();
+
+    c.bench_function("Batch encode (1 Envelope + 50 DrawText)", |b| {
+        b.iter(|| {
+            let mut w = BitWriter::new();
+            black_box(&env).encode(&mut w).unwrap();
+            for cmd in black_box(&commands) {
+                cmd.encode(&mut w).unwrap();
+            }
+            black_box(w.finish());
+        })
+    });
+    c.bench_function("Batch decode (1 Envelope + 50 DrawText)", |b| {
+        b.iter(|| {
+            let mut r = BitReader::new(black_box(&bytes));
+            black_box(Envelope::decode(&mut r).unwrap());
+            for _ in 0..50 {
+                black_box(DrawText::decode(&mut r).unwrap());
+            }
+        })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_envelope,
+    bench_draw_text,
+    bench_output_chunk,
+    bench_batch
+);
+criterion_main!(benches);

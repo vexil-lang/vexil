@@ -38,6 +38,10 @@ name = "vexil-codegen-rust"
 version_group = "vexil"
 
 [[package]]
+name = "vexil-codegen-ts"
+version_group = "vexil"
+
+[[package]]
 name = "vexil-store"
 version_group = "vexil"
 
@@ -45,4 +49,10 @@ version_group = "vexil"
 name = "vexilc"
 version_group = "vexil"
 # vexilc is a CLI binary — don't generate a changelog for it separately
+changelog_update = false
+
+[[package]]
+name = "vexil-bench"
+# Excluded from lockstep version group — publish = false, benchmarks only
+release = false
 changelog_update = false

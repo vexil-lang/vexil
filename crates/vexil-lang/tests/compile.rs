@@ -27,6 +27,14 @@ fn valid_corpus_compiles() {
         "016_recursive.vexil",
         "017_escapes.vexil",
         "018_comments.vexil",
+        "019_evolution_append_field.vexil",
+        "020_evolution_add_variant.vexil",
+        "021_empty_optionals.vexil",
+        "022_nested_schemas.vexil",
+        "023_recursive_depth.vexil",
+        "024_zero_length_payload.vexil",
+        "025_evolution_deprecate.vexil",
+        "026_required_to_optional.vexil",
     ];
     for file in &valid_files {
         let source = read_corpus("valid", file);
