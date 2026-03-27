@@ -12,3 +12,6 @@ Thumbs.db
 # Node.js
 node_modules/
 packages/runtime-ts/dist/
+
+# Example runtime data
+examples/cross-language/data/

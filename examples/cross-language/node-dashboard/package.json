@@ -1,0 +1,15 @@
+{
+  "name": "cross-language-node-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx src/main.ts"
+  },
+  "dependencies": {
+    "@vexil/runtime": "file:../../../packages/runtime-ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
