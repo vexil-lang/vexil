@@ -664,6 +664,8 @@ name = "vexilc"
 version = "0.2.4"
 dependencies = [
  "ariadne",
+ "serde",
+ "serde_json",
  "vexil-codegen-rust",
  "vexil-codegen-ts",
  "vexil-lang",

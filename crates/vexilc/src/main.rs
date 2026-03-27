@@ -1,4 +1,6 @@
 use ariadne::{Color, Label, Report, ReportKind, Source};
+use serde::Serialize;
+use vexil_lang::compat::{BumpKind, ChangeKind, CompatResult};
 use vexil_lang::diagnostic::{Diagnostic, Severity};
 
 fn render_diagnostic(filename: &str, source: &str, diag: &Diagnostic) {
@@ -551,6 +553,190 @@ fn cmd_compile(schema_file: &str, output: &str) -> i32 {
     0
 }
 
+// ---------------------------------------------------------------------------
+// Compat subcommand — JSON output types (serde stays out of vexil-lang)
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+struct JsonChange {
+    kind: String,
+    declaration: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    field: Option<String>,
+    detail: String,
+    classification: String,
+}
+
+#[derive(Serialize)]
+struct JsonReport {
+    changes: Vec<JsonChange>,
+    result: String,
+    suggested_bump: String,
+}
+
+fn bump_str(b: BumpKind) -> &'static str {
+    match b {
+        BumpKind::Patch => "patch",
+        BumpKind::Minor => "minor",
+        BumpKind::Major => "major",
+    }
+}
+
+fn kind_str(k: ChangeKind) -> &'static str {
+    match k {
+        ChangeKind::FieldAdded => "field_added",
+        ChangeKind::FieldRemoved => "field_removed",
+        ChangeKind::FieldTypeChanged => "field_type_changed",
+        ChangeKind::FieldOrdinalChanged => "field_ordinal_changed",
+        ChangeKind::FieldRenamed => "field_renamed",
+        ChangeKind::FieldDeprecated => "field_deprecated",
+        ChangeKind::FieldEncodingChanged => "field_encoding_changed",
+        ChangeKind::VariantAdded => "variant_added",
+        ChangeKind::VariantRemoved => "variant_removed",
+        ChangeKind::VariantOrdinalChanged => "variant_ordinal_changed",
+        ChangeKind::DeclarationAdded => "declaration_added",
+        ChangeKind::DeclarationRemoved => "declaration_removed",
+        ChangeKind::DeclarationKindChanged => "declaration_kind_changed",
+        ChangeKind::NamespaceChanged => "namespace_changed",
+        ChangeKind::NonExhaustiveChanged => "non_exhaustive_changed",
+        ChangeKind::FlagsBitAdded => "flags_bit_added",
+        ChangeKind::FlagsBitRemoved => "flags_bit_removed",
+        ChangeKind::FlagsBitOrdinalChanged => "flags_bit_ordinal_changed",
+    }
+}
+
+fn cmd_compat(old_file: &str, new_file: &str, format: &str) -> i32 {
+    // Read and compile old schema
+    let old_source = match std::fs::read_to_string(old_file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: {old_file}: {e}");
+            return 2;
+        }
+    };
+    let old_result = vexil_lang::compile(&old_source);
+    for diag in &old_result.diagnostics {
+        render_diagnostic(old_file, &old_source, diag);
+    }
+    if old_result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::Error)
+    {
+        return 2;
+    }
+    let old_compiled = match old_result.compiled {
+        Some(c) => c,
+        None => {
+            eprintln!("error: {old_file}: compilation produced no output");
+            return 2;
+        }
+    };
+
+    // Read and compile new schema
+    let new_source = match std::fs::read_to_string(new_file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: {new_file}: {e}");
+            return 2;
+        }
+    };
+    let new_result = vexil_lang::compile(&new_source);
+    for diag in &new_result.diagnostics {
+        render_diagnostic(new_file, &new_source, diag);
+    }
+    if new_result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::Error)
+    {
+        return 2;
+    }
+    let new_compiled = match new_result.compiled {
+        Some(c) => c,
+        None => {
+            eprintln!("error: {new_file}: compilation produced no output");
+            return 2;
+        }
+    };
+
+    // Run compat check
+    let report = vexil_lang::compat::check(&old_compiled, &new_compiled);
+
+    match format {
+        "json" => {
+            let json_changes: Vec<JsonChange> = report
+                .changes
+                .iter()
+                .map(|c| JsonChange {
+                    kind: kind_str(c.kind).to_string(),
+                    declaration: c.declaration.clone(),
+                    field: c.field.clone(),
+                    detail: c.detail.clone(),
+                    classification: bump_str(c.classification).to_string(),
+                })
+                .collect();
+            let json_report = JsonReport {
+                changes: json_changes,
+                result: match report.result {
+                    CompatResult::Compatible => "compatible".to_string(),
+                    CompatResult::Breaking => "breaking".to_string(),
+                },
+                suggested_bump: bump_str(report.suggested_bump).to_string(),
+            };
+            match serde_json::to_string_pretty(&json_report) {
+                Ok(json) => println!("{json}"),
+                Err(e) => {
+                    eprintln!("error: JSON serialization failed: {e}");
+                    return 2;
+                }
+            }
+        }
+        _ => {
+            // Human format
+            if report.changes.is_empty() {
+                println!("No changes detected.");
+            } else {
+                for change in &report.changes {
+                    let icon = if change.classification >= BumpKind::Major {
+                        "\u{2717}" // ✗
+                    } else {
+                        "\u{2713}" // ✓
+                    };
+                    let level = match change.classification {
+                        BumpKind::Patch => "patch",
+                        BumpKind::Minor => "minor",
+                        BumpKind::Major => "BREAKING",
+                    };
+                    let compat = if change.classification >= BumpKind::Major {
+                        "BREAKING"
+                    } else {
+                        "compatible"
+                    };
+                    println!("  {icon} {} \u{2014} {compat} ({level})", change.detail);
+                }
+                println!();
+                match report.result {
+                    CompatResult::Compatible => {
+                        println!(
+                            "Result: COMPATIBLE \u{2014} suggests {} version bump",
+                            bump_str(report.suggested_bump)
+                        );
+                    }
+                    CompatResult::Breaking => {
+                        println!("Result: BREAKING \u{2014} requires major version bump");
+                    }
+                }
+            }
+        }
+    }
+
+    match report.result {
+        CompatResult::Compatible => 0,
+        CompatResult::Breaking => 1,
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -777,6 +963,37 @@ fn main() {
             });
             std::process::exit(cmd_unpack(vxb_file, schema_file, type_name, output));
         }
+        Some("compat") => {
+            // vexilc compat <old.vexil> <new.vexil> [--format human|json]
+            if args.len() < 4 {
+                eprintln!("Usage: vexilc compat <old.vexil> <new.vexil> [--format human|json]");
+                std::process::exit(1);
+            }
+            let old_file = &args[2];
+            let new_file = &args[3];
+            let mut format = "human";
+            let mut i = 4;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--format" => {
+                        i += 1;
+                        if i < args.len() {
+                            format = args[i].as_str();
+                        }
+                    }
+                    other => {
+                        eprintln!("unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            if format != "human" && format != "json" {
+                eprintln!("error: --format must be 'human' or 'json'");
+                std::process::exit(1);
+            }
+            std::process::exit(cmd_compat(old_file, new_file, format));
+        }
         Some("format") => {
             if args.len() < 7 {
                 eprintln!(
@@ -833,6 +1050,7 @@ fn main() {
             );
             eprintln!("  vexilc unpack <file.vxb> --schema <schema.vexil> --type <TypeName> [-o <out.vx>]");
             eprintln!("  vexilc format <file.vx> --schema <schema.vexil> --type <TypeName>");
+            eprintln!("  vexilc compat <old.vexil> <new.vexil> [--format human|json]");
             std::process::exit(1);
         }
     }
