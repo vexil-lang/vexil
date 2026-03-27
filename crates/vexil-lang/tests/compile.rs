@@ -35,6 +35,7 @@ fn valid_corpus_compiles() {
         "024_zero_length_payload.vexil",
         "025_evolution_deprecate.vexil",
         "026_required_to_optional.vexil",
+        "027_delta_on_message.vexil",
     ];
     for file in &valid_files {
         let source = read_corpus("valid", file);

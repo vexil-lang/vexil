@@ -1,0 +1,9 @@
+namespace test.delta.message
+
+@delta
+message Telemetry {
+    timestamp @0 : i64
+    value     @1 : f32
+    label     @2 : string
+    count     @3 : u32
+}

@@ -6,7 +6,7 @@ Generated: 2026-03-25
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (26 files)
+## Valid Corpus (27 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -36,6 +36,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 024_zero_length_payload.vexil    | §11.2  | Empty messages, empty union variants |
 | 025_evolution_deprecate.vexil    | §11.10 | Schema evolution: deprecated field (no wire change) |
 | 026_required_to_optional.vexil   | §11.10 | Breaking change: required→optional wire layout difference |
+| 027_delta_on_message.vexil       | §13.4  | `@delta` on message declaration desugars to per-field |
 
 ## Invalid Corpus (56 files)
 
