@@ -8,6 +8,17 @@ updates:
       actions:
         patterns: ['*']
 
+  - package-ecosystem: npm
+    directory: /packages/runtime-ts
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    # Only monitor direct production dependencies (we have none currently).
+    # Ignore devDependency transitive vulnerabilities (vitest, typescript) —
+    # they don't ship to consumers.
+    allow:
+      - dependency-type: production
+
   - package-ecosystem: cargo
     directory: /
     schedule:
