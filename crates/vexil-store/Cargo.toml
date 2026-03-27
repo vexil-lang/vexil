@@ -1,6 +1,6 @@
 [package]
 name = "vexil-store"
-version = "0.2.1"
+version = "0.2.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -12,8 +12,8 @@ keywords = ["schema", "serialization", "format", "store"]
 categories = ["encoding", "parser-implementations"]
 
 [dependencies]
-vexil-lang = { path = "../vexil-lang", version = "^0.2.1" }
-vexil-runtime = { path = "../vexil-runtime", version = "^0.2.1" }
+vexil-lang = { path = "../vexil-lang", version = "^0.2.2" }
+vexil-runtime = { path = "../vexil-runtime", version = "^0.2.2" }
 thiserror = "2"
 blake3 = "1"
 smol_str = "0.3"
