@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.5] - 2026-03-28
+
+### Documentation
+
+- docs: rewrite READMEs, fix stale facts, remove AI patterns
+
+### Other
+
+- chore(release): bump crate versions
+
 All notable changes to this project will be documented in this file.
 
 
