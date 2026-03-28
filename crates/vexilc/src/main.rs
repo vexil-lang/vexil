@@ -750,6 +750,7 @@ Subcommands:
   check    <file.vexil>                        Validate a schema
   codegen  <file.vexil> [options]              Generate code for one file
   build    <root.vexil> --include <dir> [opts] Generate code for a project
+  watch    <file.vexil> [options]              Watch and rebuild on changes
   compat   <old.vexil> <new.vexil> [--format]  Compare schemas for breaking changes
   hash     <file.vexil>                        Print BLAKE3 schema hash
   init     [name]                              Create a new schema file
@@ -816,6 +817,108 @@ fn cmd_hash(path: &str) -> i32 {
         }
         None => 1,
     }
+}
+
+fn cmd_watch(root_file: &str, target: &str, output: Option<&str>, includes: &[String]) -> i32 {
+    use notify::{RecursiveMode, Watcher};
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    // Initial build
+    println!("[watch] Initial build...");
+    let code = match output {
+        Some(out) => cmd_build(root_file, includes, out, target),
+        None => cmd_check(root_file),
+    };
+    if code == 0 {
+        println!("[watch] Ready. Watching for changes...");
+    } else {
+        println!("[watch] Initial build had errors. Watching for changes...");
+    }
+
+    let (tx, rx) = mpsc::channel();
+
+    let mut watcher = match notify::recommended_watcher(tx) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("error: failed to create file watcher: {e}");
+            return 1;
+        }
+    };
+
+    // Watch the root file's directory
+    let root_path = std::path::Path::new(root_file);
+    if let Some(parent) = root_path.parent() {
+        let watch_dir = if parent.as_os_str().is_empty() {
+            std::path::Path::new(".")
+        } else {
+            parent
+        };
+        if let Err(e) = watcher.watch(watch_dir, RecursiveMode::Recursive) {
+            eprintln!("error: failed to watch {}: {e}", watch_dir.display());
+            return 1;
+        }
+    }
+
+    // Watch include directories
+    for inc in includes {
+        let inc_path = std::path::Path::new(inc);
+        if let Err(e) = watcher.watch(inc_path, RecursiveMode::Recursive) {
+            eprintln!("error: failed to watch {inc}: {e}");
+            return 1;
+        }
+    }
+
+    // Debounce loop
+    let debounce = Duration::from_millis(200);
+    let mut last_build = Instant::now();
+
+    loop {
+        match rx.recv() {
+            Ok(Ok(event)) => {
+                // Only react to modifications and creations
+                if !event.kind.is_modify() && !event.kind.is_create() {
+                    continue;
+                }
+
+                // Only react to .vexil file changes
+                let dominated_by_vexil = event
+                    .paths
+                    .iter()
+                    .any(|p| p.extension().map(|ext| ext == "vexil").unwrap_or(false));
+                if !dominated_by_vexil {
+                    continue;
+                }
+
+                // Drain any queued events
+                while rx.try_recv().is_ok() {}
+
+                // Debounce
+                let now = Instant::now();
+                if now.duration_since(last_build) < debounce {
+                    continue;
+                }
+                last_build = now;
+
+                println!("\n[watch] Change detected, rebuilding...");
+                let code = match output {
+                    Some(out) => cmd_build(root_file, includes, out, target),
+                    None => cmd_check(root_file),
+                };
+                if code == 0 {
+                    println!("[watch] OK");
+                } else {
+                    println!("[watch] Build failed (see errors above)");
+                }
+            }
+            Ok(Err(e)) => {
+                eprintln!("[watch] Watcher error: {e}");
+            }
+            Err(_) => break,
+        }
+    }
+
+    0
 }
 
 fn main() {
@@ -952,6 +1055,45 @@ fn main() {
                 }
             };
             std::process::exit(cmd_build(root_file, &include_paths, &output_dir, &target));
+        }
+        Some("watch") => {
+            if args.len() < 3 {
+                eprintln!("Usage: vexilc watch <file.vexil> [--target <rust|typescript|go>] [--output <dir>] [--include <dir>]");
+                std::process::exit(1);
+            }
+            let root_file = &args[2];
+            let mut target = "rust".to_string();
+            let mut output = None::<String>;
+            let mut includes = Vec::new();
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--target" => {
+                        i += 1;
+                        if i < args.len() {
+                            target = args[i].clone();
+                        }
+                    }
+                    "--output" | "-o" => {
+                        i += 1;
+                        if i < args.len() {
+                            output = Some(args[i].clone());
+                        }
+                    }
+                    "--include" => {
+                        i += 1;
+                        if i < args.len() {
+                            includes.push(args[i].clone());
+                        }
+                    }
+                    other => {
+                        eprintln!("unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            std::process::exit(cmd_watch(root_file, &target, output.as_deref(), &includes));
         }
         Some("info") => {
             if args.len() != 3 {

@@ -20,6 +20,7 @@ vexil-store = { path = "../vexil-store", version = "^0.4.1" }
 ariadne = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+notify = "8"
 
 [dev-dependencies]
 tempfile = "3"
