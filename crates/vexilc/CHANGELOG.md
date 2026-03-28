@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0] - 2026-03-28
+
+### Added
+
+- feat(vexilc): add --version, --help, init, hash subcommands
+
 ## [0.3.0] - 2026-03-28
 
 ### Added
