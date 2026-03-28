@@ -12,11 +12,11 @@ keywords = ["schema", "codegen", "compiler", "protocol", "cli"]
 categories = ["compilers", "development-tools", "command-line-utilities"]
 
 [dependencies]
-vexil-lang = { path = "../vexil-lang", version = "^0.2.5" }
-vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "^0.2.5" }
-vexil-codegen-ts = { path = "../vexil-codegen-ts", version = "^0.2.5" }
-vexil-codegen-go = { path = "../vexil-codegen-go", version = "^0.2.5" }
-vexil-store = { path = "../vexil-store", version = "^0.2.5" }
+vexil-lang = { path = "../vexil-lang", version = "^0.3.0" }
+vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "^0.3.0" }
+vexil-codegen-ts = { path = "../vexil-codegen-ts", version = "^0.3.0" }
+vexil-codegen-go = { path = "../vexil-codegen-go", version = "^0.3.0" }
+vexil-store = { path = "../vexil-store", version = "^0.3.0" }
 ariadne = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
