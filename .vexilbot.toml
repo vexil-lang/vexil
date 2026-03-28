@@ -1,0 +1,88 @@
+[labels]
+[labels.paths]
+"crate:lang"       = ["crates/vexil-lang/**"]
+"crate:codegen-rs" = ["crates/vexil-codegen-rust/**"]
+"crate:codegen-ts" = ["crates/vexil-codegen-ts/**"]
+"crate:runtime"    = ["crates/vexil-runtime/**"]
+"crate:store"      = ["crates/vexil-store/**"]
+"crate:cli"        = ["crates/vexilc/**"]
+"spec"             = ["spec/**"]
+"corpus"           = ["corpus/**"]
+"ci"               = [".github/**"]
+"ts-runtime"       = ["packages/runtime-ts/**"]
+"compliance"       = ["compliance/**"]
+"docs"             = ["docs/**"]
+
+[labels.keywords]
+"bug"         = ["crash", "panic", "regression", "broken", "incorrect", "wrong output"]
+"performance" = ["slow", "benchmark", "perf", "latency", "throughput"]
+"spec"        = ["rfc", "wire format", "encoding", "grammar", "language spec"]
+
+[triage]
+allowed_teams       = ["maintainers"]
+allow_collaborators = true
+
+[welcome]
+pr_message    = "Thanks for your first PR to Vexil! A maintainer will review it shortly. Make sure `cargo test --workspace` passes and clippy is clean."
+issue_message = "Thanks for opening this issue! We'll triage it soon. If this is a bug, please include a minimal `.vexil` schema that reproduces it."
+
+[policy]
+rfc_required_paths       = ["spec/**", "corpus/valid/**", "corpus/invalid/**", "compliance/vectors/**"]
+wire_format_warning_paths = ["crates/vexil-runtime/**", "packages/runtime-ts/src/**", "spec/vexil-spec.md"]
+
+[release]
+changelog_tool = "git-cliff"
+tag_format     = "{{ crate }}-v{{ version }}"
+auto_release   = false
+require_ci     = true
+
+[release.crates.vexil-lang]
+path              = "crates/vexil-lang"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = []
+
+[release.crates.vexil-runtime]
+path              = "crates/vexil-runtime"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = ["vexil-lang"]
+post_publish      = [{ run = "npm-publish", package = "packages/runtime-ts" }]
+
+[release.crates.vexil-codegen-rust]
+path              = "crates/vexil-codegen-rust"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = ["vexil-lang"]
+
+[release.crates.vexil-codegen-ts]
+path              = "crates/vexil-codegen-ts"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = ["vexil-lang"]
+
+[release.crates.vexil-store]
+path              = "crates/vexil-store"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = ["vexil-lang", "vexil-runtime"]
+
+[release.crates.vexilc]
+path              = "crates/vexilc"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = ["vexil-lang", "vexil-codegen-rust", "vexil-codegen-ts"]
+
+[release.crates.vexil-bench]
+path    = "crates/vexil-bench"
+publish = false
+track   = false
+
+[llm]
+enabled  = false
+provider = "claude"
+model    = "claude-sonnet-4-6-20250514"
+[llm.features]
+pr_review     = false
+issue_triage  = false
+release_notes = false
