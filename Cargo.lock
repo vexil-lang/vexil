@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-codegen-go"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "test-case",
  "thiserror",
@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-codegen-rust"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "test-case",
  "thiserror",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-codegen-ts"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "test-case",
  "thiserror",
@@ -899,7 +899,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-lang"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "blake3",
  "smol_str",
@@ -909,14 +909,14 @@ dependencies = [
 
 [[package]]
 name = "vexil-runtime"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "vexil-store"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "blake3",
  "smol_str",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "vexilc"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ariadne",
  "notify",
