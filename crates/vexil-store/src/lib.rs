@@ -1,3 +1,8 @@
+//! Schema-driven encoder/decoder with `.vx` text and `.vxb` binary file formats.
+//!
+//! Provides `encode`/`decode` for `Value` trees, human-readable `.vx` text format,
+//! and typed `.vxb` binary format with schema hash verification.
+
 pub mod convert;
 pub(crate) mod decoder;
 pub(crate) mod detect;

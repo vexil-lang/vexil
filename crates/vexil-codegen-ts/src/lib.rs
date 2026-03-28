@@ -1,3 +1,8 @@
+//! TypeScript code generation backend for the Vexil schema compiler.
+//!
+//! Generates TypeScript interfaces and encode/decode functions that use
+//! the `@vexil-lang/runtime` npm package for wire I/O.
+
 pub mod backend;
 pub mod delta;
 pub mod emit;

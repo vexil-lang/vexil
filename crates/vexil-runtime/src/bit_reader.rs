@@ -84,7 +84,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 2] = self.data[self.byte_pos..self.byte_pos + 2]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 2;
         Ok(u16::from_le_bytes(bytes))
     }
@@ -97,7 +97,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 4;
         Ok(u32::from_le_bytes(bytes))
     }
@@ -110,7 +110,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 8;
         Ok(u64::from_le_bytes(bytes))
     }
@@ -134,7 +134,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 2] = self.data[self.byte_pos..self.byte_pos + 2]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 2;
         Ok(i16::from_le_bytes(bytes))
     }
@@ -147,7 +147,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 4;
         Ok(i32::from_le_bytes(bytes))
     }
@@ -160,7 +160,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 8;
         Ok(i64::from_le_bytes(bytes))
     }
@@ -173,7 +173,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 4] = self.data[self.byte_pos..self.byte_pos + 4]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 4;
         Ok(f32::from_le_bytes(bytes))
     }
@@ -186,7 +186,7 @@ impl<'a> BitReader<'a> {
         }
         let bytes: [u8; 8] = self.data[self.byte_pos..self.byte_pos + 8]
             .try_into()
-            .unwrap();
+            .map_err(|_| DecodeError::UnexpectedEof)?;
         self.byte_pos += 8;
         Ok(f64::from_le_bytes(bytes))
     }

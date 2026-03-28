@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
 
-/// Returns set of (type_id, field_index) pairs that need Box<T> wrapping.
+/// Returns set of (type_id, field_index) pairs that need `Box<T>` wrapping.
 pub fn detect_boxing(compiled: &CompiledSchema) -> HashSet<(TypeId, usize)> {
     let mut needs_box = HashSet::new();
     for &id in &compiled.declarations {

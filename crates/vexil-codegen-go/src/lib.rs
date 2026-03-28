@@ -1,3 +1,8 @@
+//! Go code generation backend for the Vexil schema compiler.
+//!
+//! Generates Go structs implementing the `Packer`/`Unpacker` interfaces
+//! from the `github.com/vexil-lang/vexil/packages/runtime-go` module.
+
 pub mod backend;
 pub mod delta;
 pub mod emit;

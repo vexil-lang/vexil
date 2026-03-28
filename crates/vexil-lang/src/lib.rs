@@ -73,6 +73,7 @@ use ast::Schema;
 ///
 /// Contains the parsed AST (if parsing succeeded) and any diagnostics
 /// produced during lexing, parsing, and validation.
+#[derive(Debug)]
 pub struct ParseResult {
     /// The parsed schema AST, or `None` if a fatal parse error occurred.
     pub schema: Option<Schema>,
@@ -102,6 +103,7 @@ pub fn parse(source: &str) -> ParseResult {
 ///
 /// Contains both the source-faithful AST and the lowered/type-checked IR,
 /// along with all diagnostics produced at every stage.
+#[derive(Debug)]
 pub struct CompileResult {
     /// The parsed schema AST, or `None` if a fatal parse error occurred.
     pub schema: Option<Schema>,

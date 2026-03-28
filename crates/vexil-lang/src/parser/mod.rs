@@ -70,7 +70,7 @@ impl<'s> Parser<'s> {
         std::mem::discriminant(self.peek_kind()) == std::mem::discriminant(kind)
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for LSP integration
     pub(crate) fn at_ident(&self, name: &str) -> bool {
         matches!(self.peek_kind(), TokenKind::Ident(s) if s.as_str() == name)
     }
@@ -79,7 +79,7 @@ impl<'s> Parser<'s> {
         matches!(self.peek_kind(), TokenKind::Eof)
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for LSP integration
     pub(crate) fn expect(&mut self, kind: &TokenKind) -> Option<Token> {
         if self.at(kind) {
             Some(self.advance())
@@ -94,12 +94,12 @@ impl<'s> Parser<'s> {
         }
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for LSP integration
     pub(crate) fn checkpoint(&self) -> (usize, usize) {
         (self.pos, self.diagnostics.len())
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Reserved for LSP integration
     pub(crate) fn backtrack(&mut self, cp: (usize, usize)) {
         self.pos = cp.0;
         self.diagnostics.truncate(cp.1);
@@ -535,7 +535,7 @@ fn skip_import(p: &mut Parser<'_>) {
 
 /// Skip past a declaration. Advances through nested braces until we hit the
 /// next declaration keyword or EOF.
-#[allow(dead_code)]
+#[allow(dead_code)] // Reserved for LSP integration
 fn skip_decl(p: &mut Parser<'_>) {
     p.advance(); // consume decl keyword
 

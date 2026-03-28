@@ -17,6 +17,7 @@ export class SchemaHandshake {
     public readonly version: string,
   ) {}
 
+  /** Encode this handshake (hash + version) into a wire-format byte array. */
   encode(): Uint8Array {
     const w = new BitWriter();
     w.writeRawBytes(this.hash);
@@ -24,6 +25,7 @@ export class SchemaHandshake {
     return w.finish();
   }
 
+  /** Decode a wire-format byte array into a SchemaHandshake. */
   static decode(bytes: Uint8Array): SchemaHandshake {
     const r = new BitReader(bytes);
     const hash = r.readRawBytes(32);
@@ -31,6 +33,7 @@ export class SchemaHandshake {
     return new SchemaHandshake(hash, version);
   }
 
+  /** Compare this handshake against a remote one, returning match or mismatch details. */
   check(remote: SchemaHandshake): HandshakeResult {
     const match_ =
       this.hash.length === remote.hash.length &&

@@ -3,8 +3,8 @@
 //! Schema compatibility checker for detecting breaking and compatible changes
 //! between two compiled Vexil schemas (spec section 10).
 //!
-//! Given an "old" and "new" [`CompiledSchema`], [`check()`] produces a
-//! [`CompatReport`] listing every change, its classification, and the overall
+//! Given an "old" and "new" [`CompiledSchema`], `check()` produces a
+//! `CompatReport` listing every change, its classification, and the overall
 //! suggested version bump.
 
 use crate::ir::{

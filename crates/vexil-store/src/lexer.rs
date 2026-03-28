@@ -41,7 +41,7 @@ pub struct Spanned {
 }
 
 pub struct Lexer<'a> {
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Retained for future error reporting with source context
     input: &'a str,
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     line: usize,

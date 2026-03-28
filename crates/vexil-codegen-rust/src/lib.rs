@@ -1,3 +1,15 @@
+//! Rust code generation backend for the Vexil schema compiler.
+//!
+//! Implements the [`CodegenBackend`](vexil_lang::codegen::CodegenBackend) trait,
+//! generating Rust structs with `Pack`/`Unpack` implementations for wire encoding.
+//!
+//! # Usage
+//!
+//! ```ignore
+//! let result = vexil_lang::compile(source);
+//! let code = vexil_codegen_rust::generate(&result.compiled.unwrap());
+//! ```
+
 pub mod annotations;
 pub mod backend;
 pub mod boxing;
