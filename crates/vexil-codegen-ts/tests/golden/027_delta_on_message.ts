@@ -11,6 +11,7 @@ export interface Telemetry {
   value: number;
   label: string;
   count: number;
+  _unknown: Uint8Array;
 }
 
 export function encodeTelemetry(v: Telemetry, w: BitWriter): void {
@@ -19,6 +20,9 @@ export function encodeTelemetry(v: Telemetry, w: BitWriter): void {
   w.writeString(v.label);
   w.writeLeb128(v.count);
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeTelemetry(r: BitReader): Telemetry {
@@ -27,7 +31,8 @@ export function decodeTelemetry(r: BitReader): Telemetry {
   const label = r.readString();
   const count = r.readLeb128();
   r.flushToByteBoundary();
-  return { timestamp, value, label, count };
+  const _unknown = r.readRemaining();
+  return { timestamp, value, label, count, _unknown };
 }
 
 export class TelemetryEncoder {
@@ -47,6 +52,9 @@ export class TelemetryEncoder {
     w.writeLeb128(delta_count);
     this.prevcount = v.count;
     w.flushToByteBoundary();
+    if (v._unknown.length > 0) {
+      w.writeRawBytes(v._unknown);
+    }
   }
 
   reset(): void {
@@ -73,7 +81,8 @@ export class TelemetryDecoder {
     const count = (this.prevcount + delta_count) >>> 0;
     this.prevcount = count;
     r.flushToByteBoundary();
-    return { timestamp, value, label, count };
+    const _unknown = r.readRemaining();
+    return { timestamp, value, label, count, _unknown };
   }
 
   reset(): void {

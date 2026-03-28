@@ -10,6 +10,7 @@ pub const SCHEMA_HASH: [u8; 32] = [0xa1, 0x25, 0xcb, 0x50, 0x29, 0x3e, 0xa3, 0x2
 pub struct TreeNode {
     pub value: i32,
     pub children: Vec<TreeNode>,
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for TreeNode {
@@ -22,6 +23,9 @@ impl vexil_runtime::Pack for TreeNode {
             w.leave_recursive();
         }
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -38,9 +42,11 @@ impl vexil_runtime::Unpack for TreeNode {
             children.push(children_item);
         }
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
             value,
             children,
+            _unknown,
         })
     }
 }
@@ -51,6 +57,7 @@ impl vexil_runtime::Unpack for TreeNode {
 pub struct LinkedList {
     pub value: String,
     pub next: Option<Box<LinkedList>>,
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for LinkedList {
@@ -64,6 +71,9 @@ impl vexil_runtime::Pack for LinkedList {
             w.leave_recursive();
         }
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -84,9 +94,11 @@ impl vexil_runtime::Unpack for LinkedList {
         }
 ;
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
             value,
             next,
+            _unknown,
         })
     }
 }
@@ -96,6 +108,7 @@ impl vexil_runtime::Unpack for LinkedList {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
     pub kind: Box<ExprKind>,
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for Expr {
@@ -104,6 +117,9 @@ impl vexil_runtime::Pack for Expr {
         self.kind.pack(w)?;
         w.leave_recursive();
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -114,8 +130,10 @@ impl vexil_runtime::Unpack for Expr {
         let kind = vexil_runtime::Unpack::unpack(r)?;
         r.leave_recursive();
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
             kind,
+            _unknown,
         })
     }
 }

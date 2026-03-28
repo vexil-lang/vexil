@@ -344,6 +344,30 @@ describe('BitReader', () => {
     });
   });
 
+  describe('readRemaining', () => {
+    it('reads remaining bytes after partial decode', () => {
+      const r = new BitReader(new Uint8Array([0x2a, 0x00, 0x00, 0x00, 0x63, 0x00]));
+      r.readU32();
+      const remaining = r.readRemaining();
+      expect(remaining.length).toBe(2);
+      expect(remaining[0]).toBe(0x63);
+      expect(remaining[1]).toBe(0x00);
+    });
+
+    it('returns empty when fully consumed', () => {
+      const r = new BitReader(new Uint8Array([0x2a, 0x00, 0x00, 0x00]));
+      r.readU32();
+      const remaining = r.readRemaining();
+      expect(remaining.length).toBe(0);
+    });
+
+    it('reads all bytes from start', () => {
+      const r = new BitReader(new Uint8Array([0x01, 0x02, 0x03]));
+      const remaining = r.readRemaining();
+      expect(remaining).toEqual(new Uint8Array([0x01, 0x02, 0x03]));
+    });
+  });
+
   describe('trailing bytes tolerance', () => {
     it('does not reject trailing bytes', () => {
       // Simulate v2-encoded message read by v1 decoder

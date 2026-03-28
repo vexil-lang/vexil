@@ -256,6 +256,19 @@ impl<'a> BitReader<'a> {
         Ok(bytes)
     }
 
+    /// Read all remaining bytes from the current position to the end.
+    /// Flushes to byte boundary first. Returns an empty Vec if no bytes remain.
+    pub fn read_remaining(&mut self) -> Vec<u8> {
+        self.flush_to_byte_boundary();
+        let remaining = self.data.len().saturating_sub(self.byte_pos);
+        if remaining == 0 {
+            return Vec::new();
+        }
+        let result = self.data[self.byte_pos..].to_vec();
+        self.byte_pos = self.data.len();
+        result
+    }
+
     /// Increment recursion depth; return error if limit exceeded.
     pub fn enter_recursive(&mut self) -> Result<(), DecodeError> {
         self.recursion_depth += 1;
@@ -406,6 +419,32 @@ mod tests {
         r.flush_to_byte_boundary();
         // Remaining bytes (0x63, 0x00) must not cause error.
         // BitReader can be dropped with unread data — no panic.
+    }
+
+    #[test]
+    fn read_remaining_after_partial_decode() {
+        let data = [0x2a, 0x00, 0x00, 0x00, 0x63, 0x00];
+        let mut r = BitReader::new(&data);
+        let _x = r.read_u32().unwrap();
+        let remaining = r.read_remaining();
+        assert_eq!(remaining, vec![0x63, 0x00]);
+    }
+
+    #[test]
+    fn read_remaining_when_fully_consumed() {
+        let data = [0x2a, 0x00, 0x00, 0x00];
+        let mut r = BitReader::new(&data);
+        let _x = r.read_u32().unwrap();
+        let remaining = r.read_remaining();
+        assert!(remaining.is_empty());
+    }
+
+    #[test]
+    fn read_remaining_from_start() {
+        let data = [0x01, 0x02, 0x03];
+        let mut r = BitReader::new(&data);
+        let remaining = r.read_remaining();
+        assert_eq!(remaining, vec![0x01, 0x02, 0x03]);
     }
 
     #[test]

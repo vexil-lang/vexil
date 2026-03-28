@@ -354,6 +354,20 @@ export class BitReader {
   }
 
   /**
+   * Read all remaining bytes from the current position to the end.
+   * Flushes to byte boundary first. Returns an empty Uint8Array if no bytes remain.
+   */
+  readRemaining(): Uint8Array {
+    this.flushToByteBoundary();
+    if (this.bytePos >= this.data.length) {
+      return new Uint8Array(0);
+    }
+    const result = this.data.slice(this.bytePos);
+    this.bytePos = this.data.length;
+    return result;
+  }
+
+  /**
    * Increment recursion depth; throws if limit exceeded.
    */
   enterNested(): void {

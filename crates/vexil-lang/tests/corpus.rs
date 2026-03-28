@@ -167,6 +167,11 @@ fn valid_027_delta_on_message() {
     parse_valid("027_delta_on_message.vexil");
 }
 
+#[test]
+fn valid_028_typed_tombstone() {
+    parse_valid("028_typed_tombstone.vexil");
+}
+
 // Structure errors
 #[test]
 fn invalid_001_missing_namespace() {

@@ -305,6 +305,7 @@ pub enum DefaultValue {
 pub struct Tombstone {
     pub ordinal: Spanned<u32>,
     pub args: Vec<TombstoneArg>,
+    pub original_type: Option<Spanned<TypeExpr>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

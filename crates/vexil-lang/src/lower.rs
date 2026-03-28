@@ -288,7 +288,7 @@ fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) 
     for item in &msg.body {
         match item {
             MessageBodyItem::Field(f) => fields.push(lower_field(&f.node, f.span, ctx)),
-            MessageBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span)),
+            MessageBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span, ctx)),
         }
     }
 
@@ -336,7 +336,7 @@ fn lower_field(field: &MessageField, span: Span, ctx: &mut LowerCtx) -> FieldDef
     }
 }
 
-fn lower_enum(en: &crate::ast::EnumDecl, span: Span, _ctx: &mut LowerCtx) -> EnumDef {
+fn lower_enum(en: &crate::ast::EnumDecl, span: Span, ctx: &mut LowerCtx) -> EnumDef {
     // Preserve the explicit backing type as-is; None means auto-sized.
     let backing = en.backing.as_ref().map(|b| b.node.clone());
     let mut variants = Vec::new();
@@ -351,7 +351,7 @@ fn lower_enum(en: &crate::ast::EnumDecl, span: Span, _ctx: &mut LowerCtx) -> Enu
                     annotations: resolve_annotations(&v.node.annotations),
                 });
             }
-            EnumBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span)),
+            EnumBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span, ctx)),
         }
     }
     EnumDef {
@@ -365,7 +365,7 @@ fn lower_enum(en: &crate::ast::EnumDecl, span: Span, _ctx: &mut LowerCtx) -> Enu
     }
 }
 
-fn lower_flags(flags: &crate::ast::FlagsDecl, span: Span, _ctx: &mut LowerCtx) -> FlagsDef {
+fn lower_flags(flags: &crate::ast::FlagsDecl, span: Span, ctx: &mut LowerCtx) -> FlagsDef {
     let mut bits = Vec::new();
     let mut tombstones = Vec::new();
     for item in &flags.body {
@@ -378,7 +378,7 @@ fn lower_flags(flags: &crate::ast::FlagsDecl, span: Span, _ctx: &mut LowerCtx) -
                     annotations: resolve_annotations(&b.node.annotations),
                 });
             }
-            FlagsBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span)),
+            FlagsBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span, ctx)),
         }
     }
     FlagsDef {
@@ -403,7 +403,7 @@ fn lower_union(un: &crate::ast::UnionDecl, span: Span, ctx: &mut LowerCtx) -> Un
                     match body_item {
                         MessageBodyItem::Field(f) => fields.push(lower_field(&f.node, f.span, ctx)),
                         MessageBodyItem::Tombstone(t) => {
-                            tombstones.push(lower_tombstone(&t.node, t.span))
+                            tombstones.push(lower_tombstone(&t.node, t.span, ctx))
                         }
                     }
                 }
@@ -416,7 +416,9 @@ fn lower_union(un: &crate::ast::UnionDecl, span: Span, ctx: &mut LowerCtx) -> Un
                     annotations: resolve_annotations(&v.node.annotations),
                 });
             }
-            UnionBodyItem::Tombstone(t) => top_tombstones.push(lower_tombstone(&t.node, t.span)),
+            UnionBodyItem::Tombstone(t) => {
+                top_tombstones.push(lower_tombstone(&t.node, t.span, ctx))
+            }
         }
     }
     UnionDef {
@@ -700,7 +702,11 @@ fn extract_first_int_arg(ann: &Annotation) -> Option<u64> {
     })
 }
 
-fn lower_tombstone(tombstone: &crate::ast::Tombstone, span: Span) -> TombstoneDef {
+fn lower_tombstone(
+    tombstone: &crate::ast::Tombstone,
+    span: Span,
+    ctx: &mut LowerCtx,
+) -> TombstoneDef {
     let reason = tombstone
         .args
         .iter()
@@ -725,11 +731,16 @@ fn lower_tombstone(tombstone: &crate::ast::Tombstone, span: Span) -> TombstoneDe
             None
         }
     });
+    let original_type = tombstone
+        .original_type
+        .as_ref()
+        .map(|t| resolve_type_expr(&t.node, t.span, ctx));
     TombstoneDef {
         span,
         ordinal: tombstone.ordinal.node,
         reason,
         since,
+        original_type,
     }
 }
 

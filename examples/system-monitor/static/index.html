@@ -117,7 +117,7 @@
 </div>
 
 <script type="module">
-import { SystemSnapshotDecoder, BitReader } from './bundle.js';
+import { SystemSnapshotDecoder, BitReader, SchemaHandshake, SCHEMA_HASH } from './bundle.js';
 
 const decoder = new SystemSnapshotDecoder();
 
@@ -126,23 +126,44 @@ function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.binaryType = 'arraybuffer';
 
-  ws.onopen = () => { el.textContent = 'live'; el.className = 'ok'; };
-  ws.onclose = () => {
-    el.textContent = 'reconnecting...'; el.className = 'err';
-    decoder.reset();
-    setTimeout(connect, 2000);
+  ws.onopen = () => {
+    // Send schema handshake as first message
+    const hs = new SchemaHandshake(SCHEMA_HASH, '1.0.0');
+    ws.send(hs.encode());
+    el.textContent = 'handshaking...';
+    el.className = '';
   };
-  ws.onerror = () => ws.close();
 
   ws.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      // Text message = error from server (schema mismatch)
+      el.textContent = e.data;
+      el.className = 'err';
+      ws.close();
+      return;
+    }
+
+    // Binary message = telemetry frame
+    el.textContent = 'live';
+    el.className = 'ok';
     const bytes = new Uint8Array(e.data);
     document.getElementById('wire-size').textContent = bytes.length;
     try {
       const r = new BitReader(bytes);
       const s = decoder.decode(r);
       render(s);
-    } catch(err) { console.error('decode error', err); }
+    } catch(err) {
+      console.error('decode error', err);
+    }
   };
+
+  ws.onclose = () => {
+    el.textContent = 'reconnecting...';
+    el.className = 'err';
+    decoder.reset();
+    setTimeout(connect, 2000);
+  };
+  ws.onerror = () => ws.close();
 }
 
 function render(s) {

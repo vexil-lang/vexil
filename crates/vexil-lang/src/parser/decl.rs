@@ -349,8 +349,24 @@ fn parse_tombstone(p: &mut Parser<'_>) -> Spanned<Tombstone> {
         );
     }
 
+    // Optional original type annotation: `: u32`, `: string`, etc.
+    let original_type = if p.at(&TokenKind::Colon) {
+        p.advance(); // consume ':'
+        let ty = parse_type_expr(p);
+        Some(ty)
+    } else {
+        None
+    };
+
     let span = p.span_from(start);
-    Spanned::new(Tombstone { ordinal, args }, span)
+    Spanned::new(
+        Tombstone {
+            ordinal,
+            args,
+            original_type,
+        },
+        span,
+    )
 }
 
 // ---------------------------------------------------------------------------

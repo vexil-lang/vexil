@@ -8,11 +8,15 @@ pub const SCHEMA_HASH: [u8; 32] = [0x97, 0xbc, 0xeb, 0x17, 0x56, 0x6b, 0xc1, 0xd
 // ── Empty ──
 #[derive(Debug, Clone, PartialEq)]
 pub struct Empty {
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for Empty {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -20,7 +24,9 @@ impl vexil_runtime::Pack for Empty {
 impl vexil_runtime::Unpack for Empty {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
+            _unknown,
         })
     }
 }
@@ -32,6 +38,7 @@ pub struct WithGaps {
     pub first: u32,
     pub third: u32,
     pub tenth: String,
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for WithGaps {
@@ -40,6 +47,9 @@ impl vexil_runtime::Pack for WithGaps {
         w.write_u32(self.third);
         w.write_string(&self.tenth);
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -50,10 +60,12 @@ impl vexil_runtime::Unpack for WithGaps {
         let third = r.read_u32()?;
         let tenth = r.read_string()?;
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
             first,
             third,
             tenth,
+            _unknown,
         })
     }
 }
@@ -63,12 +75,16 @@ impl vexil_runtime::Unpack for WithGaps {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annotated {
     pub version: u8,
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for Annotated {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.write_u8(self.version);
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -77,8 +93,10 @@ impl vexil_runtime::Unpack for Annotated {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let version = r.read_u8()?;
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
             version,
+            _unknown,
         })
     }
 }
@@ -94,6 +112,7 @@ pub struct FieldAnnotations {
     pub c: String,
     /// @since 1.0.0
     pub d: i32,
+    pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for FieldAnnotations {
@@ -104,6 +123,9 @@ impl vexil_runtime::Pack for FieldAnnotations {
         w.write_string(&self.c);
         w.write_i32(self.d);
         w.flush_to_byte_boundary();
+        if !self._unknown.is_empty() {
+            w.write_raw_bytes(&self._unknown);
+        }
         Ok(())
     }
 }
@@ -117,11 +139,13 @@ impl vexil_runtime::Unpack for FieldAnnotations {
         if c.len() as u64 > 1024_u64 { return Err(vexil_runtime::DecodeError::LimitExceeded { field: "c", limit: 1024_u64, actual: c.len() as u64 }); }
         let d = r.read_i32()?;
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(Self {
             a,
             b,
             c,
             d,
+            _unknown,
         })
     }
 }
@@ -146,6 +170,9 @@ impl FieldAnnotationsEncoder {
         w.write_i32(delta_d);
         self.prev_d = val.d;
         w.flush_to_byte_boundary();
+        if !val._unknown.is_empty() {
+            w.write_raw_bytes(&val._unknown);
+        }
         Ok(())
     }
 
@@ -175,11 +202,13 @@ impl FieldAnnotationsDecoder {
         let d = self.prev_d.wrapping_add(delta_d);
         self.prev_d = d;
         r.flush_to_byte_boundary();
+        let _unknown = r.read_remaining();
         Ok(FieldAnnotations {
             a,
             b,
             c,
             d,
+            _unknown,
         })
     }
 
