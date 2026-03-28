@@ -1,7 +1,7 @@
 name: Publish @vexil-lang/runtime to npm
 
 # Triggered when a vexil-runtime tag is pushed.
-# Uses npm trusted publishing (OIDC provenance) — no static NPM_TOKEN needed.
+# Uses npm trusted publishing (OIDC provenance).
 # Configure trusted publisher on npmjs.com:
 #   Package settings → Trusted publishers → Add:
 #     owner: vexil-lang, repo: vexil, workflow: npm-publish.yml
@@ -55,7 +55,5 @@ jobs:
 
       - name: Publish with provenance
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
