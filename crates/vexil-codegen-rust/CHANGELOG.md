@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.1] - 2026-03-28
+
+### Fixed
+
+- fix: code quality polish — remove unwrap, fix rustdoc, add crate docs, add derives
+
+### Other
+
+- chore(release): v0.4.1
+
 ## [0.3.0] - 2026-03-28
 
 ### Added
