@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a TypeScript codegen backend, `@vexil/runtime` npm package, compliance test vectors, benchmark suite, and encoding edge-case spec additions — validating the wire format for downstream consumers.
+**Goal:** Ship a TypeScript codegen backend, `@vexil-lang/runtime` npm package, compliance test vectors, benchmark suite, and encoding edge-case spec additions — validating the wire format for downstream consumers.
 
 **Architecture:** One feature branch (`feature/ts-backend-and-compliance`) with 8 task groups in dependency order. Spec-first: normative additions land before any implementation. Compliance vectors are the shared contract between Rust and TypeScript. All TS work at `packages/runtime-ts/`.
 
-**Tech Stack:** Rust (workspace), TypeScript (ES2022, Vitest), npm (`@vexil/runtime`), Criterion (benchmarks).
+**Tech Stack:** Rust (workspace), TypeScript (ES2022, Vitest), npm (`@vexil-lang/runtime`), Criterion (benchmarks).
 
 **Spec reference:** `docs/superpowers/specs/2026-03-27-ts-backend-and-compliance-design.md`
 
@@ -1357,7 +1357,7 @@ git commit -m "test: golden byte compliance validator and evolution roundtrip te
 
 ---
 
-## Task 9: `@vexil/runtime` TypeScript Package — Project Setup
+## Task 9: `@vexil-lang/runtime` TypeScript Package — Project Setup
 
 **Files:**
 - Create: `packages/runtime-ts/package.json`
@@ -1369,7 +1369,7 @@ git commit -m "test: golden byte compliance validator and evolution roundtrip te
 
 ```json
 {
-  "name": "@vexil/runtime",
+  "name": "@vexil-lang/runtime",
   "version": "0.2.0",
   "description": "Runtime support for Vexil generated code — bit-level I/O and wire encoding primitives",
   "type": "module",
@@ -1440,12 +1440,12 @@ Expected: `node_modules/` created, `package-lock.json` generated.
 git add packages/runtime-ts/package.json packages/runtime-ts/tsconfig.json \
         packages/runtime-ts/vitest.config.ts packages/runtime-ts/src/index.ts \
         packages/runtime-ts/package-lock.json
-git commit -m "feat(@vexil/runtime): initialize TypeScript runtime package"
+git commit -m "feat(@vexil-lang/runtime): initialize TypeScript runtime package"
 ```
 
 ---
 
-## Task 10: `@vexil/runtime` — BitWriter
+## Task 10: `@vexil-lang/runtime` — BitWriter
 
 **Files:**
 - Create: `packages/runtime-ts/src/bit-writer.ts`
@@ -1744,12 +1744,12 @@ Expected: All BitWriter tests pass.
 
 ```bash
 git add packages/runtime-ts/src/bit-writer.ts packages/runtime-ts/tests/bit-writer.test.ts
-git commit -m "feat(@vexil/runtime): implement BitWriter with LSB-first bitpack"
+git commit -m "feat(@vexil-lang/runtime): implement BitWriter with LSB-first bitpack"
 ```
 
 ---
 
-## Task 11: `@vexil/runtime` — BitReader
+## Task 11: `@vexil-lang/runtime` — BitReader
 
 **Files:**
 - Create: `packages/runtime-ts/src/bit-reader.ts`
@@ -2060,12 +2060,12 @@ Expected: All BitReader and BitWriter tests pass.
 
 ```bash
 git add packages/runtime-ts/src/bit-reader.ts packages/runtime-ts/tests/bit-reader.test.ts
-git commit -m "feat(@vexil/runtime): implement BitReader with LSB-first bitpack"
+git commit -m "feat(@vexil-lang/runtime): implement BitReader with LSB-first bitpack"
 ```
 
 ---
 
-## Task 12: `@vexil/runtime` — Compliance Tests Against Golden Vectors
+## Task 12: `@vexil-lang/runtime` — Compliance Tests Against Golden Vectors
 
 **Files:**
 - Create: `packages/runtime-ts/tests/compliance.test.ts`
@@ -2187,7 +2187,7 @@ Expected: All pass — TS encode/decode matches Rust golden vectors.
 
 ```bash
 git add packages/runtime-ts/tests/compliance.test.ts
-git commit -m "test(@vexil/runtime): compliance tests against golden byte vectors"
+git commit -m "test(@vexil-lang/runtime): compliance tests against golden byte vectors"
 ```
 
 ---
@@ -2364,7 +2364,7 @@ impl CodegenBackend for TypeScriptBackend {
 /// Generate TypeScript code for a single compiled schema.
 pub fn generate(compiled: &CompiledSchema) -> String {
     let mut w = emit::CodeWriter::new();
-    w.line("import { BitReader, BitWriter } from '@vexil/runtime';");
+    w.line("import { BitReader, BitWriter } from '@vexil-lang/runtime';");
     w.blank();
 
     // TODO: implemented in subsequent tasks
@@ -2912,7 +2912,7 @@ Read each golden file and verify:
 - Encode/decode functions reference correct BitWriter/BitReader methods
 - Enums use string literal unions + const objects
 - Recursive types include `enterNested()`/`leaveNested()` calls
-- Imports are present (`import { BitReader, BitWriter } from '@vexil/runtime'`)
+- Imports are present (`import { BitReader, BitWriter } from '@vexil-lang/runtime'`)
 
 - [ ] **Step 5: Run golden tests without UPDATE_GOLDEN**
 

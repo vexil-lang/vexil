@@ -5,7 +5,7 @@
 ### Added
 
 - feat(vexil-runtime): add SchemaHandshake for connection-time identity checking
-- feat(@vexil/runtime): add SchemaHandshake for connection-time identity checking
+- feat(@vexil-lang/runtime): add SchemaHandshake for connection-time identity checking
 - feat(runtime): add read_remaining()/readRemaining() to BitReader
 
 ### Documentation

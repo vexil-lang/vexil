@@ -8,7 +8,7 @@ the generated `SystemSnapshotEncoder`, and sends compact binary frames
 over WebSocket every second.
 
 **Browser dashboard** decodes the binary frame using the generated
-`SystemSnapshotDecoder` (bundled via esbuild from `@vexil/runtime`)
+`SystemSnapshotDecoder` (bundled via esbuild from `@vexil-lang/runtime`)
 and renders live CPU bars, memory usage, and per-core utilization.
 
 ## @delta encoding

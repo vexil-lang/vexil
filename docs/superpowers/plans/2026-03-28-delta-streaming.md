@@ -46,7 +46,7 @@ corpus/
 examples/
   system-monitor/
     schema/telemetry.vexil                           # MODIFY: add @delta on message
-    package.json                                     # NEW: esbuild + @vexil/runtime deps
+    package.json                                     # NEW: esbuild + @vexil-lang/runtime deps
     ts/
       generated.ts                                   # NEW: vexilc --target typescript output
     static/
@@ -874,7 +874,7 @@ Expected: All pass.
 
 ```bash
 git add packages/runtime-ts/tests/delta-compliance.test.ts
-git commit -m "test(@vexil/runtime): delta encoding compliance tests"
+git commit -m "test(@vexil-lang/runtime): delta encoding compliance tests"
 ```
 
 ---
@@ -944,7 +944,7 @@ Create `examples/system-monitor/package.json`:
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "@vexil/runtime": "file:../../packages/runtime-ts"
+    "@vexil-lang/runtime": "file:../../packages/runtime-ts"
   }
 }
 ```
@@ -958,7 +958,7 @@ npm install
 npm run bundle
 ```
 
-This creates `static/bundle.js` containing the generated decoder + `@vexil/runtime`.
+This creates `static/bundle.js` containing the generated decoder + `@vexil-lang/runtime`.
 
 - [ ] **Step 6: Update main.rs to use stateful encoder**
 

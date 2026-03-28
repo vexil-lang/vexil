@@ -4,7 +4,7 @@ members = ["crates/vexil-lang", "crates/vexilc", "crates/vexil-runtime", "crates
 exclude = ["examples/sensor-packet", "examples/command-protocol", "examples/multi-file-project", "examples/cross-language/rust-device", "examples/system-monitor"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.4.1"
 edition = "2021"
 rust-version = "1.94"
 license = "MIT OR Apache-2.0"

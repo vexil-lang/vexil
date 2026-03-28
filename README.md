@@ -84,7 +84,7 @@ const decoded = decodeSensorReading(r);
 - `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), and `@delta` (per-field delta from previous value) are declared in the schema
 - Six declaration kinds: `message`, `enum`, `flags`, `union`, `newtype`, `config`
 - BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
-- Rust and TypeScript backends from the same schema, byte-identical output verified by compliance vectors
+- Rust, TypeScript, and Go backends from the same schema, byte-identical output verified by compliance vectors
 - Same data always produces the same bytes, enabling content addressing and replay detection
 - Every invalid input yields a distinct error with file, line, column, and a human-readable description
 - 83-file conformance corpus (27 valid, 56 invalid) that any implementation must pass
@@ -101,7 +101,7 @@ const decoded = decodeSensorReading(r);
 | Zero-copy decode | No | No | **Yes** | **Yes** |
 | Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
 | Schema evolution | Partial | **Yes** | **Yes** | **Yes** |
-| Language targets | Rust, TS | **Many** | **Many** | **Many** |
+| Language targets | Rust, TS, Go | **Many** | **Many** | **Many** |
 
 ## Install
 
@@ -130,6 +130,7 @@ vexilc check schema.vexil
 # Generate code
 vexilc codegen schema.vexil --output out.rs                    # Rust (default)
 vexilc codegen schema.vexil --output out.ts --target typescript # TypeScript
+vexilc codegen schema.vexil --output out.go --target go         # Go
 
 # Compile a multi-file project
 vexilc build root.vexil --include ./schemas --output ./generated
@@ -154,7 +155,7 @@ Error: duplicate field name
 
 ```toml
 [dependencies]
-vexil-lang = "0.2"
+vexil-lang = "0.4"
 ```
 
 ```rust
@@ -186,6 +187,7 @@ crates/
   vexil-lang/            # Compiler: lexer, parser, IR, type checker, canonical hash
   vexil-codegen-rust/    # Rust code generation
   vexil-codegen-ts/      # TypeScript code generation
+  vexil-codegen-go/      # Go code generation
   vexil-runtime/         # Rust runtime: BitWriter/BitReader, Pack/Unpack, LEB128, ZigZag
   vexilc/                # CLI with ariadne error rendering
   vexil-store/           # .vx text and .vxb binary file formats
@@ -206,7 +208,7 @@ examples/
 - [FAQ](FAQ.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
-- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-store](https://docs.rs/vexil-store)
+- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
 

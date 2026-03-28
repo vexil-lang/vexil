@@ -2,7 +2,7 @@
 
 TypeScript code generation backend for the [Vexil](https://github.com/vexil-lang/vexil) schema compiler.
 
-Takes a `CompiledSchema` from [`vexil-lang`](https://crates.io/crates/vexil-lang) and emits TypeScript interfaces, encode functions, and decode functions. Generated code depends on [`@vexil/runtime`](https://www.npmjs.com/package/@vexil/runtime) for bit-level I/O.
+Takes a `CompiledSchema` from [`vexil-lang`](https://crates.io/crates/vexil-lang) and emits TypeScript interfaces, encode functions, and decode functions. Generated code depends on [`@vexil-lang/runtime`](https://www.npmjs.com/package/@vexil-lang/runtime) for bit-level I/O.
 
 ## Single file
 
