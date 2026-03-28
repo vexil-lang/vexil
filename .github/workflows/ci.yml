@@ -79,6 +79,26 @@ jobs:
       - name: Test
         run: npm test
 
+  # ── Go runtime tests ──────────────────────────────────────────────────────────
+  # Runs @vexil/runtime-go tests.
+  # Only needs one platform — Go is cross-platform.
+  go-runtime:
+    name: Go runtime
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/runtime-go
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Test
+        run: go test -v ./...
+
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.
   # MSRV is 1.94 (see CLAUDE.md). Only build+test; clippy/fmt use stable toolchain.
