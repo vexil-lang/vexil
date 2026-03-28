@@ -1,6 +1,6 @@
 {
   "name": "@vexil/runtime",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Runtime support for Vexil generated code — bit-level I/O and wire encoding primitives",
   "type": "module",
   "main": "dist/index.js",
