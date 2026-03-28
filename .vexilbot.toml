@@ -3,6 +3,7 @@
 "crate:lang"       = ["crates/vexil-lang/**"]
 "crate:codegen-rs" = ["crates/vexil-codegen-rust/**"]
 "crate:codegen-ts" = ["crates/vexil-codegen-ts/**"]
+"crate:codegen-go" = ["crates/vexil-codegen-go/**"]
 "crate:runtime"    = ["crates/vexil-runtime/**"]
 "crate:store"      = ["crates/vexil-store/**"]
 "crate:cli"        = ["crates/vexilc/**"]
@@ -10,6 +11,7 @@
 "corpus"           = ["corpus/**"]
 "ci"               = [".github/**"]
 "ts-runtime"       = ["packages/runtime-ts/**"]
+"go-runtime"       = ["packages/runtime-go/**"]
 "compliance"       = ["compliance/**"]
 "docs"             = ["docs/**"]
 
@@ -28,7 +30,7 @@ issue_message = "Thanks for opening this issue! We'll triage it soon. If this is
 
 [policy]
 rfc_required_paths       = ["spec/**", "corpus/valid/**", "corpus/invalid/**", "compliance/vectors/**"]
-wire_format_warning_paths = ["crates/vexil-runtime/**", "packages/runtime-ts/src/**", "spec/vexil-spec.md"]
+wire_format_warning_paths = ["crates/vexil-runtime/**", "packages/runtime-ts/src/**", "packages/runtime-go/**", "spec/vexil-spec.md"]
 
 [release]
 changelog_tool = "git-cliff"
@@ -61,6 +63,12 @@ publish           = "crates.io"
 suggest_threshold = 1
 depends_on        = ["vexil-lang"]
 
+[release.crates.vexil-codegen-go]
+path              = "crates/vexil-codegen-go"
+publish           = "crates.io"
+suggest_threshold = 1
+depends_on        = ["vexil-lang"]
+
 [release.crates.vexil-store]
 path              = "crates/vexil-store"
 publish           = "crates.io"
@@ -71,7 +79,7 @@ depends_on        = ["vexil-lang", "vexil-runtime"]
 path              = "crates/vexilc"
 publish           = "crates.io"
 suggest_threshold = 1
-depends_on        = ["vexil-lang", "vexil-codegen-rust", "vexil-codegen-ts"]
+depends_on        = ["vexil-lang", "vexil-codegen-rust", "vexil-codegen-ts", "vexil-codegen-go", "vexil-store"]
 
 [release.crates.vexil-bench]
 path    = "crates/vexil-bench"
