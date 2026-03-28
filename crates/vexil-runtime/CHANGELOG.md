@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0] - 2026-03-28
+
+### Added
+
+- feat(vexil-runtime): add SchemaHandshake for connection-time identity checking
+- feat(@vexil/runtime): add SchemaHandshake for connection-time identity checking
+- feat(runtime): add read_remaining()/readRemaining() to BitReader
+
+### Documentation
+
+- docs: rewrite READMEs, fix stale facts, remove AI patterns
+
+### Other
+
+- chore(release): bump crate versions
+
 All notable changes to this project will be documented in this file.
 
 
