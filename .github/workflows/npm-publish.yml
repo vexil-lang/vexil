@@ -1,7 +1,10 @@
 name: Publish @vexil/runtime to npm
 
-# Triggered when release-plz creates a vexil-runtime tag.
-# This keeps the npm package version in lockstep with the Rust crate.
+# Triggered when a vexil-runtime tag is pushed.
+# Uses npm trusted publishing (OIDC provenance) — no static NPM_TOKEN needed.
+# Configure trusted publisher on npmjs.com:
+#   Package settings → Trusted publishers → Add:
+#     owner: vexil-lang, repo: vexil, workflow: npm-publish.yml
 
 on:
   push:
@@ -10,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -33,7 +37,6 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          # Tag format: vexil-runtime-v0.2.4
           TAG="${GITHUB_REF#refs/tags/vexil-runtime-v}"
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
           echo "Publishing @vexil/runtime@$TAG"
@@ -50,7 +53,7 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Publish
-        run: npm publish --access public
+      - name: Publish with provenance
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
