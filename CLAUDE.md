@@ -167,16 +167,29 @@ Corpus files are named `NNN_description.vexil`. Check the highest existing numbe
 Wire format changes require RFC (14-day comment period per GOVERNANCE.md).
 Corpus file additions are non-breaking; modifications to existing files are breaking.
 
-**Tooling:** Releases are fully automated via release-plz + cargo-dist + npm publish.
+**Tooling:** Releases are automated via vexilbot + cargo-dist + npm publish.
 
-- On every push to `main`, release-plz opens/updates a Release PR with version bumps and changelogs
-- Merging the Release PR triggers: crates.io publish (only changed crates) → git tags → cargo-dist binary builds → GitHub Release with artifacts + checksums
-- The `release` job ONLY runs when the commit message starts with `chore(release):` — docs/CI changes won't trigger accidental releases
-- `vexil-runtime-v*` tags also trigger npm publish of `@vexil/runtime` (same version)
-- `release-plz.toml` configures per-crate independent versioning — only crates with changes get bumped
-- `cliff.toml` configures changelog generation from conventional commits
-- `dist-workspace.toml` configures cargo-dist targets and installers
-- Never edit `Cargo.toml` versions by hand — release-plz manages them via the Release PR
+**Release flow:**
+1. Finish your feature PR
+2. Comment `@vexil-bot release` on the PR
+3. Bot merges the PR, then creates ONE atomic release PR with:
+   - Version bumps for all crates with unreleased changes (dependency order)
+   - Cross-crate dependency constraint updates (`^x.y.z`)
+   - Per-crate changelogs (generated from conventional commits)
+   - Summary table showing everything being released
+4. Review and merge the release PR
+5. Git tags trigger: cargo-dist binary builds → crates.io publish → npm publish → GitHub Release
+
+**Commands:**
+- `@vexil-bot release` — merge current PR + create workspace release PR
+- `@vexil-bot release status` — show unreleased changes per crate (no merge)
+- `@vexil-bot release <crate-name>` — release one specific crate
+
+**Configuration:**
+- `.vexilbot.toml` in repo root — crate definitions, dependency graph, label rules, policy settings
+- `dist-workspace.toml` — cargo-dist targets and installers
+- `vexil-runtime-v*` tags trigger npm publish of `@vexil/runtime` via `.github/workflows/npm-publish.yml`
+- Never edit `Cargo.toml` versions by hand — vexilbot manages them via the release PR
 
 ## Git Workflow
 
