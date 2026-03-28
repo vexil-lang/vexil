@@ -8,7 +8,7 @@ use vexil_lang::project::ProjectResult;
 /// TypeScript code-generation backend for Vexil schemas.
 ///
 /// Generates TypeScript interfaces, encode/decode functions, and type-safe
-/// discriminated unions using the `@vexil/runtime` package.
+/// discriminated unions using the `@vexil-lang/runtime` package.
 #[derive(Debug, Clone, Copy)]
 pub struct TypeScriptBackend;
 

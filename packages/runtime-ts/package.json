@@ -1,5 +1,5 @@
 {
-  "name": "@vexil/runtime",
+  "name": "@vexil-lang/runtime",
   "version": "0.4.0",
   "description": "Runtime support for Vexil generated code — bit-level I/O and wire encoding primitives",
   "type": "module",

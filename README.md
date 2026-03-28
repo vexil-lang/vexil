@@ -64,7 +64,7 @@ assert_eq!(decoded.value, 2350);
 The same schema generates TypeScript that produces identical bytes:
 
 ```typescript
-import { BitWriter, BitReader } from '@vexil/runtime';
+import { BitWriter, BitReader } from '@vexil-lang/runtime';
 
 const w = new BitWriter();
 encodeSensorReading({
@@ -191,7 +191,7 @@ crates/
   vexil-store/           # .vx text and .vxb binary file formats
   vexil-bench/           # Encode/decode benchmarks (Criterion)
 packages/
-  runtime-ts/            # @vexil/runtime -- TypeScript BitWriter/BitReader (npm)
+  runtime-ts/            # @vexil-lang/runtime -- TypeScript BitWriter/BitReader (npm)
 examples/
   sensor-packet/         # Sub-byte types, encoding annotations, compact enums
   command-protocol/      # Unions, flags, limits -- RPC-style protocol

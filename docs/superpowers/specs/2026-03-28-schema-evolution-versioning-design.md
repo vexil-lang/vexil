@@ -4,7 +4,7 @@
 
 **Goal:** Make schema evolution safe, detectable, and round-trip preserving — from CI-level breaking change detection to runtime schema negotiation.
 
-**Architecture:** Core compatibility logic in `vexil-lang` (reusable by CLI, library, and future package manager). Runtime changes in `vexil-runtime` and `@vexil/runtime`. Codegen changes in both Rust and TypeScript backends.
+**Architecture:** Core compatibility logic in `vexil-lang` (reusable by CLI, library, and future package manager). Runtime changes in `vexil-runtime` and `@vexil-lang/runtime`. Codegen changes in both Rust and TypeScript backends.
 
 **Tech Stack:** Rust (workspace), TypeScript (runtime), serde_json (CLI JSON output).
 
@@ -303,7 +303,7 @@ pub enum HandshakeResult {
 
 ### TypeScript API
 
-In `@vexil/runtime`:
+In `@vexil-lang/runtime`:
 
 ```typescript
 export class SchemaHandshake {

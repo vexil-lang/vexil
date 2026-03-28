@@ -7,7 +7,7 @@
     "start": "npx tsx src/main.ts"
   },
   "dependencies": {
-    "@vexil/runtime": "file:../../../packages/runtime-ts"
+    "@vexil-lang/runtime": "file:../../../packages/runtime-ts"
   },
   "devDependencies": {
     "tsx": "^4.0.0"

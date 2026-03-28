@@ -28,7 +28,7 @@ crates/
   vexil-bench/                # Benchmark suite (Criterion, publish = false)
   vexilc/                     # CLI: check, codegen, build subcommands
 packages/
-  runtime-ts/                 # @vexil/runtime npm package: TypeScript BitWriter/BitReader
+  runtime-ts/                 # @vexil-lang/runtime npm package: TypeScript BitWriter/BitReader
 docs/
   limitations-and-gaps.md     # Wire format limitations, gaps, room for improvement
   superpowers/specs/          # Design specs (SDK, TS backend, LSP, release model)
@@ -72,7 +72,7 @@ vexil-codegen-ts    TypeScript code generation. Depends on vexil-lang.
 vexil-runtime       Pack/Unpack traits + BitWriter/BitReader.
                     No workspace deps. Used by generated Rust code.
 
-@vexil/runtime      TypeScript npm package at packages/runtime-ts/.
+@vexil-lang/runtime      TypeScript npm package at packages/runtime-ts/.
                     BitWriter/BitReader matching Rust wire format byte-for-byte.
                     Zero dependencies. Used by generated TypeScript code.
 
@@ -188,7 +188,7 @@ Corpus file additions are non-breaking; modifications to existing files are brea
 **Configuration:**
 - `.vexilbot.toml` in repo root — crate definitions, dependency graph, label rules, policy settings
 - `dist-workspace.toml` — cargo-dist targets and installers
-- `vexil-runtime-v*` tags trigger npm publish of `@vexil/runtime` via `.github/workflows/npm-publish.yml`
+- `vexil-runtime-v*` tags trigger npm publish of `@vexil-lang/runtime` via `.github/workflows/npm-publish.yml`
 - Never edit `Cargo.toml` versions by hand — vexilbot manages them via the release PR
 
 ## Git Workflow

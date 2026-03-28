@@ -1,12 +1,12 @@
 # TypeScript Backend and Compliance Infrastructure Design
 
-> **Scope:** Unified plan covering encoding edge-case spec additions, cross-implementation compliance vectors, `@vexil/runtime` TypeScript package, `vexil-codegen-ts` Rust crate, CLI integration, benchmark suite, and limitations documentation. Subsumes and unifies the Phase 0 protocol validation plan (MALT) with the TypeScript backend spec.
+> **Scope:** Unified plan covering encoding edge-case spec additions, cross-implementation compliance vectors, `@vexil-lang/runtime` TypeScript package, `vexil-codegen-ts` Rust crate, CLI integration, benchmark suite, and limitations documentation. Subsumes and unifies the Phase 0 protocol validation plan (MALT) with the TypeScript backend spec.
 
 **Goal:** Ship a complete TypeScript backend for Vexil — codegen crate, runtime package, and compliance infrastructure — while simultaneously validating the wire format's determinism, evolution, and performance characteristics that downstream consumers (starting with MALT/VNP) depend on.
 
 **Architecture:** One feature branch (`feature/ts-backend-and-compliance`) with 8 task groups in strict dependency order. All TypeScript work lives inside the vexil-lang monorepo at `packages/runtime-ts/`. Compliance vectors in `compliance/vectors/` serve as the shared contract between Rust and TypeScript implementations.
 
-**Tech Stack:** Rust (vexil-lang workspace), TypeScript (runtime package), npm (`@vexil/runtime`), Criterion (benchmarks), Vitest (TS tests).
+**Tech Stack:** Rust (vexil-lang workspace), TypeScript (runtime package), npm (`@vexil-lang/runtime`), Criterion (benchmarks), Vitest (TS tests).
 
 **Depends on:** SDK Architecture (v0.2.0) — specifically `CodegenBackend` trait, `CodegenError`, Tier 1 API.
 
@@ -23,7 +23,7 @@
    ↓                          ↘
 4. Compliance Vectors          7. Benchmark Suite (can start after 2)
    ↓
-5. @vexil/runtime TypeScript Package
+5. @vexil-lang/runtime TypeScript Package
    ↓
 6. vexil-codegen-ts + CLI Integration
    ↓
@@ -187,9 +187,9 @@ Integration test in `vexil-codegen-rust` that:
 
 ---
 
-## 5. `@vexil/runtime` TypeScript Package
+## 5. `@vexil-lang/runtime` TypeScript Package
 
-Located at `packages/runtime-ts/`. Published to npm as `@vexil/runtime`.
+Located at `packages/runtime-ts/`. Published to npm as `@vexil-lang/runtime`.
 
 ### API Surface
 
@@ -403,9 +403,9 @@ Updated as new consumers stress-test the format.
 
 ### Single TS runtime serving both compliance and codegen
 
-**Chosen:** One `@vexil/runtime` at `packages/runtime-ts/` serving Phase 0 compliance testing and as the runtime dependency for generated TypeScript code.
+**Chosen:** One `@vexil-lang/runtime` at `packages/runtime-ts/` serving Phase 0 compliance testing and as the runtime dependency for generated TypeScript code.
 
-**Rejected:** Separate throwaway `vexil-ts/` for validation and a later `@vexil/runtime` for production.
+**Rejected:** Separate throwaway `vexil-ts/` for validation and a later `@vexil-lang/runtime` for production.
 
 **Rationale:** Wire primitives are identical. Building them twice is waste. Compliance vectors from validation become the wire round-trip test suite for the codegen backend.
 

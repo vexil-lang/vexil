@@ -1,12 +1,12 @@
 # TypeScript Backend Design
 
-> **Scope:** TypeScript code generation backend for the Vexil schema language. Covers type mapping, generated code shape, `@vexil/runtime` npm package, and integration with the SDK's `CodegenBackend` trait. Does NOT cover runtime validation, reflection metadata, or IR serialization for external tools.
+> **Scope:** TypeScript code generation backend for the Vexil schema language. Covers type mapping, generated code shape, `@vexil-lang/runtime` npm package, and integration with the SDK's `CodegenBackend` trait. Does NOT cover runtime validation, reflection metadata, or IR serialization for external tools.
 
 **Goal:** Ship a Rust-based TypeScript codegen backend (`vexil-codegen-ts`) that implements `CodegenBackend`, producing idiomatic TypeScript interfaces and codec functions. Validates the SDK trait design with a real non-Rust backend.
 
-**Architecture:** Rust crate emitting TypeScript strings, compiled into `vexilc`. Generated code depends on `@vexil/runtime` npm package for wire primitives. Backend is fully independent from `vexil-codegen-rust`.
+**Architecture:** Rust crate emitting TypeScript strings, compiled into `vexilc`. Generated code depends on `@vexil-lang/runtime` npm package for wire primitives. Backend is fully independent from `vexil-codegen-rust`.
 
-**Tech Stack:** Rust (codegen crate), TypeScript (runtime package), npm (`@vexil/runtime`).
+**Tech Stack:** Rust (codegen crate), TypeScript (runtime package), npm (`@vexil-lang/runtime`).
 
 **Depends on:** SDK Architecture Design (2026-03-26-sdk-architecture-design.md) — specifically the `CodegenBackend` trait, `CodegenError` type, and Tier 1 API.
 
@@ -16,12 +16,12 @@
 
 ```
 vexil-codegen-ts    — Rust crate, implements CodegenBackend, emits TypeScript
-@vexil/runtime      — npm package, wire primitives (varint, zigzag, buffer r/w)
+@vexil-lang/runtime      — npm package, wire primitives (varint, zigzag, buffer r/w)
 ```
 
 `vexil-codegen-ts` depends on `vexil-lang` for IR types and the `CodegenBackend` trait. No dependency on `vexil-codegen-rust`. The two backends share no code.
 
-`@vexil/runtime` is a hand-written TypeScript package developed in `packages/runtime-ts/`. It is published to npm independently and is a dependency of generated code, not of the codegen crate.
+`@vexil-lang/runtime` is a hand-written TypeScript package developed in `packages/runtime-ts/`. It is published to npm independently and is a dependency of generated code, not of the codegen crate.
 
 ---
 
@@ -68,7 +68,7 @@ enum Status { Active @0  Inactive @1 }
 
 Generated `diamond/base.ts`:
 ```typescript
-import { BufReader, BufWriter } from '@vexil/runtime';
+import { BufReader, BufWriter } from '@vexil-lang/runtime';
 
 // --- Types ---
 
@@ -133,7 +133,7 @@ diamond/index.ts
 
 ---
 
-## 4. `@vexil/runtime` npm Package
+## 4. `@vexil-lang/runtime` npm Package
 
 Minimal surface — only what generated code needs.
 
@@ -173,7 +173,7 @@ export type SchemaHash = Uint8Array & { readonly length: 32 };
 
 - All methods follow Vexil's LSB-first bitpack wire format
 - Pure TypeScript, zero dependencies
-- Published to npm as `@vexil/runtime`
+- Published to npm as `@vexil-lang/runtime`
 - Hand-written and independently tested (not generated)
 - Developed in `packages/runtime-ts/`
 
@@ -254,10 +254,10 @@ Default target remains `rust`.
 - Rust encode → TypeScript decode round-trip
 - TypeScript encode → Rust decode round-trip
 - Ensures both backends produce/consume identical wire bytes
-- Requires `@vexil/runtime` to be functional first
+- Requires `@vexil-lang/runtime` to be functional first
 
 ### Development sequence
-1. `@vexil/runtime` npm package (hand-written, tested with Jest/Vitest)
+1. `@vexil-lang/runtime` npm package (hand-written, tested with Jest/Vitest)
 2. `vexil-codegen-ts` Rust crate (implements `CodegenBackend`)
 3. Integration test: corpus → TypeScript → `tsc --noEmit`
 4. Wire-level round-trip tests
@@ -294,7 +294,7 @@ Default target remains `rust`.
 
 ### Runtime: npm package vs inline vs bundled file
 
-**Chosen:** `@vexil/runtime` npm package (Option A).
+**Chosen:** `@vexil-lang/runtime` npm package (Option A).
 
 **Rejected alternatives:**
 - **Inline everything:** Duplicates wire primitives in every generated file. Bloats output.
@@ -317,7 +317,7 @@ Default target remains `rust`.
 **Chosen:** Types + codecs only (Approach A).
 
 **Rejected alternatives:**
-- **Runtime validation (`validate()` type guards):** More codegen complexity. Can be added later as a `@vexil/runtime` utility consuming the same interfaces.
+- **Runtime validation (`validate()` type guards):** More codegen complexity. Can be added later as a `@vexil-lang/runtime` utility consuming the same interfaces.
 - **Reflection metadata:** No concrete consumer. Scope creep. Can be added without changing the codegen architecture.
 
 **Rationale:** Ship the minimum that validates the SDK trait surface. Validation and reflection are additive features that don't require codegen changes — they layer on top of existing interfaces.

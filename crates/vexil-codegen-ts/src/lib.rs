@@ -42,7 +42,7 @@ pub(crate) fn generate_with_imports(
     w.blank();
 
     // Runtime import
-    w.line("import { BitReader, BitWriter } from '@vexil/runtime';");
+    w.line("import { BitReader, BitWriter } from '@vexil-lang/runtime';");
 
     // Cross-file imports
     if let Some(paths) = import_paths {
@@ -139,7 +139,7 @@ mod tests {
         assert!(code.contains("export interface Foo"));
         assert!(code.contains("export function encodeFoo"));
         assert!(code.contains("export function decodeFoo"));
-        assert!(code.contains("import { BitReader, BitWriter } from '@vexil/runtime'"));
+        assert!(code.contains("import { BitReader, BitWriter } from '@vexil-lang/runtime'"));
     }
 
     #[test]

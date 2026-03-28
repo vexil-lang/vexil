@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { BitReader, BitWriter } from '@vexil/runtime';
+import { BitReader, BitWriter } from '@vexil-lang/runtime';
 import {
   decodeSensorReading,
   encodeDeviceConfig,

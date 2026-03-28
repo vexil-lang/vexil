@@ -1,4 +1,4 @@
-name: Publish @vexil/runtime to npm
+name: Publish @vexil-lang/runtime to npm
 
 # Triggered when a vexil-runtime tag is pushed.
 # Uses npm trusted publishing (OIDC provenance) — no static NPM_TOKEN needed.
@@ -39,7 +39,7 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/vexil-runtime-v}"
           echo "version=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Publishing @vexil/runtime@$TAG"
+          echo "Publishing @vexil-lang/runtime@$TAG"
 
       - name: Set package version
         run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version

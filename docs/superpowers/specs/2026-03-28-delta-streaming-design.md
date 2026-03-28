@@ -192,7 +192,7 @@ message SystemSnapshot {
 ```
 examples/system-monitor/
   schema/telemetry.vexil       # @delta on message
-  package.json                 # esbuild + @vexil/runtime
+  package.json                 # esbuild + @vexil-lang/runtime
   Cargo.toml
   src/
     main.rs                    # SystemSnapshotEncoder (stateful)
@@ -201,7 +201,7 @@ examples/system-monitor/
     generated.ts               # vexilc --target typescript
   static/
     index.html                 # imports bundle.js
-    bundle.js                  # esbuild: generated.ts + @vexil/runtime
+    bundle.js                  # esbuild: generated.ts + @vexil-lang/runtime
 ```
 
 ### Build Pipeline
@@ -229,7 +229,7 @@ Wrapped in `package.json` scripts:
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "@vexil/runtime": "file:../../packages/runtime-ts"
+    "@vexil-lang/runtime": "file:../../packages/runtime-ts"
   }
 }
 ```

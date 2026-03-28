@@ -36,7 +36,7 @@ Hotfix branches are short-lived — created from tag, fix applied, tagged, delet
 | Version | Meaning |
 |---|---|
 | `v0.1.0` | SDK architecture (CodegenBackend trait, crate rename) |
-| `v0.2.0` | TypeScript backend + `@vexil/runtime` |
+| `v0.2.0` | TypeScript backend + `@vexil-lang/runtime` |
 | `v0.3.0` | LSP / editor tooling |
 | `v0.x.1` | Patch release (bug fix, no new features) |
 | `v1.0.0` | Language spec and wire format considered stable |
@@ -60,13 +60,13 @@ Hotfix branches are short-lived — created from tag, fix applied, tagged, delet
 | `vexil-codegen-rust` | crates.io (library) | v0.1.0 | Rust codegen backend |
 | `vexil-codegen-ts` | crates.io (library) | v0.2.0 | TypeScript codegen backend |
 | `vexil-lsp` | crates.io (library) | v0.3.0 | LSP library (binary via `vexilc lsp`) |
-| `@vexil/runtime` | npm | v0.2.0 | TypeScript wire format runtime |
+| `@vexil-lang/runtime` | npm | v0.2.0 | TypeScript wire format runtime |
 | `vexilc` binaries | GitHub Releases | v0.1.0 | Prebuilt for linux-x86_64, macos-arm64, windows-x86_64 |
 
 ### Installation methods
 
 - `cargo install vexilc` — CLI with all compiled-in backends
-- `npm install @vexil/runtime` — for TypeScript projects consuming generated code
+- `npm install @vexil-lang/runtime` — for TypeScript projects consuming generated code
 - GitHub Releases — prebuilt binaries for users without Rust toolchain
 
 ### Publish order (dependency graph)
@@ -77,7 +77,7 @@ Hotfix branches are short-lived — created from tag, fix applied, tagged, delet
 3. vexil-codegen-ts     (depends on vexil-lang)
 4. vexil-lsp            (depends on vexil-lang)
 5. vexilc               (depends on all above)
-6. @vexil/runtime       (npm, independent)
+6. @vexil-lang/runtime       (npm, independent)
 ```
 
 Order is enforced by CI. Each crate published only after its dependencies are confirmed on crates.io.
@@ -191,9 +191,9 @@ Configuration in `cliff.toml`. Changelog committed to `CHANGELOG.md` and include
 
 **Rationale:** Publishing the compiler as a library enables third-party linters, formatters, and alternative backends without forking. The cost is minimal (it's already a library crate). The Tier 1 API provides the stability boundary.
 
-### npm scope: `@vexil/runtime` vs `vexil-runtime`
+### npm scope: `@vexil-lang/runtime` vs `vexil-runtime`
 
-**Chosen:** `@vexil/runtime` (scoped package).
+**Chosen:** `@vexil-lang/runtime` (scoped package).
 
 **Rejected:** `vexil-runtime` (unscoped).
 
