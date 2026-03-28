@@ -739,8 +739,101 @@ fn cmd_compat(old_file: &str, new_file: &str, format: &str) -> i32 {
     }
 }
 
+fn print_usage() {
+    println!(
+        "\
+vexilc — the Vexil schema compiler
+
+Usage: vexilc <subcommand> [args]
+
+Subcommands:
+  check    <file.vexil>                        Validate a schema
+  codegen  <file.vexil> [options]              Generate code for one file
+  build    <root.vexil> --include <dir> [opts] Generate code for a project
+  compat   <old.vexil> <new.vexil> [--format]  Compare schemas for breaking changes
+  hash     <file.vexil>                        Print BLAKE3 schema hash
+  init     [name]                              Create a new schema file
+  format   <file.vx> --schema <s> --type <T>   Format a .vx text file
+  pack     <file.vx> --schema <s> --type <T>   Encode .vx to .vxb binary
+  unpack   <file.vxb> --schema <s> --type <T>  Decode .vxb to .vx text
+  info     <file>                              Inspect .vxb/.vxc file headers
+  compile  <file.vexil> -o <output>            Compile to .vxc binary schema
+
+Options:
+  --target <rust|typescript|go>   Code generation target (default: rust)
+  --output <path>                 Output file or directory
+  --include <dir>                 Additional schema search directory
+  --format <human|json>           Output format for compat (default: human)
+  -V, --version                   Print version
+  -h, --help                      Print this help"
+    );
+}
+
+fn cmd_init(name: &str) -> i32 {
+    let filename = format!("{name}.vexil");
+    if std::path::Path::new(&filename).exists() {
+        eprintln!("error: {filename} already exists");
+        return 1;
+    }
+    let content = format!(
+        r#"namespace {name}
+
+message Hello {{
+    name     @0 : string
+    greeting @1 : string
+    count    @2 : u32
+}}
+"#
+    );
+    if let Err(e) = std::fs::write(&filename, &content) {
+        eprintln!("error: {e}");
+        return 1;
+    }
+    println!("Created {filename}");
+    0
+}
+
+fn cmd_hash(path: &str) -> i32 {
+    let source = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("error: {path}: {e}");
+            return 1;
+        }
+    };
+    let result = vexil_lang::compile(&source);
+    for diag in &result.diagnostics {
+        if diag.severity == vexil_lang::diagnostic::Severity::Error {
+            render_diagnostic(path, &source, diag);
+        }
+    }
+    match result.compiled {
+        Some(compiled) => {
+            let hash = vexil_lang::canonical::schema_hash(&compiled);
+            let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+            println!("{hex}  {path}");
+            0
+        }
+        None => 1,
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+
+    if args.len() > 1 {
+        match args[1].as_str() {
+            "--version" | "-V" => {
+                println!("vexilc {}", env!("CARGO_PKG_VERSION"));
+                return;
+            }
+            "--help" | "-h" | "help" => {
+                print_usage();
+                return;
+            }
+            _ => {}
+        }
+    }
 
     match args.get(1).map(|s| s.as_str()) {
         Some("check") => {
@@ -1038,21 +1131,19 @@ fn main() {
             });
             std::process::exit(cmd_format_vx(vx_file, schema_file, type_name));
         }
+        Some("hash") => {
+            if args.len() < 3 {
+                eprintln!("Usage: vexilc hash <file.vexil>");
+                std::process::exit(1);
+            }
+            std::process::exit(cmd_hash(&args[2]));
+        }
+        Some("init") => {
+            let name = if args.len() > 2 { &args[2] } else { "example" };
+            std::process::exit(cmd_init(name));
+        }
         _ => {
-            eprintln!("Usage: vexilc <subcommand> [args]");
-            eprintln!("  vexilc check <file.vexil>");
-            eprintln!("  vexilc compile <file.vexil> -o <output.vxc|output.vxcp>");
-            eprintln!("  vexilc codegen <file.vexil> [--output <path>] [--target <rust>]");
-            eprintln!(
-                "  vexilc build <root.vexil> --include <dir> --output <dir> [--target <rust>]"
-            );
-            eprintln!("  vexilc info <file>");
-            eprintln!(
-                "  vexilc pack <file.vx> --schema <schema.vexil> --type <TypeName> -o <out.vxb>"
-            );
-            eprintln!("  vexilc unpack <file.vxb> --schema <schema.vexil> --type <TypeName> [-o <out.vx>]");
-            eprintln!("  vexilc format <file.vx> --schema <schema.vexil> --type <TypeName>");
-            eprintln!("  vexilc compat <old.vexil> <new.vexil> [--format human|json]");
+            print_usage();
             std::process::exit(1);
         }
     }
