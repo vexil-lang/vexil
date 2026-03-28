@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0] - 2026-03-28
+
+### Added
+
+- feat(vexil-lang): typed tombstones — @removed with original type for decode-and-discard
+- feat(vexil-lang): add compat module with report types
+- feat(vexil-lang): desugar @delta on message to per-field @delta
+
+### Fixed
+
+- fix: message-level @delta implies varint/zigzag for wire size reduction
+
+### Documentation
+
+- docs: fix merge conflict markers and restore rewritten READMEs
+- docs: update README, FAQ, CLAUDE.md, and crate READMEs for delta streaming
+- docs: rewrite READMEs, fix stale facts, remove AI patterns
+
+### Other
+
+- chore(release): bump crate versions
+- corpus: add 027_delta_on_message for @delta on message declarations
+
 All notable changes to this project will be documented in this file.
 
 
