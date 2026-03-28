@@ -776,6 +776,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vexil-codegen-go"
+version = "0.2.5"
+dependencies = [
+ "test-case",
+ "thiserror",
+ "vexil-lang",
+]
+
+[[package]]
 name = "vexil-codegen-rust"
 version = "0.2.5"
 dependencies = [

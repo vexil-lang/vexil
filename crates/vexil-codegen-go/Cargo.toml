@@ -1,0 +1,19 @@
+[package]
+name = "vexil-codegen-go"
+version = "0.2.5"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme.workspace = true
+description = "Go code generation backend for the Vexil schema compiler"
+keywords = ["schema", "codegen", "go"]
+categories = ["compilers", "development-tools"]
+
+[dependencies]
+vexil-lang = { path = "../vexil-lang", version = "^0.2.5" }
+thiserror = "2"
+
+[dev-dependencies]
+test-case = "3"
