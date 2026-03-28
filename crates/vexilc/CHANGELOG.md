@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0] - 2026-03-28
+
+### Added
+
+- feat(vexilc): add compat subcommand for breaking change detection
+
+### Documentation
+
+- docs: fix merge conflict markers and restore rewritten READMEs
+- docs: update README, FAQ, CLAUDE.md, and crate READMEs for delta streaming
+- docs: rewrite READMEs, fix stale facts, remove AI patterns
+
+### Other
+
+- chore(release): bump crate versions
+- test(vexilc): CLI integration tests for compat subcommand
+
 ## 0.2.0 (2026-03-27)
 
 ### New Features
