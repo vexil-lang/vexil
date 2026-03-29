@@ -43,6 +43,18 @@ const s    = r.readZigzag();      // ZigZag LEB128 -> bigint
 const str  = r.readString();      // length-prefixed UTF-8
 ```
 
+### SchemaHandshake
+
+Exchanges BLAKE3 schema hashes between peers to detect mismatches before data transfer:
+
+```typescript
+import { SchemaHandshake } from '@vexil-lang/runtime';
+
+const handshake = new SchemaHandshake(schemaHash);
+const offer = handshake.createOffer();      // send to peer
+const accepted = handshake.accept(offer);   // peer validates hash match
+```
+
 ## Wire compatibility
 
 `BitWriter` and `BitReader` produce and consume the same byte sequences as the Rust [`vexil-runtime`](https://crates.io/crates/vexil-runtime) crate. This is verified by the [compliance vector suite](https://github.com/vexil-lang/vexil/tree/main/compliance/vectors).

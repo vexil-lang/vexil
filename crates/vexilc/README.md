@@ -23,6 +23,7 @@ vexilc check schema.vexil
 ```sh
 vexilc codegen schema.vexil --output out.rs                     # Rust (default)
 vexilc codegen schema.vexil --output out.ts --target typescript  # TypeScript
+vexilc codegen schema.vexil --output out.go --target go          # Go
 ```
 
 **build** -- compile a multi-file project with import resolution:
@@ -47,11 +48,40 @@ vexilc unpack data.vxb --schema s.vexil --type T
 vexilc format data.vx --schema s.vexil --type T
 ```
 
+**watch** -- auto-rebuild on schema changes:
+
+```sh
+vexilc watch root.vexil --include ./schemas --output ./generated
+```
+
+**init** -- scaffold a new schema file:
+
+```sh
+vexilc init my_schema.vexil --namespace my.namespace
+```
+
+**hash** -- print the BLAKE3 schema hash:
+
+```sh
+vexilc hash schema.vexil
+```
+
+**compat** -- compare schemas for breaking changes:
+
+```sh
+vexilc compat old.vexil new.vexil
+```
+
 **info** -- inspect a compiled schema or binary file:
 
 ```sh
 vexilc info file.vxb
 ```
+
+## Flags
+
+- `--version` -- print the vexilc version
+- `--help` -- print usage information
 
 ## Error output
 

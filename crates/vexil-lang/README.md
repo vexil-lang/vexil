@@ -2,7 +2,7 @@
 
 Compiler library for [Vexil](https://github.com/vexil-lang/vexil), a typed schema definition language with first-class encoding semantics.
 
-Parses `.vexil` source, type-checks it, and produces a `CompiledSchema` that codegen backends consume. Handles single-file and multi-file projects with transitive import resolution.
+Parses `.vexil` source, type-checks it, and produces a `CompiledSchema` that codegen backends consume. Handles single-file and multi-file projects with transitive import resolution. Includes the `compat` module for schema evolution and breaking change detection.
 
 ## Pipeline
 
@@ -57,6 +57,7 @@ let files: Vec<(PathBuf, String)> = RustBackend.generate_project(&project)?;
 | `vexil-lang` | This crate -- compiler library |
 | [`vexil-codegen-rust`](https://crates.io/crates/vexil-codegen-rust) | Rust code generation |
 | [`vexil-codegen-ts`](https://crates.io/crates/vexil-codegen-ts) | TypeScript code generation |
+| [`vexil-codegen-go`](https://crates.io/crates/vexil-codegen-go) | Go code generation |
 | [`vexil-runtime`](https://crates.io/crates/vexil-runtime) | Rust runtime for generated code |
 | [`vexil-store`](https://crates.io/crates/vexil-store) | `.vx` text and `.vxb` binary file formats |
 | [`vexilc`](https://crates.io/crates/vexilc) | CLI compiler |

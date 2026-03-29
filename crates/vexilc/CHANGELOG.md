@@ -1,10 +1,14 @@
 # Changelog
 
-## [0.5.0] - 2026-03-28
+## [0.5.0] - 2026-03-29
 
 ### Added
 
-- feat(vexilc): add --version, --help, init, hash subcommands
+- `vexilc watch` — auto-rebuild on schema file changes with 200ms debounce
+- `vexilc init [name]` — scaffold a new `.vexil` schema file
+- `vexilc hash <file>` — print BLAKE3 schema hash
+- `--version` / `-V` and `--help` / `-h` flags
+- `--target go` — Go code generation backend
 
 ## [0.3.0] - 2026-03-28
 

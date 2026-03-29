@@ -100,7 +100,7 @@ const decoded = decodeSensorReading(r);
 | Self-describing wire format | No | Optional | No | Optional |
 | Zero-copy decode | No | No | **Yes** | **Yes** |
 | Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
-| Schema evolution | Partial | **Yes** | **Yes** | **Yes** |
+| Schema evolution | **Yes** | **Yes** | **Yes** | **Yes** |
 | Language targets | Rust, TS, Go | **Many** | **Many** | **Many** |
 
 ## Install
@@ -136,9 +136,25 @@ vexilc codegen schema.vexil --output out.go --target go         # Go
 vexilc build root.vexil --include ./schemas --output ./generated
 vexilc build root.vexil --include ./schemas --output ./generated --target typescript
 
+# Auto-rebuild on schema changes
+vexilc watch root.vexil --include ./schemas --output ./generated
+
+# Scaffold a new schema file
+vexilc init my_schema.vexil --namespace my.namespace
+
+# Print BLAKE3 schema hash
+vexilc hash schema.vexil
+
+# Check schema compatibility (breaking change detection)
+vexilc compat old.vexil new.vexil
+
 # Schema-driven data tools
 vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
 vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
+
+# Version and help
+vexilc --version
+vexilc --help
 ```
 
 Errors render with source spans:
@@ -194,6 +210,7 @@ crates/
   vexil-bench/           # Encode/decode benchmarks (Criterion)
 packages/
   runtime-ts/            # @vexil-lang/runtime -- TypeScript BitWriter/BitReader (npm)
+  runtime-go/            # github.com/vexil-lang/vexil/packages/runtime-go -- Go runtime
 examples/
   sensor-packet/         # Sub-byte types, encoding annotations, compact enums
   command-protocol/      # Unions, flags, limits -- RPC-style protocol

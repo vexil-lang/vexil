@@ -12,15 +12,17 @@ Individual crate changelogs track detailed changes:
 
 ## Releases
 
-### v0.4.1 (2026-03-28)
+### v0.5.0 / v0.4.2 (2026-03-29)
 
-Delta streaming, schema evolution, Go backend, three-way cross-language interop.
+CLI polish, code quality, Go backend, delta streaming, schema evolution.
 
+- **CLI:** `vexilc watch` (auto-rebuild on save), `vexilc init`, `vexilc hash`, `--version`, `--help`
+- **Go backend:** `vexil-codegen-go` crate + `packages/runtime-go` module
 - **Delta encoding:** `@delta` on messages with automatic varint/zigzag selection
 - **Schema evolution:** `vexilc compat` CLI, `_unknown` field preservation, typed tombstones, `SchemaHandshake`
-- **Go backend:** `vexil-codegen-go` crate + `packages/runtime-go` module
 - **Cross-language:** Rust ↔ TypeScript ↔ Go interop verified by compliance vectors
 - **Examples:** System monitor dashboard (Rust → browser via WebSocket), cross-language sensor telemetry
+- **Code quality:** No `unwrap()` in production code, all public APIs documented, rustdoc clean
 
 ### v0.2.4 (2026-03-27)
 
