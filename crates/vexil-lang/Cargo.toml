@@ -12,9 +12,9 @@ keywords = ["schema", "serialization", "codegen", "protocol", "compiler"]
 categories = ["compilers", "encoding", "development-tools"]
 
 [dependencies]
-blake3 = "1"
+blake3 = "1.8.3"
 smol_str = "0.3"
-thiserror = "2"
+thiserror = "2.0.18"
 
 [dev-dependencies]
 test-case = "3"
