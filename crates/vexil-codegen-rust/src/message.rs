@@ -155,11 +155,7 @@ fn emit_write_type(
         },
         ResolvedType::SubByte(s) => {
             let bits = s.bits;
-            if s.signed {
-                w.line(&format!("w.write_bits({access} as u8 as u64, {bits}_u8);"));
-            } else {
-                w.line(&format!("w.write_bits({access} as u64, {bits}_u8);"));
-            }
+            w.line(&format!("w.write_bits({access} as u64, {bits}_u8);"));
         }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => w.line(&format!("w.write_string(&{access});")),
@@ -333,12 +329,16 @@ fn emit_read_type(
         },
         ResolvedType::SubByte(s) => {
             let bits = s.bits;
+            let uint = crate::types::containing_int_type(bits);
             if s.signed {
+                let int = uint.replace('u', "i");
                 w.line(&format!(
-                    "let {var_name} = r.read_bits({bits}_u8)? as u8 as i8;"
+                    "let {var_name} = r.read_bits({bits}_u8)? as {uint} as {int};"
                 ));
             } else {
-                w.line(&format!("let {var_name} = r.read_bits({bits}_u8)? as u8;"));
+                w.line(&format!(
+                    "let {var_name} = r.read_bits({bits}_u8)? as {uint};"
+                ));
             }
         }
         ResolvedType::Semantic(s) => match s {
