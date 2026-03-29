@@ -123,20 +123,34 @@ impl FilesystemLoader {
 impl SchemaLoader for FilesystemLoader {
     fn load(&self, namespace: &[&str]) -> Result<(String, PathBuf), LoadError> {
         let dotted = namespace.join(".");
-        // Build the relative path: segments joined by OS sep, ".vexil" extension.
-        let mut rel = PathBuf::new();
-        for seg in namespace {
-            rel.push(seg);
-        }
-        rel.set_extension("vexil");
 
-        // Collect every root that contains the file.
-        let mut found: Vec<PathBuf> = self
-            .roots
-            .iter()
-            .map(|root| root.join(&rel))
-            .filter(|p| p.is_file())
-            .collect();
+        // Try progressively shorter relative paths by stripping leading
+        // namespace segments.  This allows an `--include` directory to sit
+        // at any level of the namespace hierarchy:
+        //
+        //   namespace = ["malt", "common"]
+        //   tries:  malt/common.vexil   (full path)
+        //           common.vexil         (prefix-stripped)
+        let mut found: Vec<PathBuf> = Vec::new();
+        for start in 0..namespace.len() {
+            let mut rel = PathBuf::new();
+            for seg in &namespace[start..] {
+                rel.push(seg);
+            }
+            rel.set_extension("vexil");
+
+            for root in &self.roots {
+                let candidate = root.join(&rel);
+                if candidate.is_file() && !found.contains(&candidate) {
+                    found.push(candidate);
+                }
+            }
+
+            // Stop as soon as we find at least one match at this depth.
+            if !found.is_empty() {
+                break;
+            }
+        }
 
         match found.len() {
             0 => Err(LoadError::NotFound { namespace: dotted }),
@@ -236,6 +250,39 @@ mod tests {
                 if namespace == "net.types.core" && paths.len() == 2),
             "expected Ambiguous with 2 paths, got {err:?}"
         );
+    }
+
+    #[test]
+    fn filesystem_loader_prefix_stripped() {
+        // Include dir sits inside the namespace hierarchy:
+        // namespace "malt.common" but file is at <root>/common.vexil
+        let dir = tempdir();
+        let file = dir.path().join("common.vexil");
+        fs::write(&file, "namespace malt.common").unwrap();
+
+        let loader = FilesystemLoader::new([dir.path()]);
+        let (src, path) = loader.load(&["malt", "common"]).unwrap();
+        assert!(src.contains("malt.common"));
+        assert_eq!(path, file);
+    }
+
+    #[test]
+    fn filesystem_loader_prefers_full_path_over_stripped() {
+        // If both full path and stripped path exist, full path wins.
+        let dir = tempdir();
+        let nested = dir.path().join("malt");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("common.vexil"), "namespace malt.common (full)").unwrap();
+        // Also create a stripped version at root
+        fs::write(
+            dir.path().join("common.vexil"),
+            "namespace malt.common (stripped)",
+        )
+        .unwrap();
+
+        let loader = FilesystemLoader::new([dir.path()]);
+        let (src, _) = loader.load(&["malt", "common"]).unwrap();
+        assert!(src.contains("(full)"), "should prefer full path match");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────
