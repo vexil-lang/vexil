@@ -64,7 +64,7 @@ func (m *TreeNode) Unpack(r *vexil.BitReader) error {
 		}
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -125,7 +125,7 @@ func (m *LinkedList) Unpack(r *vexil.BitReader) error {
 		}
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -156,7 +156,7 @@ func (m *Expr) Unpack(r *vexil.BitReader) error {
 		m.Kind = v
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -185,7 +185,6 @@ func (ExprKindBinary) isExprKind() {
 }
 
 func PackExprKind(v ExprKind, w *vexil.BitWriter) error {
-	w.FlushToByteBoundary()
 	switch t := v.(type) {
 		case *ExprKindLiteral: {
 			w.WriteLeb128(0)

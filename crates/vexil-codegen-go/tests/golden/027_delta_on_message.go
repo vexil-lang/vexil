@@ -58,7 +58,7 @@ func (m *Telemetry) Unpack(r *vexil.BitReader) error {
 		m.Count = uint32(raw)
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -146,7 +146,7 @@ func (d *TelemetryDecoder) Unpack(r *vexil.BitReader) (*Telemetry, error) {
 	m.Count = uint32(d.prevCount + deltaCount)
 	d.prevCount = m.Count
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return m, nil
 }
 

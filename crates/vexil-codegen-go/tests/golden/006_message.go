@@ -22,7 +22,7 @@ func (m *Empty) Pack(w *vexil.BitWriter) error {
 
 func (m *Empty) Unpack(r *vexil.BitReader) error {
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -69,7 +69,7 @@ func (m *WithGaps) Unpack(r *vexil.BitReader) error {
 		m.Tenth = v
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (m *Annotated) Unpack(r *vexil.BitReader) error {
 		m.Version = v
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (m *FieldAnnotations) Unpack(r *vexil.BitReader) error {
 		m.D = v
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 
@@ -226,7 +226,7 @@ func (d *FieldAnnotationsDecoder) Unpack(r *vexil.BitReader) (*FieldAnnotations,
 	m.D = int32(d.prevD + deltaD)
 	d.prevD = m.D
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return m, nil
 }
 

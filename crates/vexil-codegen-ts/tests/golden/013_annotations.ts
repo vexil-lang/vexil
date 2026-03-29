@@ -23,7 +23,7 @@ export function encodeOldMessage(v: OldMessage, w: BitWriter): void {
 export function decodeOldMessage(r: BitReader): OldMessage {
   const value = r.readU32();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { value, _unknown };
 }
 
@@ -48,7 +48,7 @@ export function decodeLifecycle(r: BitReader): Lifecycle {
   const name = r.readString();
   const email = r.readString();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { name, email, _unknown };
 }
 
@@ -82,7 +82,7 @@ export function decodeEncoded(r: BitReader): Encoded {
   const smooth = r.readLeb128();
   const signed = r.readZigZag64();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { count, delta, offset, smooth, signed, _unknown };
 }
 
@@ -134,7 +134,7 @@ export class EncodedDecoder {
     const signed = this.prevsigned + delta_signed;
     this.prevsigned = signed;
     r.flushToByteBoundary();
-    const _unknown = r.readRemaining();
+    const _unknown = new Uint8Array(0);
     return { count, delta, offset, smooth, signed, _unknown };
   }
 
@@ -190,7 +190,7 @@ export function decodeLimited(r: BitReader): Limited {
   }
   const data = r.readBytes();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { body, tags, headers, data, _unknown };
 }
 
@@ -212,7 +212,7 @@ export function encodeRenderCommand(v: RenderCommand, w: BitWriter): void {
 export function decodeRenderCommand(r: BitReader): RenderCommand {
   const op = r.readU8();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { op, _unknown };
 }
 
@@ -234,7 +234,7 @@ export function encodeDocumented(v: Documented, w: BitWriter): void {
 export function decodeDocumented(r: BitReader): Documented {
   const value = r.readU32();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { value, _unknown };
 }
 

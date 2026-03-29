@@ -845,7 +845,7 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         }
     }
     w.line("r.FlushToByteBoundary()");
-    w.line("m.Unknown = r.ReadRemaining()");
+    w.line("m.Unknown = nil");
     w.line("return nil");
     w.close_block();
     w.blank();

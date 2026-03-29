@@ -24,7 +24,6 @@ export interface Shape_Point {
 export type Shape = Shape_Circle | Shape_Rectangle | Shape_Point;
 
 export function encodeShape(v: Shape, w: BitWriter): void {
-  w.flushToByteBoundary();
   switch (v.tag) {
     case 'Circle': {
       w.writeLeb128(0);
@@ -112,7 +111,6 @@ export interface Color_Unknown {
 export type Color = Color_Ansi | Color_Rgb | Color_Reset | Color_Unknown;
 
 export function encodeColor(v: Color, w: BitWriter): void {
-  w.flushToByteBoundary();
   switch (v.tag) {
     case 'Ansi': {
       w.writeLeb128(0);
@@ -198,7 +196,6 @@ export interface Event_Scroll {
 export type Event = Event_Click | Event_Scroll;
 
 export function encodeEvent(v: Event, w: BitWriter): void {
-  w.flushToByteBoundary();
   switch (v.tag) {
     case 'Click': {
       w.writeLeb128(0);

@@ -40,7 +40,6 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     w.open_block(&format!(
         "func Pack{name}(v {name}, w *vexil.BitWriter) error"
     ));
-    w.line("w.FlushToByteBoundary()");
     w.open_block("switch t := v.(type)");
 
     for variant in &un.variants {

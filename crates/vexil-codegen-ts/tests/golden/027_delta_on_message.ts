@@ -31,7 +31,7 @@ export function decodeTelemetry(r: BitReader): Telemetry {
   const label = r.readString();
   const count = r.readLeb128();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { timestamp, value, label, count, _unknown };
 }
 
@@ -81,7 +81,7 @@ export class TelemetryDecoder {
     const count = (this.prevcount + delta_count) >>> 0;
     this.prevcount = count;
     r.flushToByteBoundary();
-    const _unknown = r.readRemaining();
+    const _unknown = new Uint8Array(0);
     return { timestamp, value, label, count, _unknown };
   }
 

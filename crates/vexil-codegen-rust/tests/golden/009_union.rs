@@ -15,7 +15,6 @@ pub enum Shape {
 
 impl vexil_runtime::Pack for Shape {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        w.flush_to_byte_boundary();
         match self {
             Self::Circle { radius } => {
                 w.write_leb128(0_u64);
@@ -91,7 +90,6 @@ pub enum Color {
 
 impl vexil_runtime::Pack for Color {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        w.flush_to_byte_boundary();
         match self {
             Self::Ansi { code } => {
                 w.write_leb128(0_u64);
@@ -175,7 +173,6 @@ pub enum Event {
 
 impl vexil_runtime::Pack for Event {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        w.flush_to_byte_boundary();
         match self {
             Self::Click { x, y } => {
                 w.write_leb128(0_u64);

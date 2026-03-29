@@ -41,7 +41,6 @@ func (ShapePoint) isShape() {
 }
 
 func PackShape(v Shape, w *vexil.BitWriter) error {
-	w.FlushToByteBoundary()
 	switch t := v.(type) {
 		case *ShapeCircle: {
 			w.WriteLeb128(0)
@@ -177,7 +176,6 @@ func (ColorReset) isColor() {
 }
 
 func PackColor(v Color, w *vexil.BitWriter) error {
-	w.FlushToByteBoundary()
 	switch t := v.(type) {
 		case *ColorAnsi: {
 			w.WriteLeb128(0)
@@ -313,7 +311,6 @@ func (EventScroll) isEvent() {
 }
 
 func PackEvent(v Event, w *vexil.BitWriter) error {
-	w.FlushToByteBoundary()
 	switch t := v.(type) {
 		case *EventClick: {
 			w.WriteLeb128(0)
