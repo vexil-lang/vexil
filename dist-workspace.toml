@@ -22,6 +22,16 @@ install-path = "CARGO_HOME"
 allow-dirty = ["ci"]
 # Run cargo-dist on Release PRs to verify builds
 pr-run-mode = "upload"
+# System dependencies required by workspace crates (vexil-bench needs protoc)
+[dist.dependencies.apt]
+protobuf-compiler = { version = "*", targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"] }
+
+[dist.dependencies.homebrew]
+protobuf = { targets = ["x86_64-apple-darwin", "aarch64-apple-darwin"] }
+
+[dist.dependencies.chocolatey]
+protoc = { version = "*", targets = ["x86_64-pc-windows-msvc"] }
+
 # Customize GitHub runners for ARM Linux
 [dist.github-custom-runners]
 aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
