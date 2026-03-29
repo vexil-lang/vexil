@@ -225,6 +225,7 @@ examples/
 - [FAQ](FAQ.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
+- [**vexmon**](https://github.com/vexil-lang/vexmon) — real-time system monitor showcasing Vexil over WebSocket (~300 B/s for full telemetry)
 - API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
