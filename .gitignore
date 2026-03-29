@@ -1,12 +1,22 @@
+# Rust build output
 /target/
+
+# Example build artifacts
 examples/*/target/
+examples/*/node_modules/
+examples/cross-language/*/target/
+examples/cross-language/data/
+examples/system-monitor/data/
+
+# Editor
 *.swp
 *.swo
 *~
 .DS_Store
 Thumbs.db
+.idea/
 
-.idea
+# Worktrees and AI tools
 .worktrees/
 .claude/
 
@@ -14,5 +24,5 @@ Thumbs.db
 node_modules/
 packages/runtime-ts/dist/
 
-# Example runtime data
-examples/cross-language/data/
+# Go
+packages/runtime-go/vendor/
