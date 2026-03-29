@@ -1,0 +1,11 @@
+# §2.7 + §5: Bare import followed by annotation on next declaration.
+# Regression test for #42: parser must not treat @doc as version constraint.
+@version("1.0.0")
+namespace test.import_annotation
+
+import test.newtypes
+
+@doc("This annotation must not be parsed as a version constraint.")
+message Annotated {
+    x @0 : u32
+}

@@ -229,22 +229,18 @@ fn try_consume_lowercase_component(p: &mut Parser<'_>) -> Option<Spanned<SmolStr
 ///   - `FloatLit(major.minor)` with no following `.patch` → incomplete semver
 ///   - `DecInt Dot DecInt Dot DecInt` → also valid (if lexer changes)
 fn parse_optional_version(p: &mut Parser<'_>) -> Option<Spanned<String>> {
+    // Only treat `@` as a version constraint when followed by `^`.
+    // A bare `@` followed by an identifier (e.g. `@doc`) is an annotation on
+    // the next declaration, not part of this import statement.
     if !p.at(&TokenKind::At) {
+        return None;
+    }
+    if !matches!(p.peek_nth(1).kind, TokenKind::Caret) {
         return None;
     }
 
     let start = p.current_offset();
     p.advance(); // consume At
-
-    // Expect Caret.
-    if !p.at(&TokenKind::Caret) {
-        p.emit(
-            p.peek().span,
-            ErrorClass::VersionInvalidSemver,
-            "expected `^` after `@` in version constraint",
-        );
-        return None;
-    }
     p.advance(); // consume Caret
 
     // The lexer may produce FloatLit for "major.minor" or DecInt for just "major".
