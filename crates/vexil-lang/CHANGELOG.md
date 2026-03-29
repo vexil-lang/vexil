@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.3] - 2026-03-29
+
+### Fixed
+
+- fix(vexilc,resolve): check --include, prefix-stripped loader, no panic on unresolved TypeId (#48)
+- fix(parser): don't treat annotation after bare import as version constraint
+
+### Documentation
+
+- docs: update all READMEs and changelogs for v0.5.0 — watch, init, hash, Go backend
+
 ## [0.4.1] - 2026-03-28
 
 ### Fixed
