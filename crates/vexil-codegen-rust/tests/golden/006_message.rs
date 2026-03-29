@@ -24,7 +24,7 @@ impl vexil_runtime::Pack for Empty {
 impl vexil_runtime::Unpack for Empty {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             _unknown,
         })
@@ -60,7 +60,7 @@ impl vexil_runtime::Unpack for WithGaps {
         let third = r.read_u32()?;
         let tenth = r.read_string()?;
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             first,
             third,
@@ -93,7 +93,7 @@ impl vexil_runtime::Unpack for Annotated {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let version = r.read_u8()?;
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             version,
             _unknown,
@@ -139,7 +139,7 @@ impl vexil_runtime::Unpack for FieldAnnotations {
         if c.len() as u64 > 1024_u64 { return Err(vexil_runtime::DecodeError::LimitExceeded { field: "c", limit: 1024_u64, actual: c.len() as u64 }); }
         let d = r.read_i32()?;
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             a,
             b,
@@ -202,7 +202,7 @@ impl FieldAnnotationsDecoder {
         let d = self.prev_d.wrapping_add(delta_d);
         self.prev_d = d;
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(FieldAnnotations {
             a,
             b,

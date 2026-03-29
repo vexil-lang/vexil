@@ -42,7 +42,7 @@ impl vexil_runtime::Unpack for TreeNode {
             children.push(children_item);
         }
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             value,
             children,
@@ -94,7 +94,7 @@ impl vexil_runtime::Unpack for LinkedList {
         }
 ;
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             value,
             next,
@@ -130,7 +130,7 @@ impl vexil_runtime::Unpack for Expr {
         let kind = vexil_runtime::Unpack::unpack(r)?;
         r.leave_recursive();
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             kind,
             _unknown,
@@ -148,7 +148,6 @@ pub enum ExprKind {
 
 impl vexil_runtime::Pack for ExprKind {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        w.flush_to_byte_boundary();
         match self {
             Self::Literal { value } => {
                 w.write_leb128(0_u64);

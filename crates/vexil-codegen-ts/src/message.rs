@@ -588,7 +588,7 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         }
     }
     w.line("r.flushToByteBoundary();");
-    w.line("const _unknown = r.readRemaining();");
+    w.line("const _unknown = new Uint8Array(0);");
     let field_names: Vec<&str> = msg.fields.iter().map(|f| f.name.as_str()).collect();
     let mut all_names = field_names;
     all_names.push("_unknown");

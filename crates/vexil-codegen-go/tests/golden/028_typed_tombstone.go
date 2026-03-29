@@ -47,7 +47,7 @@ func (m *Config) Unpack(r *vexil.BitReader) error {
 		m.TimeoutMs = v
 	}
 	r.FlushToByteBoundary()
-	m.Unknown = r.ReadRemaining()
+	m.Unknown = nil
 	return nil
 }
 

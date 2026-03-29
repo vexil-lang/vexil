@@ -37,7 +37,7 @@ export function decodeTreeNode(r: BitReader): TreeNode {
     children.push(children_item);
   }
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { value, children, _unknown };
 }
 
@@ -78,7 +78,7 @@ export function decodeLinkedList(r: BitReader): LinkedList {
     next = null;
   }
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { value, next, _unknown };
 }
 
@@ -104,7 +104,7 @@ export function decodeExpr(r: BitReader): Expr {
   const kind = decodeExprKind(r);
   r.leaveNested();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { kind, _unknown };
 }
 
@@ -125,7 +125,6 @@ export interface ExprKind_Binary {
 export type ExprKind = ExprKind_Literal | ExprKind_Binary;
 
 export function encodeExprKind(v: ExprKind, w: BitWriter): void {
-  w.flushToByteBoundary();
   switch (v.tag) {
     case 'Literal': {
       w.writeLeb128(0);

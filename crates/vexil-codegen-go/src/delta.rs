@@ -197,7 +197,7 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
         }
     }
     w.line("r.FlushToByteBoundary()");
-    w.line("m.Unknown = r.ReadRemaining()");
+    w.line("m.Unknown = nil");
     w.line("return m, nil");
     w.close_block();
     w.blank();

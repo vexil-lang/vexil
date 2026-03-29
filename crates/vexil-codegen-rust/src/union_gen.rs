@@ -148,7 +148,6 @@ pub fn emit_union(
     w.open_block(
         "fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError>",
     );
-    w.line("w.flush_to_byte_boundary();");
     w.open_block("match self");
 
     for variant in &un.variants {

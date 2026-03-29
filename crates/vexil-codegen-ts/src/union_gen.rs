@@ -52,7 +52,6 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     w.open_block(&format!(
         "export function encode{name}(v: {name}, w: BitWriter): void"
     ));
-    w.line("w.flushToByteBoundary();");
     w.open_block("switch (v.tag)");
 
     for variant in &un.variants {

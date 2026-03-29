@@ -19,7 +19,7 @@ export function encodeEmpty(v: Empty, w: BitWriter): void {
 
 export function decodeEmpty(r: BitReader): Empty {
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { _unknown };
 }
 
@@ -47,7 +47,7 @@ export function decodeWithGaps(r: BitReader): WithGaps {
   const third = r.readU32();
   const tenth = r.readString();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { first, third, tenth, _unknown };
 }
 
@@ -69,7 +69,7 @@ export function encodeAnnotated(v: Annotated, w: BitWriter): void {
 export function decodeAnnotated(r: BitReader): Annotated {
   const version = r.readU8();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { version, _unknown };
 }
 
@@ -100,7 +100,7 @@ export function decodeFieldAnnotations(r: BitReader): FieldAnnotations {
   const c = r.readString();
   const d = r.readI32();
   r.flushToByteBoundary();
-  const _unknown = r.readRemaining();
+  const _unknown = new Uint8Array(0);
   return { a, b, c, d, _unknown };
 }
 
@@ -136,7 +136,7 @@ export class FieldAnnotationsDecoder {
     const d = (this.prevd + delta_d) | 0;
     this.prevd = d;
     r.flushToByteBoundary();
-    const _unknown = r.readRemaining();
+    const _unknown = new Uint8Array(0);
     return { a, b, c, d, _unknown };
   }
 

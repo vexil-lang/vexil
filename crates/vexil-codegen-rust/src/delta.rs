@@ -218,7 +218,7 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
         }
     }
     w.line("r.flush_to_byte_boundary();");
-    w.line("let _unknown = r.read_remaining();");
+    w.line("let _unknown = Vec::new();");
     w.open_block(&format!("Ok({name}"));
     for field in &msg.fields {
         w.line(&format!("{},", field.name));

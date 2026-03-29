@@ -702,7 +702,7 @@ pub fn emit_message(
         }
     }
     w.line("r.flush_to_byte_boundary();");
-    w.line("let _unknown = r.read_remaining();");
+    w.line("let _unknown = Vec::new();");
     w.open_block("Ok(Self");
     for field in &msg.fields {
         w.line(&format!("{},", field.name));

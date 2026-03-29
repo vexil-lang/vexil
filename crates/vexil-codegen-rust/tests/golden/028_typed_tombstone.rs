@@ -36,7 +36,7 @@ impl vexil_runtime::Unpack for Config {
         let _ = r.read_u32()?;
         let timeout_ms = r.read_u64()?;
         r.flush_to_byte_boundary();
-        let _unknown = r.read_remaining();
+        let _unknown = Vec::new();
         Ok(Self {
             name,
             timeout_ms,
