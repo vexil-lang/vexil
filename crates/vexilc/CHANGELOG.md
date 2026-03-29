@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.1] - 2026-03-29
+
+### Fixed
+
+- fix(vexilc,resolve): check --include, prefix-stripped loader, no panic on unresolved TypeId (#48)
+
+### Documentation
+
+- docs: update all READMEs and changelogs for v0.5.0 — watch, init, hash, Go backend
+
 ## [0.5.0] - 2026-03-29
 
 ### Added
