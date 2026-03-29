@@ -1,0 +1,32 @@
+syntax = "proto3";
+package vexil_bench;
+
+// Protobuf equivalents of the Vexil benchmark message types.
+// Used for encode/decode throughput comparison.
+
+message PbEnvelope {
+  uint32 version = 1;
+  uint32 domain = 2;
+  uint32 msg_type = 3;
+  uint32 session_id = 4;
+  uint64 timestamp = 5;
+  optional uint32 msg_id = 6;
+}
+
+message PbDrawText {
+  uint32 x = 1;
+  uint32 y = 2;
+  bytes fg = 3;
+  bytes bg = 4;
+  bool bold = 5;
+  bool italic = 6;
+  string text = 7;
+}
+
+message PbOutputChunk {
+  uint32 session_id = 1;
+  uint32 pane_id = 2;
+  uint64 sequence = 3;
+  bytes data = 4;
+  optional string command_tag = 5;
+}
