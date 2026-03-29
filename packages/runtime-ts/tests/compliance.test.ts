@@ -324,3 +324,264 @@ describe('Compliance: messages.json', () => {
     });
   }
 });
+
+describe('Compliance: optionals.json', () => {
+  interface OptionalVector {
+    name: string;
+    schema: string;
+    type: string;
+    value: Record<string, unknown>;
+    expected_bytes: string;
+    notes?: string;
+  }
+
+  const vectors: OptionalVector[] = JSON.parse(
+    readFileSync(join(vectorsDir, 'optionals.json'), 'utf-8'),
+  );
+
+  for (const vec of vectors) {
+    describe(vec.name, () => {
+      it('encode matches expected bytes', () => {
+        const w = new BitWriter();
+        const v = vec.value.v;
+        if (v === null) {
+          w.writeBool(false);
+        } else {
+          w.writeBool(true);
+          w.flushToByteBoundary();
+          w.writeU32(v as number);
+        }
+        expect(toHex(w.finish())).toBe(vec.expected_bytes);
+      });
+
+      it('decode matches expected value', () => {
+        const r = new BitReader(hexToBytes(vec.expected_bytes));
+        const present = r.readBool();
+        if (!present) {
+          expect(vec.value.v).toBeNull();
+        } else {
+          r.flushToByteBoundary();
+          const val = r.readU32();
+          expect(val).toBe(vec.value.v);
+        }
+      });
+    });
+  }
+});
+
+describe('Compliance: enums.json', () => {
+  interface EnumVector {
+    name: string;
+    schema: string;
+    type: string;
+    value: Record<string, unknown>;
+    expected_bytes: string;
+    notes?: string;
+  }
+
+  const vectors: EnumVector[] = JSON.parse(
+    readFileSync(join(vectorsDir, 'enums.json'), 'utf-8'),
+  );
+
+  const variantMap: Record<string, number> = { Active: 0, Inactive: 1 };
+  const indexToVariant = ['Active', 'Inactive'];
+
+  for (const vec of vectors) {
+    describe(vec.name, () => {
+      it('encode matches expected bytes', () => {
+        const w = new BitWriter();
+        const variant = vec.value.v as string;
+        w.writeBits(variantMap[variant], 1);
+        expect(toHex(w.finish())).toBe(vec.expected_bytes);
+      });
+
+      it('decode matches expected value', () => {
+        const r = new BitReader(hexToBytes(vec.expected_bytes));
+        const idx = r.readBits(1);
+        expect(indexToVariant[idx]).toBe(vec.value.v);
+      });
+    });
+  }
+});
+
+describe('Compliance: unions.json', () => {
+  interface UnionVector {
+    name: string;
+    schema: string;
+    type: string;
+    value: Record<string, unknown>;
+    expected_bytes: string;
+    notes?: string;
+  }
+
+  const vectors: UnionVector[] = JSON.parse(
+    readFileSync(join(vectorsDir, 'unions.json'), 'utf-8'),
+  );
+
+  for (const vec of vectors) {
+    describe(vec.name, () => {
+      it('encode matches expected bytes', () => {
+        const w = new BitWriter();
+        const unionVal = vec.value.v as Record<string, unknown>;
+        const variant = unionVal.variant as string;
+        const discriminant = variant === 'Circle' ? 0 : 1;
+
+        const pw = new BitWriter();
+        if (variant === 'Circle') {
+          pw.writeF32(Math.fround(unionVal.radius as number));
+        } else {
+          pw.writeF32(Math.fround(unionVal.w as number));
+          pw.writeF32(Math.fround(unionVal.h as number));
+        }
+        const payload = pw.finish();
+
+        w.writeLeb128(discriminant);
+        w.writeLeb128(payload.length);
+        w.writeRawBytes(payload);
+
+        expect(toHex(w.finish())).toBe(vec.expected_bytes);
+      });
+
+      it('decode matches expected value', () => {
+        const r = new BitReader(hexToBytes(vec.expected_bytes));
+        const discriminant = r.readLeb128();
+        const payloadLen = r.readLeb128();
+        const payloadBytes = r.readRawBytes(payloadLen);
+        const pr = new BitReader(payloadBytes);
+
+        const unionVal = vec.value.v as Record<string, unknown>;
+        if (discriminant === 0) {
+          const radius = pr.readF32();
+          expect(radius).toBeCloseTo(unionVal.radius as number, 5);
+        } else {
+          const w = pr.readF32();
+          const h = pr.readF32();
+          expect(w).toBeCloseTo(unionVal.w as number, 5);
+          expect(h).toBeCloseTo(unionVal.h as number, 5);
+        }
+      });
+    });
+  }
+});
+
+describe('Compliance: arrays_maps.json', () => {
+  interface ArrayMapVector {
+    name: string;
+    schema: string;
+    type: string;
+    value: Record<string, unknown>;
+    expected_bytes: string;
+    notes?: string;
+  }
+
+  const vectors: ArrayMapVector[] = JSON.parse(
+    readFileSync(join(vectorsDir, 'arrays_maps.json'), 'utf-8'),
+  );
+
+  for (const vec of vectors) {
+    describe(vec.name, () => {
+      it('encode matches expected bytes', () => {
+        const w = new BitWriter();
+        const v = vec.value.v;
+
+        if (Array.isArray(v)) {
+          w.writeLeb128(v.length);
+          for (const elem of v) {
+            w.writeU32(elem as number);
+          }
+        } else if (typeof v === 'object' && v !== null) {
+          const entries = Object.entries(v as Record<string, unknown>);
+          w.writeLeb128(entries.length);
+          for (const [key, val] of entries) {
+            w.writeString(key);
+            w.writeU32(val as number);
+          }
+        }
+
+        expect(toHex(w.finish())).toBe(vec.expected_bytes);
+      });
+
+      it('decode matches expected value', () => {
+        const r = new BitReader(hexToBytes(vec.expected_bytes));
+        const v = vec.value.v;
+
+        if (Array.isArray(v)) {
+          const count = r.readLeb128();
+          expect(count).toBe(v.length);
+          for (let i = 0; i < count; i++) {
+            expect(r.readU32()).toBe(v[i]);
+          }
+        } else if (typeof v === 'object' && v !== null) {
+          const expected = v as Record<string, unknown>;
+          const count = r.readLeb128();
+          expect(count).toBe(Object.keys(expected).length);
+          for (let i = 0; i < count; i++) {
+            const key = r.readString();
+            const val = r.readU32();
+            expect(expected[key]).toBe(val);
+          }
+        }
+      });
+    });
+  }
+});
+
+describe('Compliance: evolution.json', () => {
+  interface EvolutionVector {
+    name: string;
+    schema_v1: string;
+    schema_v2: string;
+    type: string;
+    value_v1?: Record<string, unknown>;
+    value_v2?: Record<string, unknown>;
+    encoded_v1?: string;
+    encoded_v2?: string;
+    decoded_as_v1?: Record<string, unknown>;
+    decoded_as_v2?: Record<string, unknown>;
+    notes?: string;
+  }
+
+  const vectors: EvolutionVector[] = JSON.parse(
+    readFileSync(join(vectorsDir, 'evolution.json'), 'utf-8'),
+  );
+
+  it('v1 encode produces expected bytes', () => {
+    const vec = vectors.find(
+      (v) => v.name === 'v1_encode_v2_decode_appended_field',
+    )!;
+    const w = new BitWriter();
+    w.writeU32(vec.value_v1!.x as number);
+    expect(toHex(w.finish())).toBe(vec.encoded_v1);
+  });
+
+  it('v1 bytes decoded as v2 fills default for missing field', () => {
+    const vec = vectors.find(
+      (v) => v.name === 'v1_encode_v2_decode_appended_field',
+    )!;
+    const r = new BitReader(hexToBytes(vec.encoded_v1!));
+    const x = r.readU32();
+    const y = r.remaining() >= 2 ? r.readU16() : 0;
+    expect(x).toBe(vec.decoded_as_v2!.x);
+    expect(y).toBe(vec.decoded_as_v2!.y);
+  });
+
+  it('v2 encode produces expected bytes', () => {
+    const vec = vectors.find(
+      (v) => v.name === 'v2_encode_v1_decode_trailing_ignored',
+    )!;
+    const w = new BitWriter();
+    w.writeU32(vec.value_v2!.x as number);
+    w.writeU16(vec.value_v2!.y as number);
+    expect(toHex(w.finish())).toBe(vec.encoded_v2);
+  });
+
+  it('v2 bytes decoded as v1 ignores trailing bytes', () => {
+    const vec = vectors.find(
+      (v) => v.name === 'v2_encode_v1_decode_trailing_ignored',
+    )!;
+    const r = new BitReader(hexToBytes(vec.encoded_v2!));
+    const x = r.readU32();
+    expect(x).toBe(vec.decoded_as_v1!.x);
+    expect(r.remaining()).toBeGreaterThan(0);
+  });
+});

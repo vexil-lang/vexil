@@ -38,6 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
@@ -107,6 +112,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Rust 1.94
         uses: dtolnay/rust-toolchain@master

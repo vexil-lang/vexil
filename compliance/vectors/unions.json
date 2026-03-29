@@ -4,7 +4,7 @@
     "schema": "namespace test.uni\nunion Shape {\n    Circle @0 { radius @0 : f32 }\n    Rect @1 { w @0 : f32  h @1 : f32 }\n}\nmessage M { v @0 : Shape }",
     "type": "M",
     "value": { "v": { "variant": "Circle", "radius": 1.5 } },
-    "expected_bytes": "000400000000c03f",
+    "expected_bytes": "00040000c03f",
     "notes": "discriminant LEB128(0) + length LEB128(4) + f32 LE(1.5)"
   }
 ]

@@ -2,6 +2,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use vexil_bench::messages::{DrawText, Envelope, OutputChunk};
 use vexil_runtime::{BitReader, BitWriter};
 
+use prost::Message;
+use vexil_bench::pb::{PbDrawText, PbEnvelope, PbOutputChunk};
+
 fn bench_envelope(c: &mut Criterion) {
     let env = Envelope {
         version: 1,
@@ -137,11 +140,116 @@ fn bench_batch(c: &mut Criterion) {
     });
 }
 
+fn bench_pb_envelope(c: &mut Criterion) {
+    let env = PbEnvelope {
+        version: 1,
+        domain: 3,
+        msg_type: 42,
+        session_id: 1,
+        timestamp: 1_234_567_890_123,
+        msg_id: Some(99),
+    };
+    let bytes = env.encode_to_vec();
+
+    c.bench_function("Envelope encode (Protobuf)", |b| {
+        b.iter(|| {
+            black_box(black_box(&env).encode_to_vec());
+        })
+    });
+    c.bench_function("Envelope decode (Protobuf)", |b| {
+        b.iter(|| {
+            black_box(PbEnvelope::decode(black_box(bytes.as_slice())).unwrap());
+        })
+    });
+}
+
+fn bench_pb_draw_text(c: &mut Criterion) {
+    let dt = PbDrawText {
+        x: 80,
+        y: 24,
+        fg: vec![255, 128, 0],
+        bg: vec![0, 0, 0],
+        bold: true,
+        italic: false,
+        text: "Hello, Vexil! This is a medium-length terminal draw command.".into(),
+    };
+    let bytes = dt.encode_to_vec();
+
+    c.bench_function("DrawText encode (Protobuf)", |b| {
+        b.iter(|| {
+            black_box(black_box(&dt).encode_to_vec());
+        })
+    });
+    c.bench_function("DrawText decode (Protobuf)", |b| {
+        b.iter(|| {
+            black_box(PbDrawText::decode(black_box(bytes.as_slice())).unwrap());
+        })
+    });
+}
+
+fn bench_pb_output_chunk(c: &mut Criterion) {
+    let chunk = PbOutputChunk {
+        session_id: 42,
+        pane_id: 7,
+        sequence: 1_000_000,
+        data: vec![0xAB; 4096],
+        command_tag: Some("cargo build --release".into()),
+    };
+    let bytes = chunk.encode_to_vec();
+
+    c.bench_function("OutputChunk encode (4KiB) (Protobuf)", |b| {
+        b.iter(|| {
+            black_box(black_box(&chunk).encode_to_vec());
+        })
+    });
+    c.bench_function("OutputChunk decode (4KiB) (Protobuf)", |b| {
+        b.iter(|| {
+            black_box(PbOutputChunk::decode(black_box(bytes.as_slice())).unwrap());
+        })
+    });
+}
+
+fn bench_pb_batch(c: &mut Criterion) {
+    let env = PbEnvelope {
+        version: 1,
+        domain: 3,
+        msg_type: 42,
+        session_id: 1,
+        timestamp: 1_234_567_890_123,
+        msg_id: Some(99),
+    };
+    let commands: Vec<PbDrawText> = (0..50)
+        .map(|i| PbDrawText {
+            x: i * 2,
+            y: i,
+            fg: vec![255, 200, 100],
+            bg: vec![0, 0, 0],
+            bold: i % 3 == 0,
+            italic: i % 5 == 0,
+            text: format!("line {i}: some terminal output text here"),
+        })
+        .collect();
+
+    c.bench_function("Batch encode (1+50) (Protobuf)", |b| {
+        b.iter(|| {
+            let mut buf = black_box(&env).encode_to_vec();
+            for cmd in black_box(&commands) {
+                cmd.encode(&mut buf).unwrap();
+            }
+            black_box(buf);
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_envelope,
     bench_draw_text,
     bench_output_chunk,
-    bench_batch
+    bench_batch,
+    bench_pb_envelope,
+    bench_pb_draw_text,
+    bench_pb_output_chunk,
+    bench_pb_batch,
 );
 criterion_main!(benches);

@@ -79,6 +79,14 @@ impl<'s> Parser<'s> {
         matches!(self.peek_kind(), TokenKind::Eof)
     }
 
+    /// Peek at the token `offset` positions ahead of the current position
+    /// without consuming anything.  `peek_nth(0)` is equivalent to `peek()`.
+    pub(crate) fn peek_nth(&self, offset: usize) -> &Token {
+        self.tokens
+            .get(self.pos + offset)
+            .unwrap_or_else(|| self.tokens.last().unwrap_or(&EOF_TOKEN))
+    }
+
     #[allow(dead_code)] // Reserved for LSP integration
     pub(crate) fn expect(&mut self, kind: &TokenKind) -> Option<Token> {
         if self.at(kind) {
