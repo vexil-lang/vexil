@@ -6,6 +6,10 @@ publish = false
 
 [dependencies]
 vexil-runtime = { path = "../vexil-runtime" }
+prost = "0.13"
+
+[build-dependencies]
+prost-build = "0.13"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
