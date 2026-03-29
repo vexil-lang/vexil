@@ -1,0 +1,15 @@
+[book]
+title = "Vexil Documentation"
+description = "A typed schema definition language with first-class encoding semantics"
+authors = ["Orix Systems contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../../target/book"
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/vexil-lang/vexil"
+edit-url-template = "https://github.com/vexil-lang/vexil/edit/main/docs/book/src/{path}"
