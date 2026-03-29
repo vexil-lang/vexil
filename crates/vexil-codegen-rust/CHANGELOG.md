@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.3] - 2026-03-29
+
+### Fixed
+
+- fix: readRemaining eats sibling array elements + union Pack spurious flush (fixes #40)
+
+### Other
+
+- test: regression tests for #40 — union array decode + spurious flush byte
+
 ## [0.4.1] - 2026-03-28
 
 ### Fixed
