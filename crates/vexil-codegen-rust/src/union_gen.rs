@@ -45,9 +45,15 @@ fn emit_write_to_payload(
     let code = scratch.finish();
     // Replace `w.` → `payload_w.` for method calls, and `(w)` → `(&mut payload_w)` for
     // argument passing (e.g. Named types emit `.pack(w)?;`)
+    //
+    // Union variant fields are already borrowed (`&T`) from the match destructuring,
+    // so `emit_write`'s `&access` patterns produce double-references (`&&Vec<T>`).
+    // Fix by stripping the extra `&` for iteration/match contexts.
     let redirected = code
         .replace("w.", "payload_w.")
-        .replace("(w)", "(&mut payload_w)");
+        .replace("(w)", "(&mut payload_w)")
+        .replace(&format!("in &{access}"), &format!("in {access}"))
+        .replace(&format!("match &{access}"), &format!("match {access}"));
     for line in redirected.lines() {
         if !line.trim().is_empty() {
             w.line(line.trim());

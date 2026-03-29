@@ -69,6 +69,11 @@ fn simple_diff(expected: &str, actual: &str) -> String {
 }
 
 #[test]
+fn test_003_sub_byte() {
+    golden_test("003_sub_byte");
+}
+
+#[test]
 fn test_006_message() {
     golden_test("006_message");
 }
