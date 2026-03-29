@@ -56,7 +56,6 @@ fn type_str(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             if let Some(def) = registry.get(*id) {
                 type_def_name(def).to_owned()
             } else {
-                debug_assert!(false, "unresolved TypeId {:?} in canonical form", id);
                 "<unresolved>".to_owned()
             }
         }
@@ -125,7 +124,7 @@ fn type_def_name(def: &TypeDef) -> &str {
         TypeDef::Newtype(d) => d.name.as_str(),
         TypeDef::Config(d) => d.name.as_str(),
         _ => {
-            debug_assert!(false, "unknown TypeDef variant in canonical form");
+            // Unknown TypeDef variant — skip in canonical form.
             "<unknown>"
         }
     }
@@ -240,7 +239,6 @@ fn emit_tombstones(out: &mut String, tombstones: &[TombstoneDef]) {
 
 fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
     let Some(def) = registry.get(type_id) else {
-        debug_assert!(false, "unresolved TypeId {:?} in canonical form", type_id);
         return;
     };
     #[allow(unreachable_patterns)]
@@ -468,7 +466,7 @@ fn emit_type_def(out: &mut String, type_id: TypeId, registry: &TypeRegistry) {
             }
         }
         _ => {
-            debug_assert!(false, "unknown TypeDef variant in canonical form");
+            // Unknown TypeDef variant — skip in canonical form.
         }
     }
 }

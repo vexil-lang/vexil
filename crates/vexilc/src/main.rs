@@ -21,7 +21,7 @@ fn render_diagnostic(filename: &str, source: &str, diag: &Diagnostic) {
         .ok();
 }
 
-fn cmd_check(filename: &str) -> i32 {
+fn cmd_check(filename: &str, include_paths: &[String]) -> i32 {
     let source = match std::fs::read_to_string(filename) {
         Ok(s) => s,
         Err(e) => {
@@ -29,21 +29,77 @@ fn cmd_check(filename: &str) -> i32 {
             return 1;
         }
     };
-    let result = vexil_lang::compile(&source);
-    for diag in &result.diagnostics {
-        render_diagnostic(filename, &source, diag);
+
+    // Detect import statements — if present, --include is needed for full
+    // type resolution.  Without it, imported types become unresolved stubs.
+    let has_imports = source.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("import ")
+    });
+
+    if include_paths.is_empty() && has_imports {
+        eprintln!(
+            "warning: {filename} contains import statements but no --include paths were given"
+        );
+        eprintln!("hint: use `vexilc check {filename} --include <dir>` to resolve imports");
     }
-    if result
-        .diagnostics
-        .iter()
-        .any(|d| d.severity == Severity::Error)
-    {
-        return 1;
-    }
-    if let Some(ref compiled) = result.compiled {
-        let hash = vexil_lang::canonical::schema_hash(compiled);
-        let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
-        println!("schema hash: {hex}");
+
+    if include_paths.is_empty() {
+        // Single-file mode
+        let result = vexil_lang::compile(&source);
+        for diag in &result.diagnostics {
+            render_diagnostic(filename, &source, diag);
+        }
+        if result
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error)
+        {
+            return 1;
+        }
+        if let Some(ref compiled) = result.compiled {
+            if !has_imports {
+                let hash = vexil_lang::canonical::schema_hash(compiled);
+                let hex: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+                println!("schema hash: {hex}");
+            }
+        }
+    } else {
+        // Multi-file mode with --include
+        let root_path = std::path::PathBuf::from(filename);
+        let include_dirs: Vec<std::path::PathBuf> =
+            include_paths.iter().map(std::path::PathBuf::from).collect();
+        let loader = vexil_lang::resolve::FilesystemLoader::new(include_dirs);
+
+        let result = match vexil_lang::compile_project(&source, &root_path, &loader) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return 1;
+            }
+        };
+
+        let has_errors = result
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error);
+        for diag in &result.diagnostics {
+            let file = diag
+                .source_file
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|| filename.to_string());
+            let severity = match diag.severity {
+                Severity::Error => "error",
+                Severity::Warning => "warning",
+            };
+            eprintln!("{severity}: {file}: {}", diag.message);
+        }
+        if has_errors {
+            return 1;
+        }
+
+        eprintln!("check passed: {} schemas compiled", result.schemas.len());
     }
     0
 }
@@ -828,7 +884,7 @@ fn cmd_watch(root_file: &str, target: &str, output: Option<&str>, includes: &[St
     println!("[watch] Initial build...");
     let code = match output {
         Some(out) => cmd_build(root_file, includes, out, target),
-        None => cmd_check(root_file),
+        None => cmd_check(root_file, includes),
     };
     if code == 0 {
         println!("[watch] Ready. Watching for changes...");
@@ -903,7 +959,7 @@ fn cmd_watch(root_file: &str, target: &str, output: Option<&str>, includes: &[St
                 println!("\n[watch] Change detected, rebuilding...");
                 let code = match output {
                     Some(out) => cmd_build(root_file, includes, out, target),
-                    None => cmd_check(root_file),
+                    None => cmd_check(root_file, includes),
                 };
                 if code == 0 {
                     println!("[watch] OK");
@@ -940,11 +996,29 @@ fn main() {
 
     match args.get(1).map(|s| s.as_str()) {
         Some("check") => {
-            if args.len() != 3 {
-                eprintln!("Usage: vexilc check <file.vexil>");
+            if args.len() < 3 {
+                eprintln!("Usage: vexilc check <file.vexil> [--include <dir> ...]");
                 std::process::exit(1);
             }
-            std::process::exit(cmd_check(&args[2]));
+            let filename = &args[2];
+            let mut include_paths = Vec::new();
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--include" => {
+                        i += 1;
+                        if i < args.len() {
+                            include_paths.push(args[i].clone());
+                        }
+                    }
+                    other => {
+                        eprintln!("unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            std::process::exit(cmd_check(filename, &include_paths));
         }
         Some("compile") => {
             // vexilc compile <file.vexil> -o <out.vxc|out.vxcp>
