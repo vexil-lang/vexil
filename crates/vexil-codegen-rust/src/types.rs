@@ -66,10 +66,26 @@ fn primitive_type(p: &PrimitiveType) -> &'static str {
 }
 
 fn sub_byte_type(s: &SubByteType) -> &'static str {
+    let containing = containing_int_type(s.bits);
     if s.signed {
-        "i8"
+        match containing {
+            "u8" => "i8",
+            "u16" => "i16",
+            "u32" => "i32",
+            _ => "i64",
+        }
     } else {
-        "u8"
+        containing
+    }
+}
+
+/// Returns the smallest unsigned Rust integer type that can hold `bits` bits.
+pub(crate) fn containing_int_type(bits: u8) -> &'static str {
+    match bits {
+        0..=8 => "u8",
+        9..=16 => "u16",
+        17..=32 => "u32",
+        _ => "u64",
     }
 }
 
