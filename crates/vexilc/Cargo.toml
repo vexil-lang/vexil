@@ -15,7 +15,7 @@ categories = ["compilers", "development-tools", "command-line-utilities"]
 vexil-lang = { path = "../vexil-lang", version = "^0.4.3" }
 vexil-codegen-rust = { path = "../vexil-codegen-rust", version = "^0.4.2" }
 vexil-codegen-ts = { path = "../vexil-codegen-ts", version = "^0.4.2" }
-vexil-codegen-go = { path = "../vexil-codegen-go", version = "^0.4.2" }
+vexil-codegen-go = { path = "../vexil-codegen-go", version = "^0.4.3" }
 vexil-store = { path = "../vexil-store", version = "^0.4.2" }
 ariadne = "0.6"
 serde = { version = "1", features = ["derive"] }
