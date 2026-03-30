@@ -177,6 +177,11 @@ fn valid_030_newtype_map_key() {
     parse_valid("030_newtype_map_key.vexil");
 }
 
+#[test]
+fn valid_031_custom_annotations() {
+    parse_valid("031_custom_annotations.vexil");
+}
+
 // Structure errors
 #[test]
 fn invalid_001_missing_namespace() {

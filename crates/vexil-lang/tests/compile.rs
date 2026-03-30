@@ -640,3 +640,28 @@ fn flags_wire_bytes_high_bits() {
         _ => panic!("expected flags"),
     }
 }
+
+/// Custom annotations are preserved through compilation into the IR.
+#[test]
+fn custom_annotations_preserved() {
+    let source = r#"
+@version("1.0.0")
+namespace test.custom
+
+@priority("Critical")
+@routing("broadcast")
+message Alert {
+    code @0 : u32
+}
+"#;
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.expect("should compile");
+    let alert_id = compiled.declarations[0];
+    if let TypeDef::Message(msg) = compiled.registry.get(alert_id).unwrap() {
+        assert_eq!(msg.annotations.custom.len(), 2);
+        assert_eq!(msg.annotations.custom[0].name.as_str(), "priority");
+        assert_eq!(msg.annotations.custom[1].name.as_str(), "routing");
+    } else {
+        panic!("expected Message");
+    }
+}

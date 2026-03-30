@@ -1,0 +1,15 @@
+# User-defined annotations are preserved through compilation.
+@version("1.0.0")
+namespace test.custom_annotations
+
+@priority("Critical")
+@routing("broadcast")
+message Alert {
+    code    @0 : u32
+    message @1 : string
+}
+
+@priority("Normal")
+message Heartbeat {
+    seq @0 : u64
+}
