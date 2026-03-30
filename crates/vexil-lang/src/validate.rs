@@ -37,6 +37,7 @@ struct ValidationContext<'a> {
     decl_map: &'a HashMap<&'a SmolStr, (DeclKind, Span)>,
     imported_names: &'a HashSet<&'a SmolStr>,
     has_wildcard_import: bool,
+    newtype_inners: &'a HashMap<&'a SmolStr, &'a TypeExpr>,
 }
 
 impl ValidationContext<'_> {
@@ -45,6 +46,10 @@ impl ValidationContext<'_> {
         self.decl_map.contains_key(name)
             || self.imported_names.contains(name)
             || self.has_wildcard_import
+    }
+
+    fn newtype_inner(&self, name: &SmolStr) -> Option<&TypeExpr> {
+        self.newtype_inners.get(name).copied()
     }
 }
 
@@ -103,10 +108,18 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
         }
     }
 
+    let mut newtype_inners: HashMap<&SmolStr, &TypeExpr> = HashMap::new();
+    for decl_spanned in &schema.declarations {
+        if let Decl::Newtype(d) = &decl_spanned.node {
+            newtype_inners.insert(&d.name.node, &d.inner_type.node);
+        }
+    }
+
     let ctx = ValidationContext {
         decl_map: &decl_map,
         imported_names: &imported_names,
         has_wildcard_import,
+        newtype_inners: &newtype_inners,
     };
 
     if !allow_reserved {
@@ -456,7 +469,18 @@ fn check_map_key_type(
     ctx: &ValidationContext<'_>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    let invalid = match &key.node {
+    if is_invalid_map_key(&key.node, ctx) {
+        diags.push(Diagnostic::error(
+            key.span,
+            ErrorClass::InvalidMapKey,
+            "invalid map key type",
+        ));
+    }
+}
+
+/// Returns true if the given type expression is NOT a valid map key.
+fn is_invalid_map_key(ty: &TypeExpr, ctx: &ValidationContext<'_>) -> bool {
+    match ty {
         TypeExpr::Primitive(PrimitiveType::F32 | PrimitiveType::F64 | PrimitiveType::Void) => true,
         TypeExpr::Optional(_)
         | TypeExpr::Array(_)
@@ -464,23 +488,23 @@ fn check_map_key_type(
         | TypeExpr::Result(_, _) => true,
         TypeExpr::Named(name) => {
             if let Some((kind, _)) = ctx.decl_map.get(name) {
-                matches!(
-                    kind,
-                    DeclKind::Message | DeclKind::Union | DeclKind::Newtype | DeclKind::Config
-                )
+                match kind {
+                    DeclKind::Message | DeclKind::Union | DeclKind::Config => true,
+                    DeclKind::Newtype => {
+                        // Newtypes can't nest (NewtypeOverNewtype), so inner is never another newtype.
+                        // Check if the inner type is a valid key type. For imported newtypes
+                        // where we don't have the inner type, allow it — the type checker
+                        // will catch actual errors later.
+                        ctx.newtype_inner(name)
+                            .map_or(false, |inner| is_invalid_map_key(inner, ctx))
+                    }
+                    _ => false,
+                }
             } else {
                 false
             }
         }
         _ => false,
-    };
-
-    if invalid {
-        diags.push(Diagnostic::error(
-            key.span,
-            ErrorClass::InvalidMapKey,
-            "invalid map key type",
-        ));
     }
 }
 
