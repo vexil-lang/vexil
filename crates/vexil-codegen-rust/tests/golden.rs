@@ -112,3 +112,8 @@ fn test_016_recursive() {
 fn test_028_typed_tombstone() {
     golden_test("028_typed_tombstone");
 }
+
+#[test]
+fn test_030_newtype_map_key() {
+    golden_test("030_newtype_map_key");
+}
