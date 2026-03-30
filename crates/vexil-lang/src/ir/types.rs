@@ -200,6 +200,35 @@ pub struct DeprecatedInfo {
     pub since: Option<SmolStr>,
 }
 
+/// A user-defined annotation preserved from source through to IR.
+///
+/// Unknown annotations (not `doc`, `deprecated`, `since`, `revision`,
+/// `non_exhaustive`, `version`, or encoding annotations) are collected
+/// here so SDK consumers can access custom metadata without codegen
+/// needing to know about them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomAnnotation {
+    pub name: SmolStr,
+    pub args: Vec<CustomAnnotationArg>,
+}
+
+/// A single argument to a custom annotation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomAnnotationArg {
+    pub key: Option<SmolStr>,
+    pub value: CustomAnnotationValue,
+}
+
+/// Value of a custom annotation argument.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CustomAnnotationValue {
+    Int(u64),
+    Hex(u64),
+    Str(SmolStr),
+    Bool(bool),
+    Ident(SmolStr),
+}
+
 /// Annotations resolved from source and available on any IR node.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ResolvedAnnotations {
@@ -209,6 +238,7 @@ pub struct ResolvedAnnotations {
     pub revision: Option<u64>,
     pub non_exhaustive: bool,
     pub version: Option<SmolStr>,
+    pub custom: Vec<CustomAnnotation>,
 }
 
 // ---------------------------------------------------------------------------
