@@ -662,7 +662,9 @@ fn resolve_annotations_refs(annotations: &[&Annotation]) -> ResolvedAnnotations 
             "version" => {
                 result.version = extract_first_string_arg(ann);
             }
-            _ => {}
+            _ => {
+                result.custom.push(lower_custom_annotation(ann));
+            }
         }
     }
     result
@@ -700,6 +702,37 @@ fn extract_first_int_arg(ann: &Annotation) -> Option<u64> {
             _ => None,
         })
     })
+}
+
+fn lower_custom_annotation(ann: &Annotation) -> ir::CustomAnnotation {
+    ir::CustomAnnotation {
+        name: ann.name.node.clone(),
+        args: ann
+            .args
+            .as_ref()
+            .map(|args| {
+                args.iter()
+                    .map(|arg| ir::CustomAnnotationArg {
+                        key: arg.key.as_ref().map(|k| k.node.clone()),
+                        value: match &arg.value.node {
+                            AnnotationValue::Int(v) => ir::CustomAnnotationValue::Int(*v),
+                            AnnotationValue::Hex(v) => ir::CustomAnnotationValue::Hex(*v),
+                            AnnotationValue::Str(s) => {
+                                ir::CustomAnnotationValue::Str(SmolStr::new(s))
+                            }
+                            AnnotationValue::Bool(b) => ir::CustomAnnotationValue::Bool(*b),
+                            AnnotationValue::Ident(s) => {
+                                ir::CustomAnnotationValue::Ident(s.clone())
+                            }
+                            AnnotationValue::UpperIdent(s) => {
+                                ir::CustomAnnotationValue::Ident(s.clone())
+                            }
+                        },
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
 }
 
 fn lower_tombstone(
