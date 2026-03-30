@@ -19,6 +19,7 @@ Thumbs.db
 # Worktrees and AI tools
 .worktrees/
 .claude/
+docs/superpowers/archive/
 
 # Node.js
 node_modules/
