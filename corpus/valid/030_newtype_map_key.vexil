@@ -1,0 +1,12 @@
+# §3.4: Newtypes wrapping valid map key types are valid map keys.
+@version("1.0.0")
+namespace test.newtype_map_key
+
+newtype UserId : u32
+newtype Label  : string
+
+message UserProfile {
+    id      @0 : UserId
+    friends @1 : map<UserId, string>
+    tags    @2 : map<Label, u32>
+}

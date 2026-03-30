@@ -1,0 +1,12 @@
+# §3.4: Newtypes wrapping message types are NOT valid map keys.
+# EXPECTED ERROR: invalid map key type
+@version("1.0.0")
+namespace test.newtype_msg_key
+
+message Inner { x @0 : u8 }
+
+newtype WrappedMsg : Inner
+
+message Bad {
+    lookup @0 : map<WrappedMsg, string>
+}

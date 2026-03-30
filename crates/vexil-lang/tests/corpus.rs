@@ -172,6 +172,11 @@ fn valid_028_typed_tombstone() {
     parse_valid("028_typed_tombstone.vexil");
 }
 
+#[test]
+fn valid_030_newtype_map_key() {
+    parse_valid("030_newtype_map_key.vexil");
+}
+
 // Structure errors
 #[test]
 fn invalid_001_missing_namespace() {
@@ -486,6 +491,14 @@ fn invalid_031() {
 #[test]
 fn invalid_032() {
     parse_invalid("032_map_optional_key.vexil", ErrorClass::InvalidMapKey);
+}
+
+#[test]
+fn invalid_057_newtype_message_map_key() {
+    parse_invalid(
+        "057_newtype_message_map_key.vexil",
+        ErrorClass::InvalidMapKey,
+    );
 }
 
 #[test]
