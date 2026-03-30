@@ -496,7 +496,7 @@ fn is_invalid_map_key(ty: &TypeExpr, ctx: &ValidationContext<'_>) -> bool {
                         // where we don't have the inner type, allow it — the type checker
                         // will catch actual errors later.
                         ctx.newtype_inner(name)
-                            .map_or(false, |inner| is_invalid_map_key(inner, ctx))
+                            .is_some_and(|inner| is_invalid_map_key(inner, ctx))
                     }
                     _ => false,
                 }

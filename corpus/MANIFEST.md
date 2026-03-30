@@ -6,7 +6,7 @@ Generated: 2026-03-25
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (29 files)
+## Valid Corpus (32 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -39,8 +39,11 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 027_delta_on_message.vexil       | §13.4  | `@delta` on message declaration desugars to per-field |
 | 028_typed_tombstone.vexil        | §10    | Typed `@removed` tombstone for decode-and-discard |
 | 029_import_then_annotation.vexil | §2.7, §5 | Bare import followed by `@doc` annotation (#42 regression) |
+| 030_newtype_map_key.vexil | §3.4 | Newtypes wrapping valid key types as map keys |
+| 031_custom_annotations.vexil | — | User-defined annotations preserved through compilation |
+| 032_reserved_variant_names.vexil | — | Enum variants with Rust-reserved names |
 
-## Invalid Corpus (56 files)
+## Invalid Corpus (57 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -100,6 +103,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 054_limit_zero.vexil | §12.5 | Semantic | @limit(0) — N must be positive |
 | 055_namespace_before_version.vexil | §12.1 | Parse | @version after namespace (must be before) |
 | 056_duplicate_version.vexil | §12.1 | Semantic | Two @version annotations on same schema |
+| 057_newtype_message_map_key.vexil | §3.4 | Type | Newtype wrapping message as map key |
 
 ## Error class taxonomy
 
