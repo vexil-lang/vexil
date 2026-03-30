@@ -7,6 +7,16 @@ use crate::emit::CodeWriter;
 use crate::message::{emit_read, emit_write};
 use crate::types::rust_type;
 
+const RUST_RESERVED_VARIANTS: &[&str] = &["None", "Some", "Ok", "Err", "Self"];
+
+fn safe_variant_name(name: &str) -> std::borrow::Cow<'_, str> {
+    if RUST_RESERVED_VARIANTS.contains(&name) {
+        std::borrow::Cow::Owned(format!("r#{name}"))
+    } else {
+        std::borrow::Cow::Borrowed(name)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -137,10 +147,11 @@ pub fn emit_union(
             .collect::<Vec<_>>()
             .join(", ");
 
+        let vname_decl = safe_variant_name(variant.name.as_str());
         if fields_str.is_empty() {
-            w.line(&format!("{} {{}},", variant.name));
+            w.line(&format!("{} {{}},", vname_decl));
         } else {
-            w.line(&format!("{} {{ {} }},", variant.name, fields_str));
+            w.line(&format!("{} {{ {} }},", vname_decl, fields_str));
         }
     }
     if non_exhaustive {
@@ -158,7 +169,7 @@ pub fn emit_union(
 
     for variant in &un.variants {
         let ordinal = variant.ordinal;
-        let vname = variant.name.as_str();
+        let vname = safe_variant_name(variant.name.as_str());
 
         if variant.fields.is_empty() {
             // Empty variant: write discriminant + 0-length payload
@@ -219,7 +230,7 @@ pub fn emit_union(
 
     for variant in &un.variants {
         let ordinal = variant.ordinal;
-        let vname = variant.name.as_str();
+        let vname = safe_variant_name(variant.name.as_str());
 
         if variant.fields.is_empty() {
             w.open_block(&format!("{ordinal}_u64 =>"));

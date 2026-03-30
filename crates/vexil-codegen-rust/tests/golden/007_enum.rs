@@ -85,7 +85,7 @@ impl vexil_runtime::Unpack for ClientKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u64)]
 pub enum HardwareStatus {
-    Ok = 0_u64,
+    r#Ok = 0_u64,
     Warn = 1_u64,
     Fault = 2_u64,
 }
@@ -93,7 +93,7 @@ pub enum HardwareStatus {
 impl vexil_runtime::Pack for HardwareStatus {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         let disc: u64 = match self {
-            Self::Ok => 0_u64,
+            Self::r#Ok => 0_u64,
             Self::Warn => 1_u64,
             Self::Fault => 2_u64,
         };
@@ -106,7 +106,7 @@ impl vexil_runtime::Unpack for HardwareStatus {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let disc = r.read_bits(16_u8)?;
         match disc {
-            0_u64 => Ok(Self::Ok),
+            0_u64 => Ok(Self::r#Ok),
             1_u64 => Ok(Self::Warn),
             2_u64 => Ok(Self::Fault),
             _ => Err(vexil_runtime::DecodeError::UnknownEnumVariant { type_name: "HardwareStatus", value: disc }),

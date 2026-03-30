@@ -3,6 +3,24 @@ use vexil_lang::ir::{EnumDef, TypeRegistry};
 use crate::annotations::{emit_tombstones, emit_type_annotations};
 use crate::emit::CodeWriter;
 
+/// Variant names that collide with Rust prelude types or keywords.
+/// These require `r#` raw identifier syntax in generated code.
+const RUST_RESERVED_VARIANTS: &[&str] = &[
+    "None", "Some", // Option
+    "Ok", "Err",  // Result
+    "Self", // keyword
+];
+
+/// Returns the variant name escaped with `r#` if it collides with a
+/// Rust keyword or prelude type, otherwise returns it unchanged.
+fn safe_variant_name(name: &str) -> std::borrow::Cow<'_, str> {
+    if RUST_RESERVED_VARIANTS.contains(&name) {
+        std::borrow::Cow::Owned(format!("r#{name}"))
+    } else {
+        std::borrow::Cow::Borrowed(name)
+    }
+}
+
 /// Emit a complete enum type with `Pack` and `Unpack` implementations.
 ///
 /// # Non-exhaustive enums
@@ -51,9 +69,12 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
         }
         if non_exhaustive {
             // No repr discriminant allowed when there are tuple variants
-            w.line(&format!("{},", variant.name));
+            w.line(&format!("{},", safe_variant_name(&variant.name)));
         } else {
-            w.line(&format!("{} = {ordinal}_u64,", variant.name));
+            w.line(&format!(
+                "{} = {ordinal}_u64,",
+                safe_variant_name(&variant.name)
+            ));
         }
     }
     if non_exhaustive {
@@ -74,7 +95,10 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
     w.indent();
     for variant in &en.variants {
         let ordinal = variant.ordinal;
-        w.line(&format!("Self::{} => {ordinal}_u64,", variant.name));
+        w.line(&format!(
+            "Self::{} => {ordinal}_u64,",
+            safe_variant_name(&variant.name)
+        ));
     }
     if non_exhaustive {
         w.line("Self::Unknown(v) => *v,");
@@ -96,7 +120,10 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
     w.open_block("match disc");
     for variant in &en.variants {
         let ordinal = variant.ordinal;
-        w.line(&format!("{ordinal}_u64 => Ok(Self::{}),", variant.name));
+        w.line(&format!(
+            "{ordinal}_u64 => Ok(Self::{}),",
+            safe_variant_name(&variant.name)
+        ));
     }
     if non_exhaustive {
         w.line("other => Ok(Self::Unknown(other)),");

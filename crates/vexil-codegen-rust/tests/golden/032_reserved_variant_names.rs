@@ -10,7 +10,7 @@ pub const SCHEMA_VERSION: &str = "1.0.0";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u64)]
 pub enum ImageProtocol {
-    None = 0_u64,
+    r#None = 0_u64,
     Sixel = 1_u64,
     Kitty = 2_u64,
 }
@@ -18,7 +18,7 @@ pub enum ImageProtocol {
 impl vexil_runtime::Pack for ImageProtocol {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         let disc: u64 = match self {
-            Self::None => 0_u64,
+            Self::r#None => 0_u64,
             Self::Sixel => 1_u64,
             Self::Kitty => 2_u64,
         };
@@ -31,7 +31,7 @@ impl vexil_runtime::Unpack for ImageProtocol {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let disc = r.read_bits(2_u8)?;
         match disc {
-            0_u64 => Ok(Self::None),
+            0_u64 => Ok(Self::r#None),
             1_u64 => Ok(Self::Sixel),
             2_u64 => Ok(Self::Kitty),
             _ => Err(vexil_runtime::DecodeError::UnknownEnumVariant { type_name: "ImageProtocol", value: disc }),
@@ -44,19 +44,19 @@ impl vexil_runtime::Unpack for ImageProtocol {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u64)]
 pub enum ParseResult {
-    Ok = 0_u64,
-    Err = 1_u64,
-    Some = 2_u64,
-    None = 3_u64,
+    r#Ok = 0_u64,
+    r#Err = 1_u64,
+    r#Some = 2_u64,
+    r#None = 3_u64,
 }
 
 impl vexil_runtime::Pack for ParseResult {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         let disc: u64 = match self {
-            Self::Ok => 0_u64,
-            Self::Err => 1_u64,
-            Self::Some => 2_u64,
-            Self::None => 3_u64,
+            Self::r#Ok => 0_u64,
+            Self::r#Err => 1_u64,
+            Self::r#Some => 2_u64,
+            Self::r#None => 3_u64,
         };
         w.write_bits(disc, 2_u8);
         Ok(())
@@ -67,10 +67,10 @@ impl vexil_runtime::Unpack for ParseResult {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let disc = r.read_bits(2_u8)?;
         match disc {
-            0_u64 => Ok(Self::Ok),
-            1_u64 => Ok(Self::Err),
-            2_u64 => Ok(Self::Some),
-            3_u64 => Ok(Self::None),
+            0_u64 => Ok(Self::r#Ok),
+            1_u64 => Ok(Self::r#Err),
+            2_u64 => Ok(Self::r#Some),
+            3_u64 => Ok(Self::r#None),
             _ => Err(vexil_runtime::DecodeError::UnknownEnumVariant { type_name: "ParseResult", value: disc }),
         }
     }
