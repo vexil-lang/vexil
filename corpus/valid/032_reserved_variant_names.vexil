@@ -1,0 +1,16 @@
+# Enum variants with names that collide with Rust prelude types.
+@version("1.0.0")
+namespace test.reserved_variants
+
+enum ImageProtocol {
+    None    @0
+    Sixel   @1
+    Kitty   @2
+}
+
+enum ParseResult {
+    Ok   @0
+    Err  @1
+    Some @2
+    None @3
+}

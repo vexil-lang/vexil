@@ -182,6 +182,11 @@ fn valid_031_custom_annotations() {
     parse_valid("031_custom_annotations.vexil");
 }
 
+#[test]
+fn valid_032_reserved_variant_names() {
+    parse_valid("032_reserved_variant_names.vexil");
+}
+
 // Structure errors
 #[test]
 fn invalid_001_missing_namespace() {

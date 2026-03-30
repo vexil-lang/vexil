@@ -117,3 +117,8 @@ fn test_028_typed_tombstone() {
 fn test_030_newtype_map_key() {
     golden_test("030_newtype_map_key");
 }
+
+#[test]
+fn test_032_reserved_variant_names() {
+    golden_test("032_reserved_variant_names");
+}
