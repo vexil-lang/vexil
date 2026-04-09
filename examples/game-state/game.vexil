@@ -1,0 +1,60 @@
+namespace example.game
+
+# Game State Protocol
+# A multiplayer game state snapshot showing sub-byte fields,
+# geometric types, fixed arrays, enums, and where clauses.
+
+enum Team : u8 {
+    Red    @0
+    Blue   @1
+    Spectator @2
+}
+
+enum Weapon : u8 {
+    None_  @0
+    Pistol @1
+    Rifle  @2
+    Shotgun @3
+    Sniper @4
+}
+
+flags PowerUps {
+    Speed      @0
+    Shield     @1
+    DoubleDmg  @2
+    Invisible  @3
+}
+
+message Vec2 {
+    x @0 : fixed32
+    y @1 : fixed32
+}
+
+message PlayerState {
+    id         @0 : u16
+    team       @1 : Team
+    health     @2 : u8 where value <= 100
+    armor      @3 : u8 where value <= 100
+    weapon     @4 : Weapon
+    ammo       @5 : u8
+    position   @6 : Vec2
+    rotation   @7 : u16                          # 0..359 degrees
+    power_ups  @8 : PowerUps
+    score      @9 : u32 @varint
+    deaths     @10 : u16 @varint
+}
+
+message Projectile {
+    owner_id  @0 : u16
+    position  @1 : Vec2
+    velocity  @2 : Vec2
+    damage    @3 : u8 where value > 0
+}
+
+message GameState {
+    tick        @0 : u32 @varint
+    players     @1 : array<PlayerState>
+    projectiles @2 : array<Projectile>
+    # Fixed-size map: each team's base position
+    team_bases  @3 : map<u8, Vec2>               # team enum value → base position
+}
