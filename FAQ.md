@@ -14,7 +14,7 @@ Trade-offs: Vexil doesn't have formal schema evolution rules yet. Language targe
 
 ## Is Vexil production-ready?
 
-We're at v1.0-draft. The wire format is frozen and the language spec won't change without a major version bump. We have a 105-file conformance corpus, 540+ tests, and cross-implementation compliance vectors between Rust and TypeScript. The BLAKE3 schema hash means incompatible schema versions are caught at handshake time, not at runtime corruption.
+We're at v1.0-draft. The wire format is frozen and the language spec won't change without a major version bump. We have a 108-file conformance corpus (43 valid, 65 invalid), 560+ tests, and cross-implementation compliance vectors between Rust and TypeScript. The BLAKE3 schema hash means incompatible schema versions are caught at handshake time, not at runtime corruption.
 
 That said: the Go backend doesn't have compliance vectors yet, and we haven't done a security audit. If your system can't tolerate any wire format risk, wait for v1.0 final. If you're building something where "it works and we have tests" is enough, it's ready.
 

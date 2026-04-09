@@ -91,11 +91,14 @@ const decoded = decodeSensorReading(r);
 - **Type aliases**: `type UserId = u64` — same wire encoding, better names
 - **Compile-time constants**: `const MaxSize : u32 = 1024` — usable in array sizes and where clauses
 - **Where clauses**: `field @0 : u32 where value > 0` — validated on encode and decode
+- **Traits and impl**: `trait SensorData { sensor_id @0 : u32 }` — structural contracts, zero wire impact
+- **Invariants**: `invariant { value >= 0 }` — cross-field conditions in messages
+- **Type param bounds**: `type Sorted<T: Ord> = array<T>` — constrain generic types
 - BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
 - Rust, TypeScript, and Go backends from the same schema, byte-identical output verified by compliance vectors
 - Same data always produces the same bytes — no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
-- 105-file conformance corpus (41 valid, 64 invalid) that any implementation must pass
+- 108-file conformance corpus (43 valid, 65 invalid) that any implementation must pass
 
 ## Fixed-Point Types
 
@@ -273,8 +276,8 @@ spec/
   vexil-spec.md          # Language specification (normative, S1-S14)
   vexil-grammar.peg      # Formal PEG grammar
 corpus/
-  valid/                 # 41 schemas -- conformant impl must accept all
-  invalid/               # 64 schemas -- conformant impl must reject all
+  valid/                 # 43 schemas -- conformant impl must accept all
+  invalid/               # 65 schemas -- conformant impl must reject all
   projects/              # Multi-file integration tests
 compliance/
   vectors/               # Golden byte vectors, cross-implementation contract

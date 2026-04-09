@@ -27,6 +27,10 @@ Language complete. New types, codegen for all backends, optimized runtime, compr
 - `type Name = Target` — transparent type aliases
 - `const Name : Type = Value` — compile-time constants with cross-reference arithmetic
 - `where value > 0` — field-level validation constraints (auto-checked on encode/decode)
+- `trait Name { fields }` — structural contracts (zero wire impact)
+- `impl Trait for Type` — trait implementations with validation
+- `invariant { condition }` — cross-field conditions in messages
+- `type Name<T: Trait> = ...` — type parameter bounds
 
 **Runtime improvements:**
 - `BitWriter::with_capacity(n)` — pre-allocate to avoid reallocations
@@ -42,14 +46,25 @@ Language complete. New types, codegen for all backends, optimized runtime, compr
 - Golden test files for all new types
 - 14 new compliance vector tests
 
+**CLI:**
+- `vexilc check --json` — machine-readable diagnostics for CI
+- `NO_COLOR` env var support — disables ANSI colors
+
+**API:**
+- `CompileResult.is_ok()`, `.has_errors()`, `.errors()`, `.warnings()`
+- `CompiledSchema.type_names()`, `.find_type(name)`, `.hash_hex()`
+- `FormatOptions::builder()` — builder pattern for formatting options
+
+**Testing:**
+- 20 property-based tests with proptest (roundtrip invariants)
+
 **Docs:**
-- 105-file conformance corpus (41 valid, 64 invalid)
+- 108-file conformance corpus (43 valid, 65 invalid)
 - 32 golden byte tests
 - 11 book chapters
 - Doc comments on all public items across all crates
 - Human-voice README, FAQ, contributing guide
-
-**Spec:** 1.0.0-draft (frozen wire format)
+- Game state protocol example
 
 ### v0.5.0 / v0.4.2 (2026-03-29)
 

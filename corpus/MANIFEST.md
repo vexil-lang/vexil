@@ -6,7 +6,7 @@ Generated: 2026-04-09
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (41 files)
+## Valid Corpus (43 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -51,8 +51,10 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 039_geometric.vexil | §3.1, §3.4 | Geometric types: vec2, vec3, vec4, quat, mat3, mat4 with element types |
 | 040_inline_bits.vexil | §3.4 | Inline bitfield type: `bits { r, w, x }` with named bits |
 | 041_map_key_ordering.vexil | §3.4 | Map key canonical sort order for all valid key types |
+| 042_trait_impl.vexil | §4.9 | Trait declarations with fields and functions, impl for target type |
+| 043_invariant.vexil | §4.1 | Named and unnamed invariant conditions in message bodies |
 
-## Invalid Corpus (64 files)
+## Invalid Corpus (65 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -120,6 +122,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 062_where_type_mismatch.vexil | §4.1 | Type | Where clause: string literal compared to numeric field |
 | 063_where_range_invalid.vexil | §4.1 | Type | Where clause: range expression on string type |
 | 064_where_len_invalid.vexil | §4.1 | Type | Where clause: len() on non-collection type |
+| 065_impl_unknown_trait.vexil | §4.9 | Type | Impl references trait that doesn't exist |
 
 ## Error class taxonomy
 

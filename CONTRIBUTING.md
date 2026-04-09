@@ -30,7 +30,7 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-There are 540+ tests across 34 test suites. All 41 valid corpus schemas must compile and all 64 invalid schemas must produce errors. If you add a corpus file, update `corpus/MANIFEST.md`.
+There are 560+ tests across 37 test suites. All 43 valid corpus schemas must compile and all 65 invalid schemas must produce errors. If you add a corpus file, update `corpus/MANIFEST.md`.
 
 ### Lint & Format
 
