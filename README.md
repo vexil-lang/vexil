@@ -83,106 +83,98 @@ const decoded = decodeSensorReading(r);
 - `u1`..`u64` and `i2`..`i64` occupy exactly N bits on the wire, LSB-first
 - `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), and `@delta` (per-field delta from previous value) are declared in the schema
 - **Eight declaration kinds**: `message`, `enum`, `flags`, `union`, `newtype`, `config`, `type` (alias), `const`
-- **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) for high-precision fractional values
-- **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` for graphics and simulation
-- **Fixed-size arrays**: `array<T, N>` with no length prefix on the wire
-- **Set type**: `set<T>` for unordered unique collections with canonical sort order
-- **Inline bitfields**: `bits { a, b, c }` for anonymous flags within a message
-- **Type aliases**: `type UserId = u64` for transparent type synonyms
-- **Compile-time constants**: `const MaxSize = 1024` for use in constraints and array sizes
-- **Where clauses**: `field @0 : u32 where value > 0` for declarative validation constraints
+- **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) — deterministic fractional arithmetic, no IEEE 754 surprises
+- **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` — T can be fixed32, fixed64, f32, or f64
+- **Fixed-size arrays**: `array<T, N>` — no length prefix on wire, size is part of the schema
+- **Set type**: `set<T>` — sorted on encode, duplicates silently dropped
+- **Inline bitfields**: `bits { a, b, c }` — anonymous flags, exactly N bits
+- **Type aliases**: `type UserId = u64` — same wire encoding, better names
+- **Compile-time constants**: `const MaxSize : u32 = 1024` — usable in array sizes and where clauses
+- **Where clauses**: `field @0 : u32 where value > 0` — validated on encode and decode
 - BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
 - Rust, TypeScript, and Go backends from the same schema, byte-identical output verified by compliance vectors
-- Same data always produces the same bytes, enabling content addressing and replay detection
-- Every invalid input yields a distinct error with file, line, column, and a human-readable description
+- Same data always produces the same bytes — no maps with random iteration order, no padding variance
+- Every invalid input yields a distinct error with file, line, column, and a description
 - 105-file conformance corpus (41 valid, 64 invalid) that any implementation must pass
 
-## v1.0 Feature Highlights
+## Fixed-Point Types
 
-### Fixed-Point Types
-High-precision fractional values with deterministic encoding:
+`fixed32` is Q16.16 (32 bits, ~0.000015 precision). `fixed64` is Q32.32 (64 bits, ~9 decimal digits). Unlike IEEE 754 floats, the same operation produces the same result on every platform. We use this in the Orix ecosystem for deterministic simulation — every tick computes identically regardless of CPU or compiler.
 
 ```vexil
 message Position {
-    latitude  @0 : fixed32  # Q16.16: ~0.000015 precision
+    latitude  @0 : fixed32
     longitude @1 : fixed32
-    altitude  @2 : fixed64  # Q32.32: extremely precise
+    altitude  @2 : fixed64
 }
 ```
 
-### Geometric Types
-Graphics and simulation primitives with column-major matrix layout:
+## Geometric Types
+
+These are built-in parameterized types for graphics and simulation code. Wire encoding: components in order (x, y, z, w), no padding, no count prefix. You can mix deterministic (fixed-point) and standard (float) in the same message:
 
 ```vexil
 message Transform {
-    position    @0 : vec3<f32>
-    rotation    @1 : quat<f32>     # quaternion (x, y, z, w)
-    scale       @2 : vec3<f32>
-    matrix      @3 : mat4<f32>     # column-major 4x4 transform
+    position    @0 : vec3<fixed64>   # deterministic simulation
+    gl_pos      @1 : vec3<f32>       # GPU-ready
+    rotation    @2 : quat<fixed64>
+    model       @3 : mat4<f32>       # column-major 4x4
 }
 ```
 
-### Fixed-Size Arrays
-No length prefix on the wire — size is part of the schema:
+## Fixed-Size Arrays and Sets
+
+`array<T, N>` has no count prefix — just N elements on the wire. `set<T>` is sorted on encode so the wire is deterministic regardless of insertion order:
 
 ```vexil
-const VertexCount = 256
+const Vertices = 256
 
 message Mesh {
-    vertices @0 : array<vec3<f32>, VertexCount>
-    uvs      @1 : array<vec2<f32>, VertexCount>
-    indices  @2 : array<u16, 512>
+    positions @0 : array<vec3<f32>, Vertices>
+    indices   @1 : array<u16, 512>
+    tags      @2 : set<string>      # deduplicated, sorted
 }
 ```
 
-### Set Type
-Unordered unique collections with canonical encoding order:
-
-```vexil
-message TagSet {
-    active_tags @0 : set<string>    # deduplicated, sorted
-    priorities  @1 : set<u8>       # validated unique
-}
-```
-
-### Inline Bitfields
-Anonymous flags for compact permission/storage bits:
+## Inline Bitfields
 
 ```vexil
 message FileHeader {
-    version   @0 : u8
-    perms     @1 : bits { r, w, x, hidden, system, archive }
-    flags     @2 : bits { compressed, encrypted, indexed }
+    version @0 : u8
+    perms   @1 : bits { r, w, x, hidden, system }
 }
 ```
 
-### Type Aliases and Constants
-Self-documenting schemas with compile-time values:
+Five flags, five bits on the wire. That's it.
+
+## Type Aliases and Constants
+
+Aliases are transparent — `type UserId = u64` means `UserId` and `u64` produce identical bytes. Constants can reference each other with simple arithmetic:
 
 ```vexil
 type UserId = u64
-type SessionToken = [u8; 32]
+const TicksPerSec : u32 = 64
+const TickMs : u32 = 1000 / TicksPerSec   # evaluates to 15
 
-const MaxPacketSize : u32 = 65536
-const MaxUsers : u32 = 10000
-
-message Packet {
+message Frame {
     sender @0 : UserId
-    data   @1 : array<u8, MaxPacketSize> where len(value) <= MaxPacketSize
+    ts     @1 : u32
 }
 ```
 
-### Where Clauses
-Declarative validation constraints:
+## Where Clauses
+
+Constraints are checked on encode and decode. Invalid data never hits the wire:
 
 ```vexil
 message UserProfile {
     age      @0 : u8  where value in 0..150
     score    @1 : i32 where value >= 0 && value <= 100
     username @2 : string where len(value) in 3..32
-    email    @3 : string where value matches "^[\\w.-]+@[\\w.-]+\\.\\w+$"
 }
 ```
+
+Cross-field constraints (`where amount <= balance`) and regex matching are deferred to 1.1.
 
 ## Comparison
 
@@ -229,13 +221,9 @@ vexilc codegen schema.vexil --output out.go --target go         # Go
 
 # Compile a multi-file project
 vexilc build root.vexil --include ./schemas --output ./generated
-vexilc build root.vexil --include ./schemas --output ./generated --target typescript
 
 # Auto-rebuild on schema changes
 vexilc watch root.vexil --include ./schemas --output ./generated
-
-# Scaffold a new schema file
-vexilc init my_schema.vexil --namespace my.namespace
 
 # Print BLAKE3 schema hash
 vexilc hash schema.vexil
@@ -246,10 +234,6 @@ vexilc compat old.vexil new.vexil
 # Schema-driven data tools
 vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
 vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
-
-# Version and help
-vexilc --version
-vexilc --help
 ```
 
 Errors render with source spans:
@@ -293,7 +277,7 @@ corpus/
   invalid/               # 64 schemas -- conformant impl must reject all
   projects/              # Multi-file integration tests
 compliance/
-  vectors/               # Golden byte vectors (JSON), cross-implementation contract
+  vectors/               # Golden byte vectors, cross-implementation contract
 crates/
   vexil-lang/            # Compiler: lexer, parser, IR, type checker, canonical hash
   vexil-codegen-rust/    # Rust code generation
@@ -320,7 +304,7 @@ examples/
 - [FAQ](FAQ.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
-- [**vexmon**](https://github.com/vexil-lang/vexmon) — real-time system monitor showcasing Vexil over WebSocket (~300 B/s for full telemetry)
+- [**vexmon**](https://github.com/vexil-lang/vexmon) — real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)
 - API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
