@@ -343,6 +343,26 @@ fn emit_write_type(
             emit_write_type(w, item_access, inner, registry, field_name);
             w.close_block();
         }
+        ResolvedType::FixedArray(inner, size) => {
+            let _n = *size;
+            // Write each element — no count prefix
+            w.open_block(&format!("for item in {access}.iter()"));
+            let item_access = if is_copy_type(inner) { "*item" } else { "item" };
+            emit_write_type(w, item_access, inner, registry, field_name);
+            w.close_block();
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            // Geometric types: iterate components, no count prefix
+            w.open_block(&format!("for item in {access}.iter()"));
+            let item_access = if is_copy_type(inner) { "*item" } else { "item" };
+            emit_write_type(w, item_access, inner, registry, field_name);
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
             w.open_block(&format!("for (map_k, map_v) in &{access}"));
@@ -613,6 +633,62 @@ fn emit_read_type(
             );
             w.line(&format!("{var_name}.insert({var_name}_item);"));
             w.close_block();
+        }
+        ResolvedType::FixedArray(inner, size) => {
+            let n = *size;
+            w.line(&format!(
+                "let mut {var_name}_vec = Vec::with_capacity({n}_usize);"
+            ));
+            w.open_block(&format!("for _ in 0..{n}_usize"));
+            emit_read_type(
+                w,
+                &format!("{var_name}_item"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            w.line(&format!("{var_name}_vec.push({var_name}_item);"));
+            w.close_block();
+            w.line(&format!(
+                "let {var_name}: [{inner_type}; {n}] = {var_name}_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;",
+                inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None),
+                n = n
+            ));
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            let n = match ty {
+                ResolvedType::Vec2(_) => 2,
+                ResolvedType::Vec3(_) => 3,
+                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
+                ResolvedType::Mat3(_) => 9,
+                ResolvedType::Mat4(_) => 16,
+                _ => unreachable!(),
+            };
+            w.line(&format!(
+                "let mut {var_name}_vec = Vec::with_capacity({n}_usize);"
+            ));
+            w.open_block(&format!("for _ in 0..{n}_usize"));
+            emit_read_type(
+                w,
+                &format!("{var_name}_item"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            w.line(&format!("{var_name}_vec.push({var_name}_item);"));
+            w.close_block();
+            w.line(&format!(
+                "let {var_name}: [{inner_type}; {n}] = {var_name}_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;",
+                inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None),
+                n = n
+            ));
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!(

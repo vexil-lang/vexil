@@ -56,6 +56,30 @@ pub fn rust_type(
             let bits = names.len() as u8;
             containing_int_type(bits).to_string()
         }
+        ResolvedType::Vec2(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; 2]")
+        }
+        ResolvedType::Vec3(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; 3]")
+        }
+        ResolvedType::Vec4(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; 4]")
+        }
+        ResolvedType::Quat(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; 4]")
+        }
+        ResolvedType::Mat3(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; 9]")
+        }
+        ResolvedType::Mat4(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; 16]")
+        }
         _ => "UnknownType".to_string(),
     }
 }

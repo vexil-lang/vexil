@@ -122,3 +122,28 @@ fn test_030_newtype_map_key() {
 fn test_032_reserved_variant_names() {
     golden_test("032_reserved_variant_names");
 }
+
+#[test]
+fn test_033_fixed_point() {
+    golden_test("033_fixed_point");
+}
+
+#[test]
+fn test_037_fixed_array() {
+    golden_test("037_fixed_array");
+}
+
+#[test]
+fn test_038_set() {
+    golden_test("038_set");
+}
+
+#[test]
+fn test_039_geometric() {
+    golden_test("039_geometric");
+}
+
+#[test]
+fn test_040_inline_bits() {
+    golden_test("040_inline_bits");
+}
