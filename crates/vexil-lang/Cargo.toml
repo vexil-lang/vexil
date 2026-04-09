@@ -17,4 +17,5 @@ smol_str = "0.3"
 thiserror = "2.0.18"
 
 [dev-dependencies]
+proptest = "1.6"
 test-case = "3"
