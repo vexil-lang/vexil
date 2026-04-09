@@ -175,3 +175,116 @@ fn verify_array_three_u32() {
     w.write_u32(3);
     assert_eq!(hex(&w.finish()), "03010000000200000003000000");
 }
+
+// --- v1.0: Fixed-point ---
+
+#[test]
+fn verify_fixed32_zero() {
+    let mut w = BitWriter::new();
+    w.write_i32(0);
+    assert_eq!(hex(&w.finish()), "00000000");
+}
+
+#[test]
+fn verify_fixed32_one_q16_16() {
+    // 1.0 in Q16.16 = 0x00010000 = 65536 as i32
+    let mut w = BitWriter::new();
+    w.write_i32(65536);
+    assert_eq!(hex(&w.finish()), "00000100");
+}
+
+#[test]
+fn verify_fixed64_zero() {
+    let mut w = BitWriter::new();
+    w.write_i64(0);
+    assert_eq!(hex(&w.finish()), "0000000000000000");
+}
+
+#[test]
+fn verify_fixed64_one_q32_32() {
+    // 1.0 in Q32.32 = 0x0000000100000000 = 4294967296 as i64
+    let mut w = BitWriter::new();
+    w.write_i64(4294967296);
+    assert_eq!(hex(&w.finish()), "0000000001000000");
+}
+
+#[test]
+fn verify_fixed32_varint() {
+    // Small fixed32 value encoded as varint (LEB128 of raw i32)
+    let mut w = BitWriter::new();
+    w.write_leb128(65536u64); // i32(65536) as unsigned LEB128
+    assert_eq!(hex(&w.finish()), "808004");
+}
+
+// --- v1.0: Set ---
+
+#[test]
+fn verify_set_empty() {
+    let mut w = BitWriter::new();
+    w.write_leb128(0);
+    assert_eq!(hex(&w.finish()), "00");
+}
+
+#[test]
+fn verify_set_strings_sorted() {
+    let mut w = BitWriter::new();
+    w.write_leb128(2); // count
+    w.write_string("alpha");
+    w.write_string("beta");
+    assert_eq!(hex(&w.finish()), "0205616c7068610462657461");
+}
+
+// --- v1.0: Fixed-size array ---
+
+#[test]
+fn verify_fixed_array_u8() {
+    let mut w = BitWriter::new();
+    w.write_u8(0x01);
+    w.write_u8(0x02);
+    w.write_u8(0x03);
+    w.write_u8(0x04);
+    assert_eq!(hex(&w.finish()), "01020304");
+}
+
+// --- v1.0: Geometric types ---
+
+#[test]
+fn verify_vec3_f32() {
+    let mut w = BitWriter::new();
+    w.write_f32(1.0);
+    w.write_f32(2.0);
+    w.write_f32(3.0);
+    assert_eq!(hex(&w.finish()), "0000803f0000004000004040");
+}
+
+#[test]
+fn verify_vec2_f64() {
+    let mut w = BitWriter::new();
+    w.write_f64(1.5);
+    w.write_f64(2.5);
+    assert_eq!(hex(&w.finish()), "000000000000f83f0000000000000440");
+}
+
+// --- v1.0: Inline bitfield ---
+
+#[test]
+fn verify_bits_rwx() {
+    let mut w = BitWriter::new();
+    w.write_bool(true); // r
+    w.write_bool(true); // w
+    w.write_bool(false); // x
+    w.flush_to_byte_boundary();
+    assert_eq!(hex(&w.finish()), "03");
+}
+
+#[test]
+fn verify_bits_all_set() {
+    let mut w = BitWriter::new();
+    w.write_bool(true); // bit 0
+    w.write_bool(true); // bit 1
+    w.write_bool(true); // bit 2
+    w.write_bool(true); // bit 3
+    w.write_bool(true); // bit 4
+    w.flush_to_byte_boundary();
+    assert_eq!(hex(&w.finish()), "1f");
+}

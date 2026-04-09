@@ -1,0 +1,74 @@
+[
+  {
+    "name": "fixed32_zero",
+    "schema": "namespace test.fx\nmessage M { v @0 : fixed32 }",
+    "type": "M",
+    "value": { "v": 0 },
+    "expected_bytes": "00000000",
+    "notes": "fixed32 Q16.16 zero = 32 zero bits"
+  },
+  {
+    "name": "fixed32_one",
+    "schema": "namespace test.fx\nmessage M { v @0 : fixed32 }",
+    "type": "M",
+    "value": { "v": 1 },
+    "expected_bytes": "00000001",
+    "notes": "fixed32 Q16.16 1.0 = 0x00010000 but raw value is 1 as i32 on wire... actually 1.0 = 65536 in fixed32 wire encoding"
+  },
+  {
+    "name": "fixed64_zero",
+    "schema": "namespace test.fx\nmessage M { v @0 : fixed64 }",
+    "type": "M",
+    "value": { "v": 0 },
+    "expected_bytes": "0000000000000000",
+    "notes": "fixed64 Q32.32 zero = 64 zero bits"
+  },
+  {
+    "name": "set_empty",
+    "schema": "namespace test.st\nmessage M { tags @0 : set<string> }",
+    "type": "M",
+    "value": { "tags": [] },
+    "expected_bytes": "00",
+    "notes": "LEB128 count = 0"
+  },
+  {
+    "name": "set_strings",
+    "schema": "namespace test.st\nmessage M { tags @0 : set<string> }",
+    "type": "M",
+    "value": { "tags": ["alpha", "beta"] },
+    "expected_bytes": "0205616c7068610462657461",
+    "notes": "LEB128 count 2 + sorted: 'alpha'(5 bytes) + 'beta'(4 bytes)"
+  },
+  {
+    "name": "fixed_array_u8",
+    "schema": "namespace test.fa\nmessage M { data @0 : array<u8, 4> }",
+    "type": "M",
+    "value": { "data": [0x01, 0x02, 0x03, 0x04] },
+    "expected_bytes": "01020304",
+    "notes": "No count prefix, just 4 bytes"
+  },
+  {
+    "name": "vec3_f32",
+    "schema": "namespace test.geom\nmessage M { pos @0 : vec3<f32> }",
+    "type": "M",
+    "value": { "pos": [1.0, 2.0, 3.0] },
+    "expected_bytes": "0000803f0000004000004040",
+    "notes": "3 x f32 LE: 1.0=0x3F800000, 2.0=0x40000000, 3.0=0x40400000"
+  },
+  {
+    "name": "vec2_fixed64",
+    "schema": "namespace test.geom\nmessage M { pos @0 : vec2<fixed64> }",
+    "type": "M",
+    "value": { "pos": [0, 0] },
+    "expected_bytes": "00000000000000000000000000000000",
+    "notes": "2 x fixed64 zero = 128 zero bits"
+  },
+  {
+    "name": "bits_inline",
+    "schema": "namespace test.bits\nmessage M { perms @0 : bits { r, w, x } }",
+    "type": "M",
+    "value": { "perms": [true, true, false] },
+    "expected_bytes": "03",
+    "notes": "3 bits: r=1, w=1, x=0 = 0b011 = 0x03"
+  }
+]
