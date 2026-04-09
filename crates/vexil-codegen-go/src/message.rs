@@ -663,6 +663,65 @@ fn emit_read_type(
             w.close_block();
             w.close_block();
         }
+        ResolvedType::Set(inner) => {
+            w.open_block("");
+            w.line(&format!("setLen, err := {reader}.ReadLeb128(4)"));
+            w.open_block("if err != nil");
+            w.line(err_return);
+            w.close_block();
+            let inner_go = go_type(inner, registry);
+            w.line(&format!(
+                "{target} = make(map[{inner_go}]struct{{}}, setLen)"
+            ));
+            w.open_block("for i := uint64(0); i < setLen; i++");
+            w.line(&format!("var item {inner_go}"));
+            emit_read_type(w, "item", inner, registry, reader, err_return);
+            w.line(&format!("{target}[item] = struct{{}}{{}}"));
+            w.close_block();
+            w.close_block();
+        }
+        ResolvedType::FixedArray(inner, size) => {
+            let n = *size;
+            let inner_go = go_type(inner, registry);
+            w.line(&format!("{target} = [{n}]{inner_go}{{}}"));
+            w.open_block(&format!("for i := 0; i < {n}; i++"));
+            emit_read_type(
+                w,
+                &format!("{target}[i]"),
+                inner,
+                registry,
+                reader,
+                err_return,
+            );
+            w.close_block();
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            let n = match ty {
+                ResolvedType::Vec2(_) => 2,
+                ResolvedType::Vec3(_) => 3,
+                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
+                ResolvedType::Mat3(_) => 9,
+                ResolvedType::Mat4(_) => 16,
+                _ => unreachable!(),
+            };
+            let inner_go = go_type(inner, registry);
+            w.line(&format!("{target} = [{n}]{inner_go}{{}}"));
+            w.open_block(&format!("for i := 0; i < {n}; i++"));
+            emit_read_type(
+                w,
+                &format!("{target}[i]"),
+                inner,
+                registry,
+                reader,
+                err_return,
+            );
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.open_block("");
             w.line(&format!("mapLen, err := {reader}.ReadLeb128(4)"));

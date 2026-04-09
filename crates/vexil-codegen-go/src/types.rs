@@ -35,6 +35,34 @@ pub fn go_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             let bits = names.len() as u8;
             containing_int_type(bits).to_string()
         }
+        ResolvedType::FixedArray(inner, size) => {
+            let inner_str = go_type(inner, registry);
+            format!("[{size}]{inner_str}")
+        }
+        ResolvedType::Set(inner) => {
+            let inner_str = go_type(inner, registry);
+            format!("map[{inner_str}]struct{{}}")
+        }
+        ResolvedType::Vec2(inner) => {
+            let inner_str = go_type(inner, registry);
+            format!("[2]{inner_str}")
+        }
+        ResolvedType::Vec3(inner) => {
+            let inner_str = go_type(inner, registry);
+            format!("[3]{inner_str}")
+        }
+        ResolvedType::Vec4(inner) | ResolvedType::Quat(inner) => {
+            let inner_str = go_type(inner, registry);
+            format!("[4]{inner_str}")
+        }
+        ResolvedType::Mat3(inner) => {
+            let inner_str = go_type(inner, registry);
+            format!("[9]{inner_str}")
+        }
+        ResolvedType::Mat4(inner) => {
+            let inner_str = go_type(inner, registry);
+            format!("[16]{inner_str}")
+        }
         _ => "interface{}".to_string(),
     }
 }
