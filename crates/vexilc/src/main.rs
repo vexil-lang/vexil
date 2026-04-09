@@ -200,8 +200,9 @@ fn cmd_codegen(filename: &str, output: Option<&str>, target: &str) -> i32 {
         "rust" => Box::new(vexil_codegen_rust::RustBackend),
         "typescript" => Box::new(vexil_codegen_ts::TypeScriptBackend),
         "go" => Box::new(vexil_codegen_go::GoBackend),
+        "python" => Box::new(vexil_codegen_py::PythonBackend),
         other => {
-            eprintln!("error: unknown target `{other}` (available: rust, typescript, go)");
+            eprintln!("error: unknown target `{other}` (available: rust, typescript, go, python)");
             return 1;
         }
     };
@@ -275,8 +276,9 @@ fn cmd_build(root_file: &str, include_paths: &[String], output_dir: &str, target
         "rust" => Box::new(vexil_codegen_rust::RustBackend),
         "typescript" => Box::new(vexil_codegen_ts::TypeScriptBackend),
         "go" => Box::new(vexil_codegen_go::GoBackend),
+        "python" => Box::new(vexil_codegen_py::PythonBackend),
         other => {
-            eprintln!("error: unknown target `{other}` (available: rust, typescript, go)");
+            eprintln!("error: unknown target `{other}` (available: rust, typescript, go, python)");
             return 1;
         }
     };
@@ -883,7 +885,7 @@ Subcommands:
   compile  <file.vexil> -o <output>            Compile to .vxc binary schema
 
 Options:
-  --target <rust|typescript|go>   Code generation target (default: rust)
+  --target <rust|typescript|go|python>   Code generation target (default: rust)
   --output <path>                 Output file or directory
   --include <dir>                 Additional schema search directory
   --format <human|json>           Output format for compat (default: human)
@@ -1202,7 +1204,7 @@ fn main() {
         }
         Some("watch") => {
             if args.len() < 3 {
-                eprintln!("Usage: vexilc watch <file.vexil> [--target <rust|typescript|go>] [--output <dir>] [--include <dir>]");
+                eprintln!("Usage: vexilc watch <file.vexil> [--target <rust|typescript|go|python>] [--output <dir>] [--include <dir>]");
                 std::process::exit(1);
             }
             let root_file = &args[2];

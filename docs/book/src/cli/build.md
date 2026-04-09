@@ -14,7 +14,7 @@ vexilc build <root.vexil> --include <dir> --output <dir> [--target <target>]
 |--------|---------|-------------|
 | `--include <dir>` | (none) | Directory to search for imported schemas (can be repeated) |
 | `--output <dir>` | (required) | Output directory for generated code |
-| `--target <target>` | `rust` | Code generation target: `rust`, `typescript`, or `go` |
+| `--target <target>` | `rust` | Code generation target: `rust`, `typescript`, `go`, or `python` |
 
 ## Example
 

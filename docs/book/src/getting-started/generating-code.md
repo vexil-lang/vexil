@@ -11,6 +11,9 @@ vexilc codegen hello.vexil --target typescript --output hello.ts
 
 # Go
 vexilc codegen hello.vexil --target go --output hello.go
+
+# Python
+vexilc codegen hello.vexil --target python --output hello.py
 ```
 
 Default target is `rust`. Output goes to stdout if `--output` is omitted.

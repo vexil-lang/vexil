@@ -1,0 +1,19 @@
+[package]
+name = "vexil-codegen-py"
+version = "0.4.3"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme.workspace = true
+description = "Python code generation backend for the Vexil schema compiler"
+keywords = ["schema", "codegen", "python"]
+categories = ["compilers", "development-tools"]
+
+[dependencies]
+vexil-lang = { path = "../vexil-lang", version = "^0.4.3" }
+thiserror = "2.0.18"
+
+[dev-dependencies]
+test-case = "3"

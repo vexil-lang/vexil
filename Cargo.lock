@@ -701,6 +701,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "vexil-codegen-py"
+version = "0.4.3"
+dependencies = [
+ "test-case",
+ "thiserror",
+ "vexil-lang",
+]
+
+[[package]]
 name = "vexil-codegen-rust"
 version = "0.4.3"
 dependencies = [
@@ -760,6 +769,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "vexil-codegen-go",
+ "vexil-codegen-py",
  "vexil-codegen-rust",
  "vexil-codegen-ts",
  "vexil-lang",

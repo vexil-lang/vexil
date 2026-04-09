@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/vexil-lang", "crates/vexilc", "crates/vexil-runtime", "crates/vexil-codegen-rust", "crates/vexil-codegen-ts", "crates/vexil-codegen-go", "crates/vexil-store"]
+members = ["crates/vexil-lang", "crates/vexilc", "crates/vexil-runtime", "crates/vexil-codegen-rust", "crates/vexil-codegen-ts", "crates/vexil-codegen-go", "crates/vexil-codegen-py", "crates/vexil-store"]
 exclude = ["crates/vexil-bench", "examples/sensor-packet", "examples/command-protocol", "examples/multi-file-project", "examples/cross-language/rust-device", "examples/system-monitor"]
 
 [workspace.package]

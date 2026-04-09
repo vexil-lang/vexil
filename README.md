@@ -95,7 +95,7 @@ const decoded = decodeSensorReading(r);
 - **Invariants**: `invariant { value >= 0 }` — cross-field conditions in messages
 - **Type param bounds**: `type Sorted<T: Ord> = array<T>` — constrain generic types
 - BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
-- Rust, TypeScript, and Go backends from the same schema, byte-identical output verified by compliance vectors
+- Rust, TypeScript, Go, and Python backends from the same schema, byte-identical output verified by compliance vectors
 - Same data always produces the same bytes — no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
 - 108-file conformance corpus (43 valid, 65 invalid) that any implementation must pass
@@ -191,7 +191,7 @@ Cross-field constraints (`where amount <= balance`) and regex matching are defer
 | Zero-copy decode | **Yes** | No | **Yes** | **Yes** |
 | Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
 | Schema evolution | **Yes** | **Yes** | **Yes** | **Yes** |
-| Language targets | Rust, TS, Go | **Many** | **Many** | **Many** |
+| Language targets | Rust, TS, Go, Python | **Many** | **Many** | **Many** |
 
 ## Install
 
@@ -221,6 +221,7 @@ vexilc check schema.vexil
 vexilc codegen schema.vexil --output out.rs                    # Rust (default)
 vexilc codegen schema.vexil --output out.ts --target typescript # TypeScript
 vexilc codegen schema.vexil --output out.go --target go         # Go
+vexilc codegen schema.vexil --output out.py --target python      # Python
 
 # Compile a multi-file project
 vexilc build root.vexil --include ./schemas --output ./generated
@@ -286,6 +287,7 @@ crates/
   vexil-codegen-rust/    # Rust code generation
   vexil-codegen-ts/      # TypeScript code generation
   vexil-codegen-go/      # Go code generation
+  vexil-codegen-py/      # Python code generation
   vexil-runtime/         # Rust runtime: BitWriter/BitReader, Pack/Unpack, LEB128, ZigZag
   vexilc/                # CLI with ariadne error rendering
   vexil-store/           # .vx text and .vxb binary file formats
@@ -308,7 +310,7 @@ examples/
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
 - [**vexmon**](https://github.com/vexil-lang/vexmon) — real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)
-- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-store](https://docs.rs/vexil-store)
+- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-codegen-py](https://docs.rs/vexil-codegen-py) | [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing
 

@@ -35,6 +35,7 @@ Generate code:
 vexilc codegen sensor.vexil --target rust
 vexilc codegen sensor.vexil --target typescript
 vexilc codegen sensor.vexil --target go
+vexilc codegen sensor.vexil --target python
 ```
 
 ## Installation
