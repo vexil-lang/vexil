@@ -12,9 +12,9 @@ use smol_str::SmolStr;
 
 use crate::ast::{
     Annotation, AnnotationValue, BinOpKind, CmpOp, ConfigDecl, ConstDecl, ConstExpr, Decl,
-    EnumBacking, EnumBodyItem, EnumDecl, FlagsBodyItem, FlagsDecl, ImportKind, MessageBodyItem,
-    MessageDecl, MessageField, NewtypeDecl, PrimitiveType, Schema, SemanticType, TypeExpr,
-    UnionBodyItem, UnionDecl, WhereExpr, WhereOperand,
+    EnumBacking, EnumBodyItem, EnumDecl, FlagsBodyItem, FlagsDecl, ImplDecl, ImportKind,
+    MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, PrimitiveType, Schema, SemanticType,
+    TypeExpr, UnionBodyItem, UnionDecl, WhereExpr, WhereOperand,
 };
 use crate::diagnostic::{find_closest_match, Diagnostic, ErrorClass, Note};
 use crate::span::{Span, Spanned};
@@ -33,6 +33,8 @@ enum DeclKind {
     Config,
     Alias,
     Const,
+    Trait,
+    Impl,
 }
 
 /// Context passed to all validation functions.
@@ -92,6 +94,8 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
             Decl::Config(d) => (&d.name, DeclKind::Config),
             Decl::Alias(d) => (&d.name, DeclKind::Alias),
             Decl::Const(d) => (&d.name, DeclKind::Const),
+            Decl::Trait(d) => (&d.name, DeclKind::Trait),
+            Decl::Impl(_) => continue, // Impls don't register names
         };
         decl_map.insert(&name.node, (kind, name.span));
     }
@@ -164,6 +168,8 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
             Decl::Config(d) => check_config(d, &ctx, &mut diags),
             Decl::Alias(d) => check_alias(d, &ctx, &mut diags),
             Decl::Const(d) => check_const(d, &ctx, &mut diags),
+            Decl::Trait(_) => {} // trait validation during impl
+            Decl::Impl(d) => check_impl(d, &ctx, &mut diags),
         }
     }
 
@@ -204,6 +210,8 @@ fn check_decl_name_duplicate(schema: &Schema, diags: &mut Vec<Diagnostic>) {
             Decl::Config(d) => &d.name,
             Decl::Alias(d) => &d.name,
             Decl::Const(d) => &d.name,
+            Decl::Trait(d) => &d.name,
+            Decl::Impl(_) => continue, // Impls don't declare names, skip duplicate check
         };
         if seen.contains_key(&name.node) {
             diags.push(Diagnostic::error(
@@ -248,6 +256,8 @@ fn check_schema_annotations(schema: &Schema, diags: &mut Vec<Diagnostic>) {
             Decl::Config(d) => &d.annotations,
             Decl::Alias(d) => &d.annotations,
             Decl::Const(d) => &d.annotations,
+            Decl::Trait(d) => &d.annotations,
+            Decl::Impl(d) => &d.annotations,
         };
 
         check_duplicate_annotations(annotations, diags);
@@ -261,6 +271,8 @@ fn check_schema_annotations(schema: &Schema, diags: &mut Vec<Diagnostic>) {
             Decl::Config(_) => DeclKind::Config,
             Decl::Alias(_) => DeclKind::Alias,
             Decl::Const(_) => DeclKind::Const,
+            Decl::Trait(_) => DeclKind::Trait,
+            Decl::Impl(_) => DeclKind::Impl,
         };
 
         for ann in annotations {
@@ -277,6 +289,8 @@ fn check_schema_annotations(schema: &Schema, diags: &mut Vec<Diagnostic>) {
                     DeclKind::Config => "config",
                     DeclKind::Alias => "alias",
                     DeclKind::Const => "const",
+                    DeclKind::Trait => "trait",
+                    DeclKind::Impl => "impl",
                 };
                 diags.push(
                     Diagnostic::error(
@@ -1412,6 +1426,45 @@ fn eval_const_expr(
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Impl validation
+// ---------------------------------------------------------------------------
+
+fn check_impl(impl_decl: &ImplDecl, ctx: &ValidationContext<'_>, diags: &mut Vec<Diagnostic>) {
+    let target_name = &impl_decl.target_type.node;
+    let trait_name = &impl_decl.trait_name.node;
+
+    // Check: target type must exist
+    if !ctx.decl_map.contains_key(target_name) && !ctx.imported_names.contains(target_name) {
+        diags.push(Diagnostic::error(
+            impl_decl.target_type.span,
+            ErrorClass::UnknownType,
+            format!("unknown type '{target_name}' in impl"),
+        ));
+    }
+
+    // Check: trait must exist and be a trait
+    match ctx.decl_map.get(trait_name) {
+        Some((DeclKind::Trait, _)) => {} // OK
+        Some((kind, _)) => {
+            diags.push(Diagnostic::error(
+                impl_decl.trait_name.span,
+                ErrorClass::UnknownType,
+                format!("'{trait_name}' is a {kind:?}, not a trait"),
+            ));
+        }
+        None => {
+            if !ctx.imported_names.contains(trait_name) {
+                diags.push(Diagnostic::error(
+                    impl_decl.trait_name.span,
+                    ErrorClass::UnknownType,
+                    format!("unknown trait '{trait_name}'"),
+                ));
+            }
+        }
+    }
+}
+
 // Where clause validation
 // ---------------------------------------------------------------------------
 

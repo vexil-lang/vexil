@@ -360,6 +360,8 @@ fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
             Decl::Config(d) => d.name.node.clone(),
             Decl::Alias(_) => continue, // Aliases don't get TypeIds, they use alias_map
             Decl::Const(_) => continue, // Consts don't get TypeIds, they use constants map
+            Decl::Trait(_) => continue, // Traits don't get TypeIds
+            Decl::Impl(_) => continue,  // Impls don't get TypeIds
         };
         ctx.local_names.insert(name.clone());
         // Register a concrete placeholder so get_mut will find it later.
@@ -387,7 +389,7 @@ fn lower_decl(decl: &Decl, span: Span, ctx: &mut LowerCtx) -> TypeDef {
         Decl::Union(d) => TypeDef::Union(lower_union(d, span, ctx)),
         Decl::Newtype(d) => TypeDef::Newtype(lower_newtype(d, span, ctx)),
         Decl::Config(d) => TypeDef::Config(lower_config(d, span, ctx)),
-        Decl::Alias(_) | Decl::Const(_) => {
+        Decl::Alias(_) | Decl::Const(_) | Decl::Trait(_) | Decl::Impl(_) => {
             // Aliases and consts are handled separately in lower_with_deps after all regular
             // declarations are lowered. This ensures dependencies are resolved.
             // Return a dummy TypeDef that should never be used.

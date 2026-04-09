@@ -541,6 +541,8 @@ pub(crate) fn is_at_decl_keyword(p: &Parser<'_>) -> bool {
             | TokenKind::KwConfig
             | TokenKind::KwType
             | TokenKind::KwConst
+            | TokenKind::KwTrait
+            | TokenKind::KwImpl
     )
 }
 

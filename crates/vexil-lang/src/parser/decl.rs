@@ -1,8 +1,8 @@
 use crate::ast::{
     AliasDecl, Annotation, BinOpKind, CmpOp, ConfigDecl, ConfigField, ConstDecl, ConstExpr, Decl,
-    EnumBacking, EnumBodyItem, EnumDecl, EnumVariant, FlagsBit, FlagsBodyItem, FlagsDecl,
-    MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, Tombstone, TombstoneArg,
-    UnionBodyItem, UnionDecl, UnionVariant, WhereExpr, WhereOperand,
+    EnumBacking, EnumBodyItem, EnumDecl, EnumVariant, FlagsBit, FlagsBodyItem, FlagsDecl, FnParam,
+    ImplDecl, MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, Tombstone, TombstoneArg,
+    TraitDecl, TraitFnDecl, UnionBodyItem, UnionDecl, UnionVariant, WhereExpr, WhereOperand,
 };
 use crate::diagnostic::ErrorClass;
 use crate::lexer::token::TokenKind;
@@ -64,6 +64,16 @@ pub(crate) fn parse_type_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) 
             let const_decl = parse_const_decl(annotations, p);
             let span = p.span_from(start);
             Spanned::new(Decl::Const(const_decl), span)
+        }
+        TokenKind::KwTrait => {
+            let trait_decl = parse_trait_decl(annotations, p);
+            let span = p.span_from(start);
+            Spanned::new(Decl::Trait(trait_decl), span)
+        }
+        TokenKind::KwImpl => {
+            let impl_decl = parse_impl_decl(annotations, p);
+            let span = p.span_from(start);
+            Spanned::new(Decl::Impl(impl_decl), span)
         }
         _ => {
             // Unknown declaration keyword — skip to recover.
@@ -1443,5 +1453,216 @@ fn parse_const_expr_primary(p: &mut Parser<'_>) -> Spanned<ConstExpr> {
             );
             Spanned::new(ConstExpr::Int(0), p.peek().span)
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Trait
+// ---------------------------------------------------------------------------
+
+fn parse_trait_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> TraitDecl {
+    use crate::ast::TypeParam;
+
+    p.advance(); // consume KwTrait
+    let name = parse_decl_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    // Check for optional type parameters: <T> or <T, U>
+    let mut type_params: Vec<TypeParam> = Vec::new();
+    if p.at(&TokenKind::LAngle) {
+        p.advance(); // consume LAngle
+
+        loop {
+            // Type parameter name must be an identifier (lowercase or uppercase)
+            let param_name = match p.peek_kind().clone() {
+                TokenKind::Ident(s) | TokenKind::UpperIdent(s) => {
+                    let tok = p.advance();
+                    Spanned::new(s, tok.span)
+                }
+                _ => {
+                    p.emit(
+                        p.peek().span,
+                        ErrorClass::UnexpectedToken,
+                        "expected type parameter name",
+                    );
+                    break;
+                }
+            };
+
+            type_params.push(TypeParam {
+                name: param_name,
+                bounds: Vec::new(), // Bounds not yet supported
+            });
+
+            // Check for comma (more parameters) or closing angle
+            if p.at(&TokenKind::Comma) {
+                p.advance(); // consume comma
+                continue;
+            } else if p.at(&TokenKind::RAngle) {
+                p.advance(); // consume RAngle
+                break;
+            } else {
+                p.emit(
+                    p.peek().span,
+                    ErrorClass::UnexpectedToken,
+                    "expected ',' or '>' in type parameter list",
+                );
+                break;
+            }
+        }
+    }
+
+    p.expect(&TokenKind::LBrace);
+
+    let mut fields = Vec::new();
+    let mut functions = Vec::new();
+
+    while !p.at(&TokenKind::RBrace) && !p.at_eof() {
+        // Check for fn keyword to parse a trait function
+        if p.at(&TokenKind::KwFn) {
+            let fn_decl = parse_trait_fn_decl(p);
+            functions.push(fn_decl);
+            continue;
+        }
+
+        // Otherwise try to parse a field (with optional pre-annotations)
+        let pre_annotations = parse_annotations(p);
+
+        // After annotations, if we see RBrace, fn, or EOF, break
+        if p.at(&TokenKind::RBrace) || p.at(&TokenKind::KwFn) || p.at_eof() {
+            break;
+        }
+
+        match parse_field(pre_annotations, p) {
+            Some(field) => fields.push(field.node),
+            None => {
+                // Skip a token to avoid infinite loop
+                if !p.at(&TokenKind::RBrace) && !p.at_eof() {
+                    p.advance();
+                }
+            }
+        }
+    }
+
+    p.expect(&TokenKind::RBrace);
+
+    TraitDecl {
+        annotations,
+        name,
+        type_params,
+        fields,
+        functions,
+    }
+}
+
+fn parse_trait_fn_decl(p: &mut Parser<'_>) -> TraitFnDecl {
+    let _start = p.current_offset();
+    p.advance(); // consume KwFn
+
+    // Function name: must be lowercase identifier or keyword
+    let name = parse_field_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    // Expect opening parenthesis
+    p.expect(&TokenKind::LParen);
+
+    // Parse parameters
+    let mut params = Vec::new();
+    while !p.at(&TokenKind::RParen) && !p.at_eof() {
+        let param = parse_fn_param(p);
+        params.push(param);
+
+        // Optional comma separator
+        if p.at(&TokenKind::Comma) {
+            p.advance();
+        } else if !p.at(&TokenKind::RParen) {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected ',' or ')' in parameter list",
+            );
+            break;
+        }
+    }
+
+    p.expect(&TokenKind::RParen);
+
+    // Optional return type: -> Type
+    let return_type = if p.at(&TokenKind::Minus) {
+        // Check for -> (minus followed by greater-than)
+        if p.tokens
+            .get(p.pos + 1)
+            .is_some_and(|t| matches!(t.kind, TokenKind::RAngle))
+        {
+            p.advance(); // consume Minus
+            p.advance(); // consume RAngle (which acts as '>' in this context)
+            Some(parse_type_expr(p))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    TraitFnDecl {
+        name,
+        params,
+        return_type,
+    }
+}
+
+fn parse_fn_param(p: &mut Parser<'_>) -> FnParam {
+    let _start = p.current_offset();
+
+    // Parameter name: lowercase identifier or keyword
+    let name = parse_field_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    // Colon separator
+    p.expect(&TokenKind::Colon);
+
+    // Parameter type
+    let ty = parse_type_expr(p);
+
+    FnParam { name, ty }
+}
+
+// ---------------------------------------------------------------------------
+// Impl
+// ---------------------------------------------------------------------------
+
+fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl {
+    p.advance(); // consume KwImpl
+
+    // Trait name: must be PascalCase
+    let trait_name = parse_decl_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    // For keyword
+    if !p.at(&TokenKind::KwFor) {
+        p.emit(
+            p.peek().span,
+            ErrorClass::UnexpectedToken,
+            "expected 'for' after trait name in impl declaration",
+        );
+    } else {
+        p.advance(); // consume KwFor
+    }
+
+    // Target type name: must be PascalCase
+    let target_type = parse_decl_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    // Optional body: { }
+    if p.at(&TokenKind::LBrace) {
+        p.advance(); // consume LBrace
+                     // For now, impl body is empty (function implementations will be added later)
+        p.expect(&TokenKind::RBrace);
+    }
+
+    ImplDecl {
+        annotations,
+        trait_name,
+        target_type,
     }
 }

@@ -83,6 +83,10 @@ pub enum Decl {
     Alias(AliasDecl),
     /// A named constant declaration.
     Const(ConstDecl),
+    /// A trait declaration defining an interface.
+    Trait(TraitDecl),
+    /// An implementation declaration for a trait on a type.
+    Impl(ImplDecl),
 }
 
 // ---------------------------------------------------------------------------
@@ -374,6 +378,60 @@ pub enum BinOpKind {
     Mul,
     /// Division.
     Div,
+}
+
+// ---------------------------------------------------------------------------
+// Trait Declaration
+// ---------------------------------------------------------------------------
+
+/// A trait declaration defining an interface with fields and functions.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitDecl {
+    /// Annotations applied to the trait.
+    pub annotations: Vec<Annotation>,
+    /// The trait name.
+    pub name: Spanned<SmolStr>,
+    /// Type parameters for generic traits (e.g., `<T>` in `trait Foo<T>`).
+    pub type_params: Vec<TypeParam>,
+    /// Required fields for types implementing this trait.
+    pub fields: Vec<MessageField>,
+    /// Required function signatures for types implementing this trait.
+    pub functions: Vec<TraitFnDecl>,
+}
+
+/// A function declaration within a trait.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitFnDecl {
+    /// The function name.
+    pub name: Spanned<SmolStr>,
+    /// Function parameters.
+    pub params: Vec<FnParam>,
+    /// Optional return type (None for functions returning void).
+    pub return_type: Option<Spanned<TypeExpr>>,
+}
+
+/// A function parameter.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FnParam {
+    /// The parameter name.
+    pub name: Spanned<SmolStr>,
+    /// The parameter type.
+    pub ty: Spanned<TypeExpr>,
+}
+
+// ---------------------------------------------------------------------------
+// Impl Declaration
+// ---------------------------------------------------------------------------
+
+/// An implementation declaration for a trait on a type.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImplDecl {
+    /// Annotations applied to the impl.
+    pub annotations: Vec<Annotation>,
+    /// The trait being implemented.
+    pub trait_name: Spanned<SmolStr>,
+    /// The target type receiving the implementation.
+    pub target_type: Spanned<SmolStr>,
 }
 
 // ---------------------------------------------------------------------------

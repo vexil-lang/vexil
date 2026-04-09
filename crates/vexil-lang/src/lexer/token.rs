@@ -118,6 +118,10 @@ pub enum TokenKind {
     KwType,
     /// `const` keyword.
     KwConst,
+    KwTrait,
+    KwImpl,
+    KwFor,
+    KwFn,
 
     /// `optional` keyword.
     KwOptional,
