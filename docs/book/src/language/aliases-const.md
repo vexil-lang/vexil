@@ -2,7 +2,7 @@
 
 ## Type Aliases
 
-A type alias gives an existing type a new name. Aliases are transparent -- they have zero wire impact and produce the same encoding as the underlying type.
+A type alias gives an existing type a new name. It's transparent — same wire encoding, same codegen, just a different name in the schema.
 
 ```vexil
 type UserId = u64
@@ -10,55 +10,41 @@ type Token = bytes
 type DFixed = fixed64
 ```
 
-Aliases make schemas more readable by replacing raw types with meaningful names. A field `sender @0 : UserId` is clearer than `sender @0 : u64`.
+`UserId` and `u64` produce identical bytes. The alias exists only in the schema source, making fields more readable.
 
 ### Rules
 
-- The target must be a concrete type (not another alias)
-- Alias chains are rejected: `type A = u64` then `type B = A` is invalid
-- Aliases do not create distinct wire types -- `UserId` and `u64` produce identical bytes
-- Aliases can be exported via `import { UserId } from my.types`
+- The target must be a concrete type, not another alias
+- Alias chains are rejected: `type A = u64` then `type B = A` won't compile
+- Aliases can be imported: `import { UserId } from my.types`
 
 ## Constants
 
-Constants define named compile-time values. They have no wire impact -- they exist only during compilation.
+Constants are named compile-time values. They don't exist on the wire — they're resolved during compilation and disappear.
 
 ```vexil
 const MaxHealth : u32 = 100
 const TickRate : u32 = 64
-const DefaultPos : fixed64 = 0.0
 ```
 
-### Using Constants
+### Where You Can Use Them
 
-Constants can be used in:
-
-- **Array sizes**: `array<u8, MaxHealth>`
-- **Where clause bounds**: `where value in 0..MaxHealth`
-- **Other constant expressions**: see below
+- Array sizes: `array<u8, MaxHealth>`
+- Where clause bounds: `where value in 0..MaxHealth`
+- Other constant expressions (see below)
 
 ### Cross-References
 
-Constants can reference other constants using simple arithmetic:
+Constants can reference each other with `+`, `-`, `*`, `/`:
 
 ```vexil
 const TicksPerSec : u32 = 64
-const TickMs : u32 = 1000 / TicksPerSec   # evaluates to 15
-const TwoSecTicks : u32 = TicksPerSec * 2  # evaluates to 128
+const TickMs : u32 = 1000 / TicksPerSec   # 15
+const TwoSecTicks : u32 = TicksPerSec * 2  # 128
 ```
 
-Supported operators: `+`, `-`, `*`, `/` (integer division, truncates toward zero).
-
-Circular dependencies are rejected at compile time:
-
-```vexil
-# INVALID: circular dependency
-const A : u32 = B + 1
-const B : u32 = A + 1
-```
-
-Division by zero is also caught at compile time.
+Division truncates toward zero (integer division). Division by zero and circular dependencies are caught at compile time — you'll get a diagnostic, not a runtime panic.
 
 ### Supported Types
 
-Constants can be declared with these types: `bool`, `u8`--`u64`, `i8`--`i64`, `f32`, `f64`, `fixed32`, `fixed64`.
+`bool`, `u8`–`u64`, `i8`–`i64`, `f32`, `f64`, `fixed32`, `fixed64`. Messages, enums, unions — none of those. Constants are values, not types.

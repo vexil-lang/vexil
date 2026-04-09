@@ -1,82 +1,37 @@
-# Vexil Wire Format — Limitations, Gaps, and Room for Improvement
-
-A living document tracking what has been validated, what is known to be
-limited, and where improvements would have the most impact.
+# Vexil Wire Format — Limitations, Gaps, and What We Haven't Done Yet
 
 Last updated: 2026-04-09
 
-## What Was Validated
+## What We've Verified
 
-- **Deterministic encoding:** Golden byte vectors produce identical bytes in
-  both Rust and TypeScript implementations for all primitive types, sub-byte
-  packing, messages, enums, unions, optionals, arrays, maps, and evolution
-  scenarios.
-- **Schema evolution:** Forward and backward compatibility verified for field
-  append and variant addition. Trailing bytes tolerated by decoders.
-- **Recursion safety:** Depth limit of 64 enforced at both encode and decode
-  time in both Rust and TypeScript runtimes. Stack overflow prevented.
-- **NaN canonicalization:** All NaN inputs produce canonical quiet NaN bytes
-  (f32: 0x7FC00000, f64: 0x7FF8000000000000).
-- **Cross-implementation compliance:** Rust and TypeScript implementations
-  pass the same golden byte vector suite.
-- **TypeScript backend:** Full code generation for all 6 declaration kinds
-  (message, enum, flags, union, newtype, config) with cross-file imports.
-- **Delta encoding:** `@delta` annotation generates stateful encoder/decoder
-  pairs in both Rust and TypeScript. Numeric fields transmit deltas from the
-  previous frame; non-numeric fields are sent in full. Verified in the
-  system-monitor example with live WebSocket streaming.
+- **Deterministic encoding:** Golden byte vectors match between Rust and TypeScript for all primitive types, sub-byte packing, messages, enums, unions, optionals, arrays, maps, sets, and evolution scenarios.
+- **Schema evolution:** Field append and variant addition work (forward and backward). Trailing bytes are tolerated by older decoders.
+- **Recursion safety:** Depth limit of 64 enforced at encode and decode in both Rust and TypeScript. Stack overflow is prevented, not just unlikely.
+- **NaN canonicalization:** All NaN inputs produce the same quiet NaN bytes (f32: `0x7FC00000`, f64: `0x7FF8000000000000`). We don't allow NaN payloads to vary.
+- **Delta encoding:** `@delta` works in both Rust and TypeScript. The system-monitor example uses it over WebSocket with live data.
+- **Zero-copy reads:** `BitReader` can return `&[u8]` and `&str` slices backed by the input buffer. No copies for large payloads.
+- **Map key ordering:** Canonical sort order defined for all valid key types. Encoders sort before writing. This wasn't always the case — we fixed it for 1.0.
 
 ## Known Limitations
 
-- **No streaming / incremental decode:** The entire message must be available
-  in memory before decoding starts. Not suitable for unbounded streams
-  without framing.
-- **No built-in compression:** Wire format is uncompressed. Applications can
-  layer compression (zstd, etc.) on top.
-- **No self-description:** The wire format contains no type information.
-  Both sides must agree on the schema. This is by design (schema = contract)
-  but means debug tooling needs the schema to interpret wire bytes.
-- **Map key ordering:** Map entries are encoded in iteration order. For
-  deterministic encoding, implementations must sort map keys before encoding.
-  The spec does not mandate a sort order — this is left to the application.
+- **No streaming decode:** You need the entire message in memory before you can start decoding. If you're working with unbounded streams, you need a framing layer on top. The transport header in Appendix A of the spec is one option.
+- **No built-in compression:** Wire format is uncompressed. Layer zstd or LZ4 on top if you need it. We decided not to bake compression into the format because different use cases want different compression.
+- **No self-description:** The wire bytes contain no type info. Both sides need the schema. This is a design choice, not a gap — it keeps messages small. But it means you can't debug a packet without the schema file.
+- **Go backend lacks compliance vectors:** The Go codegen works (it compiles and produces code that looks right) but we haven't verified byte output against the Rust and TypeScript implementations. I'd manually verify bytes before shipping a cross-language protocol with Go.
+- **No security audit:** We haven't done one. The runtime has length limits and recursion depth caps, so the obvious DoS vectors are covered. But "obvious" and "all" are different words.
 
-## Gaps
+## What's Missing
 
-- **Reflection metadata:** No runtime type information emitted by codegen.
-  Consumers needing schema introspection at runtime would need a separate
-  metadata format.
-- **Runtime validation / type guards:** Generated TypeScript code does not
-  emit type guards or runtime validators. Can be layered on top of existing
-  interfaces without codegen changes.
-- **Schema registry integration:** No built-in registry or discovery. Schema
-  hash provides identity but not distribution.
-- **Additional backend targets:** Only Rust and TypeScript backends exist.
-  Python, Go, and C backends are potential future work.
+Things that would be useful but aren't implemented:
 
-## Performance Characteristics
+- **Reflection / runtime type info:** Generated code doesn't emit metadata for schema introspection. If you need it, you'll have to build it on top.
+- **Runtime type guards (TypeScript):** The generated TypeScript has interfaces but no runtime validation. You can't check "is this object a valid `SensorReading`?" without the schema.
+- **Schema registry:** No built-in distribution mechanism. The BLAKE3 hash gives you identity but not discovery.
+- **Python backend:** Doesn't exist. The `CodegenBackend` trait is designed for it, but nobody's written one.
+- **Wire size optimization for many-optionals:** Messages with lots of optional fields pay 1 bit per field for presence. A presence bitset could amortize this. Not urgent — 1 bit per field is pretty cheap already.
 
-- **Wire size:** Competitive for sub-byte fields (bit-packing is more compact
-  than byte-aligned formats). Equivalent for byte-aligned fields. No overhead
-  for field tags or type descriptors.
-- **Encode/decode throughput:** Benchmarks available via `cargo bench -p vexil-bench`.
-- **Comparison with protobuf:** Vexil's deterministic encoding enables content
-  addressing (BLAKE3 hash) which protobuf cannot guarantee. Throughput
-  comparison pending formal benchmarks.
+## Performance
 
-## Room for Improvement
+Wire size is competitive for sub-byte fields (bit-packing beats byte-aligned formats like Protobuf). For byte-aligned fields, it's roughly equivalent — no tags, no descriptors, just the data.
 
-Prioritized by likely consumer demand:
-
-1. **Zero-copy byte slices** — Return `&[u8]` / `Uint8Array` views instead
-   of copies for large payloads. Requires lifetime tracking in BitReader.
-2. **Streaming decode** — Allow progressive decode with a framing layer.
-   The standard transport header (Appendix A of the spec) provides a
-   starting point.
-3. **Wire size optimization** — Consider optional field presence bitsets
-   for messages with many optional fields (reduces per-field overhead from
-   1 bit per optional to amortized cost).
-4. **Additional backend targets** — Python, Go, C.
-5. **Compression integration** — First-class zstd or LZ4 support at the
-   transport layer.
-6. **Map key ordering** — Define a canonical sort order for map keys to
-   ensure deterministic encoding without application-level coordination.
+Encode/decode benchmarks are in `vexil-bench`. Run `cargo bench -p vexil-bench` to get numbers on your machine. We haven't published formal throughput comparisons with Protobuf because the numbers depend heavily on field mix and we'd rather you measure your own workload.

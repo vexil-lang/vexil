@@ -1,6 +1,6 @@
 # Where Clauses
 
-Where clauses add declarative validation constraints to fields. They generate validation code that runs automatically during encode and decode -- invalid data is rejected before it ever hits the wire.
+Where clauses add validation constraints to fields. They run automatically on encode and decode — if the data violates the constraint, you get an error and nothing goes on the wire.
 
 ## Basic Syntax
 
@@ -12,26 +12,15 @@ message Player {
 }
 ```
 
-The `value` keyword refers to the field's value. Constraints are boolean expressions evaluated at encode/decode time.
+`value` refers to the field being validated. The expression must evaluate to a boolean.
 
 ## Comparison Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `==` | Equal |
-| `!=` | Not equal |
-| `<` | Less than |
-| `>` | Greater than |
-| `<=` | Less than or equal |
-| `>=` | Greater than or equal |
+`==`, `!=`, `<`, `>`, `<=`, `>=`. They work like you'd expect.
 
 ## Logical Operators
 
-| Operator | Meaning |
-|----------|---------|
-| `&&` | Logical AND |
-| `\|\|` | Logical OR |
-| `!` | Logical NOT |
+`&&`, `||`, `!`. Standard boolean logic.
 
 ```vexil
 message Request {
@@ -42,8 +31,6 @@ message Request {
 
 ## Range Expressions
 
-Check if a value falls within a range:
-
 ```vexil
 # Inclusive: 0 to 100 (both endpoints included)
 health @0 : u8 where value in 0..100
@@ -52,45 +39,36 @@ health @0 : u8 where value in 0..100
 age @1 : u8 where value in 0..<100
 ```
 
-Range bounds can be constants:
+Bounds can be constants:
 
 ```vexil
 const MaxLevel : u16 = 999
 
-message Character {
-    level @0 : u16 where value in 1..MaxLevel
-}
+level @0 : u16 where value in 1..MaxLevel
 ```
 
-## Built-in Functions
+## len()
 
-### len(value)
-
-Returns the length of a collection, string, or byte array:
+Returns the length of a string, bytes, array, map, or set:
 
 ```vexil
 message User {
     username @0 : string where len(value) in 3..32
-    bio      @1 : string where len(value) <= 500
-    tags     @2 : array<string> where len(value) <= 10
-    key      @3 : bytes where len(value) == 32
+    tags     @1 : array<string> where len(value) <= 10
+    key      @2 : bytes where len(value) == 32
 }
 ```
 
-`len()` is valid on: `string`, `bytes`, `array<T>`, `array<T, N>`, `map<K,V>`, `set<T>`.
+## What's Not Supported (Yet)
 
-## What Constraints Do NOT Do
-
-- **Cross-field constraints are not supported**: `where amount <= balance` referencing another field is not allowed in v1.0
-- **Regex patterns are not supported**: `where value matches "..."` is deferred to 1.1
-- **User-defined functions are not supported**: constraints must use built-in operators and functions
-- **Constraints do not affect wire format**: they are compile-time contracts, not runtime metadata
+- **Cross-field constraints**: `where amount <= balance` can't reference other fields. Deferred to 1.1.
+- **Regex**: `where value matches "..."` doesn't exist. Use a length check and validate regex in application code.
+- **User-defined functions**: you can only use the built-in operators and `len()`.
 
 ## Error Behavior
 
-When a constraint is violated:
+On constraint violation:
+- Encode: returns `PackError::ConstraintViolation`, nothing written
+- Decode: returns `DecodeError::ConstraintViolation`, partial data discarded
 
-- **On encode**: `PackError::ConstraintViolation` is returned, no data is written
-- **On decode**: `DecodeError::ConstraintViolation` is returned, partial data is discarded
-
-This means invalid data never crosses the wire.
+Invalid data never makes it onto the wire. That's the whole point.

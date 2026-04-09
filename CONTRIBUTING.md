@@ -1,44 +1,26 @@
 # Contributing to Vexil
 
-## Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [Ways to Contribute](#ways-to-contribute)
-- [Development Setup](#development-setup)
-- [Making Changes](#making-changes)
-- [Submitting a Pull Request](#submitting-a-pull-request)
-- [Commit Messages](#commit-messages)
-- [Code Style](#code-style)
-
----
-
 ## Code of Conduct
 
-This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md).
-By participating, you agree to uphold it.
+This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By participating, you agree to uphold it.
 
 ## Ways to Contribute
 
-- **Bug reports** — open an issue using the bug report template
-- **Feature requests** — open an issue and describe the problem you're solving
-- **Spec clarifications** — corrections or improvements to `spec/vexil-spec.md` or `spec/vexil-grammar.peg`
-- **Corpus additions** — new test cases for `corpus/valid/` or `corpus/invalid/` with a corresponding `MANIFEST.md` entry
-- **Documentation** — typos, clarifications, and examples are always welcome
-- **Code** — see below for how to set up a dev environment
+- **Bug reports** — open an issue. Include the schema that triggers the bug and the error output.
+- **Feature requests** — open an issue and explain the problem you're solving. "Add X" without context is hard to evaluate.
+- **Spec corrections** — typos, ambiguities, or things that don't match the implementation. The spec is in `spec/vexil-spec.md`.
+- **Corpus additions** — new test cases for `corpus/valid/` or `corpus/invalid/`. Add the `.vexil` file and a line in `corpus/MANIFEST.md`.
+- **Documentation** — typos, better examples, things that are wrong. If something confused you, it'll confuse someone else.
+- **Code** — see below.
 
 ## Development Setup
 
-### Prerequisites
-
-- Rust 1.94 or later ([install via rustup](https://rustup.rs))
-- `cargo` (included with Rust)
-
-### Build
+You need Rust 1.94 or later. Install via [rustup](https://rustup.rs).
 
 ```sh
 git clone https://github.com/vexil-lang/vexil
 cd vexil
-git config core.hooksPath .githooks   # enable the pre-commit fmt hook
+git config core.hooksPath .githooks   # pre-commit fmt hook
 cargo build --workspace
 ```
 
@@ -48,8 +30,7 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-The test suite includes corpus-driven tests. All 41 valid corpus schemas must
-be accepted and all 64 invalid schemas must be rejected.
+There are 540+ tests across 34 test suites. All 41 valid corpus schemas must compile and all 64 invalid schemas must produce errors. If you add a corpus file, update `corpus/MANIFEST.md`.
 
 ### Lint & Format
 
@@ -58,26 +39,25 @@ cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 ```
 
-Both checks are enforced in CI. Run them locally before pushing.
+Both are enforced in CI. Run them before you push — CI failures for formatting are annoying for everyone.
 
 ## Making Changes
 
-1. Fork the repository and create a branch:
-   - Features: `feat/your-feature`
-   - Bug fixes: `fix/your-fix`
-   - Spec/corpus work: `spec/description` or `corpus/description`
+1. Fork and branch:
+   - Features: `feat/description`
+   - Bug fixes: `fix/description`
+   - Spec/corpus: `spec/description` or `corpus/description`
 2. Make your changes
-3. Run `cargo test --workspace` and ensure all tests pass
-4. Run `cargo fmt --all` and `cargo clippy --workspace -- -D warnings`
-5. Push and open a pull request
+3. `cargo test --workspace` — all pass
+4. `cargo fmt --all` + `cargo clippy --workspace -- -D warnings` — clean
+5. Push and open a PR
 
 ## Submitting a Pull Request
 
-- Keep PRs focused — one concern per PR
-- Add tests for new behavior; for compiler changes, add corpus files where possible
-- Update `corpus/MANIFEST.md` if you add corpus entries
-- Fill in the PR template
-- For language features, protocol changes, or anything architectural, follow the RFC process described in [GOVERNANCE.md](./GOVERNANCE.md)
+- One concern per PR. A PR that changes the parser AND adds a new type AND updates the spec is too much.
+- Add tests. For compiler changes, add corpus files where possible — they're the easiest tests to maintain.
+- Update `corpus/MANIFEST.md` if you add entries.
+- For language features, wire format changes, or anything architectural: go through the RFC process in [GOVERNANCE.md](./GOVERNANCE.md). Don't just show up with a 2000-line PR changing the wire format.
 
 ## Commit Messages
 
@@ -97,9 +77,9 @@ Scope is optional but useful: `vexil-lang`, `vexilc`, `spec`, `corpus`.
 
 ## Code Style
 
-- Code is formatted with `cargo fmt` (enforced in CI)
-- Clippy lints are treated as errors in CI (`-D warnings`)
+- Formatted with `cargo fmt` (enforced in CI)
+- Clippy lints are errors in CI (`-D warnings`)
 - No `unwrap()` or `expect()` in non-test code — use `?` or explicit error handling
-- All `unsafe` blocks require a `// SAFETY:` comment explaining the invariant
-- Public API items in `vexil-lang` must have doc comments
-- `#[derive(Debug, Clone, PartialEq)]` on all data types unless there is a specific reason not to
+- All `unsafe` blocks need a `// SAFETY:` comment explaining the invariant
+- Public API items in `vexil-lang` need doc comments
+- `#[derive(Debug, Clone, PartialEq)]` on all data types unless there's a specific reason not to
