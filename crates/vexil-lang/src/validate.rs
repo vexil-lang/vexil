@@ -365,6 +365,25 @@ fn check_deprecated_has_reason(ann: &Annotation, diags: &mut Vec<Diagnostic>) {
             ErrorClass::DeprecatedMissingReason,
             "@deprecated must include a `reason` argument",
         ));
+    } else {
+        // Extract reason for warning message
+        let reason = ann.args.as_ref().and_then(|args| {
+            args.iter()
+                .find(|arg| arg.key.as_ref().is_some_and(|k| k.node == "reason"))
+                .and_then(|arg| match &arg.value.node {
+                    crate::ast::AnnotationValue::Str(s) => Some(s.as_str()),
+                    _ => None,
+                })
+        });
+        let msg = match reason {
+            Some(r) => format!("@deprecated: {r}"),
+            None => "@deprecated".to_string(),
+        };
+        diags.push(Diagnostic::warning(
+            ann.span,
+            ErrorClass::DeprecatedMissingReason,
+            msg,
+        ));
     }
 }
 
