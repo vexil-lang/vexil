@@ -213,6 +213,7 @@ mod tests {
     #[test]
     fn value_union() {
         let mut fields = BTreeMap::new();
+        #[allow(clippy::approx_constant)]
         fields.insert("radius".to_string(), Value::F64(3.14));
         let v = Value::Union {
             variant: "Circle".to_string(),

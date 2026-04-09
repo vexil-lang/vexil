@@ -697,7 +697,8 @@ mod tests {
     }
 
     #[test]
-    fn lex_float() {
+    #[allow(clippy::approx_constant)]
+    fn parse_float_lit() {
         let toks = tokens("3.14");
         assert!(matches!(toks[0], Token::FloatLit(f) if (f - 3.14).abs() < 1e-10));
     }

@@ -30,7 +30,7 @@ fn delta_u32_two_frames() {
 #[test]
 fn delta_i64_three_frames() {
     let values: Vec<i64> = vec![1000, 2000, 2005];
-    let expected = vec!["e803000000000000", "e803000000000000", "0500000000000000"];
+    let expected = ["e803000000000000", "e803000000000000", "0500000000000000"];
     let mut prev: i64 = 0;
     for (i, val) in values.iter().enumerate() {
         let delta = val - prev;

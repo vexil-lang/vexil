@@ -57,7 +57,8 @@ fn full_roundtrip_text_to_binary_to_text() {
         emit_schema_directive: true,
         ..Default::default()
     };
-    let text = format(&[decoded.clone()], "Item", &schema, &opts).expect("format should succeed");
+    let text = format(std::slice::from_ref(&decoded), "Item", &schema, &opts)
+        .expect("format should succeed");
     assert!(text.contains("@schema"), "text should contain @schema");
     assert!(text.contains("42"), "text should contain id value");
     assert!(text.contains("widget"), "text should contain name value");

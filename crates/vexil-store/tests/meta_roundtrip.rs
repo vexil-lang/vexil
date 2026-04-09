@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use vexil_lang::diagnostic::Severity;
 use vexil_store::{decode, encode, meta_schema, pack_schema, Value};
 
 #[test]

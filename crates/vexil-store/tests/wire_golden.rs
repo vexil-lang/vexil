@@ -316,7 +316,7 @@ fn golden_leb128_array_length_two_bytes() {
     fields.insert("items".to_string(), Value::Array(items));
 
     let mut golden = vec![0x80u8, 0x01]; // LEB128(128)
-    golden.extend(std::iter::repeat(0x00).take(128));
+    golden.extend(std::iter::repeat_n(0x00u8, 128));
 
     assert_wire_golden(
         Value::Message(fields),
