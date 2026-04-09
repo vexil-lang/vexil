@@ -34,5 +34,8 @@
     "vitest": "^2.0.0"
   },
   "keywords": ["vexil", "schema", "serialization", "binary", "protocol", "bitpack", "codec"],
-  "license": "MIT OR Apache-2.0"
+  "license": "MIT OR Apache-2.0",
+  "overrides": {
+    "esbuild": ">=0.25.0"
+  }
 }
