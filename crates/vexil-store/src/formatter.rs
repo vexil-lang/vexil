@@ -15,6 +15,50 @@ pub struct FormatOptions {
     pub emit_schema_directive: bool,
 }
 
+impl FormatOptions {
+    /// Create a new builder with default settings.
+    pub fn builder() -> FormatOptionsBuilder {
+        FormatOptionsBuilder::default()
+    }
+}
+
+/// Builder for [`FormatOptions`].
+#[derive(Default)]
+pub struct FormatOptionsBuilder {
+    indent: Option<String>,
+    max_inline_width: Option<usize>,
+    emit_schema_directive: Option<bool>,
+}
+
+impl FormatOptionsBuilder {
+    /// Set the indentation string (default: `"  "`).
+    pub fn indent(mut self, indent: impl Into<String>) -> Self {
+        self.indent = Some(indent.into());
+        self
+    }
+
+    /// Set the max inline width before wrapping (default: `80`).
+    pub fn max_inline_width(mut self, width: usize) -> Self {
+        self.max_inline_width = Some(width);
+        self
+    }
+
+    /// Whether to emit `@schema` directive (default: `false`).
+    pub fn emit_schema_directive(mut self, emit: bool) -> Self {
+        self.emit_schema_directive = Some(emit);
+        self
+    }
+
+    /// Build the [`FormatOptions`].
+    pub fn build(self) -> FormatOptions {
+        FormatOptions {
+            indent: self.indent.unwrap_or_else(|| "  ".to_string()),
+            max_inline_width: self.max_inline_width.unwrap_or(80),
+            emit_schema_directive: self.emit_schema_directive.unwrap_or(false),
+        }
+    }
+}
+
 impl Default for FormatOptions {
     fn default() -> Self {
         Self {

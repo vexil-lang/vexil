@@ -117,6 +117,36 @@ pub struct CompileResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+impl CompileResult {
+    /// Returns true if compilation succeeded (no error-severity diagnostics).
+    pub fn is_ok(&self) -> bool {
+        !self.has_errors()
+    }
+
+    /// Returns true if any error-severity diagnostics were produced.
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error)
+    }
+
+    /// Returns only the warning diagnostics.
+    pub fn warnings(&self) -> Vec<&Diagnostic> {
+        self.diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Warning)
+            .collect()
+    }
+
+    /// Returns only the error diagnostics.
+    pub fn errors(&self) -> Vec<&Diagnostic> {
+        self.diagnostics
+            .iter()
+            .filter(|d| d.severity == Severity::Error)
+            .collect()
+    }
+}
+
 /// Compile a Vexil source string through the full pipeline.
 ///
 /// Runs lexing, parsing, structural validation, lowering to IR, and

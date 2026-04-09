@@ -104,6 +104,61 @@ const _: fn() = || {
     assert_send_sync::<CompiledSchema>();
 };
 
+impl CompiledSchema {
+    /// Returns all type names declared in this schema (not imports).
+    pub fn type_names(&self) -> Vec<&str> {
+        self.declarations
+            .iter()
+            .filter_map(|&id| self.registry.get(id))
+            .map(|def| match def {
+                TypeDef::Message(m) => m.name.as_str(),
+                TypeDef::Enum(e) => e.name.as_str(),
+                TypeDef::Flags(f) => f.name.as_str(),
+                TypeDef::Union(u) => u.name.as_str(),
+                TypeDef::Newtype(n) => n.name.as_str(),
+                TypeDef::Config(c) => c.name.as_str(),
+                TypeDef::GenericAlias(g) => g.name.as_str(),
+            })
+            .collect()
+    }
+
+    /// Look up a type by name. Returns the TypeId and TypeDef if found.
+    pub fn find_type(&self, name: &str) -> Option<(TypeId, &TypeDef)> {
+        for &id in &self.declarations {
+            if let Some(def) = self.registry.get(id) {
+                let def_name = match def {
+                    TypeDef::Message(m) => m.name.as_str(),
+                    TypeDef::Enum(e) => e.name.as_str(),
+                    TypeDef::Flags(f) => f.name.as_str(),
+                    TypeDef::Union(u) => u.name.as_str(),
+                    TypeDef::Newtype(n) => n.name.as_str(),
+                    TypeDef::Config(c) => c.name.as_str(),
+                    TypeDef::GenericAlias(g) => g.name.as_str(),
+                };
+                if def_name == name {
+                    return Some((id, def));
+                }
+            }
+        }
+        None
+    }
+
+    /// Returns the fully-qualified namespace as a dot-separated string.
+    pub fn namespace_str(&self) -> String {
+        self.namespace
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    /// Returns the BLAKE3 schema hash as a hex string.
+    pub fn hash_hex(&self) -> String {
+        let hash = crate::canonical::schema_hash(self);
+        hash.iter().map(|b| format!("{b:02x}")).collect()
+    }
+}
+
 /// A compiled constant value.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstValue {
