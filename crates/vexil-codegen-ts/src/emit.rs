@@ -11,6 +11,7 @@ impl Default for CodeWriter {
 }
 
 impl CodeWriter {
+    /// Create a new empty code writer.
     pub fn new() -> Self {
         Self {
             buf: String::new(),

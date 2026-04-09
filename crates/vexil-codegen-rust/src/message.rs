@@ -14,9 +14,10 @@ use crate::types::rust_type;
 // Byte-alignment helper
 // ---------------------------------------------------------------------------
 
-/// Returns true if the type is byte-aligned (i.e., not sub-byte).
+/// Returns true if the type is byte-aligned on the wire (not sub-byte).
 ///
-/// Returns false for: Bool, SubByte, exhaustive enum with wire_bits < 8.
+/// Returns false for `bool`, `SubByte`, and exhaustive enums with `wire_bits < 8`.
+/// Used to decide whether to flush the bit-stream before encoding/decoding optional inner values.
 pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     match ty {
         ResolvedType::Primitive(PrimitiveType::Bool) => false,
@@ -39,6 +40,7 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
 // Primitive type bits helper
 // ---------------------------------------------------------------------------
 
+/// Returns the bit width of a primitive integer/float type.
 fn primitive_bits(p: &PrimitiveType) -> u8 {
     match p {
         PrimitiveType::I8 | PrimitiveType::U8 => 8,
@@ -129,6 +131,7 @@ fn generate_constraint_expr(constraint: &FieldConstraint, access: &str) -> Strin
     }
 }
 
+/// Convert a comparison operator to its Rust operator string.
 fn cmp_op_to_str(op: CmpOp) -> &'static str {
     match op {
         CmpOp::Eq => "==",
@@ -140,6 +143,7 @@ fn cmp_op_to_str(op: CmpOp) -> &'static str {
     }
 }
 
+/// Convert a constraint operand to its Rust literal string.
 fn operand_to_rust(operand: &ConstraintOperand) -> String {
     match operand {
         ConstraintOperand::Int(i) => i.to_string(),
@@ -190,10 +194,11 @@ fn emit_constraint_validation_unpack(
     w.close_block();
 }
 
-/// Emit code to write a field to `w: &mut BitWriter`.
+/// Emit code to write (pack) a field to a `BitWriter`.
 ///
-/// `access` is the Rust expression for the value (e.g. `self.name` or `&self.data`).
-/// For `Encoding::Delta`, this function is a no-op (the delta module handles it).
+/// `access` is the Rust expression for the value (e.g., `self.name` or `&self.data`).
+/// Handles encoding dispatch (Varint, ZigZag, Delta, Default), limit checks,
+/// and constraint validation before encoding.
 pub fn emit_write(
     w: &mut CodeWriter,
     access: &str,
@@ -259,6 +264,7 @@ pub fn emit_write(
     emit_write_type(w, access, ty, registry, field_name);
 }
 
+/// Recursively emit write code for each ResolvedType variant.
 #[allow(clippy::only_used_in_recursion)]
 fn emit_write_type(
     w: &mut CodeWriter,
@@ -402,9 +408,10 @@ fn emit_write_type(
 // emit_read
 // ---------------------------------------------------------------------------
 
-/// Emit code to read a field from `r: &mut BitReader<'_>`.
+/// Emit code to read (unpack) a field from a `BitReader`.
 ///
-/// Binds the result to `var_name`.
+/// Binds the decoded value to `var_name`. Handles encoding dispatch (Varint, ZigZag,
+/// Delta, Default), limit checks, and constraint validation after decoding.
 pub fn emit_read(
     w: &mut CodeWriter,
     var_name: &str,
@@ -466,6 +473,7 @@ pub fn emit_read(
     emit_read_type(w, var_name, ty, registry, field_name, enc.limit);
 }
 
+/// Recursively emit read code for each ResolvedType variant.
 fn emit_read_type(
     w: &mut CodeWriter,
     var_name: &str,
@@ -830,6 +838,7 @@ fn emit_tombstone_read(w: &mut CodeWriter, ty: &ResolvedType, registry: &TypeReg
     }
 }
 
+/// Return the Rust type to cast a decoded LEB128 value into.
 fn read_cast_for_varint(ty: &ResolvedType) -> &'static str {
     match ty {
         ResolvedType::Primitive(p) => match p {
@@ -843,6 +852,7 @@ fn read_cast_for_varint(ty: &ResolvedType) -> &'static str {
     }
 }
 
+/// Return the Rust type to cast a decoded ZigZag value into.
 fn read_cast_for_zigzag(ty: &ResolvedType) -> &'static str {
     match ty {
         ResolvedType::Primitive(p) => match p {
@@ -860,7 +870,11 @@ fn read_cast_for_zigzag(ty: &ResolvedType) -> &'static str {
 // emit_message
 // ---------------------------------------------------------------------------
 
-/// Emit a complete message struct with Pack and Unpack implementations.
+/// Emit a complete message struct with [`Pack`] and [`Unpack`] implementations.
+///
+/// Generates a Rust struct with `#[derive(Debug, Clone, PartialEq)]`, plus
+/// `impl Pack` (encode to `BitWriter`) and `impl Unpack` (decode from `BitReader`).
+/// Tombstone fields are read-and-discarded during decode for forward compatibility.
 pub fn emit_message(
     w: &mut CodeWriter,
     msg: &MessageDef,

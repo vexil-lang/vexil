@@ -5,9 +5,13 @@ use vexil_lang::{CompiledSchema, ResolvedType, TypeDef, TypeRegistry};
 use crate::error::VxError;
 use crate::Value;
 
+/// Options controlling `.vx` text output formatting.
 pub struct FormatOptions {
+    /// Indentation string used for each nesting level (e.g. `"  "` for two spaces).
     pub indent: String,
+    /// Maximum width before arrays and long structures are split across lines.
     pub max_inline_width: usize,
+    /// Whether to emit an `@schema` directive at the top of the output.
     pub emit_schema_directive: bool,
 }
 

@@ -51,13 +51,20 @@ pub enum FieldConstraint {
     },
 }
 
+/// Comparison operators in IR constraint expressions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmpOp {
+    /// `==` — equality.
     Eq,
+    /// `!=` — inequality.
     Ne,
+    /// `<` — less than.
     Lt,
+    /// `>` — greater than.
     Gt,
+    /// `<=` — less than or equal.
     Le,
+    /// `>=` — greater than or equal.
     Ge,
 }
 

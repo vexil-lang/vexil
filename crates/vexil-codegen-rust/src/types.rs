@@ -84,6 +84,7 @@ pub fn rust_type(
     }
 }
 
+/// Map a Vexil primitive type to its Rust type name.
 fn primitive_type(p: &PrimitiveType) -> &'static str {
     match p {
         PrimitiveType::Bool => "bool",
@@ -103,6 +104,7 @@ fn primitive_type(p: &PrimitiveType) -> &'static str {
     }
 }
 
+/// Map a sub-byte type to its containing Rust integer type (signed or unsigned).
 fn sub_byte_type(s: &SubByteType) -> &'static str {
     let containing = containing_int_type(s.bits);
     if s.signed {
@@ -127,6 +129,7 @@ pub(crate) fn containing_int_type(bits: u8) -> &'static str {
     }
 }
 
+/// Map a Vexil semantic type to its Rust type representation.
 fn semantic_type(s: &SemanticType) -> &'static str {
     match s {
         SemanticType::String => "String",
@@ -138,6 +141,7 @@ fn semantic_type(s: &SemanticType) -> &'static str {
     }
 }
 
+/// Extract the name from any TypeDef variant.
 fn type_def_name(def: &TypeDef) -> String {
     match def {
         TypeDef::Message(m) => m.name.to_string(),

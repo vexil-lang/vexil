@@ -1,55 +1,80 @@
 use crate::error::VxError;
 
+/// A lexical token produced by the `.vx` text lexer.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// `@schema`, `@version`, etc.
     Directive(String),
-    /// Identifier: type name, field name, keyword
+    /// Identifier: type name, field name, keyword.
     Ident(String),
-    /// Quoted string literal
+    /// Quoted string literal.
     StringLit(String),
-    /// Integer literal
+    /// Integer literal.
     IntLit(i128),
-    /// Float literal
+    /// Float literal.
     FloatLit(f64),
-    /// Hex byte sequence: `0x[01 02 ab]`
+    /// Hex byte sequence: `0x[01 02 ab]`.
     HexBytes(Vec<u8>),
-    /// Base64 byte sequence: `b64"..."`
+    /// Base64 byte sequence: `b64"..."`.
     Base64Bytes(Vec<u8>),
+    /// Left brace `{`.
     LBrace,
+    /// Right brace `}`.
     RBrace,
+    /// Left bracket `[`.
     LBracket,
+    /// Right bracket `]`.
     RBracket,
+    /// Left parenthesis `(`.
     LParen,
+    /// Right parenthesis `)`.
     RParen,
+    /// Colon `:`.
     Colon,
+    /// Comma `,`.
     Comma,
+    /// Pipe `|` (used in flags).
     Pipe,
+    /// End of input.
     Eof,
 }
 
+/// A source location (line and column).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
+    /// 1-based line number.
     pub line: usize,
+    /// 1-based column number.
     pub col: usize,
 }
 
+/// A token paired with its source location.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spanned {
+    /// The token value.
     pub token: Token,
+    /// Source location of this token.
     pub span: Span,
 }
 
+/// Lexer for `.vx` text format.
+///
+/// Converts a source string into a stream of [`Spanned`] tokens,
+/// skipping whitespace and comments (`#` and `//`).
 pub struct Lexer<'a> {
     #[allow(dead_code)] // Retained for future error reporting with source context
     input: &'a str,
     chars: std::iter::Peekable<std::str::CharIndices<'a>>,
     line: usize,
     col: usize,
+    /// Source file name, used in error messages.
     pub file: String,
 }
 
 impl<'a> Lexer<'a> {
+    /// Creates a new lexer for the given input source and file name.
+    ///
+    /// The `file` name is used in error messages.
     pub fn new(input: &'a str, file: impl Into<String>) -> Self {
         Self {
             input,
@@ -117,6 +142,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Returns the next token from the input, skipping comments.
+    ///
+    /// Returns `Err` on invalid syntax such as unterminated strings or
+    /// unexpected characters.
     pub fn next_token(&mut self) -> Result<Spanned, VxError> {
         loop {
             self.skip_whitespace();

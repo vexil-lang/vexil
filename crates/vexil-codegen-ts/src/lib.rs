@@ -3,20 +3,31 @@
 //! Generates TypeScript interfaces and encode/decode functions that use
 //! the `@vexil-lang/runtime` npm package for wire I/O.
 
+/// TypeScript [`CodegenBackend`](backend::TypeScriptBackend) implementation.
 pub mod backend;
+/// Delta encoder/decoder class generation for messages with `@delta` fields.
 pub mod delta;
+/// Low-level [`CodeWriter`] helper for emitting indented TypeScript source.
 pub mod emit;
+/// Enum type generation: string literal union + const object + encode/decode.
 pub mod enum_gen;
+/// Flags type generation: number type alias + named bit constants + encode/decode.
 pub mod flags;
+/// Message and config type generation: interface + encode/decode functions.
 pub mod message;
+/// Newtype (wrapper) generation: type alias + encode/decode delegation.
 pub mod newtype;
+/// TypeScript type mapping utilities for Vexil resolved types.
 pub mod types;
+/// Union (tagged-discriminant) generation: discriminated union + encode/decode.
 pub mod union_gen;
 
+/// Re-export of the TypeScript code-generation backend.
 pub use backend::TypeScriptBackend;
 
 use vexil_lang::ir::{CompiledSchema, TypeDef};
 
+/// Errors that can occur during TypeScript code generation.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum CodegenError {
     #[error("unresolved type {type_id:?} referenced by {referenced_by}")]

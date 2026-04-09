@@ -166,6 +166,7 @@ fn collect_named_ids_from_typedef(
     }
 }
 
+/// Recursively collect imported Named type IDs from a ResolvedType tree.
 fn collect_named_ids_from_resolved(
     ty: &ResolvedType,
     declared: &HashSet<TypeId>,

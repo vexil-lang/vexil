@@ -1,16 +1,23 @@
 use crate::error::VxbError;
 
+/// Current `.vxb` binary file format version number.
 pub const FORMAT_VERSION: u8 = 1;
 
+/// Magic bytes identifying the binary file type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Magic {
-    Vxb,  // b"VXB\0"
-    Vxc,  // b"VXC\0"
-    Vxbp, // b"VXBP"
-    Vxcp, // b"VXCP"
+    /// `.vxb` — binary data file (`b"VXB\0"`).
+    Vxb,
+    /// `.vxc` — binary compiled schema file (`b"VXC\0"`).
+    Vxc,
+    /// `.vxbp` — binary data pack file (`b"VXBP"`).
+    Vxbp,
+    /// `.vxcp` — binary compiled schema pack file (`b"VXCP"`).
+    Vxcp,
 }
 
 impl Magic {
+    /// Returns the 4-byte magic signature for this variant.
     pub fn bytes(&self) -> [u8; 4] {
         match self {
             Magic::Vxb => *b"VXB\0",
@@ -20,6 +27,8 @@ impl Magic {
         }
     }
 
+    /// Attempts to parse a 4-byte magic signature into a `Magic` variant.
+    /// Returns `None` if the bytes do not match any known signature.
     pub fn from_bytes(bytes: &[u8; 4]) -> Option<Magic> {
         match bytes {
             b"VXB\0" => Some(Magic::Vxb),
@@ -31,13 +40,24 @@ impl Magic {
     }
 }
 
+/// Header for `.vxb` binary files.
+///
+/// Parsed from the first bytes of a binary file, containing the magic
+/// signature, format version, compression flag, schema hash, namespace,
+/// and schema version.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VxbHeader {
+    /// The magic bytes identifying the file type.
     pub magic: Magic,
+    /// Binary format version (must equal [`FORMAT_VERSION`]).
     pub format_version: u8,
+    /// Whether the payload is compressed.
     pub compressed: bool,
+    /// BLAKE3 hash of the compiled schema used to encode this file.
     pub schema_hash: [u8; 32],
+    /// Schema namespace (dot-separated).
     pub namespace: String,
+    /// Schema version string.
     pub schema_version: String,
 }
 

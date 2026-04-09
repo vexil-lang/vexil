@@ -1,19 +1,35 @@
 use std::collections::BTreeMap;
 
 /// Dynamic representation of any Vexil-typed value.
+///
+/// `Value` is the universal in-memory data model for the vexil-store crate.
+/// It can represent any Vexil schema type, from primitive scalars to deeply
+/// nested messages and unions. Values are produced by the parser and decoder,
+/// and consumed by the encoder, formatter, and validator.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     // Primitives
+    /// Boolean value (`true` or `false`).
     Bool(bool),
+    /// Unsigned 8-bit integer.
     U8(u8),
+    /// Unsigned 16-bit integer.
     U16(u16),
+    /// Unsigned 32-bit integer.
     U32(u32),
+    /// Unsigned 64-bit integer.
     U64(u64),
+    /// Signed 8-bit integer.
     I8(i8),
+    /// Signed 16-bit integer.
     I16(i16),
+    /// Signed 32-bit integer.
     I32(i32),
+    /// Signed 64-bit integer.
     I64(i64),
+    /// 32-bit IEEE 754 floating-point.
     F32(f32),
+    /// 64-bit IEEE 754 floating-point.
     F64(f64),
     /// Q16.16 fixed-point (raw i32 on wire).
     Fixed32(i32),
@@ -21,14 +37,20 @@ pub enum Value {
     Fixed64(i64),
     /// Sub-byte integer (1-7 bits). `width` is the declared bit count.
     Bits {
+        /// The unsigned integer value stored in the bits.
         value: u64,
+        /// Number of bits (1-64).
         width: u8,
     },
 
     // Semantic types
+    /// UTF-8 string.
     String(String),
+    /// Arbitrary byte sequence.
     Bytes(Vec<u8>),
+    /// RGB color, stored as `[r, g, b]`.
     Rgb([u8; 3]),
+    /// 128-bit UUID.
     Uuid([u8; 16]),
     /// Microseconds since Unix epoch.
     Timestamp(i64),
@@ -36,31 +58,44 @@ pub enum Value {
     Hash([u8; 32]),
 
     // Parameterized types
+    /// Absent optional value.
     None,
+    /// Present optional value wrapping an inner value.
     Some(Box<Value>),
+    /// Ordered sequence of values of a uniform type.
     Array(Vec<Value>),
     /// Set of unique values. Elements must be valid map key types.
     Set(Vec<Value>),
-    /// Map preserves insertion order. Keys are (key, value) pairs.
+    /// Map of key-value pairs. Preserves insertion order.
     Map(Vec<(Value, Value)>),
+    /// Successful result value.
     Ok(Box<Value>),
+    /// Error result value.
     Err(Box<Value>),
 
     // Composite types
-    /// Message with named fields.
+    /// Message with named fields stored in a `BTreeMap`.
     Message(BTreeMap<String, Value>),
-    /// Enum variant (bare name).
+    /// Enum variant identified by its name.
     Enum(String),
     /// Flags (set of flag names).
     Flags(Vec<String>),
     /// Union variant with named fields.
     Union {
+        /// The name of the active variant.
         variant: String,
+        /// Fields of the active variant.
         fields: BTreeMap<String, Value>,
     },
 }
 
 impl Value {
+    /// Returns the default `Value` for a given resolved type.
+    ///
+    /// This produces the zero-value / canonical default for each type:
+    /// `false` for booleans, `0` for numeric types, empty collections
+    /// for containers, `None` for optionals, and the first variant for
+    /// enums and unions.
     pub fn default_for_type(
         ty: &vexil_lang::ResolvedType,
         registry: &vexil_lang::TypeRegistry,

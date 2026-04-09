@@ -1,95 +1,166 @@
 use crate::span::Span;
 use smol_str::SmolStr;
 
+/// A single token produced by the lexer, with its source span for error reporting.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
+    /// The token's kind and optional payload.
     pub kind: TokenKind,
+    /// Source location of this token in the input.
     pub span: Span,
 }
 
+/// All token kinds recognized by the Vexil lexer.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // Punctuation
+    /// `{` — opens a block.
     LBrace,
+    /// `}` — closes a block.
     RBrace,
+    /// `[` — opens a bracket.
     LBracket,
+    /// `]` — closes a bracket.
     RBracket,
+    /// `(` — opens parentheses.
     LParen,
+    /// `)` — closes parentheses.
     RParen,
+    /// `<` — opens angle bracket (generics).
     LAngle,
+    /// `>` — closes angle bracket (generics).
     RAngle,
+    /// `:` — type separator.
     Colon,
+    /// `,` — item separator.
     Comma,
+    /// `.` — dot accessor.
     Dot,
-    DotDot,   // ..
-    DotDotLt, // ..<
+    /// `..` — inclusive range.
+    DotDot,
+    /// `..<` — exclusive range.
+    DotDotLt,
+    /// `=` — assignment or variant value separator.
     Eq,
-    EqEq,   // ==
-    Bang,   // !
-    Ne,     // !=
-    Le,     // <=
-    Ge,     // >=
-    AndAnd, // &&
-    OrOr,   // ||
+    /// `==` — equality comparison.
+    EqEq,
+    /// `!` — logical NOT or field reference sigil.
+    Bang,
+    /// `!=` — inequality comparison.
+    Ne,
+    /// `<=` — less-than-or-equal comparison.
+    Le,
+    /// `>=` — greater-than-or-equal comparison.
+    Ge,
+    /// `&&` — logical AND.
+    AndAnd,
+    /// `||` — logical OR.
+    OrOr,
+    /// `#` — used in hex literals.
     Hash,
+    /// `^` — caret (reserved).
     Caret,
+    /// `-` — minus sign.
     Minus,
+    /// `+` — plus sign.
     Plus,
+    /// `*` — star (wildcard import).
     Star,
+    /// `/` — forward slash (path separator).
     Slash,
 
     // Literals
+    /// A lowercase or snake_case identifier.
     Ident(SmolStr),
+    /// A PascalCase / uppercase identifier.
     UpperIdent(SmolStr),
+    /// A double-quoted string literal.
     StringLit(String),
+    /// A decimal integer literal.
     DecInt(u64),
+    /// A hexadecimal integer literal (e.g. `0xFF`).
     HexInt(u64),
+    /// A floating-point literal.
     FloatLit(f64),
 
     // Ordinal (@N)
+    /// An ordinal marker (e.g. `@0`, `@42`).
     Ordinal(u32),
 
     // Annotation sigil (@)
+    /// The `@` sigil introducing an annotation.
     At,
 
     // Keywords
+    /// `namespace` keyword.
     KwNamespace,
+    /// `import` keyword.
     KwImport,
+    /// `from` keyword.
     KwFrom,
+    /// `as` keyword.
     KwAs,
+    /// `message` keyword.
     KwMessage,
+    /// `enum` keyword.
     KwEnum,
+    /// `flags` keyword.
     KwFlags,
+    /// `bits` keyword (inline bitfields).
     KwBits,
+    /// `union` keyword.
     KwUnion,
+    /// `newtype` keyword.
     KwNewtype,
+    /// `config` keyword.
     KwConfig,
+    /// `type` keyword (aliases).
     KwType,
+    /// `const` keyword.
     KwConst,
 
+    /// `optional` keyword.
     KwOptional,
+    /// `array` keyword.
     KwArray,
+    /// `set` keyword.
     KwSet,
+    /// `map` keyword.
     KwMap,
+    /// `result` keyword.
     KwResult,
+    /// `true` keyword.
     KwTrue,
+    /// `false` keyword.
     KwFalse,
+    /// `none` keyword.
     KwNone,
 
     // Geometric types
+    /// `vec2` keyword.
     KwVec2,
+    /// `vec3` keyword.
     KwVec3,
+    /// `vec4` keyword.
     KwVec4,
+    /// `quat` keyword.
     KwQuat,
+    /// `mat3` keyword.
     KwMat3,
+    /// `mat4` keyword.
     KwMat4,
 
-    KwWhere, // where
-    KwIn,    // in
-    KwValue, // value (pseudo-keyword for constraints)
+    /// `where` keyword (field constraints).
+    KwWhere,
+    /// `in` keyword (range constraints).
+    KwIn,
+    /// `value` pseudo-keyword (constraint operand).
+    KwValue,
 
     // Special
+    /// End of file marker.
     Eof,
+    /// An error token (invalid character or sequence).
     Error,
 }
 
