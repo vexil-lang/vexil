@@ -3,25 +3,87 @@ use serde::Serialize;
 use vexil_lang::compat::{BumpKind, ChangeKind, CompatResult};
 use vexil_lang::diagnostic::{Diagnostic, Severity};
 
+/// Returns true if color output should be disabled.
+/// Respects the NO_COLOR convention: https://no-color.org/
+fn no_color() -> bool {
+    std::env::var("NO_COLOR").is_ok()
+}
+
 fn render_diagnostic(filename: &str, source: &str, diag: &Diagnostic) {
     let kind = match diag.severity {
         Severity::Error => ReportKind::Error,
         Severity::Warning => ReportKind::Warning,
     };
     let range = diag.span.range();
-    Report::build(kind, (filename, range.clone()))
+    let label = Label::new((filename, range.clone())).with_message(format!("{:?}", diag.class));
+    let label = if no_color() {
+        label
+    } else {
+        label.with_color(Color::Red)
+    };
+    Report::build(kind, (filename, range))
         .with_message(&diag.message)
-        .with_label(
-            Label::new((filename, range))
-                .with_message(format!("{:?}", diag.class))
-                .with_color(Color::Red),
-        )
+        .with_label(label)
         .finish()
         .eprint((filename, Source::from(source)))
         .ok();
 }
 
-fn cmd_check(filename: &str, include_paths: &[String]) -> i32 {
+/// JSON output for CI integration. Outputs diagnostics as a JSON array.
+fn cmd_check_json(filename: &str, source: &str, include_paths: &[String]) -> i32 {
+    #[derive(serde::Serialize)]
+    struct JsonDiag {
+        severity: String,
+        message: String,
+        file: String,
+        line: usize,
+        col: usize,
+    }
+
+    let diags = if include_paths.is_empty() {
+        let result = vexil_lang::compile(source);
+        result.diagnostics
+    } else {
+        let root_path = std::path::PathBuf::from(filename);
+        let include_dirs: Vec<std::path::PathBuf> =
+            include_paths.iter().map(std::path::PathBuf::from).collect();
+        let loader = vexil_lang::resolve::FilesystemLoader::new(include_dirs);
+        match vexil_lang::compile_project(source, &root_path, &loader) {
+            Ok(r) => r.diagnostics,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return 1;
+            }
+        }
+    };
+
+    let json_diags: Vec<JsonDiag> = diags
+        .iter()
+        .map(|d| {
+            let range = d.span.range();
+            let prefix = &source[..range.start];
+            let line = prefix.lines().count();
+            let col = prefix.lines().last().map_or(0, |l| l.len());
+            JsonDiag {
+                severity: format!("{:?}", d.severity),
+                message: d.message.clone(),
+                file: filename.to_string(),
+                line,
+                col,
+            }
+        })
+        .collect();
+
+    println!("{}", serde_json::to_string(&json_diags).unwrap());
+
+    if diags.iter().any(|d| d.severity == Severity::Error) {
+        1
+    } else {
+        0
+    }
+}
+
+fn cmd_check(filename: &str, include_paths: &[String], json_output: bool) -> i32 {
     let source = match std::fs::read_to_string(filename) {
         Ok(s) => s,
         Err(e) => {
@@ -29,6 +91,10 @@ fn cmd_check(filename: &str, include_paths: &[String]) -> i32 {
             return 1;
         }
     };
+
+    if json_output {
+        return cmd_check_json(filename, &source, include_paths);
+    }
 
     // Detect import statements — if present, --include is needed for full
     // type resolution.  Without it, imported types become unresolved stubs.
@@ -884,7 +950,7 @@ fn cmd_watch(root_file: &str, target: &str, output: Option<&str>, includes: &[St
     println!("[watch] Initial build...");
     let code = match output {
         Some(out) => cmd_build(root_file, includes, out, target),
-        None => cmd_check(root_file, includes),
+        None => cmd_check(root_file, includes, false),
     };
     if code == 0 {
         println!("[watch] Ready. Watching for changes...");
@@ -959,7 +1025,7 @@ fn cmd_watch(root_file: &str, target: &str, output: Option<&str>, includes: &[St
                 println!("\n[watch] Change detected, rebuilding...");
                 let code = match output {
                     Some(out) => cmd_build(root_file, includes, out, target),
-                    None => cmd_check(root_file, includes),
+                    None => cmd_check(root_file, includes, false),
                 };
                 if code == 0 {
                     println!("[watch] OK");
@@ -1002,6 +1068,7 @@ fn main() {
             }
             let filename = &args[2];
             let mut include_paths = Vec::new();
+            let mut json_output = false;
             let mut i = 3;
             while i < args.len() {
                 match args[i].as_str() {
@@ -1011,6 +1078,9 @@ fn main() {
                             include_paths.push(args[i].clone());
                         }
                     }
+                    "--json" => {
+                        json_output = true;
+                    }
                     other => {
                         eprintln!("unknown option: {other}");
                         std::process::exit(1);
@@ -1018,7 +1088,7 @@ fn main() {
                 }
                 i += 1;
             }
-            std::process::exit(cmd_check(filename, &include_paths));
+            std::process::exit(cmd_check(filename, &include_paths, json_output));
         }
         Some("compile") => {
             // vexilc compile <file.vexil> -o <out.vxc|out.vxcp>

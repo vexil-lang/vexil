@@ -8,7 +8,7 @@ proptest! {
     /// This is a sanity check that the compiler handles all valid inputs.
     #[test]
     fn corpus_valid_compiles(idx in 1u32..=41) {
-        let filename = format!("{idx:03}_*.vexil");
+        let _filename = format!("{idx:03}_*.vexil");
         let corpus_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent().unwrap().parent().unwrap()
             .join("corpus/valid");
