@@ -27,3 +27,7 @@ packages/runtime-ts/dist/
 
 # Go
 packages/runtime-go/vendor/
+
+# AI tooling (local only)
+.agents/
+CLAUDE.md
