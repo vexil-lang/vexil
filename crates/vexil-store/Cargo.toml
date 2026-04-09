@@ -15,7 +15,7 @@ categories = ["encoding", "parser-implementations"]
 vexil-lang = { path = "../vexil-lang", version = "^0.4.3" }
 vexil-runtime = { path = "../vexil-runtime", version = "^0.5.1" }
 thiserror = "2.0.18"
-blake3 = "1.8.3"
+blake3 = "1.8.4"
 smol_str = "0.3"
 
 [dev-dependencies]
