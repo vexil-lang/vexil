@@ -65,6 +65,9 @@ pub fn check(compiled: &mut CompiledSchema) -> Vec<Diagnostic> {
         }
     }
 
+    // Check trait conformance
+    check_impl_conformance(compiled, &mut diags);
+
     diags
 }
 
@@ -630,4 +633,152 @@ fn walk_type_for_recursion(ty: &ResolvedType, direct: bool, state: &mut Recursio
         }
         _ => {} // Primitive, SubByte, Semantic — terminal
     }
+}
+
+// ---------------------------------------------------------------------------
+// Trait Conformance Checking
+// ---------------------------------------------------------------------------
+
+use smol_str::SmolStr;
+use std::collections::HashMap;
+
+use crate::ir::{ImplDef, TraitDef};
+
+/// Check that all impls in the schema conform to their traits.
+fn check_impl_conformance(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>) {
+    // Collect all traits and impls
+    let mut traits: HashMap<SmolStr, &TraitDef> = HashMap::new();
+    let mut impls: Vec<&ImplDef> = Vec::new();
+
+    for &id in &compiled.declarations {
+        if let Some(type_def) = compiled.registry.get(id) {
+            match type_def {
+                TypeDef::Trait(t) => {
+                    traits.insert(t.name.clone(), t);
+                }
+                TypeDef::Impl(i) => {
+                    impls.push(i);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Also check impls that are not in declarations (collected separately)
+    for (_id, type_def) in compiled.registry.iter() {
+        if let TypeDef::Impl(i) = type_def {
+            // Check if we already have this impl
+            if !impls.iter().any(|existing| std::ptr::eq(*existing, i)) {
+                impls.push(i);
+            }
+        }
+    }
+
+    // Check each impl
+    for impl_def in impls {
+        check_single_impl_conformance(impl_def, &traits, compiled, diags);
+    }
+}
+
+fn check_single_impl_conformance(
+    impl_def: &ImplDef,
+    traits: &HashMap<SmolStr, &TraitDef>,
+    compiled: &CompiledSchema,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Some(trait_def) = traits.get(&impl_def.trait_name) else {
+        diags.push(Diagnostic::error(
+            impl_def.span,
+            ErrorClass::UnresolvedType,
+            format!("impl references unknown trait '{}'", impl_def.trait_name),
+        ));
+        return;
+    };
+
+    // Check target type has all required trait fields
+    check_trait_fields(impl_def, trait_def, compiled, diags);
+
+    // Check all trait functions are implemented
+    check_trait_functions(impl_def, trait_def, diags);
+}
+
+fn check_trait_fields(
+    impl_def: &ImplDef,
+    trait_def: &TraitDef,
+    compiled: &CompiledSchema,
+    diags: &mut Vec<Diagnostic>,
+) {
+    // Get the target type definition
+    let target_type_def = match &impl_def.target_type {
+        ResolvedType::Named(id) => compiled.registry.get(*id),
+        _ => None,
+    };
+
+    let Some(target_def) = target_type_def else {
+        // Type validation happens elsewhere
+        return;
+    };
+
+    let target_fields = match target_def {
+        TypeDef::Message(m) => &m.fields,
+        _ => {
+            diags.push(Diagnostic::error(
+                impl_def.span,
+                ErrorClass::UnresolvedType,
+                format!(
+                    "impl target '{:?}' is not a message type",
+                    impl_def.target_type
+                ),
+            ));
+            return;
+        }
+    };
+
+    // Check each required trait field exists on target
+    for trait_field in &trait_def.fields {
+        let found = target_fields.iter().any(|f| {
+            f.name == trait_field.name && types_compatible(&f.resolved_type, &trait_field.ty)
+        });
+
+        if !found {
+            diags.push(Diagnostic::error(
+                impl_def.span,
+                ErrorClass::UnresolvedType,
+                format!(
+                    "impl for '{:?}' missing required trait field '{}' of type '{:?}'",
+                    impl_def.target_type, trait_field.name, trait_field.ty
+                ),
+            ));
+        }
+    }
+}
+
+fn check_trait_functions(impl_def: &ImplDef, trait_def: &TraitDef, diags: &mut Vec<Diagnostic>) {
+    // Check all trait functions are implemented
+    for trait_fn in &trait_def.functions {
+        let found = impl_def.functions.iter().any(|f| {
+            f.name == trait_fn.name
+                && f.params.len() == trait_fn.params.len()
+                && f.return_type == trait_fn.return_type
+        });
+
+        if !found {
+            diags.push(Diagnostic::error(
+                impl_def.span,
+                ErrorClass::UnresolvedType,
+                format!(
+                    "impl for '{:?}' missing trait function '{}'",
+                    impl_def.target_type, trait_fn.name
+                ),
+            ));
+        }
+    }
+
+    // TODO: Check for extra functions in impl that aren't in trait?
+}
+
+fn types_compatible(a: &ResolvedType, b: &ResolvedType) -> bool {
+    // For now, exact match only
+    // TODO: handle generic substitution, subtyping
+    a == b
 }
