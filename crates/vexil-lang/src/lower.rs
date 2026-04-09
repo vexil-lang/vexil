@@ -759,9 +759,27 @@ fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> cr
     // TODO: Handle type arguments for generic traits
     let type_args = vec![];
 
-    // TODO: Function implementations in impl blocks
-    // The AST ImplDecl doesn't have functions yet, so we leave it empty
-    let functions = vec![];
+    // Lower function implementations
+    let functions = decl
+        .functions
+        .iter()
+        .map(|f| crate::ir::ImplFnDef {
+            name: f.name.node.clone(),
+            params: f
+                .params
+                .iter()
+                .map(|p| crate::ir::FnParamDef {
+                    name: p.name.node.clone(),
+                    ty: resolve_type_expr(&p.ty.node, p.name.span, ctx),
+                })
+                .collect(),
+            return_type: f
+                .return_type
+                .as_ref()
+                .map(|t| resolve_type_expr(&t.node, span, ctx)),
+            body: crate::ir::FnBody::External, // TODO: support block bodies
+        })
+        .collect();
 
     crate::ir::ImplDef {
         trait_name,

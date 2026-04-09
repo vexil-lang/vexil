@@ -435,6 +435,30 @@ pub struct FnParam {
 // Impl Declaration
 // ---------------------------------------------------------------------------
 
+/// A function implementation within an impl block.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImplFnDecl {
+    /// Annotations applied to the function.
+    pub annotations: Vec<Annotation>,
+    /// The function name.
+    pub name: Spanned<SmolStr>,
+    /// Function parameters.
+    pub params: Vec<FnParam>,
+    /// Optional return type.
+    pub return_type: Option<Spanned<TypeExpr>>,
+    /// Function body (if present) — currently just a semicolon for external fns.
+    pub body: ImplFnBody,
+}
+
+/// Function body in an impl block.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImplFnBody {
+    /// External function (no body, just semicolon).
+    External,
+    /// TODO: Block-based body with statements/expressions.
+    Block,
+}
+
 /// An implementation declaration for a trait on a type.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplDecl {
@@ -444,6 +468,8 @@ pub struct ImplDecl {
     pub trait_name: Spanned<SmolStr>,
     /// The target type receiving the implementation.
     pub target_type: Spanned<SmolStr>,
+    /// Function implementations.
+    pub functions: Vec<ImplFnDecl>,
 }
 
 // ---------------------------------------------------------------------------

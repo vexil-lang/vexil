@@ -1,11 +1,12 @@
-# Trait/impl system test - minimal version
-# Parser doesn't support functions in impl blocks yet
+# Trait/impl system test with function declarations
 
 namespace test.trait_impl
 
 # Trait for timestamped messages
 trait Timestamped {
     timestamp @1 : u64
+    
+    fn get_timestamp() -> u64
 }
 
 # Event with timestamp
@@ -14,5 +15,7 @@ message Event {
     payload @2 : string
 }
 
-# Impl of Timestamped for Event (empty - structural conformance only)
-impl Timestamped for Event
+# Impl of Timestamped for Event with function implementation
+impl Timestamped for Event {
+    fn get_timestamp() -> u64
+}

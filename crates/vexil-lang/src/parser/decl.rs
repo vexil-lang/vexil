@@ -1,9 +1,9 @@
 use crate::ast::{
     AliasDecl, Annotation, BinOpKind, CmpOp, ConfigDecl, ConfigField, ConstDecl, ConstExpr, Decl,
     EnumBacking, EnumBodyItem, EnumDecl, EnumVariant, FlagsBit, FlagsBodyItem, FlagsDecl, FnParam,
-    ImplDecl, MessageBodyItem, MessageDecl, MessageField, MessageInvariant, NewtypeDecl, Tombstone,
-    TombstoneArg, TraitDecl, TraitFnDecl, UnionBodyItem, UnionDecl, UnionVariant, WhereExpr,
-    WhereOperand,
+    ImplDecl, ImplFnBody, ImplFnDecl, MessageBodyItem, MessageDecl, MessageField, MessageInvariant,
+    NewtypeDecl, Tombstone, TombstoneArg, TraitDecl, TraitFnDecl, UnionBodyItem, UnionDecl,
+    UnionVariant, WhereExpr, WhereOperand,
 };
 use crate::diagnostic::ErrorClass;
 use crate::lexer::token::TokenKind;
@@ -1729,9 +1729,24 @@ fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl
         .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
 
     // Optional body: { }
+    let mut functions = Vec::new();
     if p.at(&TokenKind::LBrace) {
         p.advance(); // consume LBrace
-                     // For now, impl body is empty (function implementations will be added later)
+
+        // Parse function implementations until we hit RBrace
+        while !p.at(&TokenKind::RBrace) && !p.at_eof() {
+            if p.at(&TokenKind::KwFn) {
+                functions.push(parse_impl_fn_decl(p));
+            } else {
+                p.emit(
+                    p.peek().span,
+                    ErrorClass::UnexpectedToken,
+                    "expected 'fn' or '}' in impl body",
+                );
+                p.advance(); // skip to recover
+            }
+        }
+
         p.expect(&TokenKind::RBrace);
     }
 
@@ -1739,5 +1754,65 @@ fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl
         annotations,
         trait_name,
         target_type,
+        functions,
+    }
+}
+
+fn parse_impl_fn_decl(p: &mut Parser<'_>) -> ImplFnDecl {
+    p.advance(); // consume KwFn
+
+    // Function name
+    let name = parse_field_name(p)
+        .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+
+    // Parameter list: (name: Type, ...)
+    p.expect(&TokenKind::LParen);
+
+    let mut params = Vec::new();
+    while !p.at(&TokenKind::RParen) && !p.at_eof() {
+        params.push(parse_fn_param(p));
+
+        // Optional comma separator
+        if p.at(&TokenKind::Comma) {
+            p.advance();
+        } else if !p.at(&TokenKind::RParen) {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected ',' or ')' in parameter list",
+            );
+            break;
+        }
+    }
+
+    p.expect(&TokenKind::RParen);
+
+    // Optional return type: -> Type
+    let return_type = if p.at(&TokenKind::Minus) {
+        // Check for -> (minus followed by greater-than)
+        if p.tokens
+            .get(p.pos + 1)
+            .is_some_and(|t| matches!(t.kind, TokenKind::RAngle))
+        {
+            p.advance(); // consume Minus
+            p.advance(); // consume RAngle (which acts as '>' in this context)
+            Some(parse_type_expr(p))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // For now, functions in impl are always external (no body)
+    // TODO: support block bodies: { statements }
+    let body = ImplFnBody::External;
+
+    ImplFnDecl {
+        annotations: Vec::new(), // TODO: parse annotations on impl fns
+        name,
+        params,
+        return_type,
+        body,
     }
 }
