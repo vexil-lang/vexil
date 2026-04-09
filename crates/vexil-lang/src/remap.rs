@@ -8,8 +8,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{
-    ConfigDef, ConfigFieldDef, FieldDef, MessageDef, NewtypeDef, ResolvedType, TypeDef, TypeId,
-    TypeRegistry, UnionDef, UnionVariantDef,
+    ConfigDef, ConfigFieldDef, FieldDef, FnParamDef, ImplDef, ImplFnDef, MessageDef, NewtypeDef,
+    ResolvedType, TraitDef, TraitFieldDef, TraitFnDef, TypeDef, TypeId, TypeRegistry, UnionDef,
+    UnionVariantDef,
 };
 
 /// Clone type definitions from `source` into `target`, assigning fresh `TypeId`s.
@@ -111,6 +112,27 @@ fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
                 collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
             }
         }
+        TypeDef::Trait(t) => {
+            for f in &t.fields {
+                collect_type_ids_from_resolved(&f.ty, &mut ids);
+            }
+            for fn_def in &t.functions {
+                for p in &fn_def.params {
+                    collect_type_ids_from_resolved(&p.ty, &mut ids);
+                }
+            }
+        }
+        TypeDef::Impl(i) => {
+            collect_type_ids_from_resolved(&i.target_type, &mut ids);
+            for ty in &i.type_args {
+                collect_type_ids_from_resolved(ty, &mut ids);
+            }
+            for fn_def in &i.functions {
+                for p in &fn_def.params {
+                    collect_type_ids_from_resolved(&p.ty, &mut ids);
+                }
+            }
+        }
         TypeDef::Enum(_) | TypeDef::Flags(_) | TypeDef::GenericAlias(_) => {}
     }
     ids
@@ -204,6 +226,8 @@ pub fn remap_type_def(def: &TypeDef, id_map: &HashMap<TypeId, TypeId>) -> TypeDe
         TypeDef::Enum(e) => TypeDef::Enum(e.clone()),
         TypeDef::Flags(f) => TypeDef::Flags(f.clone()),
         TypeDef::GenericAlias(a) => TypeDef::GenericAlias(a.clone()),
+        TypeDef::Trait(t) => TypeDef::Trait(remap_trait_def(t, id_map)),
+        TypeDef::Impl(i) => TypeDef::Impl(remap_impl_def(i, id_map)),
     }
 }
 
@@ -217,6 +241,8 @@ pub fn type_def_name(def: &TypeDef) -> &str {
         TypeDef::Newtype(n) => n.name.as_str(),
         TypeDef::Config(c) => c.name.as_str(),
         TypeDef::GenericAlias(a) => a.name.as_str(),
+        TypeDef::Trait(t) => t.name.as_str(),
+        TypeDef::Impl(_) => "", // Impls don't have a simple name
     }
 }
 
@@ -314,6 +340,78 @@ fn remap_config_def(c: &ConfigDef, id_map: &HashMap<TypeId, TypeId>) -> ConfigDe
             .map(|f| remap_config_field_def(f, id_map))
             .collect(),
         annotations: c.annotations.clone(),
+    }
+}
+
+fn remap_trait_def(t: &TraitDef, id_map: &HashMap<TypeId, TypeId>) -> TraitDef {
+    TraitDef {
+        name: t.name.clone(),
+        type_params: t.type_params.clone(),
+        fields: t
+            .fields
+            .iter()
+            .map(|f| TraitFieldDef {
+                name: f.name.clone(),
+                ty: remap_resolved_type(&f.ty, id_map),
+                ordinal: f.ordinal,
+                annotations: f.annotations.clone(),
+            })
+            .collect(),
+        functions: t
+            .functions
+            .iter()
+            .map(|f| TraitFnDef {
+                name: f.name.clone(),
+                params: f
+                    .params
+                    .iter()
+                    .map(|p| FnParamDef {
+                        name: p.name.clone(),
+                        ty: remap_resolved_type(&p.ty, id_map),
+                    })
+                    .collect(),
+                return_type: f
+                    .return_type
+                    .as_ref()
+                    .map(|t| remap_resolved_type(t, id_map)),
+            })
+            .collect(),
+        annotations: t.annotations.clone(),
+        span: t.span,
+    }
+}
+
+fn remap_impl_def(i: &ImplDef, id_map: &HashMap<TypeId, TypeId>) -> ImplDef {
+    ImplDef {
+        trait_name: i.trait_name.clone(),
+        target_type: remap_resolved_type(&i.target_type, id_map),
+        type_args: i
+            .type_args
+            .iter()
+            .map(|t| remap_resolved_type(t, id_map))
+            .collect(),
+        functions: i
+            .functions
+            .iter()
+            .map(|f| ImplFnDef {
+                name: f.name.clone(),
+                params: f
+                    .params
+                    .iter()
+                    .map(|p| FnParamDef {
+                        name: p.name.clone(),
+                        ty: remap_resolved_type(&p.ty, id_map),
+                    })
+                    .collect(),
+                return_type: f
+                    .return_type
+                    .as_ref()
+                    .map(|t| remap_resolved_type(t, id_map)),
+                body: f.body.clone(),
+            })
+            .collect(),
+        annotations: i.annotations.clone(),
+        span: i.span,
     }
 }
 

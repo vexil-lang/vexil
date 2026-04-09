@@ -276,7 +276,11 @@ fn named_type_wire_size(
             }
             compute_union_wire_size(id, compiled, computing)
         }
-        Some(TypeDef::Config(_)) | Some(TypeDef::GenericAlias(_)) | None => WireSize::Variable {
+        Some(TypeDef::Config(_))
+        | Some(TypeDef::GenericAlias(_))
+        | Some(TypeDef::Trait(_))
+        | Some(TypeDef::Impl(_))
+        | None => WireSize::Variable {
             min_bits: 0,
             max_bits: None,
         },

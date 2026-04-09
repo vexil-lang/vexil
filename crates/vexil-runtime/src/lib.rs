@@ -20,6 +20,7 @@ pub mod bit_reader;
 pub mod bit_writer;
 pub mod error;
 pub mod framing;
+pub mod geometric;
 pub mod handshake;
 pub mod leb128;
 pub mod traits;
@@ -29,6 +30,7 @@ pub use bit_reader::BitReader;
 pub use bit_writer::BitWriter;
 pub use error::{DecodeError, EncodeError};
 pub use framing::{FrameReader, FrameWriter};
+pub use geometric::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4};
 pub use handshake::{HandshakeResult, SchemaHandshake};
 pub use traits::{Pack, Unpack};
 

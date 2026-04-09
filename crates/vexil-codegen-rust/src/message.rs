@@ -357,16 +357,54 @@ fn emit_write_type(
             emit_write_type(w, item_access, inner, registry, field_name);
             w.close_block();
         }
-        ResolvedType::Vec2(inner)
-        | ResolvedType::Vec3(inner)
-        | ResolvedType::Vec4(inner)
-        | ResolvedType::Quat(inner)
-        | ResolvedType::Mat3(inner)
-        | ResolvedType::Mat4(inner) => {
-            // Geometric types: iterate components, no count prefix
-            w.open_block(&format!("for item in {access}.iter()"));
-            let item_access = if is_copy_type(inner) { "*item" } else { "item" };
-            emit_write_type(w, item_access, inner, registry, field_name);
+        ResolvedType::Vec2(inner) => {
+            // Vec2: write x and y components
+            let inner_access = if is_copy_type(inner) { "*c" } else { "c" };
+            w.open_block(&format!("for c in [&{access}.x, &{access}.y]"));
+            emit_write_type(w, inner_access, inner, registry, field_name);
+            w.close_block();
+        }
+        ResolvedType::Vec3(inner) => {
+            // Vec3: write x, y, z components
+            let inner_access = if is_copy_type(inner) { "*c" } else { "c" };
+            w.open_block(&format!("for c in [&{access}.x, &{access}.y, &{access}.z]"));
+            emit_write_type(w, inner_access, inner, registry, field_name);
+            w.close_block();
+        }
+        ResolvedType::Vec4(inner) => {
+            // Vec4: write x, y, z, w components
+            let inner_access = if is_copy_type(inner) { "*c" } else { "c" };
+            w.open_block(&format!(
+                "for c in [&{access}.x, &{access}.y, &{access}.z, &{access}.w]"
+            ));
+            emit_write_type(w, inner_access, inner, registry, field_name);
+            w.close_block();
+        }
+        ResolvedType::Quat(inner) => {
+            // Quat: write x, y, z, w components
+            let inner_access = if is_copy_type(inner) { "*c" } else { "c" };
+            w.open_block(&format!(
+                "for c in [&{access}.x, &{access}.y, &{access}.z, &{access}.w]"
+            ));
+            emit_write_type(w, inner_access, inner, registry, field_name);
+            w.close_block();
+        }
+        ResolvedType::Mat3(inner) => {
+            // Mat3: write 3 column vectors
+            let inner_access = if is_copy_type(inner) { "*c" } else { "c" };
+            w.open_block(&format!("for col in &{access}.cols"));
+            w.open_block("for c in [&col.x, &col.y, &col.z]");
+            emit_write_type(w, inner_access, inner, registry, field_name);
+            w.close_block();
+            w.close_block();
+        }
+        ResolvedType::Mat4(inner) => {
+            // Mat4: write 4 column vectors
+            let inner_access = if is_copy_type(inner) { "*c" } else { "c" };
+            w.open_block(&format!("for col in &{access}.cols"));
+            w.open_block("for c in [&col.x, &col.y, &col.z, &col.w]");
+            emit_write_type(w, inner_access, inner, registry, field_name);
+            w.close_block();
             w.close_block();
         }
         ResolvedType::Map(k, v) => {
@@ -664,39 +702,102 @@ fn emit_read_type(
                 n = n
             ));
         }
-        ResolvedType::Vec2(inner)
-        | ResolvedType::Vec3(inner)
-        | ResolvedType::Vec4(inner)
-        | ResolvedType::Quat(inner)
-        | ResolvedType::Mat3(inner)
-        | ResolvedType::Mat4(inner) => {
-            let n = match ty {
-                ResolvedType::Vec2(_) => 2,
-                ResolvedType::Vec3(_) => 3,
-                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
-                ResolvedType::Mat3(_) => 9,
-                ResolvedType::Mat4(_) => 16,
-                _ => unreachable!(),
-            };
+        ResolvedType::Vec2(inner) => {
+            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
             w.line(&format!(
-                "let mut {var_name}_vec = Vec::with_capacity({n}_usize);"
+                "let {var_name} = vexil_runtime::Vec2::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y }};"
             ));
-            w.open_block(&format!("for _ in 0..{n}_usize"));
-            emit_read_type(
-                w,
-                &format!("{var_name}_item"),
-                inner,
-                registry,
-                field_name,
-                None,
-            );
-            w.line(&format!("{var_name}_vec.push({var_name}_item);"));
-            w.close_block();
+        }
+        ResolvedType::Vec3(inner) => {
+            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_z"), inner, registry, field_name, None);
             w.line(&format!(
-                "let {var_name}: [{inner_type}; {n}] = {var_name}_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;",
-                inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None),
-                n = n
+                "let {var_name} = vexil_runtime::Vec3::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y, z: {var_name}_z }};"
             ));
+        }
+        ResolvedType::Vec4(inner) => {
+            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_w"), inner, registry, field_name, None);
+            w.line(&format!(
+                "let {var_name} = vexil_runtime::Vec4::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y, z: {var_name}_z, w: {var_name}_w }};"
+            ));
+        }
+        ResolvedType::Quat(inner) => {
+            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_w"), inner, registry, field_name, None);
+            w.line(&format!(
+                "let {var_name} = vexil_runtime::Quat::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y, z: {var_name}_z, w: {var_name}_w }};"
+            ));
+        }
+        ResolvedType::Mat3(inner) => {
+            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(w, &format!("{var_name}_c0_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c0_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c0_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_z"), inner, registry, field_name, None);
+            w.line(&format!(
+                "let {var_name} = vexil_runtime::Mat3::<{inner_type}> {{ cols: ["
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec3 {{ x: {var_name}_c0_x, y: {var_name}_c0_y, z: {var_name}_c0_z }},"
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec3 {{ x: {var_name}_c1_x, y: {var_name}_c1_y, z: {var_name}_c1_z }},"
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec3 {{ x: {var_name}_c2_x, y: {var_name}_c2_y, z: {var_name}_c2_z }},"
+            ));
+            w.line(&format!("]; }};"));
+        }
+        ResolvedType::Mat4(inner) => {
+            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(w, &format!("{var_name}_c0_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c0_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c0_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c0_w"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c1_w"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c2_w"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c3_x"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c3_y"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c3_z"), inner, registry, field_name, None);
+            emit_read_type(w, &format!("{var_name}_c3_w"), inner, registry, field_name, None);
+            w.line(&format!(
+                "let {var_name} = vexil_runtime::Mat4::<{inner_type}> {{ cols: ["
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec4 {{ x: {var_name}_c0_x, y: {var_name}_c0_y, z: {var_name}_c0_z, w: {var_name}_c0_w }},"
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec4 {{ x: {var_name}_c1_x, y: {var_name}_c1_y, z: {var_name}_c1_z, w: {var_name}_c1_w }},"
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec4 {{ x: {var_name}_c2_x, y: {var_name}_c2_y, z: {var_name}_c2_z, w: {var_name}_c2_w }},"
+            ));
+            w.line(&format!(
+                "    vexil_runtime::Vec4 {{ x: {var_name}_c3_x, y: {var_name}_c3_y, z: {var_name}_c3_z, w: {var_name}_c3_w }},"
+            ));
+            w.line(&format!("]; }};"));
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!(

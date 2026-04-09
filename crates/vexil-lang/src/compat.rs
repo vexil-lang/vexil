@@ -202,6 +202,8 @@ fn decl_name(def: &TypeDef) -> SmolStr {
         TypeDef::Newtype(d) => d.name.clone(),
         TypeDef::Config(d) => d.name.clone(),
         TypeDef::GenericAlias(d) => d.name.clone(),
+        TypeDef::Trait(d) => d.name.clone(),
+        TypeDef::Impl(_) => SmolStr::new(""), // Impls don't have a simple name
     }
 }
 
@@ -214,6 +216,8 @@ fn decl_kind_name(def: &TypeDef) -> &'static str {
         TypeDef::Newtype(_) => "newtype",
         TypeDef::Config(_) => "config",
         TypeDef::GenericAlias(_) => "generic_alias",
+        TypeDef::Trait(_) => "trait",
+        TypeDef::Impl(_) => "impl",
     }
 }
 

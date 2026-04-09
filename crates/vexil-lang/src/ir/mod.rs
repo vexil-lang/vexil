@@ -118,7 +118,10 @@ impl CompiledSchema {
                 TypeDef::Newtype(n) => n.name.as_str(),
                 TypeDef::Config(c) => c.name.as_str(),
                 TypeDef::GenericAlias(g) => g.name.as_str(),
+                TypeDef::Trait(t) => t.name.as_str(),
+                TypeDef::Impl(_) => "", // Impls don't have a simple name
             })
+            .filter(|s| !s.is_empty())
             .collect()
     }
 
@@ -134,6 +137,8 @@ impl CompiledSchema {
                     TypeDef::Newtype(n) => n.name.as_str(),
                     TypeDef::Config(c) => c.name.as_str(),
                     TypeDef::GenericAlias(g) => g.name.as_str(),
+                    TypeDef::Trait(t) => t.name.as_str(),
+                    TypeDef::Impl(_) => continue, // Skip impls in name lookup
                 };
                 if def_name == name {
                     return Some((id, def));
@@ -172,7 +177,7 @@ pub struct ConstValue {
 
 /// A type definition in the Vexil IR.
 ///
-/// Each variant corresponds to one of the six declaration forms in the
+/// Each variant corresponds to one of the declaration forms in the
 /// Vexil language. Marked `#[non_exhaustive]` to allow future expansion.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
@@ -192,6 +197,10 @@ pub enum TypeDef {
     /// A generic type alias with type parameters.
     /// Stores the alias definition with type parameters and target type expression.
     GenericAlias(GenericAliasDef),
+    /// A trait definition (compile-time contract, no wire encoding).
+    Trait(TraitDef),
+    /// An implementation of a trait for a type (compile-time only).
+    Impl(ImplDef),
 }
 
 /// A message type definition with ordered, typed fields.
@@ -329,4 +338,68 @@ pub struct GenericAliasDef {
     /// Type arguments are substituted into this to produce the resolved type.
     pub target_type: crate::ast::TypeExpr,
     pub annotations: ResolvedAnnotations,
+}
+
+/// A trait definition defining required fields and functions.
+#[derive(Debug, Clone)]
+pub struct TraitDef {
+    pub name: SmolStr,
+    pub type_params: Vec<crate::ast::TypeParam>,
+    pub fields: Vec<TraitFieldDef>,
+    pub functions: Vec<TraitFnDef>,
+    pub annotations: ResolvedAnnotations,
+    pub span: Span,
+}
+
+/// Required field in a trait.
+#[derive(Debug, Clone)]
+pub struct TraitFieldDef {
+    pub name: SmolStr,
+    pub ty: ResolvedType,
+    pub ordinal: u32,
+    pub annotations: ResolvedAnnotations,
+}
+
+/// Function signature in a trait.
+#[derive(Debug, Clone)]
+pub struct TraitFnDef {
+    pub name: SmolStr,
+    pub params: Vec<FnParamDef>,
+    pub return_type: Option<ResolvedType>,
+}
+
+/// Function parameter definition.
+#[derive(Debug, Clone)]
+pub struct FnParamDef {
+    pub name: SmolStr,
+    pub ty: ResolvedType,
+}
+
+/// An implementation of a trait for a specific type.
+#[derive(Debug, Clone)]
+pub struct ImplDef {
+    pub trait_name: SmolStr,
+    pub target_type: ResolvedType,
+    pub type_args: Vec<ResolvedType>, // Concrete types for trait generics
+    pub functions: Vec<ImplFnDef>,
+    pub annotations: ResolvedAnnotations,
+    pub span: Span,
+}
+
+/// Function implementation in an impl block.
+#[derive(Debug, Clone)]
+pub struct ImplFnDef {
+    pub name: SmolStr,
+    pub params: Vec<FnParamDef>,
+    pub return_type: Option<ResolvedType>,
+    pub body: FnBody, // For now, just store signature; body comes later
+}
+
+/// Function body (placeholder for now).
+#[derive(Debug, Clone)]
+pub enum FnBody {
+    /// Implemented via FFI or native code (no Vexil source body).
+    External,
+    /// TODO: Add expression-based body when we have expressions.
+    Unimplemented,
 }

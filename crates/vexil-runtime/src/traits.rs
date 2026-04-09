@@ -33,3 +33,148 @@ impl<T: Unpack> Unpack for Box<T> {
         Ok(Box::new(T::unpack(reader)?))
     }
 }
+
+// ==================== Primitive Pack/Unpack Implementations ====================
+
+impl Pack for bool {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_bool(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for bool {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_bool()
+    }
+}
+
+impl Pack for u8 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_u8(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for u8 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_u8()
+    }
+}
+
+impl Pack for u16 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_u16(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for u16 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_u16()
+    }
+}
+
+impl Pack for u32 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_u32(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for u32 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_u32()
+    }
+}
+
+impl Pack for u64 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_u64(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for u64 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_u64()
+    }
+}
+
+impl Pack for i8 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_i8(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for i8 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_i8()
+    }
+}
+
+impl Pack for i16 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_i16(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for i16 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_i16()
+    }
+}
+
+impl Pack for i32 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_i32(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for i32 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_i32()
+    }
+}
+
+impl Pack for i64 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_i64(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for i64 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_i64()
+    }
+}
+
+impl Pack for f32 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_f32(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for f32 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_f32()
+    }
+}
+
+impl Pack for f64 {
+    fn pack(&self, w: &mut BitWriter) -> Result<(), EncodeError> {
+        w.write_f64(*self);
+        Ok(())
+    }
+}
+
+impl Unpack for f64 {
+    fn unpack(r: &mut BitReader<'_>) -> Result<Self, DecodeError> {
+        r.read_f64()
+    }
+}

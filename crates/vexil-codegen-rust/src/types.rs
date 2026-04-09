@@ -58,27 +58,27 @@ pub fn rust_type(
         }
         ResolvedType::Vec2(inner) => {
             let inner_str = rust_type(inner, registry, needs_box, None);
-            format!("[{inner_str}; 2]")
+            format!("vexil_runtime::Vec2<{inner_str}>")
         }
         ResolvedType::Vec3(inner) => {
             let inner_str = rust_type(inner, registry, needs_box, None);
-            format!("[{inner_str}; 3]")
+            format!("vexil_runtime::Vec3<{inner_str}>")
         }
         ResolvedType::Vec4(inner) => {
             let inner_str = rust_type(inner, registry, needs_box, None);
-            format!("[{inner_str}; 4]")
+            format!("vexil_runtime::Vec4<{inner_str}>")
         }
         ResolvedType::Quat(inner) => {
             let inner_str = rust_type(inner, registry, needs_box, None);
-            format!("[{inner_str}; 4]")
+            format!("vexil_runtime::Quat<{inner_str}>")
         }
         ResolvedType::Mat3(inner) => {
             let inner_str = rust_type(inner, registry, needs_box, None);
-            format!("[{inner_str}; 9]")
+            format!("vexil_runtime::Mat3<{inner_str}>")
         }
         ResolvedType::Mat4(inner) => {
             let inner_str = rust_type(inner, registry, needs_box, None);
-            format!("[{inner_str}; 16]")
+            format!("vexil_runtime::Mat4<{inner_str}>")
         }
         _ => "UnknownType".to_string(),
     }

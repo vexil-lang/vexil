@@ -345,6 +345,8 @@ fn set_type_name(def: &mut TypeDef, name: SmolStr) {
         TypeDef::Newtype(n) => n.name = name,
         TypeDef::Config(c) => c.name = name,
         TypeDef::GenericAlias(a) => a.name = name,
+        TypeDef::Trait(t) => t.name = name,
+        TypeDef::Impl(_) => {} // Impls don't have a simple name to set
     }
 }
 
