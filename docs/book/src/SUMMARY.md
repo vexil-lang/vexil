@@ -15,6 +15,8 @@
 - [Enums and Flags](./language/enums-flags.md)
 - [Unions](./language/unions.md)
 - [Newtypes and Configs](./language/newtypes-configs.md)
+- [Type Aliases and Constants](./language/aliases-const.md)
+- [Where Clauses](./language/where-clauses.md)
 - [Annotations](./language/annotations.md)
 - [Imports](./language/imports.md)
 - [Schema Evolution](./language/evolution.md)
