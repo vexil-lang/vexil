@@ -329,7 +329,7 @@ fn parse_where_and(p: &mut Parser<'_>) -> Spanned<WhereExpr> {
     let mut left = parse_where_unary(p);
 
     while p.at(&TokenKind::AndAnd) {
-        p.advance(); // consume &&
+        p.advance(); // consume +
         let right = parse_where_unary(p);
         let span = p.span_from(start);
         left = Spanned::new(WhereExpr::And(Box::new(left), Box::new(right)), span);
@@ -1259,9 +1259,27 @@ fn parse_alias_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> AliasDe
                 }
             };
 
+            // Parse optional bounds: T: Trait1 & Trait2
+            let mut bounds = Vec::new();
+            if p.at(&TokenKind::Colon) {
+                p.advance(); // consume colon
+                loop {
+                    if let TokenKind::UpperIdent(s) = p.peek_kind() {
+                        let bound = Spanned::new(s.clone(), p.peek().span);
+                        bounds.push(bound);
+                        p.advance();
+                    }
+                    if p.at(&TokenKind::Plus) {
+                        p.advance(); // consume +
+                        continue;
+                    }
+                    break;
+                }
+            }
+
             type_params.push(TypeParam {
                 name: param_name,
-                bounds: Vec::new(), // Bounds not yet supported
+                bounds,
             });
 
             // Check for comma (more parameters) or closing angle
@@ -1489,9 +1507,27 @@ fn parse_trait_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> TraitDe
                 }
             };
 
+            // Parse optional bounds: T: Trait1 & Trait2
+            let mut bounds = Vec::new();
+            if p.at(&TokenKind::Colon) {
+                p.advance(); // consume colon
+                loop {
+                    if let TokenKind::UpperIdent(s) = p.peek_kind() {
+                        let bound = Spanned::new(s.clone(), p.peek().span);
+                        bounds.push(bound);
+                        p.advance();
+                    }
+                    if p.at(&TokenKind::Plus) {
+                        p.advance(); // consume +
+                        continue;
+                    }
+                    break;
+                }
+            }
+
             type_params.push(TypeParam {
                 name: param_name,
-                bounds: Vec::new(), // Bounds not yet supported
+                bounds,
             });
 
             // Check for comma (more parameters) or closing angle
