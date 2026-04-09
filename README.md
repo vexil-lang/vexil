@@ -82,7 +82,7 @@ const decoded = decodeSensorReading(r);
 
 - `u1`..`u64` and `i2`..`i64` occupy exactly N bits on the wire, LSB-first
 - `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), and `@delta` (per-field delta from previous value) are declared in the schema
-- **Eight declaration kinds**: `message`, `enum`, `flags`, `union`, `newtype`, `config`, `type` (alias), `const`
+- **Ten declaration kinds**: `message`, `enum`, `flags`, `union`, `newtype`, `config`, `type` (alias), `const`, `trait`, `impl`
 - **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) — deterministic fractional arithmetic, no IEEE 754 surprises
 - **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` — T can be fixed32, fixed64, f32, or f64
 - **Fixed-size arrays**: `array<T, N>` — no length prefix on wire, size is part of the schema

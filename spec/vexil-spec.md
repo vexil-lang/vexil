@@ -134,6 +134,8 @@ namespaces under the `vexil.` prefix; implementations MUST reject such schemas.
 | `config`  | Structured record with defaults; NOT wire-encoded    |
 | `type`    | Type alias (transparent synonym for another type)  |
 | `const`   | Compile-time constant (integer or boolean)           |
+| `trait`   | Structural contract defining required fields         |
+| `impl`    | Declaration that a type implements a trait           |
 
 Declaration names MUST match `[A-Z][A-Za-z0-9]*`. Leading or trailing
 underscores are not permitted. Declaration names MUST be unique within a schema.
@@ -737,6 +739,114 @@ Backends MUST generate a struct or class for `config` declarations with
 default-initialized fields. Backends MUST NOT generate `Pack`/`Unpack` or
 serialization methods for `config` declarations. Backends MUST generate a
 `Default` impl (or equivalent) for `config` types.
+
+---
+
+### 4.7  type (alias)
+
+A type alias creates a transparent synonym for an existing type.
+
+```vexil
+type UserId = u64
+type Token = bytes
+```
+
+An alias MUST reference a concrete type, not another alias. Alias chains are
+NOT permitted — `type A = u64` then `type B = A` MUST be rejected.
+
+An alias has no distinct wire encoding. `UserId` and `u64` produce identical
+bytes on the wire.
+
+### 4.8  const
+
+A const declaration defines a named compile-time value.
+
+```vexil
+const MaxSize : u32 = 1024
+const TicksPerSec : u32 = 64
+const TickMs : u32 = 1000 / TicksPerSec
+```
+
+Constants MAY reference other constants via simple arithmetic (`+`, `-`, `*`,
+`). Division by zero MUST be rejected at compile time. Circular dependencies
+MUST be rejected.
+
+Constants have no wire impact. They are used in array size expressions
+(`array<T, N>` where `N` is a constant) and where clause bounds.
+
+Supported types: `bool`, `u8`–`u64`, `i8`–`i64`, `f32`, `f64`, `fixed32`,
+`fixed64`.
+
+### 4.9  trait
+
+A trait defines a structural contract — a set of fields that an implementing
+type MUST contain.
+
+```vexil
+trait SensorData {
+    sensor_id @0 : u32
+    timestamp @1 : u64
+}
+```
+
+Trait fields use the same syntax as message fields but carry no ordinals
+(traits have no wire encoding). A trait MAY also declare function signatures:
+
+```vexil
+trait Validatable {
+    fn validate() -> bool
+}
+```
+
+Traits MAY have type parameters:
+
+```vexil
+trait Tagged<T> {
+    tag @0 : T
+    label @1 : string
+}
+```
+
+Traits have ZERO wire impact. They are compile-time contracts used for
+code generation.
+
+### 4.10  impl
+
+An impl declaration states that a type satisfies a trait.
+
+```vexil
+impl SensorData for TemperatureReading { }
+```
+
+The trait name MUST reference an existing trait declaration. The target type
+MUST exist. The compiler SHOULD validate that the target type contains
+fields matching the trait's requirements (by name and type).
+
+Multiple traits MAY be implemented for the same type. The same trait
+MUST NOT be implemented more than once for the same type.
+
+Impls have ZERO wire impact.
+
+### 4.11  invariant
+
+An invariant is a named or unnamed condition within a message body.
+
+```vexil
+message Balance {
+    amount @0 : fixed64
+    invariant AmountNonNegative { value >= 0 }
+    invariant { value <= 1000000 }
+}
+```
+
+Invariants use the same expression syntax as where clauses. The `value`
+keyword refers to the most recently declared field's value.
+
+Invariants are checked on encode and decode. A violation MUST produce
+an error and MUST NOT write data to the wire.
+
+Invariants have zero wire impact — they generate validation code, not
+wire data.
 
 ---
 
