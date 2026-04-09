@@ -14,8 +14,8 @@ spec/
   vexil-grammar.peg           # Formal PEG grammar derived from spec
 corpus/
   MANIFEST.md                 # Index of all test files with spec references
-  valid/                      # Conformant impl MUST accept all (29 files)
-  invalid/                    # Conformant impl MUST reject all (56 files)
+  valid/                      # Conformant impl MUST accept all (41 files)
+  invalid/                    # Conformant impl MUST reject all (64 files)
   projects/                   # Multi-file project tests (simple, diamond, mixed)
 compliance/
   vectors/                    # Golden byte vectors (JSON) — cross-implementation contract
@@ -113,6 +113,7 @@ vexilc              CLI binary. Depends on vexil-lang + vexil-codegen-rust + vex
 - **v0.1.0** SDK architecture, release CI, CodegenBackend trait — RELEASED
 - **v0.2.0** vexil-store, release-plz + cargo-dist pipeline — RELEASED
 - **v0.3.0** TypeScript backend, compliance vectors, benchmarks — RELEASED
+- **v1.0.0** Language features: fixed-point, geometric types, const, type aliases, where clauses, set, fixed arrays, inline bitfields — IN DRAFT
 - **G** Package manager (registry, lockfile, fetch/publish) — PLANNED
 - **LSP** — SPECCED (docs/superpowers/specs/2026-03-26-lsp-editor-tooling-design.md)
 

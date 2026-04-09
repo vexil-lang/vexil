@@ -200,7 +200,7 @@ fn typedef_uses_map(typedef: &TypeDef) -> bool {
 
 fn resolved_type_uses_map(ty: &ResolvedType) -> bool {
     match ty {
-        ResolvedType::Map(_, _) => true,
+        ResolvedType::Map(_, _) | ResolvedType::Set(_) => true,
         ResolvedType::Optional(inner) => resolved_type_uses_map(inner),
         ResolvedType::Array(inner) => resolved_type_uses_map(inner),
         ResolvedType::Result(ok, err) => resolved_type_uses_map(ok) || resolved_type_uses_map(err),

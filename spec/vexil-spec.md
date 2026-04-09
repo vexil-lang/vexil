@@ -1,8 +1,8 @@
 # Vexil Language Specification
 
-Version: 0.1.0-draft-r2
-Date: 2026-03-25
-Status: Draft (post-review revision)
+Version: 1.0.0-draft
+Date: 2026-04-09
+Status: Draft (pre-conformance — Phase 2-4 features added, awaiting compliance verification)
 Authors: Orix Systems
 License: CC-BY 4.0 (this document) / Apache-2.0 (reference implementation)
 
@@ -132,6 +132,8 @@ namespaces under the `vexil.` prefix; implementations MUST reject such schemas.
 | `union`   | Discriminated sum type with per-variant fields       |
 | `newtype` | Single-value wrapper around another type             |
 | `config`  | Structured record with defaults; NOT wire-encoded    |
+| `type`    | Type alias (transparent synonym for another type)  |
+| `const`   | Compile-time constant (integer or boolean)           |
 
 Declaration names MUST match `[A-Z][A-Za-z0-9]*`. Leading or trailing
 underscores are not permitted. Declaration names MUST be unique within a schema.
@@ -166,7 +168,7 @@ by a letter begins an annotation name. The two are syntactically disjoint.
 ### 2.5  Types
 
 A type is one of: primitive (§3.1), sub-byte (§3.2), semantic (§3.3),
-parameterized (§3.4), or user-defined (§3.5).
+parameterized (§3.4), or user-defined (§3.13).
 
 ### 2.6  Annotations
 
@@ -348,16 +350,20 @@ bits are written immediately after the presence flag with no alignment gap.
 **`array<T>`:** Element count MUST NOT exceed 16,777,216 (2^24). A decoder MUST
 reject arrays exceeding this limit.
 
-**`map<K, V>`:** Keys MUST be sorted in ascending order as follows:
+**`map<K, V>`:** Keys MUST be sorted in ascending canonical order before encoding. The sort order for each valid key type is defined as follows:
 
-- Integer key types (`bool`, `u8`–`u64`, `i8`–`i64`, `uN`, `iN`, `enum`,
-  `flags`): ascending numeric order (signed types use signed comparison).
-- `string`, `bytes`: ascending lexicographic order of the UTF-8 / raw byte
-  sequences.
-- `uuid`: ascending lexicographic order of the 16-byte big-endian representation.
+| Key type | Sort order |
+|----------|------------|
+| Integer types (`u8`–`u64`, `i8`–`i64`, `uN`, `iN`) | Ascending numeric order. Signed types (`i8`–`i64`, `iN`) use signed comparison. |
+| `fixed32`, `fixed64` | Ascending numeric order (signed comparison). |
+| `string`, `bytes` | Ascending lexicographic order of the UTF-8 (for `string`) or raw byte (for `bytes`) sequences. |
+| `uuid` | Ascending lexicographic order of the 16-byte big-endian representation. |
+| `enum` | Ascending by ordinal value (the `@N` discriminant value written on the wire). |
+| `flags` | Ascending by bit value (`1 << ordinal`, where `ordinal` is the `@N` bit position). |
+| `newtype` | Follows the sort order of the inner type. A newtype wrapping an invalid map key type is itself not a valid map key. |
 
 K MUST be one of: `bool`, `u8`–`u64`, `i8`–`i64`, `uN`, `iN`, `string`,
-`bytes`, `uuid`, or a user-defined `enum` or `flags` type. K MUST NOT be
+`bytes`, `uuid`, `fixed32`, `fixed64`, or a user-defined `enum` or `flags` type. K MUST NOT be
 `optional<T>`, `array<T>`, `map<K,V>`, `result<T,E>`, `void`, `f32`, `f64`,
 or any `message`, `union`, `newtype`, or `config` type. Pair count MUST NOT
 exceed 16,777,216.
@@ -369,7 +375,153 @@ only the discriminant. `E` MUST follow the same type restrictions as `T`; it
 MUST NOT be a `config` type. `E` MAY be any other type including `string`,
 `message`, `enum`, or parameterized types.
 
-### 3.5  User-defined types
+### 3.5  Fixed-point types
+
+| Type      | Rust    | Bits | Wire encoding                              |
+|-----------|---------|------|--------------------------------------------|
+| `fixed32` | `i32`   | 32   | 32-bit signed two's complement (Q16.16)  |
+| `fixed64` | `i64`   | 64   | 64-bit signed two's complement (Q32.32)    |
+
+`fixed32` and `fixed64` are signed fixed-point types using two's complement
+representation. The binary point is at the midpoint: `fixed32` uses Q16.16 format
+(16 integer bits, 16 fraction bits), and `fixed64` uses Q32.32 format.
+
+The wire encoding is identical to `i32` and `i64` respectively — the fixed-point
+interpretation is a schema-level contract between encoder and decoder.
+
+`@varint` is valid on fixed-point types; the value is LEB128-encoded as signed.
+`@zigzag` MUST NOT be applied to fixed-point types (they use two's complement,
+not ZigZag encoding).
+
+### 3.6  Geometric types
+
+| Type         | Elements | Wire encoding                                      |
+|--------------|----------|----------------------------------------------------|
+| `vec2<T>`    | 2        | Two `T` values in order (x, y)                     |
+| `vec3<T>`    | 3        | Three `T` values in order (x, y, z)                |
+| `vec4<T>`    | 4        | Four `T` values in order (x, y, z, w)              |
+| `quat<T>`    | 4        | Four `T` values in order (x, y, z, w)              |
+| `mat3<T>`    | 9        | Nine `T` values in column-major order              |
+| `mat4<T>`    | 16       | Sixteen `T` values in column-major order           |
+
+`T` MUST be one of: `fixed32`, `fixed64`, `f32`, `f64`. The element type
+restricts geometric types to floating-point or high-precision fixed-point
+representations; integer types are not valid.
+
+`mat3` and `mat4` use column-major layout: the first three/four values are the
+first column, the next three/four are the second column, etc. This matches the
+de facto standard in graphics APIs (OpenGL, Vulkan, DirectX).
+
+### 3.7  Fixed-size arrays
+
+`array<T, N>` declares an array of exactly `N` elements of type `T`. Unlike
+`array<T>` (variable-length), `array<T, N>` has no length prefix on the wire.
+
+Wire encoding: `N` repetitions of `T`'s encoding, with no separator or length
+prefix. The total bit count is `N * bit_size(T)`.
+
+`N` MUST be a positive integer. `N` MUST NOT exceed 65,536.
+
+`T` MUST be a fixed-size type: primitive, sub-byte, fixed-point, geometric,
+`enum`, or `flags`. `T` MUST NOT be `string`, `bytes`, `array`, `map`,
+`optional`, `result`, `union`, `message`, or `newtype` over a variable-size type.
+
+### 3.8  Set type
+
+`set<T>` declares an unordered collection of unique values. Wire encoding is
+identical to `array<T>`: unsigned LEB128 element count followed by each element
+in ascending canonical order.
+
+The sort order for `set<T>` elements is the same as `map<K, V>` key sort order
+(§3.4). Duplicate values are not permitted; an encoder MUST produce a sorted,
+deduplicated set. A decoder MUST reject a `set` containing duplicate values.
+
+`T` MUST be a valid `map` key type: `bool`, `u8`–`u64`, `i8`–`i64`, `uN`, `iN`,
+`string`, `bytes`, `uuid`, `fixed32`, `fixed64`, `enum`, or `flags`. `T` MUST NOT
+be `optional`, `array`, `map`, `result`, `void`, `f32`, `f64`, `message`,
+`union`, `newtype`, or `config`.
+
+### 3.9  Inline bitfields
+
+`bits { name1, name2, ... }` declares an anonymous bitfield type inline. It
+is semantically equivalent to a `flags` declaration, but without a named type.
+
+```vexil
+message Header {
+    perms @0 : bits { r, w, x, admin }
+}
+```
+
+Bit names are identifiers matching `[a-z][a-z0-9_]*`. Bit positions are assigned
+in source order starting from 0. The wire width is the minimum power-of-2 byte
+width accommodating all defined bits (identical to `flags`, §4.3).
+
+An inline bitfield participates in sub-byte packing identically to a `uN` field
+of the computed width. Unknown bits MUST be preserved by decoders, identical to
+`flags` behavior.
+
+### 3.10  Type aliases
+
+A `type` declaration creates an alias for another type:
+
+```vexil
+type UserId = u64
+type Score = fixed32
+```
+
+The alias name MUST match `[A-Z][A-Za-z0-9]*`. The target type MUST be a
+primitive, semantic, parameterized, or user-defined type. The target MUST NOT
+be another type alias; alias chains are not permitted.
+
+A type alias has no distinct wire encoding — it is a transparent alias. The
+canonical form (§7) expands aliases to their target types.
+
+### 3.11  Const declarations
+
+A `const` declaration defines a named compile-time constant:
+
+```vexil
+const MaxBufferSize : u32 = 1024
+const HeaderSize : u32 = 16
+const PayloadSize : u32 = MaxBufferSize - HeaderSize
+```
+
+Const names MUST match `[A-Z][A-Za-z0-9]*`. Const types MUST be integer types
+(`u8`–`u64`, `i8`–`i64`, `fixed32`, `fixed64`) or `bool`. Const values MUST be
+constant expressions: literals, other const references, or arithmetic
+(`+`, `-`, `*`, `/`, `%`).
+
+Const declarations may reference other consts defined earlier in the same
+schema. Circular references are not permitted. Consts are used in `where` clause
+constraints (§3.12) and array size expressions (`array<T, N>`).
+
+### 3.12  Where clause constraints
+
+A `where` clause attaches validation constraints to a field:
+
+```vexil
+age @0 : u32 where value >= 0 && value <= 150
+score @1 : u32 where value in 0..100
+username @2 : string where len(value) in 3..32
+```
+
+Constraint expressions support:
+
+| Expression | Description |
+|------------|-------------|
+| `value` | The field value being validated |
+| `len(value)` | Length of string, bytes, array, set, map |
+| `x && y` / `x \|\| y` / `!x` | Boolean logic |
+| `x == y` / `x != y` / `x < y` / `x > y` / `x <= y` / `x >= y` | Comparison |
+| `x in a..b` | Range inclusive of lower, inclusive of upper |
+| `x in a..<b` | Range inclusive of lower, exclusive of upper |
+| const references | Any in-scope const name |
+
+`where` clauses generate validation code in backends. They do not affect wire
+encoding. A decoder receiving invalid data per the `where` clause MUST reject
+it with a validation error.
+
+### 3.13  User-defined types
 
 A field MAY reference any declaration in the same schema or any declaration
 available via import. Forward references within the same schema are permitted.
@@ -680,6 +832,26 @@ be rejected as a parse error. The compiler MUST reject imports where the importe
 schema's `@version` does not satisfy the constraint. If the imported schema has
 no `@version` annotation, the compiler MUST emit a warning and MUST NOT treat
 this as an error; the import proceeds as if unconstrained.
+
+### 6.4  Zero-copy byte slices (runtime API)
+
+The Vexil runtime provides zero-copy methods for reading byte slices and strings
+without heap allocation. These methods return references into the original
+buffer with lifetime `'a`.
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `read_bytes_ref(len)` | `&'a [u8]` | Read `len` bytes as a slice |
+| `read_bytes_var_ref()` | `&'a [u8]` | Read LEB128 length, then that many bytes |
+| `read_string_ref()` | `&'a str` | Read LEB128 length, then UTF-8 bytes as `&str` |
+
+All three methods flush the bit reader to a byte boundary first. The returned
+slice/string borrows from the original buffer — no copy is performed. Invalid
+UTF-8 in `read_string_ref()` produces `DecodeError::InvalidUtf8`.
+
+These methods are provided in addition to the allocating variants
+(`read_bytes`, `read_bytes_var`, `read_string`). Callers choose based on whether
+they need ownership (allocating) or zero-copy (borrowing).
 
 ---
 

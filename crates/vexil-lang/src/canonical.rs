@@ -61,6 +61,12 @@ fn type_str(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         }
         ResolvedType::Optional(inner) => format!("optional<{}>", type_str(inner, registry)),
         ResolvedType::Array(inner) => format!("array<{}>", type_str(inner, registry)),
+        ResolvedType::FixedArray(inner, size) => {
+            format!("array<{}, {}>", type_str(inner, registry), size)
+        }
+        ResolvedType::Set(inner) => {
+            format!("set<{}>", type_str(inner, registry))
+        }
         ResolvedType::Map(k, v) => {
             format!("map<{}, {}>", type_str(k, registry), type_str(v, registry))
         }
@@ -70,6 +76,15 @@ fn type_str(ty: &ResolvedType, registry: &TypeRegistry) -> String {
                 type_str(ok, registry),
                 type_str(err, registry)
             )
+        }
+        ResolvedType::Vec2(inner) => format!("vec2<{}>", type_str(inner, registry)),
+        ResolvedType::Vec3(inner) => format!("vec3<{}>", type_str(inner, registry)),
+        ResolvedType::Vec4(inner) => format!("vec4<{}>", type_str(inner, registry)),
+        ResolvedType::Quat(inner) => format!("quat<{}>", type_str(inner, registry)),
+        ResolvedType::Mat3(inner) => format!("mat3<{}>", type_str(inner, registry)),
+        ResolvedType::Mat4(inner) => format!("mat4<{}>", type_str(inner, registry)),
+        ResolvedType::BitsInline(names) => {
+            format!("bits {{ {} }}", names.join(", "))
         }
         _ => {
             debug_assert!(false, "unknown ResolvedType variant in canonical form");
@@ -91,6 +106,8 @@ fn primitive_str(p: &PrimitiveType) -> &'static str {
         PrimitiveType::I64 => "i64",
         PrimitiveType::F32 => "f32",
         PrimitiveType::F64 => "f64",
+        PrimitiveType::Fixed32 => "fixed32",
+        PrimitiveType::Fixed64 => "fixed64",
         PrimitiveType::Void => "void",
     }
 }

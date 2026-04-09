@@ -67,8 +67,10 @@ fn encode_resolved(
         }
         ResolvedType::Optional(inner) => encode_optional(value, inner, registry, w),
         ResolvedType::Array(elem) => encode_array(value, elem, registry, w),
+        ResolvedType::Set(elem) => encode_set(value, elem, registry, w),
         ResolvedType::Map(key, val) => encode_map(value, key, val, registry, w),
         ResolvedType::Result(ok_ty, err_ty) => encode_result(value, ok_ty, err_ty, registry, w),
+        ResolvedType::BitsInline(names) => encode_bits_inline(value, names.len() as u8, w),
         _ => Err(StoreEncodeError::TypeMismatch {
             expected: format!("{ty:?}"),
             actual: value_type_name(value).to_string(),
@@ -124,6 +126,14 @@ fn encode_primitive(
         }
         (Value::F64(v), PrimitiveType::F64) => {
             w.write_f64(*v);
+            Ok(())
+        }
+        (Value::Fixed32(v), PrimitiveType::Fixed32) => {
+            w.write_i32(*v);
+            Ok(())
+        }
+        (Value::Fixed64(v), PrimitiveType::Fixed64) => {
+            w.write_i64(*v);
             Ok(())
         }
         // Void fields carry no wire bits; accept the canonical default value.
@@ -202,6 +212,43 @@ fn encode_sub_byte(
         }
         _ => Err(StoreEncodeError::TypeMismatch {
             expected: format!("u{bits}"),
+            actual: value_type_name(value).to_string(),
+        }),
+    }
+}
+
+fn encode_bits_inline(value: &Value, bits: u8, w: &mut BitWriter) -> Result<(), StoreEncodeError> {
+    let mask: u64 = if bits == 64 {
+        u64::MAX
+    } else {
+        (1u64 << bits) - 1
+    };
+
+    match value {
+        Value::U64(v) => {
+            if *v > mask {
+                return Err(StoreEncodeError::Overflow {
+                    value: v.to_string(),
+                    bits,
+                });
+            }
+            w.write_bits(*v, bits);
+            Ok(())
+        }
+        Value::U32(v) => {
+            w.write_bits(*v as u64, bits);
+            Ok(())
+        }
+        Value::U16(v) => {
+            w.write_bits(*v as u64, bits);
+            Ok(())
+        }
+        Value::U8(v) => {
+            w.write_bits(*v as u64, bits);
+            Ok(())
+        }
+        _ => Err(StoreEncodeError::TypeMismatch {
+            expected: format!("bits<{bits}>"),
             actual: value_type_name(value).to_string(),
         }),
     }
@@ -288,6 +335,28 @@ fn encode_array(
     Ok(())
 }
 
+fn encode_set(
+    value: &Value,
+    elem_ty: &ResolvedType,
+    registry: &TypeRegistry,
+    w: &mut BitWriter,
+) -> Result<(), StoreEncodeError> {
+    let items = match value {
+        Value::Set(items) => items,
+        _ => {
+            return Err(StoreEncodeError::TypeMismatch {
+                expected: "set".to_string(),
+                actual: value_type_name(value).to_string(),
+            })
+        }
+    };
+    w.write_leb128(items.len() as u64);
+    for item in items {
+        encode_resolved(item, elem_ty, registry, w)?;
+    }
+    Ok(())
+}
+
 fn encode_map(
     value: &Value,
     key_ty: &ResolvedType,
@@ -305,11 +374,179 @@ fn encode_map(
         }
     };
     w.write_leb128(entries.len() as u64);
-    for (k, v) in entries {
+
+    // Sort entries by key according to the canonical sort order for the key type
+    let mut sorted_entries: Vec<_> = entries.iter().collect();
+    sorted_entries.sort_by(|(k1, _), (k2, _)| compare_map_keys(k1, k2, key_ty, registry));
+
+    for (k, v) in sorted_entries {
         encode_resolved(k, key_ty, registry, w)?;
         encode_resolved(v, val_ty, registry, w)?;
     }
     Ok(())
+}
+
+/// Compare two map keys according to the canonical sort order defined in the spec.
+/// Returns Ordering::Less if k1 < k2, Ordering::Equal if k1 == k2, Ordering::Greater if k1 > k2.
+fn compare_map_keys(
+    k1: &Value,
+    k2: &Value,
+    key_ty: &ResolvedType,
+    registry: &TypeRegistry,
+) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    use vexil_lang::ast::{PrimitiveType, SemanticType};
+    use vexil_lang::ResolvedType;
+
+    match key_ty {
+        // Integer types: ascending numeric (signed use signed comparison)
+        ResolvedType::Primitive(prim) => match prim {
+            PrimitiveType::Bool => {
+                let b1 = matches!(k1, Value::Bool(true));
+                let b2 = matches!(k2, Value::Bool(true));
+                b1.cmp(&b2)
+            }
+            PrimitiveType::U8 => match (k1, k2) {
+                (Value::U8(v1), Value::U8(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::U16 => match (k1, k2) {
+                (Value::U16(v1), Value::U16(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::U32 => match (k1, k2) {
+                (Value::U32(v1), Value::U32(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::U64 => match (k1, k2) {
+                (Value::U64(v1), Value::U64(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::I8 => match (k1, k2) {
+                (Value::I8(v1), Value::I8(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::I16 => match (k1, k2) {
+                (Value::I16(v1), Value::I16(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::I32 | PrimitiveType::Fixed32 => match (k1, k2) {
+                (Value::I32(v1), Value::I32(v2)) => v1.cmp(v2),
+                (Value::Fixed32(v1), Value::Fixed32(v2)) => v1.cmp(v2),
+                (Value::I32(v1), Value::Fixed32(v2)) => v1.cmp(v2),
+                (Value::Fixed32(v1), Value::I32(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            PrimitiveType::I64 | PrimitiveType::Fixed64 => match (k1, k2) {
+                (Value::I64(v1), Value::I64(v2)) => v1.cmp(v2),
+                (Value::Fixed64(v1), Value::Fixed64(v2)) => v1.cmp(v2),
+                (Value::I64(v1), Value::Fixed64(v2)) => v1.cmp(v2),
+                (Value::Fixed64(v1), Value::I64(v2)) => v1.cmp(v2),
+                _ => Ordering::Equal,
+            },
+            _ => Ordering::Equal,
+        },
+
+        // Sub-byte types: compare as unsigned N-bit values
+        ResolvedType::SubByte(sbt) => {
+            let mask = if sbt.bits == 64 {
+                u64::MAX
+            } else {
+                (1u64 << sbt.bits) - 1
+            };
+            let v1 = extract_bits_value(k1) & mask;
+            let v2 = extract_bits_value(k2) & mask;
+            v1.cmp(&v2)
+        }
+
+        // Semantic types: string, bytes, uuid use lexicographic order
+        ResolvedType::Semantic(sem) => match sem {
+            SemanticType::String => match (k1, k2) {
+                (Value::String(s1), Value::String(s2)) => s1.as_bytes().cmp(s2.as_bytes()),
+                _ => Ordering::Equal,
+            },
+            SemanticType::Bytes => match (k1, k2) {
+                (Value::Bytes(b1), Value::Bytes(b2)) => b1.cmp(b2),
+                _ => Ordering::Equal,
+            },
+            SemanticType::Uuid => match (k1, k2) {
+                (Value::Uuid(u1), Value::Uuid(u2)) => u1.cmp(u2),
+                _ => Ordering::Equal,
+            },
+            _ => Ordering::Equal,
+        },
+
+        // Enum: ascending by ordinal value
+        ResolvedType::Named(type_id) => {
+            if let Some(type_def) = registry.get(*type_id) {
+                match type_def {
+                    TypeDef::Enum(enum_def) => {
+                        let ord1 = enum_ordinal(k1, enum_def);
+                        let ord2 = enum_ordinal(k2, enum_def);
+                        ord1.cmp(&ord2)
+                    }
+                    // Flags: ascending by bit value (1 << ordinal)
+                    TypeDef::Flags(flags_def) => {
+                        let bits1 = flags_bit_value(k1, flags_def);
+                        let bits2 = flags_bit_value(k2, flags_def);
+                        bits1.cmp(&bits2)
+                    }
+                    // Newtype: follow inner type sort order
+                    TypeDef::Newtype(nt) => compare_map_keys(k1, k2, &nt.terminal_type, registry),
+                    _ => Ordering::Equal,
+                }
+            } else {
+                Ordering::Equal
+            }
+        }
+
+        _ => Ordering::Equal,
+    }
+}
+
+/// Extract a u64 value from a Value for sub-byte comparison.
+fn extract_bits_value(value: &Value) -> u64 {
+    match value {
+        Value::U8(v) => *v as u64,
+        Value::U16(v) => *v as u64,
+        Value::U32(v) => *v as u64,
+        Value::U64(v) => *v,
+        Value::I8(v) => (*v as i64) as u64,
+        Value::I16(v) => (*v as i64) as u64,
+        Value::I32(v) => (*v as i64) as u64,
+        Value::I64(v) => *v as u64,
+        Value::Bits { value: v, .. } => *v,
+        _ => 0,
+    }
+}
+
+/// Get the ordinal value for an enum variant.
+fn enum_ordinal(value: &Value, enum_def: &vexil_lang::ir::EnumDef) -> u32 {
+    match value {
+        Value::Enum(name) => enum_def
+            .variants
+            .iter()
+            .find(|v| v.name == *name)
+            .map(|v| v.ordinal)
+            .unwrap_or(0),
+        _ => 0,
+    }
+}
+
+/// Get the combined bit value for flags (sum of 1 << bit for each flag).
+fn flags_bit_value(value: &Value, flags_def: &vexil_lang::ir::FlagsDef) -> u64 {
+    match value {
+        Value::Flags(names) => {
+            let mut bits: u64 = 0;
+            for name in names {
+                if let Some(bit_def) = flags_def.bits.iter().find(|b| b.name == *name) {
+                    bits |= 1u64 << bit_def.bit;
+                }
+            }
+            bits
+        }
+        _ => 0,
+    }
 }
 
 fn encode_result(
@@ -524,6 +761,8 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::I64(_) => "i64",
         Value::F32(_) => "f32",
         Value::F64(_) => "f64",
+        Value::Fixed32(_) => "fixed32",
+        Value::Fixed64(_) => "fixed64",
         Value::Bits { .. } => "bits",
         Value::String(_) => "string",
         Value::Bytes(_) => "bytes",
@@ -534,6 +773,7 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::None => "none",
         Value::Some(_) => "some",
         Value::Array(_) => "array",
+        Value::Set(_) => "set",
         Value::Map(_) => "map",
         Value::Ok(_) => "ok",
         Value::Err(_) => "err",

@@ -1,7 +1,7 @@
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{
-    ConfigDef, Encoding, FieldEncoding, MessageDef, ResolvedType, TombstoneDef, TypeDef,
-    TypeRegistry,
+    CmpOp, ConfigDef, ConstraintOperand, Encoding, FieldConstraint, FieldEncoding, MessageDef,
+    ResolvedType, TombstoneDef, TypeDef, TypeRegistry,
 };
 
 use crate::emit::CodeWriter;
@@ -36,8 +36,8 @@ fn primitive_bits(p: &PrimitiveType) -> u8 {
     match p {
         PrimitiveType::I8 | PrimitiveType::U8 => 8,
         PrimitiveType::I16 | PrimitiveType::U16 => 16,
-        PrimitiveType::I32 | PrimitiveType::U32 | PrimitiveType::F32 => 32,
-        PrimitiveType::I64 | PrimitiveType::U64 | PrimitiveType::F64 => 64,
+        PrimitiveType::I32 | PrimitiveType::U32 | PrimitiveType::F32 | PrimitiveType::Fixed32 => 32,
+        PrimitiveType::I64 | PrimitiveType::U64 | PrimitiveType::F64 | PrimitiveType::Fixed64 => 64,
         _ => 0,
     }
 }
@@ -57,8 +57,113 @@ fn leb128_max_bytes_for_type(ty: &ResolvedType) -> u8 {
 }
 
 // ---------------------------------------------------------------------------
-// emit_write
+// Constraint validation
 // ---------------------------------------------------------------------------
+
+/// Generate a Go boolean expression for a field constraint.
+/// `access` is the Go expression for the field value (e.g., `m.Field`).
+fn generate_constraint_expr_go(constraint: &FieldConstraint, access: &str) -> String {
+    match constraint {
+        FieldConstraint::And(left, right) => {
+            let left_expr = generate_constraint_expr_go(left, access);
+            let right_expr = generate_constraint_expr_go(right, access);
+            format!("({} && {})", left_expr, right_expr)
+        }
+        FieldConstraint::Or(left, right) => {
+            let left_expr = generate_constraint_expr_go(left, access);
+            let right_expr = generate_constraint_expr_go(right, access);
+            format!("({} || {})", left_expr, right_expr)
+        }
+        FieldConstraint::Not(inner) => {
+            let inner_expr = generate_constraint_expr_go(inner, access);
+            format!("!({})", inner_expr)
+        }
+        FieldConstraint::Cmp { op, operand } => {
+            let op_str = cmp_op_to_str_go(*op);
+            let operand_str = operand_to_go(operand);
+            format!("{} {} {}", access, op_str, operand_str)
+        }
+        FieldConstraint::Range {
+            low,
+            high,
+            exclusive_high,
+        } => {
+            let low_str = operand_to_go(low);
+            let high_str = operand_to_go(high);
+            if *exclusive_high {
+                format!("{} >= {} && {} < {}", access, low_str, access, high_str)
+            } else {
+                format!("{} >= {} && {} <= {}", access, low_str, access, high_str)
+            }
+        }
+        FieldConstraint::LenCmp { op, operand } => {
+            let op_str = cmp_op_to_str_go(*op);
+            let operand_str = operand_to_go(operand);
+            format!("len({}) {} {}", access, op_str, operand_str)
+        }
+        FieldConstraint::LenRange {
+            low,
+            high,
+            exclusive_high,
+        } => {
+            let low_str = operand_to_go(low);
+            let high_str = operand_to_go(high);
+            let len_access = format!("len({})", access);
+            if *exclusive_high {
+                format!(
+                    "{} >= {} && {} < {}",
+                    len_access, low_str, len_access, high_str
+                )
+            } else {
+                format!(
+                    "{} >= {} && {} <= {}",
+                    len_access, low_str, len_access, high_str
+                )
+            }
+        }
+    }
+}
+
+fn cmp_op_to_str_go(op: CmpOp) -> &'static str {
+    match op {
+        CmpOp::Eq => "==",
+        CmpOp::Ne => "!=",
+        CmpOp::Lt => "<",
+        CmpOp::Gt => ">",
+        CmpOp::Le => "<=",
+        CmpOp::Ge => ">=",
+    }
+}
+
+fn operand_to_go(operand: &ConstraintOperand) -> String {
+    match operand {
+        ConstraintOperand::Int(i) => i.to_string(),
+        ConstraintOperand::Float(f) => f.to_string(),
+        ConstraintOperand::String(s) => format!("{:?}", s),
+        ConstraintOperand::Bool(b) => b.to_string(),
+        ConstraintOperand::ConstRef(name) => name.to_string(),
+    }
+}
+
+/// Emit constraint validation code that returns an error if the constraint is violated.
+fn emit_constraint_validation_go(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    access: &str,
+    field_name: &str,
+    _err_return: &str,
+) {
+    let condition = generate_constraint_expr_go(constraint, access);
+    let negated_condition = format!("!({})", condition);
+    w.open_block(&format!("if {}", negated_condition));
+    w.line(&format!(
+        "return fmt.Errorf(`constraint violation for field \"{}\": value %v violates constraint: expected [{}]`, {})",
+        field_name,
+        condition.replace('\n', ""),
+        access
+    ));
+    w.close_block();
+}
 
 /// Emit code to write a value to a BitWriter.
 ///
@@ -144,6 +249,8 @@ fn emit_write_type(
             PrimitiveType::I64 => w.line(&format!("{writer}.WriteI64({access})")),
             PrimitiveType::F32 => w.line(&format!("{writer}.WriteF32({access})")),
             PrimitiveType::F64 => w.line(&format!("{writer}.WriteF64({access})")),
+            PrimitiveType::Fixed32 => w.line(&format!("{writer}.WriteI32({access})")),
+            PrimitiveType::Fixed64 => w.line(&format!("{writer}.WriteI64({access})")),
             PrimitiveType::Void => {}
         },
         ResolvedType::SubByte(s) => {
@@ -357,6 +464,8 @@ fn emit_read_type(
                 PrimitiveType::I64 => "ReadI64",
                 PrimitiveType::F32 => "ReadF32",
                 PrimitiveType::F64 => "ReadF64",
+                PrimitiveType::Fixed32 => "ReadI32",
+                PrimitiveType::Fixed64 => "ReadI64",
                 PrimitiveType::Void => {
                     return;
                 }
@@ -624,6 +733,8 @@ fn emit_tombstone_read(
                 PrimitiveType::I64 => "ReadI64",
                 PrimitiveType::F32 => "ReadF32",
                 PrimitiveType::F64 => "ReadF64",
+                PrimitiveType::Fixed32 => "ReadI32",
+                PrimitiveType::Fixed64 => "ReadI64",
                 PrimitiveType::Void => return,
             };
             w.open_block("");
@@ -780,6 +891,10 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
     for field in &msg.fields {
         let field_name = to_pascal_case(&field.name);
         let access = format!("m.{field_name}");
+        // Validate constraint before encoding
+        if let Some(constraint) = &field.constraint {
+            emit_constraint_validation_go(w, constraint, &access, field.name.as_str(), err_ret);
+        }
         emit_write(
             w,
             &access,
@@ -821,8 +936,8 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
     for (idx, (_ord, action)) in actions.iter().enumerate() {
         match action {
             DecodeAction::Field(field) => {
-                let field_name = to_pascal_case(&field.name);
-                let target = format!("m.{field_name}");
+                let field_name_pascal = to_pascal_case(&field.name);
+                let target = format!("m.{field_name_pascal}");
                 emit_read(
                     w,
                     &target,
@@ -832,6 +947,16 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
                     "r",
                     err_ret,
                 );
+                // Validate constraint after decoding
+                if let Some(constraint) = &field.constraint {
+                    emit_constraint_validation_go(
+                        w,
+                        constraint,
+                        &target,
+                        field.name.as_str(),
+                        err_ret,
+                    );
+                }
             }
             DecodeAction::Tombstone(tombstone) => {
                 if let Some(ref ty) = tombstone.original_type {

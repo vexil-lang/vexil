@@ -16,6 +16,12 @@ use crate::span::Spanned;
 ///           | "array"    "<" type_expr ">"
 ///           | "map"      "<" type_expr "," type_expr ">"
 ///           | "result"   "<" type_expr "," type_expr ">"
+///           | "vec2"     "<" type_expr ">"
+///           | "vec3"     "<" type_expr ">"
+///           | "vec4"     "<" type_expr ">"
+///           | "quat"     "<" type_expr ">"
+///           | "mat3"     "<" type_expr ">"
+///           | "mat4"     "<" type_expr ">"
 ///           | named_type
 /// ```
 pub(crate) fn parse_type_expr(p: &mut Parser<'_>) -> Spanned<TypeExpr> {
@@ -34,9 +40,40 @@ pub(crate) fn parse_type_expr(p: &mut Parser<'_>) -> Spanned<TypeExpr> {
             p.advance();
             p.expect(&TokenKind::LAngle);
             let inner = parse_type_expr(p);
+
+            // Check for fixed array syntax: array<T, N>
+            let is_fixed = p.at(&TokenKind::Comma);
+            if is_fixed {
+                p.advance(); // consume Comma
+                let size_token = p.advance();
+                let size = match &size_token.kind {
+                    TokenKind::DecInt(v) => *v,
+                    TokenKind::HexInt(v) => *v,
+                    _ => {
+                        p.emit(
+                            size_token.span,
+                            ErrorClass::UnexpectedToken,
+                            "expected integer literal for fixed array size",
+                        );
+                        0
+                    }
+                };
+                p.expect(&TokenKind::RAngle);
+                let span = p.span_from(start);
+                Spanned::new(TypeExpr::FixedArray(Box::new(inner), size), span)
+            } else {
+                p.expect(&TokenKind::RAngle);
+                let span = p.span_from(start);
+                Spanned::new(TypeExpr::Array(Box::new(inner)), span)
+            }
+        }
+        TokenKind::KwSet => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
             p.expect(&TokenKind::RAngle);
             let span = p.span_from(start);
-            Spanned::new(TypeExpr::Array(Box::new(inner)), span)
+            Spanned::new(TypeExpr::Set(Box::new(inner)), span)
         }
         TokenKind::KwMap => {
             p.advance();
@@ -57,6 +94,77 @@ pub(crate) fn parse_type_expr(p: &mut Parser<'_>) -> Spanned<TypeExpr> {
             p.expect(&TokenKind::RAngle);
             let span = p.span_from(start);
             Spanned::new(TypeExpr::Result(Box::new(ok), Box::new(err)), span)
+        }
+        TokenKind::KwVec2 => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
+            p.expect(&TokenKind::RAngle);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::Vec2(Box::new(inner)), span)
+        }
+        TokenKind::KwVec3 => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
+            p.expect(&TokenKind::RAngle);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::Vec3(Box::new(inner)), span)
+        }
+        TokenKind::KwVec4 => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
+            p.expect(&TokenKind::RAngle);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::Vec4(Box::new(inner)), span)
+        }
+        TokenKind::KwQuat => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
+            p.expect(&TokenKind::RAngle);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::Quat(Box::new(inner)), span)
+        }
+        TokenKind::KwMat3 => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
+            p.expect(&TokenKind::RAngle);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::Mat3(Box::new(inner)), span)
+        }
+        TokenKind::KwMat4 => {
+            p.advance();
+            p.expect(&TokenKind::LAngle);
+            let inner = parse_type_expr(p);
+            p.expect(&TokenKind::RAngle);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::Mat4(Box::new(inner)), span)
+        }
+        TokenKind::KwBits => {
+            p.advance();
+            p.expect(&TokenKind::LBrace);
+            let mut names = Vec::new();
+            // Parse at least one identifier
+            if let Some(name) = p.peek_kind().as_field_name() {
+                p.advance();
+                names.push(name);
+                // Parse additional comma-separated identifiers
+                while p.at(&TokenKind::Comma) {
+                    p.advance(); // consume comma
+                    if let Some(name) = p.peek_kind().as_field_name() {
+                        p.advance();
+                        names.push(name);
+                    } else {
+                        break;
+                    }
+                }
+            }
+            p.expect(&TokenKind::RBrace);
+            let span = p.span_from(start);
+            Spanned::new(TypeExpr::BitsInline(names), span)
         }
         _ => parse_named_type(p),
     }
@@ -82,6 +190,15 @@ fn parse_named_type(p: &mut Parser<'_>) -> Spanned<TypeExpr> {
                     return Spanned::new(TypeExpr::Qualified(name, member), span);
                 }
             }
+            // Check for generic type instantiation: Name<TypeArg>
+            let is_generic = p.at(&TokenKind::LAngle);
+            if is_generic {
+                p.advance(); // consume LAngle
+                let arg = parse_type_expr(p);
+                p.expect(&TokenKind::RAngle);
+                let span = p.span_from(start);
+                return Spanned::new(TypeExpr::Generic(name, Box::new(arg)), span);
+            }
             Spanned::new(TypeExpr::Named(name), tok.span)
         }
         TokenKind::Ident(s) => {
@@ -98,6 +215,8 @@ fn parse_named_type(p: &mut Parser<'_>) -> Spanned<TypeExpr> {
                 "i64" => TypeExpr::Primitive(PrimitiveType::I64),
                 "f32" => TypeExpr::Primitive(PrimitiveType::F32),
                 "f64" => TypeExpr::Primitive(PrimitiveType::F64),
+                "fixed32" => TypeExpr::Primitive(PrimitiveType::Fixed32),
+                "fixed64" => TypeExpr::Primitive(PrimitiveType::Fixed64),
                 "void" => TypeExpr::Primitive(PrimitiveType::Void),
                 "string" => TypeExpr::Semantic(SemanticType::String),
                 "bytes" => TypeExpr::Semantic(SemanticType::Bytes),

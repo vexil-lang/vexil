@@ -1,12 +1,12 @@
 # Vexil Test Corpus Manifest
 
-Version: 0.1.0-draft-r2
-Generated: 2026-03-25
+Version: 1.0.0-draft
+Generated: 2026-04-09
 
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (32 files)
+## Valid Corpus (41 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -42,8 +42,17 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 030_newtype_map_key.vexil | §3.4 | Newtypes wrapping valid key types as map keys |
 | 031_custom_annotations.vexil | — | User-defined annotations preserved through compilation |
 | 032_reserved_variant_names.vexil | — | Enum variants with Rust-reserved names |
+| 033_fixed_point.vexil | §3.1 | fixed32 and fixed64 primitive types with @varint encoding |
+| 034_type_alias.vexil | §4.7 | Type aliases: transparent name for existing types |
+| 035_const.vexil | §4.8 | Named constants with cross-references and arithmetic |
+| 036_where_clause.vexil | §4.1 | Where clause constraints on fields: comparisons, ranges, len() |
+| 037_fixed_array.vexil | §3.4 | Fixed-size array syntax: `array<T, N>` with compile-time constant N |
+| 038_set.vexil | §3.4 | Set type: `set<T>` with valid key types |
+| 039_geometric.vexil | §3.1, §3.4 | Geometric types: vec2, vec3, vec4, quat, mat3, mat4 with element types |
+| 040_inline_bits.vexil | §3.4 | Inline bitfield type: `bits { r, w, x }` with named bits |
+| 041_map_key_ordering.vexil | §3.4 | Map key canonical sort order for all valid key types |
 
-## Invalid Corpus (57 files)
+## Invalid Corpus (64 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -104,6 +113,13 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 055_namespace_before_version.vexil | §12.1 | Parse | @version after namespace (must be before) |
 | 056_duplicate_version.vexil | §12.1 | Semantic | Two @version annotations on same schema |
 | 057_newtype_message_map_key.vexil | §3.4 | Type | Newtype wrapping message as map key |
+| 058_fixed_zigzag_invalid.vexil | §12.4 | Semantic | @zigzag on fixed32 (fixed types use two's complement, not ZigZag) |
+| 059_alias_chain.vexil | §4.7 | Type | Alias referencing another alias (must reference terminal type) |
+| 060_const_div_zero.vexil | §4.8 | Semantic | Division by zero in constant expression |
+| 061_const_cycle.vexil | §4.8 | Semantic | Circular dependency between constants |
+| 062_where_type_mismatch.vexil | §4.1 | Type | Where clause: string literal compared to numeric field |
+| 063_where_range_invalid.vexil | §4.1 | Type | Where clause: range expression on string type |
+| 064_where_len_invalid.vexil | §4.1 | Type | Where clause: len() on non-collection type |
 
 ## Error class taxonomy
 

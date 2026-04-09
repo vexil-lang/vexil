@@ -29,6 +29,12 @@ pub(crate) const POISON_TYPE_ID: TypeId = TypeId(u32::MAX);
 pub struct TypeRegistry {
     types: Vec<Option<TypeDef>>,
     by_name: HashMap<SmolStr, TypeId>,
+    /// Secondary name mappings for type aliases (alias name -> target TypeId).
+    /// Aliases are transparent and don't create TypeDef entries.
+    alias_map: HashMap<SmolStr, TypeId>,
+    /// Primitive type aliases (alias name -> PrimitiveType).
+    /// These map alias names directly to primitive types.
+    primitive_aliases: HashMap<SmolStr, PrimitiveType>,
 }
 
 impl Default for TypeRegistry {
@@ -43,6 +49,8 @@ impl TypeRegistry {
         Self {
             types: Vec::new(),
             by_name: HashMap::new(),
+            alias_map: HashMap::new(),
+            primitive_aliases: HashMap::new(),
         }
     }
 
@@ -63,8 +71,28 @@ impl TypeRegistry {
     }
 
     /// Look up a type by name, returning its [`TypeId`] if registered.
+    /// Also checks alias_map for type aliases.
     pub fn lookup(&self, name: &str) -> Option<TypeId> {
-        self.by_name.get(name).copied()
+        self.by_name
+            .get(name)
+            .copied()
+            .or_else(|| self.alias_map.get(name).copied())
+    }
+
+    /// Look up a primitive type alias by name.
+    pub fn lookup_primitive_alias(&self, name: &str) -> Option<PrimitiveType> {
+        self.primitive_aliases.get(name).copied()
+    }
+
+    /// Register a type alias (secondary name mapping).
+    /// The target TypeId must already exist in the registry.
+    pub fn register_alias(&mut self, alias: SmolStr, target: TypeId) {
+        self.alias_map.insert(alias, target);
+    }
+
+    /// Register a primitive type alias.
+    pub fn register_primitive_alias(&mut self, alias: SmolStr, primitive: PrimitiveType) {
+        self.primitive_aliases.insert(alias, primitive);
     }
 
     /// Get a reference to the type definition for `id`, if it exists and is not a stub.
@@ -117,6 +145,11 @@ impl TypeRegistry {
             .enumerate()
             .filter_map(|(i, opt)| opt.as_ref().map(|def| (TypeId(i as u32), def)))
     }
+
+    /// Iterate over all registered type names (excluding stubs).
+    pub fn iter_names(&self) -> impl Iterator<Item = &str> {
+        self.by_name.keys().map(|k| k.as_str())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -136,8 +169,21 @@ pub enum ResolvedType {
     Named(TypeId),
     Optional(Box<ResolvedType>),
     Array(Box<ResolvedType>),
+    /// Fixed-size array with compile-time known length: `array<T, N>`
+    FixedArray(Box<ResolvedType>, u64),
+    Set(Box<ResolvedType>),
     Map(Box<ResolvedType>, Box<ResolvedType>),
     Result(Box<ResolvedType>, Box<ResolvedType>),
+    /// Geometric types parameterized by element type
+    Vec2(Box<ResolvedType>),
+    Vec3(Box<ResolvedType>),
+    Vec4(Box<ResolvedType>),
+    Quat(Box<ResolvedType>),
+    Mat3(Box<ResolvedType>),
+    Mat4(Box<ResolvedType>),
+    /// Inline bitfield: bits { name1, name2, ... }
+    /// Wire size = number of bits, LSB-first packing
+    BitsInline(Vec<SmolStr>),
 }
 
 // ---------------------------------------------------------------------------

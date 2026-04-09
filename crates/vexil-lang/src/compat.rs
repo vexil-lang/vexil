@@ -201,6 +201,7 @@ fn decl_name(def: &TypeDef) -> SmolStr {
         TypeDef::Union(d) => d.name.clone(),
         TypeDef::Newtype(d) => d.name.clone(),
         TypeDef::Config(d) => d.name.clone(),
+        TypeDef::GenericAlias(d) => d.name.clone(),
     }
 }
 
@@ -212,6 +213,7 @@ fn decl_kind_name(def: &TypeDef) -> &'static str {
         TypeDef::Union(_) => "union",
         TypeDef::Newtype(_) => "newtype",
         TypeDef::Config(_) => "config",
+        TypeDef::GenericAlias(_) => "generic_alias",
     }
 }
 
@@ -237,12 +239,17 @@ fn types_equal(
             types_equal(a, b, old_reg, new_reg)
         }
         (ResolvedType::Array(a), ResolvedType::Array(b)) => types_equal(a, b, old_reg, new_reg),
+        (ResolvedType::FixedArray(a, asize), ResolvedType::FixedArray(b, bsize)) => {
+            asize == bsize && types_equal(a, b, old_reg, new_reg)
+        }
+        (ResolvedType::Set(a), ResolvedType::Set(b)) => types_equal(a, b, old_reg, new_reg),
         (ResolvedType::Map(ak, av), ResolvedType::Map(bk, bv)) => {
             types_equal(ak, bk, old_reg, new_reg) && types_equal(av, bv, old_reg, new_reg)
         }
         (ResolvedType::Result(ao, ae), ResolvedType::Result(bo, be)) => {
             types_equal(ao, bo, old_reg, new_reg) && types_equal(ae, be, old_reg, new_reg)
         }
+        (ResolvedType::BitsInline(a), ResolvedType::BitsInline(b)) => a == b,
         _ => false,
     }
 }
@@ -265,6 +272,12 @@ fn type_display(ty: &ResolvedType, reg: &TypeRegistry) -> String {
             .unwrap_or_else(|| "<unknown>".to_string()),
         ResolvedType::Optional(inner) => format!("optional<{}>", type_display(inner, reg)),
         ResolvedType::Array(inner) => format!("array<{}>", type_display(inner, reg)),
+        ResolvedType::FixedArray(inner, size) => {
+            format!("array<{}, {}>", type_display(inner, reg), size)
+        }
+        ResolvedType::Set(inner) => {
+            format!("set<{}>", type_display(inner, reg))
+        }
         ResolvedType::Map(k, v) => {
             format!("map<{}, {}>", type_display(k, reg), type_display(v, reg))
         }
@@ -274,6 +287,15 @@ fn type_display(ty: &ResolvedType, reg: &TypeRegistry) -> String {
                 type_display(ok, reg),
                 type_display(err, reg)
             )
+        }
+        ResolvedType::Vec2(inner) => format!("vec2<{}>", type_display(inner, reg)),
+        ResolvedType::Vec3(inner) => format!("vec3<{}>", type_display(inner, reg)),
+        ResolvedType::Vec4(inner) => format!("vec4<{}>", type_display(inner, reg)),
+        ResolvedType::Quat(inner) => format!("quat<{}>", type_display(inner, reg)),
+        ResolvedType::Mat3(inner) => format!("mat3<{}>", type_display(inner, reg)),
+        ResolvedType::Mat4(inner) => format!("mat4<{}>", type_display(inner, reg)),
+        ResolvedType::BitsInline(names) => {
+            format!("bits {{ {} }}", names.join(", "))
         }
     }
 }

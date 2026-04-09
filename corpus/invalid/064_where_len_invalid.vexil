@@ -1,0 +1,6 @@
+namespace test.where_len_invalid
+
+message Invalid {
+    # Error: len() on non-collection type (u32)
+    count @0 : u32 where len(value) > 5
+}

@@ -177,7 +177,7 @@ fn collect_named_ids_from_resolved(
                 on_import(*id);
             }
         }
-        ResolvedType::Optional(inner) | ResolvedType::Array(inner) => {
+        ResolvedType::Optional(inner) | ResolvedType::Array(inner) | ResolvedType::Set(inner) => {
             collect_named_ids_from_resolved(inner, declared, on_import);
         }
         ResolvedType::Map(k, v) | ResolvedType::Result(k, v) => {

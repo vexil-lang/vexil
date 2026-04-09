@@ -14,6 +14,12 @@ pub enum EncodeError {
     /// Recursive type nesting exceeded [`MAX_RECURSION_DEPTH`](crate::MAX_RECURSION_DEPTH).
     #[error("recursive type nesting exceeded 64 levels")]
     RecursionLimitExceeded,
+    /// A field value violated a where clause constraint.
+    #[error("field `{field}`: constraint violation: {message}")]
+    ConstraintViolation {
+        field: &'static str,
+        message: String,
+    },
 }
 
 /// Errors that can occur while decoding (unpacking) a value from wire format.

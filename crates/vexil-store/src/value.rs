@@ -15,6 +15,10 @@ pub enum Value {
     I64(i64),
     F32(f32),
     F64(f64),
+    /// Q16.16 fixed-point (raw i32 on wire).
+    Fixed32(i32),
+    /// Q32.32 fixed-point (raw i64 on wire).
+    Fixed64(i64),
     /// Sub-byte integer (1-7 bits). `width` is the declared bit count.
     Bits {
         value: u64,
@@ -35,6 +39,8 @@ pub enum Value {
     None,
     Some(Box<Value>),
     Array(Vec<Value>),
+    /// Set of unique values. Elements must be valid map key types.
+    Set(Vec<Value>),
     /// Map preserves insertion order. Keys are (key, value) pairs.
     Map(Vec<(Value, Value)>),
     Ok(Box<Value>),
@@ -74,6 +80,8 @@ impl Value {
                 PrimitiveType::I64 => Value::I64(0),
                 PrimitiveType::F32 => Value::F32(0.0),
                 PrimitiveType::F64 => Value::F64(0.0),
+                PrimitiveType::Fixed32 => Value::Fixed32(0),
+                PrimitiveType::Fixed64 => Value::Fixed64(0),
                 PrimitiveType::Void => Value::Bool(false),
             },
             ResolvedType::SubByte(sbt) => Value::Bits {
@@ -97,6 +105,7 @@ impl Value {
             }
             ResolvedType::Optional(_) => Value::None,
             ResolvedType::Array(_) => Value::Array(Vec::new()),
+            ResolvedType::Set(_) => Value::Set(Vec::new()),
             ResolvedType::Map(_, _) => Value::Map(Vec::new()),
             ResolvedType::Result(ok_ty, _) => {
                 Value::Ok(Box::new(Self::default_for_type(ok_ty, registry)))

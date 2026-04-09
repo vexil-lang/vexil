@@ -48,8 +48,8 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-The test suite includes corpus-driven tests. All 27 valid corpus schemas must
-be accepted and all 56 invalid schemas must be rejected.
+The test suite includes corpus-driven tests. All 41 valid corpus schemas must
+be accepted and all 64 invalid schemas must be rejected.
 
 ### Lint & Format
 

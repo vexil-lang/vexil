@@ -1,0 +1,43 @@
+# §3.4: Map keys MUST be sorted in ascending canonical order.
+# This schema tests all valid map key types to ensure implementations
+# produce deterministic wire encoding regardless of insertion order.
+@version("1.0.0")
+namespace test.map_key_ordering
+
+enum Status {
+    Active    @1
+    Pending   @0
+    Completed @2
+}
+
+flags Permissions {
+    Read    @0
+    Write   @1
+    Execute @2
+}
+
+newtype UserId : u32
+newtype Label  : string
+
+# Test message with various map key types
+message MapKeyTest {
+    # Integer key types
+    bool_map    @0 : map<bool, string>
+    u8_map      @1 : map<u8, string>
+    u32_map     @2 : map<u32, string>
+    i32_map     @3 : map<i32, string>
+    fixed_map   @4 : map<fixed32, string>
+    
+    # Semantic key types
+    string_map  @5 : map<string, u32>
+    bytes_map   @6 : map<bytes, u32>
+    uuid_map    @7 : map<uuid, string>
+    
+    # User-defined key types
+    enum_map    @8 : map<Status, string>
+    flags_map   @9 : map<Permissions, string>
+    
+    # Newtype key types (follow inner type sort order)
+    newtype_u32_map @10 : map<UserId, string>
+    newtype_str_map @11 : map<Label, u32>
+}

@@ -1,0 +1,10 @@
+# §4.8: Named constants with cross-references and arithmetic
+namespace test.consts
+
+const MaxBufferSize : u32 = 1024
+const HeaderSize : u32 = 16
+const PayloadSize : u32 = MaxBufferSize - HeaderSize
+
+message Packet {
+    data @0 : array<u8>
+}

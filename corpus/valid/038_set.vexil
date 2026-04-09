@@ -1,0 +1,2 @@
+namespace test.set
+message Tags { names @0 : set<string> }

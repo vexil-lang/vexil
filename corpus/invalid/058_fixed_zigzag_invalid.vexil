@@ -1,0 +1,5 @@
+namespace test.fixed
+
+message Invalid {
+    bad @0 : fixed32 @zigzag  # Error: @zigzag not allowed on fixed types
+}

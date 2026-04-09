@@ -34,6 +34,14 @@ pub fn rust_type(
             let inner_str = rust_type(inner, registry, needs_box, None);
             format!("Vec<{inner_str}>")
         }
+        ResolvedType::FixedArray(inner, size) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("[{inner_str}; {size}]")
+        }
+        ResolvedType::Set(inner) => {
+            let inner_str = rust_type(inner, registry, needs_box, None);
+            format!("std::collections::BTreeSet<{inner_str}>")
+        }
         ResolvedType::Map(k, v) => {
             let k_str = rust_type(k, registry, needs_box, None);
             let v_str = rust_type(v, registry, needs_box, None);
@@ -43,6 +51,10 @@ pub fn rust_type(
             let ok_str = rust_type(ok, registry, needs_box, context);
             let err_str = rust_type(err, registry, needs_box, context);
             format!("Result<{ok_str}, {err_str}>")
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len() as u8;
+            containing_int_type(bits).to_string()
         }
         _ => "UnknownType".to_string(),
     }
@@ -61,6 +73,8 @@ fn primitive_type(p: &PrimitiveType) -> &'static str {
         PrimitiveType::I64 => "i64",
         PrimitiveType::F32 => "f32",
         PrimitiveType::F64 => "f64",
+        PrimitiveType::Fixed32 => "i32",
+        PrimitiveType::Fixed64 => "i64",
         PrimitiveType::Void => "()",
     }
 }

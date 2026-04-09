@@ -179,6 +179,8 @@ fn validate_primitive(value: &Value, prim: PrimitiveType, errors: &mut Vec<VxErr
             | (Value::I64(_), PrimitiveType::I64)
             | (Value::F32(_), PrimitiveType::F32)
             | (Value::F64(_), PrimitiveType::F64)
+            | (Value::Fixed32(_), PrimitiveType::Fixed32)
+            | (Value::Fixed64(_), PrimitiveType::Fixed64)
     );
     if !ok {
         errors.push(VxError::TypeMismatch {
@@ -330,6 +332,8 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::I64(_) => "i64",
         Value::F32(_) => "f32",
         Value::F64(_) => "f64",
+        Value::Fixed32(_) => "fixed32",
+        Value::Fixed64(_) => "fixed64",
         Value::Bits { .. } => "bits",
         Value::String(_) => "string",
         Value::Bytes(_) => "bytes",
@@ -340,6 +344,7 @@ fn value_type_name(value: &Value) -> &'static str {
         Value::None => "none",
         Value::Some(_) => "some",
         Value::Array(_) => "array",
+        Value::Set(_) => "set",
         Value::Map(_) => "map",
         Value::Ok(_) => "ok",
         Value::Err(_) => "err",

@@ -61,6 +61,8 @@ pub enum Decl {
     Union(UnionDecl),
     Newtype(NewtypeDecl),
     Config(ConfigDecl),
+    Alias(AliasDecl),
+    Const(ConstDecl),
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +90,7 @@ pub struct MessageField {
     pub post_ordinal_annotations: Vec<Annotation>,
     pub ty: Spanned<TypeExpr>,
     pub post_type_annotations: Vec<Annotation>,
+    pub where_clause: Option<Spanned<WhereExpr>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +206,64 @@ pub struct ConfigField {
 }
 
 // ---------------------------------------------------------------------------
+// Type Alias
+// ---------------------------------------------------------------------------
+
+/// A type parameter for generic type aliases (e.g., `T` in `type Vec3<T> = ...`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeParam {
+    pub name: Spanned<SmolStr>,
+    /// Optional bounds on the type parameter (e.g., `T: Numeric`).
+    /// Currently unused but reserved for future use.
+    pub bounds: Vec<Spanned<SmolStr>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AliasDecl {
+    pub annotations: Vec<Annotation>,
+    pub name: Spanned<SmolStr>,
+    /// Type parameters for generic aliases (e.g., `<T>` in `type Vec3<T> = ...`).
+    /// Empty for non-generic aliases.
+    pub type_params: Vec<TypeParam>,
+    pub target: Spanned<TypeExpr>,
+}
+
+// ---------------------------------------------------------------------------
+// Const Declaration
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstDecl {
+    pub annotations: Vec<Annotation>,
+    pub name: Spanned<SmolStr>,
+    pub ty: Spanned<TypeExpr>,
+    pub value: Spanned<ConstExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstExpr {
+    Int(i64),
+    UInt(u64),
+    Float(f64),
+    Hex(u64),
+    Bool(bool),
+    ConstRef(SmolStr),
+    BinOp {
+        op: BinOpKind,
+        left: Box<ConstExpr>,
+        right: Box<ConstExpr>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinOpKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+// ---------------------------------------------------------------------------
 // Type expressions
 // ---------------------------------------------------------------------------
 
@@ -214,10 +275,24 @@ pub enum TypeExpr {
     Named(SmolStr),
     /// namespace.Type
     Qualified(SmolStr, SmolStr),
+    /// Generic type instantiation: Name<TypeArg>
+    Generic(SmolStr, Box<Spanned<TypeExpr>>),
     Optional(Box<Spanned<TypeExpr>>),
     Array(Box<Spanned<TypeExpr>>),
+    /// Fixed-size array with compile-time known length: `array<T, N>`
+    FixedArray(Box<Spanned<TypeExpr>>, u64),
+    Set(Box<Spanned<TypeExpr>>),
     Map(Box<Spanned<TypeExpr>>, Box<Spanned<TypeExpr>>),
     Result(Box<Spanned<TypeExpr>>, Box<Spanned<TypeExpr>>),
+    /// Geometric types parameterized by element type
+    Vec2(Box<Spanned<TypeExpr>>),
+    Vec3(Box<Spanned<TypeExpr>>),
+    Vec4(Box<Spanned<TypeExpr>>),
+    Quat(Box<Spanned<TypeExpr>>),
+    Mat3(Box<Spanned<TypeExpr>>),
+    Mat4(Box<Spanned<TypeExpr>>),
+    /// Inline bitfield: bits { name1, name2, ... }
+    BitsInline(Vec<SmolStr>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -233,6 +308,8 @@ pub enum PrimitiveType {
     I64,
     F32,
     F64,
+    Fixed32,
+    Fixed64,
     Void,
 }
 
@@ -278,6 +355,70 @@ pub enum AnnotationValue {
     Bool(bool),
     Ident(SmolStr),
     UpperIdent(SmolStr),
+}
+
+// ---------------------------------------------------------------------------
+// Where Clause Constraints
+// ---------------------------------------------------------------------------
+
+/// A constraint expression attached to a field via `where`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WhereExpr {
+    /// Binary logical AND: `a && b`
+    And(Box<Spanned<WhereExpr>>, Box<Spanned<WhereExpr>>),
+    /// Binary logical OR: `a || b`
+    Or(Box<Spanned<WhereExpr>>, Box<Spanned<WhereExpr>>),
+    /// Logical NOT: `!a`
+    Not(Box<Spanned<WhereExpr>>),
+    /// Comparison: `value == expr`, `value != expr`, etc.
+    Cmp {
+        op: CmpOp,
+        operand: Box<Spanned<WhereOperand>>,
+    },
+    /// Range check: `value in low..high` or `value in low..<high`
+    Range {
+        low: Box<Spanned<WhereOperand>>,
+        high: Box<Spanned<WhereOperand>>,
+        exclusive_high: bool, // true for `..<`, false for `..`
+    },
+    /// Length check: `len(value)` compared to something
+    LenCmp {
+        op: CmpOp,
+        operand: Box<Spanned<WhereOperand>>,
+    },
+    /// Length in range: `len(value) in low..high`
+    LenRange {
+        low: Box<Spanned<WhereOperand>>,
+        high: Box<Spanned<WhereOperand>>,
+        exclusive_high: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmpOp {
+    Eq, // ==
+    Ne, // !=
+    Lt, // <
+    Gt, // >
+    Le, // <=
+    Ge, // >=
+}
+
+/// Operands in where expressions (the `value` keyword is implicit).
+#[derive(Debug, Clone, PartialEq)]
+pub enum WhereOperand {
+    /// Integer literal
+    Int(i64),
+    /// Float literal
+    Float(f64),
+    /// String literal
+    String(String),
+    /// Boolean literal
+    Bool(bool),
+    /// The `value` keyword - refers to the field's value
+    Value,
+    /// Reference to a const: `MAX_SIZE`, etc.
+    ConstRef(SmolStr),
 }
 
 // ---------------------------------------------------------------------------

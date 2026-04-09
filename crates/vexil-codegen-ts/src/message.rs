@@ -1,7 +1,7 @@
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{
-    ConfigDef, Encoding, FieldEncoding, MessageDef, ResolvedType, TombstoneDef, TypeDef,
-    TypeRegistry,
+    CmpOp, ConfigDef, ConstraintOperand, Encoding, FieldConstraint, FieldEncoding, MessageDef,
+    ResolvedType, TombstoneDef, TypeDef, TypeRegistry,
 };
 
 use crate::emit::CodeWriter;
@@ -16,6 +16,7 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     match ty {
         ResolvedType::Primitive(PrimitiveType::Bool) => false,
         ResolvedType::SubByte(_) => false,
+        ResolvedType::BitsInline(names) => names.len() >= 8,
         ResolvedType::Named(id) => {
             if let Some(TypeDef::Enum(e)) = registry.get(*id) {
                 e.wire_bits >= 8
@@ -36,15 +37,119 @@ fn primitive_bits(p: &PrimitiveType) -> u8 {
     match p {
         PrimitiveType::I8 | PrimitiveType::U8 => 8,
         PrimitiveType::I16 | PrimitiveType::U16 => 16,
-        PrimitiveType::I32 | PrimitiveType::U32 | PrimitiveType::F32 => 32,
-        PrimitiveType::I64 | PrimitiveType::U64 | PrimitiveType::F64 => 64,
+        PrimitiveType::I32 | PrimitiveType::U32 | PrimitiveType::F32 | PrimitiveType::Fixed32 => 32,
+        PrimitiveType::I64 | PrimitiveType::U64 | PrimitiveType::F64 | PrimitiveType::Fixed64 => 64,
         _ => 0,
     }
 }
 
 // ---------------------------------------------------------------------------
-// emit_write
+// Constraint validation
 // ---------------------------------------------------------------------------
+
+/// Generate a TypeScript boolean expression for a field constraint.
+/// `access` is the TypeScript expression for the field value (e.g., `v.field`).
+fn generate_constraint_expr_ts(constraint: &FieldConstraint, access: &str) -> String {
+    match constraint {
+        FieldConstraint::And(left, right) => {
+            let left_expr = generate_constraint_expr_ts(left, access);
+            let right_expr = generate_constraint_expr_ts(right, access);
+            format!("({} && {})", left_expr, right_expr)
+        }
+        FieldConstraint::Or(left, right) => {
+            let left_expr = generate_constraint_expr_ts(left, access);
+            let right_expr = generate_constraint_expr_ts(right, access);
+            format!("({} || {})", left_expr, right_expr)
+        }
+        FieldConstraint::Not(inner) => {
+            let inner_expr = generate_constraint_expr_ts(inner, access);
+            format!("!({})", inner_expr)
+        }
+        FieldConstraint::Cmp { op, operand } => {
+            let op_str = cmp_op_to_str_ts(*op);
+            let operand_str = operand_to_ts(operand);
+            format!("{} {} {}", access, op_str, operand_str)
+        }
+        FieldConstraint::Range {
+            low,
+            high,
+            exclusive_high,
+        } => {
+            let low_str = operand_to_ts(low);
+            let high_str = operand_to_ts(high);
+            if *exclusive_high {
+                format!("{} >= {} && {} < {}", access, low_str, access, high_str)
+            } else {
+                format!("{} >= {} && {} <= {}", access, low_str, access, high_str)
+            }
+        }
+        FieldConstraint::LenCmp { op, operand } => {
+            let op_str = cmp_op_to_str_ts(*op);
+            let operand_str = operand_to_ts(operand);
+            format!("{}.length {} {}", access, op_str, operand_str)
+        }
+        FieldConstraint::LenRange {
+            low,
+            high,
+            exclusive_high,
+        } => {
+            let low_str = operand_to_ts(low);
+            let high_str = operand_to_ts(high);
+            let len_access = format!("{}.length", access);
+            if *exclusive_high {
+                format!(
+                    "{} >= {} && {} < {}",
+                    len_access, low_str, len_access, high_str
+                )
+            } else {
+                format!(
+                    "{} >= {} && {} <= {}",
+                    len_access, low_str, len_access, high_str
+                )
+            }
+        }
+    }
+}
+
+fn cmp_op_to_str_ts(op: CmpOp) -> &'static str {
+    match op {
+        CmpOp::Eq => "===",
+        CmpOp::Ne => "!==",
+        CmpOp::Lt => "<",
+        CmpOp::Gt => ">",
+        CmpOp::Le => "<=",
+        CmpOp::Ge => ">=",
+    }
+}
+
+fn operand_to_ts(operand: &ConstraintOperand) -> String {
+    match operand {
+        ConstraintOperand::Int(i) => i.to_string(),
+        ConstraintOperand::Float(f) => f.to_string(),
+        ConstraintOperand::String(s) => format!("{:?}", s),
+        ConstraintOperand::Bool(b) => b.to_string(),
+        ConstraintOperand::ConstRef(name) => name.to_string(),
+    }
+}
+
+/// Emit constraint validation code that throws an error if the constraint is violated.
+fn emit_constraint_validation_ts(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    access: &str,
+    field_name: &str,
+) {
+    let condition = generate_constraint_expr_ts(constraint, access);
+    let negated_condition = format!("!({})", condition);
+    w.open_block(&format!("if ({})", negated_condition));
+    w.line(&format!(
+        "throw new Error(`Constraint violation for field \"{}\": value ${{{}}} violates constraint: expected [{}]`);",
+        field_name,
+        access,
+        condition.replace('\n', "")
+    ));
+    w.close_block();
+}
 
 /// Emit code to write a value to a BitWriter.
 ///
@@ -119,10 +224,16 @@ fn emit_write_type(
             PrimitiveType::I64 => w.line(&format!("{writer}.writeI64({access});")),
             PrimitiveType::F32 => w.line(&format!("{writer}.writeF32({access});")),
             PrimitiveType::F64 => w.line(&format!("{writer}.writeF64({access});")),
+            PrimitiveType::Fixed32 => w.line(&format!("{writer}.writeI32({access});")),
+            PrimitiveType::Fixed64 => w.line(&format!("{writer}.writeI64({access});")),
             PrimitiveType::Void => {} // 0 bits — nothing to write
         },
         ResolvedType::SubByte(s) => {
             let bits = s.bits;
+            w.line(&format!("{writer}.writeBits({access}, {bits});"));
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
             w.line(&format!("{writer}.writeBits({access}, {bits});"));
         }
         ResolvedType::Semantic(s) => match s {
@@ -165,6 +276,12 @@ fn emit_write_type(
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("{writer}.writeLeb128({access}.length);"));
+            w.open_block(&format!("for (const item of {access})"));
+            emit_write_type(w, "item", inner, registry, writer);
+            w.close_block();
+        }
+        ResolvedType::Set(inner) => {
+            w.line(&format!("{writer}.writeLeb128({access}.size);"));
             w.open_block(&format!("for (const item of {access})"));
             emit_write_type(w, "item", inner, registry, writer);
             w.close_block();
@@ -290,6 +407,12 @@ fn emit_read_type(
             PrimitiveType::F64 => {
                 w.line(&format!("const {var_name} = {reader}.readF64();"));
             }
+            PrimitiveType::Fixed32 => {
+                w.line(&format!("const {var_name} = {reader}.readI32();"));
+            }
+            PrimitiveType::Fixed64 => {
+                w.line(&format!("const {var_name} = {reader}.readI64();"));
+            }
             PrimitiveType::Void => {
                 w.line(&format!("const {var_name} = undefined;"));
             }
@@ -305,6 +428,10 @@ fn emit_read_type(
             } else {
                 w.line(&format!("const {var_name} = {reader}.readBits({bits});",));
             }
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            w.line(&format!("const {var_name} = {reader}.readBits({bits});"));
         }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => {
@@ -372,6 +499,15 @@ fn emit_read_type(
             w.line(&format!("{var_name}.push({var_name}_item);"));
             w.close_block();
         }
+        ResolvedType::Set(inner) => {
+            w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
+            let inner_ts = ts_type(inner, registry);
+            w.line(&format!("const {var_name} = new Set<{inner_ts}>();"));
+            w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
+            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
+            w.line(&format!("{var_name}.add({var_name}_item);"));
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
             let k_ts = ts_type(k, registry);
@@ -429,6 +565,8 @@ fn emit_tombstone_read(
             PrimitiveType::I64 => w.line(&format!("{reader}.readI64();")),
             PrimitiveType::F32 => w.line(&format!("{reader}.readF32();")),
             PrimitiveType::F64 => w.line(&format!("{reader}.readF64();")),
+            PrimitiveType::Fixed32 => w.line(&format!("{reader}.readI32();")),
+            PrimitiveType::Fixed64 => w.line(&format!("{reader}.readI64();")),
             PrimitiveType::Void => {} // 0 bits — nothing to read
         },
         ResolvedType::SubByte(s) => {
@@ -473,6 +611,13 @@ fn emit_tombstone_read(
             w.close_block();
         }
         ResolvedType::Array(inner) => {
+            let len_var = format!("_tombstone_{idx}_len");
+            w.line(&format!("const {len_var} = {reader}.readLeb128();"));
+            w.open_block(&format!("for (let i = 0; i < {len_var}; i++)"));
+            emit_tombstone_read(w, inner, registry, reader, idx);
+            w.close_block();
+        }
+        ResolvedType::Set(inner) => {
             let len_var = format!("_tombstone_{idx}_len");
             w.line(&format!("const {len_var} = {reader}.readLeb128();"));
             w.open_block(&format!("for (let i = 0; i < {len_var}; i++)"));
@@ -526,6 +671,10 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
     ));
     for field in &msg.fields {
         let access = format!("v.{}", field.name);
+        // Validate constraint before encoding
+        if let Some(constraint) = &field.constraint {
+            emit_constraint_validation_ts(w, constraint, &access, field.name.as_str());
+        }
         emit_write(
             w,
             &access,
@@ -567,14 +716,19 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
     for (idx, (_ord, action)) in actions.iter().enumerate() {
         match action {
             DecodeAction::Field(field) => {
+                let var_name = field.name.as_str();
                 emit_read(
                     w,
-                    field.name.as_str(),
+                    var_name,
                     &field.resolved_type,
                     &field.encoding,
                     registry,
                     "r",
                 );
+                // Validate constraint after decoding
+                if let Some(constraint) = &field.constraint {
+                    emit_constraint_validation_ts(w, constraint, var_name, var_name);
+                }
             }
             DecodeAction::Tombstone(tombstone) => {
                 if let Some(ref ty) = tombstone.original_type {

@@ -369,11 +369,25 @@ pub(crate) fn parse_annotations(p: &mut Parser<'_>) -> Vec<Annotation> {
         let start = p.current_offset();
         p.advance(); // consume At
 
-        // Annotation name.
+        // Annotation name - can be identifier or keyword.
         let name = match p.peek_kind().clone() {
             TokenKind::Ident(s) => {
                 let tok = p.advance();
                 Spanned::new(s, tok.span)
+            }
+            ref kind if kind.is_keyword() => {
+                // Keywords can be used as annotation names (e.g., @type)
+                if let Some(name_str) = kind.as_field_name() {
+                    let tok = p.advance();
+                    Spanned::new(name_str, tok.span)
+                } else {
+                    p.emit(
+                        p.peek().span,
+                        ErrorClass::UnexpectedToken,
+                        "expected annotation name",
+                    );
+                    continue;
+                }
             }
             _ => {
                 p.emit(
@@ -525,6 +539,8 @@ pub(crate) fn is_at_decl_keyword(p: &Parser<'_>) -> bool {
             | TokenKind::KwUnion
             | TokenKind::KwNewtype
             | TokenKind::KwConfig
+            | TokenKind::KwType
+            | TokenKind::KwConst
     )
 }
 

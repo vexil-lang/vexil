@@ -10,14 +10,17 @@ use std::collections::{HashMap, HashSet};
 use smol_str::SmolStr;
 
 use crate::ast::{
-    Annotation, AnnotationValue, Decl, EnumBodyItem, FlagsBodyItem, ImportKind, MessageBodyItem,
-    MessageField, PrimitiveType, Schema, TypeExpr, UnionBodyItem,
+    Annotation, AnnotationValue, BinOpKind, CmpOp, ConstDecl, ConstExpr, Decl, EnumBodyItem,
+    FlagsBodyItem, ImportKind, MessageBodyItem, MessageField, PrimitiveType, Schema, TypeExpr,
+    UnionBodyItem, WhereExpr, WhereOperand,
 };
-use crate::diagnostic::{Diagnostic, ErrorClass};
+use crate::diagnostic::{Diagnostic, ErrorClass, Note};
+use crate::errors::edit_distance;
 use crate::ir::{
-    self, CompiledSchema, ConfigDef, ConfigFieldDef, Encoding, EnumDef, EnumVariantDef, FieldDef,
-    FieldEncoding, FlagsBitDef, FlagsDef, MessageDef, NewtypeDef, ResolvedAnnotations,
-    ResolvedType, TombstoneDef, TypeDef, TypeId, TypeRegistry, UnionDef, UnionVariantDef,
+    self, CmpOp as IrCmpOp, CompiledSchema, ConfigDef, ConfigFieldDef, ConstValue,
+    ConstraintOperand, Encoding, EnumDef, EnumVariantDef, FieldConstraint, FieldDef, FieldEncoding,
+    FlagsBitDef, FlagsDef, MessageDef, NewtypeDef, ResolvedAnnotations, ResolvedType, TombstoneDef,
+    TypeDef, TypeId, TypeRegistry, UnionDef, UnionVariantDef,
 };
 use crate::span::Span;
 
@@ -36,6 +39,13 @@ struct LowerCtx {
     wildcard_origins: HashMap<SmolStr, Option<String>>,
     /// Names from local declarations (populated during `register_declarations`).
     local_names: HashSet<SmolStr>,
+    /// Evaluated constant values.
+    constants: HashMap<SmolStr, ConstValue>,
+    /// Const declarations that need evaluation.
+    const_decls: HashMap<SmolStr, (ConstDecl, Span)>,
+    /// TypeIds of generic aliases registered during lowering.
+    /// These are added to the declarations list after processing.
+    generic_alias_ids: Vec<TypeId>,
 }
 
 impl LowerCtx {
@@ -46,6 +56,9 @@ impl LowerCtx {
             wildcard_imports: HashSet::new(),
             wildcard_origins: HashMap::new(),
             local_names: HashSet::new(),
+            constants: HashMap::new(),
+            const_decls: HashMap::new(),
+            generic_alias_ids: Vec::new(),
         }
     }
 
@@ -73,14 +86,39 @@ pub fn lower_with_deps(
     register_import_types(schema, &mut ctx, deps);
     let decl_ids = register_declarations(schema, &mut ctx);
 
+    // First pass: lower non-alias, non-const declarations
+    let mut alias_decls: Vec<&crate::ast::AliasDecl> = Vec::new();
+    let mut const_decls: Vec<&crate::ast::ConstDecl> = Vec::new();
     for (decl_spanned, &id) in schema.declarations.iter().zip(decl_ids.iter()) {
-        let def = lower_decl(&decl_spanned.node, decl_spanned.span, &mut ctx);
-        // Replace the placeholder registered earlier.
-        // get_mut returns Some because we registered with a concrete TypeDef, not a stub.
-        if let Some(slot) = ctx.registry.get_mut(id) {
-            *slot = def;
+        match &decl_spanned.node {
+            Decl::Alias(alias) => {
+                alias_decls.push(alias);
+            }
+            Decl::Const(c) => {
+                const_decls.push(c);
+                // Store for later evaluation
+                ctx.const_decls
+                    .insert(c.name.node.clone(), (c.clone(), decl_spanned.span));
+            }
+            _ => {
+                let def = lower_decl(&decl_spanned.node, decl_spanned.span, &mut ctx);
+                // Replace the placeholder registered earlier.
+                // get_mut returns Some because we registered with a concrete TypeDef, not a stub.
+                if let Some(slot) = ctx.registry.get_mut(id) {
+                    *slot = def;
+                }
+            }
         }
     }
+
+    // Second pass: process aliases after all regular declarations exist
+    // This ensures alias targets can be resolved.
+    for alias in alias_decls {
+        lower_alias(alias, &mut ctx);
+    }
+
+    // Third pass: evaluate constants after all types are resolved
+    evaluate_constants(&mut ctx);
 
     let namespace: Vec<SmolStr> = schema
         .namespace
@@ -90,11 +128,26 @@ pub fn lower_with_deps(
 
     let annotations = resolve_annotations(&schema.annotations);
 
+    // Filter out aliases and consts from declarations list.
+    // Generic aliases are handled separately (see generic_alias_ids below).
+    // Consts are skipped here because they don't have TypeIds (handled separately).
+    let mut declaration_ids: Vec<TypeId> = schema
+        .declarations
+        .iter()
+        .zip(decl_ids.iter())
+        .filter(|(d, _)| !matches!(d.node, Decl::Alias(_) | Decl::Const(_)))
+        .map(|(_, &id)| id)
+        .collect();
+
+    // Add TypeIds of generic aliases (registered in lower_alias) to declarations
+    declaration_ids.extend(ctx.generic_alias_ids.iter().copied());
+
     let compiled = CompiledSchema {
         namespace,
         annotations,
         registry: ctx.registry,
-        declarations: decl_ids,
+        declarations: declaration_ids,
+        constants: ctx.constants,
     };
 
     (Some(compiled), ctx.diagnostics)
@@ -145,13 +198,67 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                     );
                                 }
                                 None => {
-                                    ctx.emit(
-                                        name_spanned.span,
-                                        ErrorClass::UnresolvedType,
+                                    // Collect available export names for suggestions
+                                    let available_names: Vec<&str> = dep_compiled
+                                        .declarations
+                                        .iter()
+                                        .filter_map(|&id| {
+                                            dep_compiled
+                                                .registry
+                                                .get(id)
+                                                .map(crate::remap::type_def_name)
+                                        })
+                                        .collect();
+
+                                    // Find closest match using edit distance (threshold 3)
+                                    let target_lower = name.as_str().to_lowercase();
+                                    let mut best_match: Option<&str> = None;
+                                    let mut best_distance = usize::MAX;
+                                    const THRESHOLD: usize = 3;
+
+                                    for candidate in &available_names {
+                                        let candidate_lower = candidate.to_lowercase();
+                                        let distance =
+                                            edit_distance(&target_lower, &candidate_lower);
+                                        if distance < best_distance && distance <= THRESHOLD {
+                                            best_distance = distance;
+                                            best_match = Some(*candidate);
+                                        }
+                                    }
+
+                                    let message = if let Some(sugg) = best_match {
+                                        format!("unknown import `{name}`. Did you mean `{sugg}`?")
+                                    } else {
                                         format!(
                                             "imported name `{name}` not found in namespace `{ns_key}`"
-                                        ),
+                                        )
+                                    };
+
+                                    let mut diag = Diagnostic::error(
+                                        name_spanned.span,
+                                        ErrorClass::UnresolvedType,
+                                        message,
                                     );
+
+                                    // Add list of available exports
+                                    if !available_names.is_empty() {
+                                        let exports_list: Vec<String> = available_names
+                                            .iter()
+                                            .take(10) // Limit to avoid overwhelming output
+                                            .map(|s| s.to_string())
+                                            .collect();
+                                        diag = diag.with_note(Note::ValidOptions(exports_list));
+                                        if available_names.len() > 10 {
+                                            diag = diag.with_note(Note::Note(format!(
+                                                "... and {} more",
+                                                available_names.len() - 10
+                                            )));
+                                        }
+                                    } else {
+                                        diag = diag.with_help("the imported namespace exports no types (namespace may be empty or all declarations may be private)");
+                                    }
+
+                                    ctx.diagnostics.push(diag);
                                 }
                             }
                         }
@@ -237,6 +344,7 @@ fn set_type_name(def: &mut TypeDef, name: SmolStr) {
         TypeDef::Union(u) => u.name = name,
         TypeDef::Newtype(n) => n.name = name,
         TypeDef::Config(c) => c.name = name,
+        TypeDef::GenericAlias(a) => a.name = name,
     }
 }
 
@@ -250,6 +358,8 @@ fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
             Decl::Union(d) => d.name.node.clone(),
             Decl::Newtype(d) => d.name.node.clone(),
             Decl::Config(d) => d.name.node.clone(),
+            Decl::Alias(_) => continue, // Aliases don't get TypeIds, they use alias_map
+            Decl::Const(_) => continue, // Consts don't get TypeIds, they use constants map
         };
         ctx.local_names.insert(name.clone());
         // Register a concrete placeholder so get_mut will find it later.
@@ -277,6 +387,19 @@ fn lower_decl(decl: &Decl, span: Span, ctx: &mut LowerCtx) -> TypeDef {
         Decl::Union(d) => TypeDef::Union(lower_union(d, span, ctx)),
         Decl::Newtype(d) => TypeDef::Newtype(lower_newtype(d, span, ctx)),
         Decl::Config(d) => TypeDef::Config(lower_config(d, span, ctx)),
+        Decl::Alias(_) | Decl::Const(_) => {
+            // Aliases and consts are handled separately in lower_with_deps after all regular
+            // declarations are lowered. This ensures dependencies are resolved.
+            // Return a dummy TypeDef that should never be used.
+            TypeDef::Message(MessageDef {
+                name: SmolStr::new("__placeholder"),
+                span,
+                fields: Vec::new(),
+                tombstones: Vec::new(),
+                annotations: ResolvedAnnotations::default(),
+                wire_size: None,
+            })
+        }
     }
 }
 
@@ -326,6 +449,10 @@ fn lower_field(field: &MessageField, span: Span, ctx: &mut LowerCtx) -> FieldDef
         .collect();
     let encoding = compute_field_encoding(&all_annotations);
     let annotations = resolve_annotations_refs(&all_annotations);
+    let constraint = field
+        .where_clause
+        .as_ref()
+        .map(|w| lower_where_expr(&w.node));
     FieldDef {
         name: field.name.node.clone(),
         span,
@@ -333,6 +460,7 @@ fn lower_field(field: &MessageField, span: Span, ctx: &mut LowerCtx) -> FieldDef
         resolved_type,
         encoding,
         annotations,
+        constraint,
     }
 }
 
@@ -445,6 +573,62 @@ fn lower_newtype(nt: &crate::ast::NewtypeDecl, span: Span, ctx: &mut LowerCtx) -
     }
 }
 
+/// Lower a type alias declaration.
+/// Non-generic aliases are transparent — they don't create TypeDef entries.
+/// Instead, they add name→TypeId mappings in the registry alias_map.
+/// Generic aliases are stored as GenericAlias TypeDef entries.
+fn lower_alias(alias: &crate::ast::AliasDecl, ctx: &mut LowerCtx) {
+    // Check if this is a generic alias (has type parameters)
+    if !alias.type_params.is_empty() {
+        // Generic alias: store as GenericAlias TypeDef
+        let type_param_names: Vec<SmolStr> = alias
+            .type_params
+            .iter()
+            .map(|p| p.name.node.clone())
+            .collect();
+
+        let generic_alias_def = TypeDef::GenericAlias(ir::GenericAliasDef {
+            name: alias.name.node.clone(),
+            span: alias.name.span,
+            type_params: type_param_names,
+            target_type: alias.target.node.clone(),
+            annotations: resolve_annotations(&alias.annotations),
+        });
+
+        // Register the generic alias in the registry
+        let id = ctx
+            .registry
+            .register(alias.name.node.clone(), generic_alias_def);
+        ctx.generic_alias_ids.push(id);
+        return;
+    }
+
+    // Non-generic alias: use existing transparent alias behavior
+    let target_type = resolve_type_expr(&alias.target.node, alias.target.span, ctx);
+
+    // Handle different target types
+    match target_type {
+        ResolvedType::Named(id) => {
+            // Register the alias mapping to the named type
+            ctx.registry.register_alias(alias.name.node.clone(), id);
+        }
+        ResolvedType::Primitive(p) => {
+            // Register a primitive type alias
+            ctx.registry
+                .register_primitive_alias(alias.name.node.clone(), p);
+        }
+        _ => {
+            // Container types (optional, array, map, result) as alias targets
+            // are more complex - for now we emit an error
+            ctx.emit(
+                alias.target.span,
+                ErrorClass::AliasTargetNotFound,
+                "alias to container type not yet supported",
+            );
+        }
+    }
+}
+
 fn lower_config(cfg: &crate::ast::ConfigDecl, span: Span, ctx: &mut LowerCtx) -> ConfigDef {
     let fields = cfg
         .fields
@@ -502,11 +686,43 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
                 let id = ctx.registry.register_stub(name.clone());
                 ResolvedType::Named(id)
             } else {
-                ctx.emit(
+                // Collect available type names for suggestions
+                let available_types: Vec<&str> = ctx
+                    .local_names
+                    .iter()
+                    .map(|s| s.as_str())
+                    .chain(ctx.registry.iter_names())
+                    .collect();
+
+                let mut diag = Diagnostic::error(
                     span,
                     ErrorClass::UnresolvedType,
                     format!("unresolved type `{name}`"),
                 );
+
+                if let Some(suggestion) = crate::diagnostic::find_closest_match(
+                    name.as_str(),
+                    available_types.clone().into_iter(),
+                ) {
+                    diag = diag.with_suggestion(suggestion);
+                }
+
+                if !available_types.is_empty() {
+                    let type_list: Vec<String> = available_types
+                        .iter()
+                        .take(15)
+                        .map(|s| s.to_string())
+                        .collect();
+                    diag = diag.with_note(Note::ValidOptions(type_list));
+                    if available_types.len() > 15 {
+                        diag = diag.with_note(Note::Note(format!(
+                            "... and {} more types",
+                            available_types.len() - 15
+                        )));
+                    }
+                }
+
+                ctx.diagnostics.push(diag);
                 ResolvedType::Named(ir::types::POISON_TYPE_ID)
             }
         }
@@ -519,11 +735,39 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
                 let id = ctx.registry.register_stub(qualified_name);
                 ResolvedType::Named(id)
             } else {
-                ctx.emit(
+                // Collect available namespace aliases for suggestions
+                let available_ns: Vec<&str> = ctx
+                    .registry
+                    .iter_names()
+                    .filter(|n| !n.contains('.')) // Only top-level aliases
+                    .collect();
+
+                let mut diag = Diagnostic::error(
                     span,
                     ErrorClass::UnresolvedType,
                     format!("unresolved qualified type `{ns}.{name}`"),
                 );
+
+                // Suggest if namespace alias is typo
+                if let Some(suggestion) = crate::diagnostic::find_closest_match(
+                    ns.as_str(),
+                    available_ns.clone().into_iter(),
+                ) {
+                    diag = diag.with_suggestion(format!("{}.{}", suggestion, name));
+                }
+
+                if !available_ns.is_empty() {
+                    diag = diag.with_help(format!(
+                        "available namespace aliases: {}",
+                        available_ns.join(", ")
+                    ));
+                } else {
+                    diag = diag.with_help(
+                        "use `import <namespace> as <alias>` to create a namespace alias",
+                    );
+                }
+
+                ctx.diagnostics.push(diag);
                 ResolvedType::Named(ir::types::POISON_TYPE_ID)
             }
         }
@@ -532,6 +776,13 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
         }
         TypeExpr::Array(inner) => {
             ResolvedType::Array(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::FixedArray(inner, size) => ResolvedType::FixedArray(
+            Box::new(resolve_type_expr(&inner.node, inner.span, ctx)),
+            *size,
+        ),
+        TypeExpr::Set(inner) => {
+            ResolvedType::Set(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
         }
         TypeExpr::Map(key, value) => {
             let rk = resolve_type_expr(&key.node, key.span, ctx);
@@ -543,6 +794,65 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
             let re = resolve_type_expr(&err.node, err.span, ctx);
             ResolvedType::Result(Box::new(ro), Box::new(re))
         }
+        TypeExpr::Vec2(inner) => {
+            ResolvedType::Vec2(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::Vec3(inner) => {
+            ResolvedType::Vec3(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::Vec4(inner) => {
+            ResolvedType::Vec4(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::Quat(inner) => {
+            ResolvedType::Quat(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::Mat3(inner) => {
+            ResolvedType::Mat3(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::Mat4(inner) => {
+            ResolvedType::Mat4(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
+        }
+        TypeExpr::Generic(name, arg) => {
+            // Generic type instantiation: Name<TypeArg>
+            // Look up the generic alias by name
+            let alias_id = ctx.registry.lookup(name.as_str());
+            match alias_id {
+                Some(id) => {
+                    // Check if it's a generic alias
+                    if let Some(TypeDef::GenericAlias(_alias_def)) = ctx.registry.get(id) {
+                        // TODO: Implement type substitution
+                        // For now, resolve the type argument and return it
+                        // This is a stub that allows parsing to work
+                        ctx.emit(
+                            span,
+                            ErrorClass::AliasTargetNotFound,
+                            format!(
+                                "generic alias instantiation `{name}<...>` is not yet fully supported"
+                            ),
+                        );
+                        resolve_type_expr(&arg.node, arg.span, ctx)
+                    } else {
+                        // Not a generic alias - treat as regular named type
+                        // This could be an error or we could ignore the type arg
+                        ctx.emit(
+                            span,
+                            ErrorClass::AliasTargetNotFound,
+                            format!("`{name}` is not a generic alias"),
+                        );
+                        ResolvedType::Named(ir::types::POISON_TYPE_ID)
+                    }
+                }
+                None => {
+                    ctx.emit(
+                        span,
+                        ErrorClass::UnresolvedType,
+                        format!("unresolved generic type `{name}`"),
+                    );
+                    ResolvedType::Named(ir::types::POISON_TYPE_ID)
+                }
+            }
+        }
+        TypeExpr::BitsInline(names) => ResolvedType::BitsInline(names.clone()),
     }
 }
 
@@ -599,6 +909,8 @@ fn is_delta_eligible(ty: &ResolvedType) -> bool {
                 | PrimitiveType::I64
                 | PrimitiveType::F32
                 | PrimitiveType::F64
+                | PrimitiveType::Fixed32
+                | PrimitiveType::Fixed64
         ),
         ResolvedType::SubByte(_) => true,
         _ => false,
@@ -777,6 +1089,200 @@ fn lower_tombstone(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Where clause lowering
+// ---------------------------------------------------------------------------
+
+fn lower_where_expr(expr: &WhereExpr) -> FieldConstraint {
+    match expr {
+        WhereExpr::And(left, right) => FieldConstraint::And(
+            Box::new(lower_where_expr(&left.node)),
+            Box::new(lower_where_expr(&right.node)),
+        ),
+        WhereExpr::Or(left, right) => FieldConstraint::Or(
+            Box::new(lower_where_expr(&left.node)),
+            Box::new(lower_where_expr(&right.node)),
+        ),
+        WhereExpr::Not(inner) => FieldConstraint::Not(Box::new(lower_where_expr(&inner.node))),
+        WhereExpr::Cmp { op, operand } => FieldConstraint::Cmp {
+            op: lower_cmp_op(*op),
+            operand: lower_where_operand(&operand.node),
+        },
+        WhereExpr::Range {
+            low,
+            high,
+            exclusive_high,
+        } => FieldConstraint::Range {
+            low: lower_where_operand(&low.node),
+            high: lower_where_operand(&high.node),
+            exclusive_high: *exclusive_high,
+        },
+        WhereExpr::LenCmp { op, operand } => FieldConstraint::LenCmp {
+            op: lower_cmp_op(*op),
+            operand: lower_where_operand(&operand.node),
+        },
+        WhereExpr::LenRange {
+            low,
+            high,
+            exclusive_high,
+        } => FieldConstraint::LenRange {
+            low: lower_where_operand(&low.node),
+            high: lower_where_operand(&high.node),
+            exclusive_high: *exclusive_high,
+        },
+    }
+}
+
+fn lower_cmp_op(op: CmpOp) -> IrCmpOp {
+    match op {
+        CmpOp::Eq => IrCmpOp::Eq,
+        CmpOp::Ne => IrCmpOp::Ne,
+        CmpOp::Lt => IrCmpOp::Lt,
+        CmpOp::Gt => IrCmpOp::Gt,
+        CmpOp::Le => IrCmpOp::Le,
+        CmpOp::Ge => IrCmpOp::Ge,
+    }
+}
+
+fn lower_where_operand(operand: &WhereOperand) -> ConstraintOperand {
+    match operand {
+        WhereOperand::Int(v) => ConstraintOperand::Int(*v),
+        WhereOperand::Float(v) => ConstraintOperand::Float(*v),
+        WhereOperand::String(s) => ConstraintOperand::String(s.clone()),
+        WhereOperand::Bool(b) => ConstraintOperand::Bool(*b),
+        WhereOperand::Value => ConstraintOperand::Int(0), // placeholder, value is implicit
+        WhereOperand::ConstRef(s) => ConstraintOperand::ConstRef(s.clone()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Constant evaluation
+// ---------------------------------------------------------------------------
+
+fn evaluate_constants(ctx: &mut LowerCtx) {
+    if ctx.const_decls.is_empty() {
+        return;
+    }
+
+    // Build dependency graph - collect data first to avoid borrow issues
+    let const_entries: Vec<(SmolStr, ConstDecl, Span)> = ctx
+        .const_decls
+        .iter()
+        .map(|(name, (c, span))| (name.clone(), c.clone(), *span))
+        .collect();
+
+    let mut deps: HashMap<SmolStr, Vec<SmolStr>> = HashMap::new();
+    for (name, c, _) in &const_entries {
+        let mut refs = Vec::new();
+        collect_const_refs(&c.value.node, &mut refs);
+        deps.insert(name.clone(), refs.into_iter().cloned().collect());
+    }
+
+    // Topological sort using Kahn's algorithm
+    let mut in_degree: HashMap<&SmolStr, usize> = HashMap::new();
+    for (name, _, _) in &const_entries {
+        in_degree.insert(name, 0);
+    }
+
+    for (name, refs) in &deps {
+        for ref_name in refs {
+            if ctx.const_decls.contains_key(ref_name) {
+                *in_degree.entry(name).or_insert(0) += 1;
+            }
+        }
+    }
+
+    let mut queue: Vec<&SmolStr> = in_degree
+        .iter()
+        .filter(|(_, &count)| count == 0)
+        .map(|(name, _)| *name)
+        .collect();
+
+    let mut eval_order: Vec<SmolStr> = Vec::new();
+
+    while let Some(name) = queue.pop() {
+        eval_order.push(name.clone());
+
+        // Find all consts that depend on this one
+        for (other_name, other_deps) in &deps {
+            if other_deps.contains(name) {
+                let count = in_degree.get_mut(other_name).unwrap();
+                *count -= 1;
+                if *count == 0 {
+                    queue.push(other_name);
+                }
+            }
+        }
+    }
+
+    // Evaluate in dependency order
+    for name in &eval_order {
+        // Clone the data we need to avoid borrow conflicts
+        let const_data = ctx.const_decls.get(name).cloned();
+        if let Some((c, span)) = const_data {
+            let resolved_type = resolve_type_expr(&c.ty.node, c.ty.span, ctx);
+            match eval_const_expr(&c.value.node, &ctx.constants) {
+                Some(value) => {
+                    ctx.constants.insert(
+                        name.clone(),
+                        ConstValue {
+                            ty: resolved_type,
+                            value,
+                            span,
+                        },
+                    );
+                }
+                None => {
+                    // Reference not found - emit error
+                    ctx.emit(
+                        c.value.span,
+                        ErrorClass::ConstRefNotFound,
+                        format!("could not evaluate constant `{}`", name),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn collect_const_refs<'a>(expr: &'a ConstExpr, refs: &mut Vec<&'a SmolStr>) {
+    match expr {
+        ConstExpr::ConstRef(name) => refs.push(name),
+        ConstExpr::BinOp { left, right, .. } => {
+            collect_const_refs(left, refs);
+            collect_const_refs(right, refs);
+        }
+        _ => {}
+    }
+}
+
+fn eval_const_expr(expr: &ConstExpr, values: &HashMap<SmolStr, ConstValue>) -> Option<i64> {
+    match expr {
+        ConstExpr::Int(v) => Some(*v),
+        ConstExpr::UInt(v) => Some(*v as i64),
+        ConstExpr::Hex(v) => Some(*v as i64),
+        ConstExpr::ConstRef(name) => values.get(name).map(|cv| cv.value),
+        ConstExpr::BinOp { op, left, right } => {
+            let left_val = eval_const_expr(left, values)?;
+            let right_val = eval_const_expr(right, values)?;
+
+            match op {
+                BinOpKind::Add => left_val.checked_add(right_val),
+                BinOpKind::Sub => left_val.checked_sub(right_val),
+                BinOpKind::Mul => left_val.checked_mul(right_val),
+                BinOpKind::Div => {
+                    if right_val == 0 {
+                        None // Division by zero — caught in validate phase
+                    } else {
+                        left_val.checked_div(right_val)
+                    }
+                }
+            }
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod dep_tests {
     use super::*;
@@ -851,7 +1357,9 @@ mod dep_tests {
         dep_ctx.schemas.insert("dep".to_string(), dep_compiled);
 
         let (_compiled, diags) = lower_with_deps(&root_schema, Some(&dep_ctx));
-        assert!(diags.iter().any(|d| d.message.contains("not found")));
+        assert!(diags
+            .iter()
+            .any(|d| d.message.contains("unknown import") || d.message.contains("not found")));
     }
 
     #[test]

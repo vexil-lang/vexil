@@ -111,7 +111,7 @@ fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
                 collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
             }
         }
-        TypeDef::Enum(_) | TypeDef::Flags(_) => {}
+        TypeDef::Enum(_) | TypeDef::Flags(_) | TypeDef::GenericAlias(_) => {}
     }
     ids
 }
@@ -122,11 +122,28 @@ fn collect_type_ids_from_resolved(ty: &ResolvedType, ids: &mut Vec<TypeId>) {
         ResolvedType::Optional(inner) | ResolvedType::Array(inner) => {
             collect_type_ids_from_resolved(inner, ids);
         }
+        ResolvedType::FixedArray(inner, _) => {
+            collect_type_ids_from_resolved(inner, ids);
+        }
+        ResolvedType::Set(inner) => {
+            collect_type_ids_from_resolved(inner, ids);
+        }
         ResolvedType::Map(k, v) | ResolvedType::Result(k, v) => {
             collect_type_ids_from_resolved(k, ids);
             collect_type_ids_from_resolved(v, ids);
         }
-        ResolvedType::Primitive(_) | ResolvedType::SubByte(_) | ResolvedType::Semantic(_) => {}
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            collect_type_ids_from_resolved(inner, ids);
+        }
+        ResolvedType::Primitive(_)
+        | ResolvedType::SubByte(_)
+        | ResolvedType::Semantic(_)
+        | ResolvedType::BitsInline(_) => {}
     }
 }
 
@@ -140,6 +157,10 @@ pub fn remap_resolved_type(ty: &ResolvedType, id_map: &HashMap<TypeId, TypeId>) 
         ResolvedType::Array(inner) => {
             ResolvedType::Array(Box::new(remap_resolved_type(inner, id_map)))
         }
+        ResolvedType::FixedArray(inner, size) => {
+            ResolvedType::FixedArray(Box::new(remap_resolved_type(inner, id_map)), *size)
+        }
+        ResolvedType::Set(inner) => ResolvedType::Set(Box::new(remap_resolved_type(inner, id_map))),
         ResolvedType::Map(k, v) => ResolvedType::Map(
             Box::new(remap_resolved_type(k, id_map)),
             Box::new(remap_resolved_type(v, id_map)),
@@ -148,9 +169,28 @@ pub fn remap_resolved_type(ty: &ResolvedType, id_map: &HashMap<TypeId, TypeId>) 
             Box::new(remap_resolved_type(ok, id_map)),
             Box::new(remap_resolved_type(err, id_map)),
         ),
+        ResolvedType::Vec2(inner) => {
+            ResolvedType::Vec2(Box::new(remap_resolved_type(inner, id_map)))
+        }
+        ResolvedType::Vec3(inner) => {
+            ResolvedType::Vec3(Box::new(remap_resolved_type(inner, id_map)))
+        }
+        ResolvedType::Vec4(inner) => {
+            ResolvedType::Vec4(Box::new(remap_resolved_type(inner, id_map)))
+        }
+        ResolvedType::Quat(inner) => {
+            ResolvedType::Quat(Box::new(remap_resolved_type(inner, id_map)))
+        }
+        ResolvedType::Mat3(inner) => {
+            ResolvedType::Mat3(Box::new(remap_resolved_type(inner, id_map)))
+        }
+        ResolvedType::Mat4(inner) => {
+            ResolvedType::Mat4(Box::new(remap_resolved_type(inner, id_map)))
+        }
         ResolvedType::Primitive(_) | ResolvedType::SubByte(_) | ResolvedType::Semantic(_) => {
             ty.clone()
         }
+        ResolvedType::BitsInline(_) => ty.clone(),
     }
 }
 
@@ -163,6 +203,7 @@ pub fn remap_type_def(def: &TypeDef, id_map: &HashMap<TypeId, TypeId>) -> TypeDe
         TypeDef::Config(c) => TypeDef::Config(remap_config_def(c, id_map)),
         TypeDef::Enum(e) => TypeDef::Enum(e.clone()),
         TypeDef::Flags(f) => TypeDef::Flags(f.clone()),
+        TypeDef::GenericAlias(a) => TypeDef::GenericAlias(a.clone()),
     }
 }
 
@@ -175,6 +216,7 @@ pub fn type_def_name(def: &TypeDef) -> &str {
         TypeDef::Union(u) => u.name.as_str(),
         TypeDef::Newtype(n) => n.name.as_str(),
         TypeDef::Config(c) => c.name.as_str(),
+        TypeDef::GenericAlias(a) => a.name.as_str(),
     }
 }
 
@@ -190,6 +232,7 @@ fn remap_field_def(f: &FieldDef, id_map: &HashMap<TypeId, TypeId>) -> FieldDef {
         resolved_type: remap_resolved_type(&f.resolved_type, id_map),
         encoding: f.encoding.clone(),
         annotations: f.annotations.clone(),
+        constraint: f.constraint.clone(),
     }
 }
 

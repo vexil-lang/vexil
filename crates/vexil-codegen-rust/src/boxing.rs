@@ -95,7 +95,7 @@ fn walk_for_boxing(
                 _ => {}
             }
         }
-        ResolvedType::Array(_) | ResolvedType::Map(_, _) => {
+        ResolvedType::Array(_) | ResolvedType::Set(_) | ResolvedType::Map(_, _) => {
             // Heap-allocated containers — no boxing needed through them
         }
         _ => {} // Primitive, SubByte, Semantic — terminal

@@ -1,0 +1,7 @@
+namespace test.fixed
+
+message SensorReading {
+    temperature @0 : fixed32  # Q16.16 degrees Celsius
+    pressure    @1 : fixed64  # Q32.32 Pascals
+    delta_temp  @2 : fixed32 @varint
+}

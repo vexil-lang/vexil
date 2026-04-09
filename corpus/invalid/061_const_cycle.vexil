@@ -1,0 +1,4 @@
+namespace test.consts
+
+const A : u32 = B + 1
+const B : u32 = A + 1

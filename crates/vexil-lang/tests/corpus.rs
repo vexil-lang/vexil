@@ -187,6 +187,54 @@ fn valid_032_reserved_variant_names() {
     parse_valid("032_reserved_variant_names.vexil");
 }
 
+#[test]
+fn valid_035_const() {
+    parse_valid("035_const.vexil");
+}
+
+#[test]
+fn valid_033_fixed_point() {
+    parse_valid("033_fixed_point.vexil");
+}
+
+#[test]
+fn valid_034_type_alias() {
+    parse_valid("034_type_alias.vexil");
+}
+
+#[test]
+fn valid_036_where_clause() {
+    parse_valid("036_where_clause.vexil");
+}
+
+// =========================================================================
+// Where clause semantic validation errors
+// =========================================================================
+
+#[test]
+fn invalid_062_where_type_mismatch() {
+    parse_invalid(
+        "062_where_type_mismatch.vexil",
+        ErrorClass::WhereClauseTypeMismatch,
+    );
+}
+
+#[test]
+fn invalid_063_where_range_invalid() {
+    parse_invalid(
+        "063_where_range_invalid.vexil",
+        ErrorClass::WhereClauseRangeInvalid,
+    );
+}
+
+#[test]
+fn invalid_064_where_len_invalid() {
+    parse_invalid(
+        "064_where_len_invalid.vexil",
+        ErrorClass::WhereClauseLenOnNonCollection,
+    );
+}
+
 // Structure errors
 #[test]
 fn invalid_001_missing_namespace() {
@@ -229,8 +277,18 @@ fn invalid_042_version_not_semver() {
 
 // Lexer errors
 #[test]
-fn invalid_021_invalid_escape() {
-    parse_invalid("021_invalid_escape.vexil", ErrorClass::InvalidEscape);
+fn invalid_059_alias_chain() {
+    parse_invalid("059_alias_chain.vexil", ErrorClass::AliasTargetIsAlias);
+}
+
+#[test]
+fn invalid_060_const_div_zero() {
+    parse_invalid("060_const_div_zero.vexil", ErrorClass::ConstDivByZero);
+}
+
+#[test]
+fn invalid_061_const_cycle() {
+    parse_invalid("061_const_cycle.vexil", ErrorClass::ConstCycleDetected);
 }
 
 // Namespace errors

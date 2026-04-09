@@ -29,7 +29,39 @@ impl<'a> BitReader<'a> {
     }
 
     /// Read `count` bits LSB-first into a u64.
+    ///
+    /// Fast path: if the requested bits fit entirely within the current byte,
+    /// extract them with a single mask+shift instead of looping.
     pub fn read_bits(&mut self, count: u8) -> Result<u64, DecodeError> {
+        debug_assert!(count <= 64, "read_bits: count must be <= 64");
+        if count == 0 {
+            return Ok(0);
+        }
+
+        if self.byte_pos >= self.data.len() {
+            return Err(DecodeError::UnexpectedEof);
+        }
+
+        let remaining = 8 - self.bit_offset;
+
+        // Fast path: all requested bits are in the current byte
+        if count <= remaining {
+            let byte = self.data[self.byte_pos];
+            let mask = if count >= 8 {
+                u8::MAX
+            } else {
+                (1u8 << count) - 1
+            };
+            let result = u64::from((byte >> self.bit_offset) & mask);
+            self.bit_offset += count;
+            if self.bit_offset == 8 {
+                self.byte_pos += 1;
+                self.bit_offset = 0;
+            }
+            return Ok(result);
+        }
+
+        // Slow path: bits span byte boundaries
         let mut result: u64 = 0;
         for i in 0..count {
             if self.byte_pos >= self.data.len() {
@@ -256,6 +288,71 @@ impl<'a> BitReader<'a> {
         Ok(bytes)
     }
 
+    /// Read `len` bytes as a zero-copy slice, aligning to a byte boundary first.
+    ///
+    /// The returned slice borrows from the original buffer (lifetime `'a`).
+    /// This is useful when you need to reference data without allocating.
+    pub fn read_bytes_ref(&mut self, len: usize) -> Result<&'a [u8], DecodeError> {
+        self.flush_to_byte_boundary();
+        if self.remaining() < len {
+            return Err(DecodeError::UnexpectedEof);
+        }
+        let slice = &self.data[self.byte_pos..self.byte_pos + len];
+        self.byte_pos += len;
+        Ok(slice)
+    }
+
+    /// Read a length-prefixed byte slice without copying.
+    ///
+    /// Reads a LEB128 length prefix, validates against [`MAX_BYTES_LENGTH`](crate::MAX_BYTES_LENGTH),
+    /// and returns a slice backed by the original buffer (lifetime `'a`).
+    ///
+    /// For invalid UTF-8, returns [`DecodeError::InvalidUtf8`].
+    pub fn read_bytes_var_ref(&mut self) -> Result<&'a [u8], DecodeError> {
+        self.flush_to_byte_boundary();
+        let len = self.read_leb128(crate::MAX_LENGTH_PREFIX_BYTES)?;
+        if len > MAX_BYTES_LENGTH {
+            return Err(DecodeError::LimitExceeded {
+                field: "bytes",
+                limit: MAX_BYTES_LENGTH,
+                actual: len,
+            });
+        }
+        let len = len as usize;
+        if self.remaining() < len {
+            return Err(DecodeError::UnexpectedEof);
+        }
+        let slice = &self.data[self.byte_pos..self.byte_pos + len];
+        self.byte_pos += len;
+        Ok(slice)
+    }
+
+    /// Read a length-prefixed UTF-8 string as a zero-copy reference.
+    ///
+    /// Reads a LEB128 length prefix, validates against [`MAX_BYTES_LENGTH`](crate::MAX_BYTES_LENGTH),
+    /// validates UTF-8, and returns a `&str` backed by the original buffer (lifetime `'a`).
+    ///
+    /// For invalid UTF-8, returns [`DecodeError::InvalidUtf8`].
+    pub fn read_string_ref(&mut self) -> Result<&'a str, DecodeError> {
+        self.flush_to_byte_boundary();
+        let len = self.read_leb128(crate::MAX_LENGTH_PREFIX_BYTES)?;
+        if len > MAX_BYTES_LENGTH {
+            return Err(DecodeError::LimitExceeded {
+                field: "string",
+                limit: MAX_BYTES_LENGTH,
+                actual: len,
+            });
+        }
+        let len = len as usize;
+        if self.remaining() < len {
+            return Err(DecodeError::UnexpectedEof);
+        }
+        let bytes = &self.data[self.byte_pos..self.byte_pos + len];
+        let s = std::str::from_utf8(bytes).map_err(|_| DecodeError::InvalidUtf8)?;
+        self.byte_pos += len;
+        Ok(s)
+    }
+
     /// Read all remaining bytes from the current position to the end.
     /// Flushes to byte boundary first. Returns an empty Vec if no bytes remain.
     pub fn read_remaining(&mut self) -> Vec<u8> {
@@ -448,15 +545,161 @@ mod tests {
     }
 
     #[test]
-    fn flush_reader() {
+    fn read_bytes_ref_basic() {
+        // read_bytes_ref reads raw bytes with no length prefix
+        let data = [0x01, 0x02, 0x03, 0x04, 0x05, 0xFF];
+        let mut r = BitReader::new(&data);
+        let slice = r.read_bytes_ref(5).unwrap();
+        assert_eq!(slice, &[0x01, 0x02, 0x03, 0x04, 0x05]);
+        // Verify the slice has the correct lifetime (borrowed from input)
+        assert_eq!(slice.as_ptr(), data[0..5].as_ptr());
+        // Reader positioned after the slice
+        assert_eq!(r.read_u8().unwrap(), 0xFF);
+    }
+
+    #[test]
+    fn read_bytes_ref_eof() {
+        let data = [0x01, 0x02];
+        let mut r = BitReader::new(&data);
+        assert_eq!(r.read_bytes_ref(5).unwrap_err(), DecodeError::UnexpectedEof);
+    }
+
+    #[test]
+    fn read_bytes_var_ref_roundtrip() {
         let mut w = BitWriter::new();
-        w.write_bits(0b101, 3);
-        w.flush_to_byte_boundary();
-        w.write_u8(0xAB);
+        w.write_bytes(&[0x01, 0x02, 0x03, 0x04]);
         let b = w.finish();
         let mut r = BitReader::new(&b);
+        let slice = r.read_bytes_var_ref().unwrap();
+        assert_eq!(slice, &[0x01, 0x02, 0x03, 0x04]);
+    }
+
+    #[test]
+    fn read_bytes_var_ref_zero_copy() {
+        let data = [0x04, 0x41, 0x42, 0x43, 0x44]; // LEB128(4) + "ABCD"
+        let mut r = BitReader::new(&data);
+        let slice = r.read_bytes_var_ref().unwrap();
+        // Verify zero-copy: slice points into original buffer
+        assert_eq!(slice.as_ptr(), data[1..5].as_ptr());
+    }
+
+    #[test]
+    fn read_bytes_var_ref_limit_exceeded() {
+        let mut w = BitWriter::new();
+        w.write_leb128(MAX_BYTES_LENGTH + 1);
+        let b = w.finish();
+        let mut r = BitReader::new(&b);
+        assert_eq!(
+            r.read_bytes_var_ref().unwrap_err(),
+            DecodeError::LimitExceeded {
+                field: "bytes",
+                limit: MAX_BYTES_LENGTH,
+                actual: MAX_BYTES_LENGTH + 1,
+            }
+        );
+    }
+
+    #[test]
+    fn read_string_ref_roundtrip() {
+        let mut w = BitWriter::new();
+        w.write_string("hello");
+        let b = w.finish();
+        let mut r = BitReader::new(&b);
+        let s = r.read_string_ref().unwrap();
+        assert_eq!(s, "hello");
+    }
+
+    #[test]
+    fn read_string_ref_zero_copy() {
+        let data = [0x05, b'h', b'e', b'l', b'l', b'o']; // LEB128(5) + "hello"
+        let mut r = BitReader::new(&data);
+        let s = r.read_string_ref().unwrap();
+        // Verify zero-copy: string points into original buffer
+        assert_eq!(s.as_ptr(), data[1..6].as_ptr());
+    }
+
+    #[test]
+    fn read_string_ref_invalid_utf8() {
+        let mut w = BitWriter::new();
+        w.write_leb128(2);
+        w.write_raw_bytes(&[0xFF, 0xFE]);
+        let b = w.finish();
+        let mut r = BitReader::new(&b);
+        assert_eq!(r.read_string_ref().unwrap_err(), DecodeError::InvalidUtf8);
+    }
+
+    #[test]
+    fn read_string_ref_limit_exceeded() {
+        let mut w = BitWriter::new();
+        w.write_leb128(MAX_BYTES_LENGTH + 1);
+        let b = w.finish();
+        let mut r = BitReader::new(&b);
+        assert_eq!(
+            r.read_string_ref().unwrap_err(),
+            DecodeError::LimitExceeded {
+                field: "string",
+                limit: MAX_BYTES_LENGTH,
+                actual: MAX_BYTES_LENGTH + 1,
+            }
+        );
+    }
+
+    #[test]
+    fn read_string_ref_eof_mid_string() {
+        // Length prefix says 10 bytes, but only 3 available
+        let mut w = BitWriter::new();
+        w.write_leb128(10);
+        w.write_raw_bytes(&[0x41, 0x42, 0x43]); // "ABC"
+        let b = w.finish();
+        let mut r = BitReader::new(&b);
+        assert_eq!(r.read_string_ref().unwrap_err(), DecodeError::UnexpectedEof);
+    }
+
+    #[test]
+    fn zero_copy_methods_after_bit_reads() {
+        // Test that zero-copy methods properly flush to byte boundary
+        let mut w = BitWriter::new();
+        w.write_bits(0b101, 3); // 3 bits
+        w.flush_to_byte_boundary();
+        w.write_string("test");
+        let b = w.finish();
+
+        let mut r = BitReader::new(&b);
         assert_eq!(r.read_bits(3).unwrap(), 0b101);
-        r.flush_to_byte_boundary();
-        assert_eq!(r.read_u8().unwrap(), 0xAB);
+        // read_string_ref should flush and read correctly
+        let s = r.read_string_ref().unwrap();
+        assert_eq!(s, "test");
+    }
+
+    #[test]
+    fn read_string_equivalence() {
+        // Ensure read_string and read_string_ref produce equivalent results
+        let mut w = BitWriter::new();
+        w.write_string("vexil rocks 🚀");
+        let b = w.finish();
+
+        let mut r1 = BitReader::new(&b);
+        let mut r2 = BitReader::new(&b);
+
+        let owned = r1.read_string().unwrap();
+        let borrowed = r2.read_string_ref().unwrap();
+
+        assert_eq!(owned, borrowed);
+    }
+
+    #[test]
+    fn read_bytes_equivalence() {
+        // Ensure read_bytes and read_bytes_var_ref produce equivalent results
+        let mut w = BitWriter::new();
+        w.write_bytes(&[0x00, 0x01, 0x02, 0x03]);
+        let b = w.finish();
+
+        let mut r1 = BitReader::new(&b);
+        let mut r2 = BitReader::new(&b);
+
+        let owned = r1.read_bytes().unwrap();
+        let borrowed = r2.read_bytes_var_ref().unwrap();
+
+        assert_eq!(owned, borrowed);
     }
 }

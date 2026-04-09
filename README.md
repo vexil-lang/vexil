@@ -80,14 +80,109 @@ const decoded = decodeSensorReading(r);
 
 ## What Vexil does
 
-- `u1`..`u63` and `i2`..`i63` occupy exactly N bits on the wire, LSB-first
+- `u1`..`u64` and `i2`..`i64` occupy exactly N bits on the wire, LSB-first
 - `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), and `@delta` (per-field delta from previous value) are declared in the schema
-- Six declaration kinds: `message`, `enum`, `flags`, `union`, `newtype`, `config`
+- **Eight declaration kinds**: `message`, `enum`, `flags`, `union`, `newtype`, `config`, `type` (alias), `const`
+- **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) for high-precision fractional values
+- **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` for graphics and simulation
+- **Fixed-size arrays**: `array<T, N>` with no length prefix on the wire
+- **Set type**: `set<T>` for unordered unique collections with canonical sort order
+- **Inline bitfields**: `bits { a, b, c }` for anonymous flags within a message
+- **Type aliases**: `type UserId = u64` for transparent type synonyms
+- **Compile-time constants**: `const MaxSize = 1024` for use in constraints and array sizes
+- **Where clauses**: `field @0 : u32 where value > 0` for declarative validation constraints
 - BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
 - Rust, TypeScript, and Go backends from the same schema, byte-identical output verified by compliance vectors
 - Same data always produces the same bytes, enabling content addressing and replay detection
 - Every invalid input yields a distinct error with file, line, column, and a human-readable description
-- 83-file conformance corpus (27 valid, 56 invalid) that any implementation must pass
+- 105-file conformance corpus (41 valid, 64 invalid) that any implementation must pass
+
+## v1.0 Feature Highlights
+
+### Fixed-Point Types
+High-precision fractional values with deterministic encoding:
+
+```vexil
+message Position {
+    latitude  @0 : fixed32  # Q16.16: ~0.000015 precision
+    longitude @1 : fixed32
+    altitude  @2 : fixed64  # Q32.32: extremely precise
+}
+```
+
+### Geometric Types
+Graphics and simulation primitives with column-major matrix layout:
+
+```vexil
+message Transform {
+    position    @0 : vec3<f32>
+    rotation    @1 : quat<f32>     # quaternion (x, y, z, w)
+    scale       @2 : vec3<f32>
+    matrix      @3 : mat4<f32>     # column-major 4x4 transform
+}
+```
+
+### Fixed-Size Arrays
+No length prefix on the wire — size is part of the schema:
+
+```vexil
+const VertexCount = 256
+
+message Mesh {
+    vertices @0 : array<vec3<f32>, VertexCount>
+    uvs      @1 : array<vec2<f32>, VertexCount>
+    indices  @2 : array<u16, 512>
+}
+```
+
+### Set Type
+Unordered unique collections with canonical encoding order:
+
+```vexil
+message TagSet {
+    active_tags @0 : set<string>    # deduplicated, sorted
+    priorities  @1 : set<u8>       # validated unique
+}
+```
+
+### Inline Bitfields
+Anonymous flags for compact permission/storage bits:
+
+```vexil
+message FileHeader {
+    version   @0 : u8
+    perms     @1 : bits { r, w, x, hidden, system, archive }
+    flags     @2 : bits { compressed, encrypted, indexed }
+}
+```
+
+### Type Aliases and Constants
+Self-documenting schemas with compile-time values:
+
+```vexil
+type UserId = u64
+type SessionToken = [u8; 32]
+
+const MaxPacketSize : u32 = 65536
+const MaxUsers : u32 = 10000
+
+message Packet {
+    sender @0 : UserId
+    data   @1 : array<u8, MaxPacketSize> where len(value) <= MaxPacketSize
+}
+```
+
+### Where Clauses
+Declarative validation constraints:
+
+```vexil
+message UserProfile {
+    age      @0 : u8  where value in 0..150
+    score    @1 : i32 where value >= 0 && value <= 100
+    username @2 : string where len(value) in 3..32
+    email    @3 : string where value matches "^[\\w.-]+@[\\w.-]+\\.\\w+$"
+}
+```
 
 ## Comparison
 
@@ -98,7 +193,7 @@ const decoded = decodeSensorReading(r);
 | Schema hash (mismatch detection) | **BLAKE3** | -- | -- | -- |
 | LSB-first bit packing | **Yes** | -- | -- | -- |
 | Self-describing wire format | No | Optional | No | Optional |
-| Zero-copy decode | No | No | **Yes** | **Yes** |
+| Zero-copy decode | **Yes** | No | **Yes** | **Yes** |
 | Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
 | Schema evolution | **Yes** | **Yes** | **Yes** | **Yes** |
 | Language targets | Rust, TS, Go | **Many** | **Many** | **Many** |
@@ -171,7 +266,7 @@ Error: duplicate field name
 
 ```toml
 [dependencies]
-vexil-lang = "0.4"
+vexil-lang = "1.0"
 ```
 
 ```rust
@@ -194,8 +289,8 @@ spec/
   vexil-spec.md          # Language specification (normative, S1-S14)
   vexil-grammar.peg      # Formal PEG grammar
 corpus/
-  valid/                 # 27 schemas -- conformant impl must accept all
-  invalid/               # 56 schemas -- conformant impl must reject all
+  valid/                 # 41 schemas -- conformant impl must accept all
+  invalid/               # 64 schemas -- conformant impl must reject all
   projects/              # Multi-file integration tests
 compliance/
   vectors/               # Golden byte vectors (JSON), cross-implementation contract

@@ -1,0 +1,6 @@
+namespace test.where_range_invalid
+
+message Invalid {
+    # Error: range expression on non-numeric type (string)
+    name @0 : string where value in "a".."z"
+}

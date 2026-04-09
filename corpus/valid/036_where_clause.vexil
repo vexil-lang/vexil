@@ -1,0 +1,44 @@
+namespace test.where_clause
+
+const MinSize : u32 = 10
+const MaxSize : u32 = 100
+
+message User {
+    # Basic comparisons
+    age @0 : u32 where value >= 0 && value <= 150
+
+    # Range expressions
+    score @1 : u32 where value in 0..100
+
+    # Exclusive upper bound
+    percentile @2 : u8 where value in 0..<101
+
+    # Length constraints on strings
+    username @3 : string where len(value) in 3..32
+
+    # Length with exclusive upper bound
+    email @4 : string where len(value) in 5..<256
+
+    # Length comparison
+    bio @5 : string where len(value) <= 500
+
+    # Multiple constraints combined
+    password @6 : string where len(value) >= 8 && len(value) <= 128
+
+    # Using const references in constraints
+    buffer @7 : array<u8> where len(value) >= MinSize && len(value) <= MaxSize
+
+    # Boolean with constraints (always valid, but allowed)
+    active @8 : bool where value == true || value == false
+
+    # Float range
+    rating @9 : f32 where value in 0.0..5.0
+
+    # Enum-like constraint on integer
+    status @10 : u8 where value in 0..4
+}
+
+# Message with optional fields having constraints
+message Config {
+    port @0 : optional<u16> where value in 1024..65535
+}

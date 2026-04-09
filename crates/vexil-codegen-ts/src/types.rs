@@ -19,6 +19,15 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             let inner_str = ts_type(inner, registry);
             format!("{inner_str}[]")
         }
+        ResolvedType::FixedArray(inner, _size) => {
+            // TypeScript doesn't have native fixed array types, use regular array
+            let inner_str = ts_type(inner, registry);
+            format!("{inner_str}[]")
+        }
+        ResolvedType::Set(inner) => {
+            let inner_str = ts_type(inner, registry);
+            format!("Set<{inner_str}>")
+        }
         ResolvedType::Map(k, v) => {
             let k_str = ts_type(k, registry);
             let v_str = ts_type(v, registry);
@@ -29,6 +38,7 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             let err_str = ts_type(err, registry);
             format!("{{ ok: {ok_str} }} | {{ err: {err_str} }}")
         }
+        ResolvedType::BitsInline(_) => "number".to_string(),
         _ => "unknown".to_string(),
     }
 }
@@ -40,6 +50,7 @@ fn primitive_type(p: &PrimitiveType) -> &'static str {
         PrimitiveType::I8 | PrimitiveType::I16 | PrimitiveType::I32 => "number",
         PrimitiveType::U64 | PrimitiveType::I64 => "bigint",
         PrimitiveType::F32 | PrimitiveType::F64 => "number",
+        PrimitiveType::Fixed32 | PrimitiveType::Fixed64 => "number",
         PrimitiveType::Void => "void",
     }
 }

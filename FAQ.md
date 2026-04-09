@@ -10,17 +10,17 @@ Other differences:
 - **No self-description on the wire** — the schema is the contract, keeping messages compact
 - **Delta encoding** — `@delta` annotation generates stateful encoder/decoder pairs that transmit field-level deltas, reducing wire size for streaming use cases
 
-Trade-offs: Vexil does not yet support formal schema evolution rules, and does not offer zero-copy decoding. Language targets are currently Rust and TypeScript; more backends are planned.
+Trade-offs: Vexil does not yet support formal schema evolution rules. Language targets are Rust, TypeScript, and Go; more backends are planned.
 
 ## Is Vexil production-ready?
 
-Vexil is pre-1.0. The language spec is draft, and the wire format may change before v1.0. It has an 83-file conformance corpus (27 valid, 56 invalid), 436+ tests across the workspace, and cross-implementation compliance vectors verified between Rust and TypeScript. The BLAKE3 schema hash provides a safety net against incompatible changes.
+Vexil v1.0 is in draft. The language spec is stable, the wire format is frozen, and it has a 105-file conformance corpus (41 valid, 64 invalid), 540+ tests across the workspace, and cross-implementation compliance vectors verified between Rust and TypeScript. The BLAKE3 schema hash provides a safety net against incompatible changes.
 
-If your system cannot tolerate wire format changes between versions, wait for v1.0.
+If your system cannot tolerate wire format changes between versions, wait for v1.0 final.
 
 ## What languages are supported?
 
-Rust and TypeScript code generation both ship today. Both backends produce byte-identical wire output, verified by the compliance vector suite. The [`CodegenBackend`](https://docs.rs/vexil-lang/latest/vexil_lang/codegen/trait.CodegenBackend.html) trait makes adding new language backends straightforward — contributions are welcome.
+Rust, TypeScript, and Go code generation all ship today. Rust and TypeScript backends produce byte-identical wire output, verified by the compliance vector suite. Go backend is functional and will gain compliance vectors in a future release. The [`CodegenBackend`](https://docs.rs/vexil-lang/latest/vexil_lang/codegen/trait.CodegenBackend.html) trait makes adding new language backends straightforward — contributions are welcome.
 
 ## Why not just use `#[repr(packed)]` or C bitfields?
 

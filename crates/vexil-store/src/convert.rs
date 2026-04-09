@@ -199,6 +199,8 @@ fn primitive_type_to_value(p: &PrimitiveType) -> Value {
         PrimitiveType::I64 => "I64",
         PrimitiveType::F32 => "F32",
         PrimitiveType::F64 => "F64",
+        PrimitiveType::Fixed32 => "Fixed32",
+        PrimitiveType::Fixed64 => "Fixed64",
         PrimitiveType::Void => "Void",
     };
     Value::Enum(name.to_string())

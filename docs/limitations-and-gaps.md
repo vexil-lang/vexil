@@ -3,7 +3,7 @@
 A living document tracking what has been validated, what is known to be
 limited, and where improvements would have the most impact.
 
-Last updated: 2026-03-28
+Last updated: 2026-04-09
 
 ## What Was Validated
 
@@ -28,9 +28,6 @@ Last updated: 2026-03-28
 
 ## Known Limitations
 
-- **No zero-copy decode:** BitReader copies data for strings and byte arrays.
-  Applications needing zero-copy access to large payloads should consider
-  a bytes-reference mode (future work).
 - **No streaming / incremental decode:** The entire message must be available
   in memory before decoding starts. Not suitable for unbounded streams
   without framing.

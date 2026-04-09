@@ -17,12 +17,30 @@ pub struct BitWriter {
 impl BitWriter {
     /// Create a new, empty `BitWriter`.
     pub fn new() -> Self {
+        Self::with_capacity(64)
+    }
+
+    /// Create a `BitWriter` with pre-allocated buffer capacity.
+    ///
+    /// Use this when the approximate wire size is known (from `wire_size_bits`)
+    /// to avoid repeated reallocations during encoding.
+    pub fn with_capacity(bytes: usize) -> Self {
         Self {
-            buf: Vec::new(),
+            buf: Vec::with_capacity(bytes),
             current_byte: 0,
             bit_offset: 0,
             recursion_depth: 0,
         }
+    }
+
+    /// Reset the writer for reuse, keeping the allocated buffer.
+    ///
+    /// This avoids re-allocation when encoding multiple messages of similar size.
+    pub fn reset(&mut self) {
+        self.buf.clear();
+        self.current_byte = 0;
+        self.bit_offset = 0;
+        self.recursion_depth = 0;
     }
 
     /// Internal: align to a byte boundary without the "empty = zero byte" rule.
@@ -36,7 +54,37 @@ impl BitWriter {
     }
 
     /// Write `count` bits from `value`, LSB first.
+    ///
+    /// Fast path: if the value fits entirely within the remaining bits of the
+    /// current byte, no loop is needed — a single bitwise OR suffices.
     pub fn write_bits(&mut self, value: u64, count: u8) {
+        debug_assert!(count <= 64, "write_bits: count must be <= 64");
+        if count == 0 {
+            return;
+        }
+
+        let remaining = 8 - self.bit_offset;
+
+        // Fast path: value fits entirely in the current byte.
+        // Mask to `count` bits (safe for count=8 since we branch),
+        // then shift into position within the byte.
+        if count <= remaining {
+            let masked = if count >= 8 {
+                value as u8
+            } else {
+                (value as u8) & ((1u8 << count) - 1)
+            };
+            self.current_byte |= masked << self.bit_offset;
+            self.bit_offset += count;
+            if self.bit_offset == 8 {
+                self.buf.push(self.current_byte);
+                self.current_byte = 0;
+                self.bit_offset = 0;
+            }
+            return;
+        }
+
+        // Slow path: value spans byte boundaries — write bits one at a time
         let mut v = value;
         for _ in 0..count {
             let bit = (v & 1) as u8;

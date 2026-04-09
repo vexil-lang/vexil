@@ -1,0 +1,6 @@
+namespace test.where_type_mismatch
+
+message Invalid {
+    # Error: string literal in comparison with numeric field
+    count @0 : u32 where value == "hello"
+}

@@ -16,6 +16,60 @@ pub use types::{
 use crate::ast::{DefaultValue, EnumBacking};
 use crate::span::Span;
 use smol_str::SmolStr;
+use std::collections::HashMap;
+
+/// Constraint expression for field validation.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldConstraint {
+    /// Binary logical AND
+    And(Box<FieldConstraint>, Box<FieldConstraint>),
+    /// Binary logical OR
+    Or(Box<FieldConstraint>, Box<FieldConstraint>),
+    /// Logical NOT
+    Not(Box<FieldConstraint>),
+    /// Comparison: value op operand
+    Cmp {
+        op: CmpOp,
+        operand: ConstraintOperand,
+    },
+    /// Range check: value in [low, high) or [low, high]
+    Range {
+        low: ConstraintOperand,
+        high: ConstraintOperand,
+        exclusive_high: bool,
+    },
+    /// Length comparison: len(value) op operand
+    LenCmp {
+        op: CmpOp,
+        operand: ConstraintOperand,
+    },
+    /// Length range: len(value) in range
+    LenRange {
+        low: ConstraintOperand,
+        high: ConstraintOperand,
+        exclusive_high: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CmpOp {
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
+}
+
+/// Operands in constraint expressions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstraintOperand {
+    Int(i64),
+    Float(f64),
+    String(String),
+    Bool(bool),
+    ConstRef(SmolStr),
+}
 
 /// A single-file compilation result.
 ///
@@ -32,6 +86,26 @@ pub struct CompiledSchema {
     pub registry: TypeRegistry,
     /// Type IDs of declarations **defined** in this file (excludes imports).
     pub declarations: Vec<TypeId>,
+    /// Evaluated constant values (const name -> value).
+    pub constants: HashMap<SmolStr, ConstValue>,
+}
+
+// Compile-time assertion: CompiledSchema must be Send + Sync for
+// potential future parallel compilation and cross-thread sharing.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<CompiledSchema>();
+};
+
+/// A compiled constant value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstValue {
+    /// The constant's resolved type.
+    pub ty: ResolvedType,
+    /// The evaluated value (stored as i64 for all integral types).
+    pub value: i64,
+    /// Source span for error reporting.
+    pub span: Span,
 }
 
 /// A type definition in the Vexil IR.
@@ -53,6 +127,9 @@ pub enum TypeDef {
     Newtype(NewtypeDef),
     /// A compile-time configuration record (not encoded on the wire).
     Config(ConfigDef),
+    /// A generic type alias with type parameters.
+    /// Stores the alias definition with type parameters and target type expression.
+    GenericAlias(GenericAliasDef),
 }
 
 /// A message type definition with ordered, typed fields.
@@ -75,6 +152,7 @@ pub struct FieldDef {
     pub resolved_type: ResolvedType,
     pub encoding: FieldEncoding,
     pub annotations: ResolvedAnnotations,
+    pub constraint: Option<FieldConstraint>,
 }
 
 #[derive(Debug, Clone)]
@@ -170,5 +248,23 @@ pub struct ConfigFieldDef {
     pub span: Span,
     pub resolved_type: ResolvedType,
     pub default_value: DefaultValue,
+    pub annotations: ResolvedAnnotations,
+}
+
+/// A generic type alias definition.
+///
+/// Generic aliases are stored with their type parameters and target type.
+/// When a generic alias is used with type arguments (e.g., `Vec3<fixed64>`),
+/// the type arguments are substituted into the target type to produce the
+/// final resolved type.
+#[derive(Debug, Clone)]
+pub struct GenericAliasDef {
+    pub name: SmolStr,
+    pub span: Span,
+    /// Type parameter names (e.g., `["T"]` for `type Vec3<T> = ...`).
+    pub type_params: Vec<SmolStr>,
+    /// The target type expression with unresolved type parameters.
+    /// Type arguments are substituted into this to produce the resolved type.
+    pub target_type: crate::ast::TypeExpr,
     pub annotations: ResolvedAnnotations,
 }

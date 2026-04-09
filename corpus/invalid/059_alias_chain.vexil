@@ -1,0 +1,4 @@
+namespace test.aliases
+
+type B = u32
+type A = B  # Error: alias A references alias B; must reference terminal type

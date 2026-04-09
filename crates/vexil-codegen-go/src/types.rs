@@ -31,6 +31,10 @@ pub fn go_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             let err_str = go_type(err, registry);
             format!("Result[{ok_str}, {err_str}]")
         }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len() as u8;
+            containing_int_type(bits).to_string()
+        }
         _ => "interface{}".to_string(),
     }
 }
@@ -48,6 +52,8 @@ fn primitive_type(p: &PrimitiveType) -> &'static str {
         PrimitiveType::I64 => "int64",
         PrimitiveType::F32 => "float32",
         PrimitiveType::F64 => "float64",
+        PrimitiveType::Fixed32 => "int32",
+        PrimitiveType::Fixed64 => "int64",
         PrimitiveType::Void => "struct{}",
     }
 }
@@ -60,6 +66,16 @@ fn semantic_type(s: &SemanticType) -> &'static str {
         SemanticType::Uuid => "[16]byte",
         SemanticType::Timestamp => "int64",
         SemanticType::Hash => "[32]byte",
+    }
+}
+
+/// Returns the smallest unsigned Go integer type that can hold `bits` bits.
+pub(crate) fn containing_int_type(bits: u8) -> &'static str {
+    match bits {
+        0..=8 => "uint8",
+        9..=16 => "uint16",
+        17..=32 => "uint32",
+        _ => "uint64",
     }
 }
 

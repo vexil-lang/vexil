@@ -102,6 +102,14 @@ fn decode_resolved(
             }
             Ok(Value::Array(items))
         }
+        ResolvedType::Set(elem) => {
+            let count = r.read_leb128(4)? as usize;
+            let mut items = Vec::with_capacity(count.min(1024));
+            for _ in 0..count {
+                items.push(decode_resolved(elem, registry, r)?);
+            }
+            Ok(Value::Set(items))
+        }
         ResolvedType::Map(key, val) => {
             let count = r.read_leb128(4)? as usize;
             let mut entries = Vec::with_capacity(count.min(1024));
@@ -118,6 +126,20 @@ fn decode_resolved(
             } else {
                 Ok(Value::Err(Box::new(decode_resolved(err_ty, registry, r)?)))
             }
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len() as u8;
+            let raw = r.read_bits(bits)?;
+            // Return as U64 if > 32 bits, otherwise as appropriate size
+            Ok(if bits > 32 {
+                Value::U64(raw)
+            } else if bits > 16 {
+                Value::U32(raw as u32)
+            } else if bits > 8 {
+                Value::U16(raw as u16)
+            } else {
+                Value::U8(raw as u8)
+            })
         }
         _ => Err(StoreDecodeError::TypeMismatch {
             context: "resolved".to_string(),
@@ -139,6 +161,8 @@ fn decode_primitive(prim: PrimitiveType, r: &mut BitReader<'_>) -> Result<Value,
         PrimitiveType::I64 => Value::I64(r.read_i64()?),
         PrimitiveType::F32 => Value::F32(r.read_f32()?),
         PrimitiveType::F64 => Value::F64(r.read_f64()?),
+        PrimitiveType::Fixed32 => Value::Fixed32(r.read_i32()?),
+        PrimitiveType::Fixed64 => Value::Fixed64(r.read_i64()?),
         PrimitiveType::Void => Value::Bool(false),
     })
 }

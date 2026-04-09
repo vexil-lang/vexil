@@ -1,0 +1,5 @@
+namespace test.bits
+
+message Header {
+    perms @0 : bits { r, w, x, admin }
+}

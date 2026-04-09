@@ -97,14 +97,86 @@ impl<'a> Lexer<'a> {
             b']' => self.make_token(TokenKind::RBracket, start),
             b'(' => self.make_token(TokenKind::LParen, start),
             b')' => self.make_token(TokenKind::RParen, start),
-            b'<' => self.make_token(TokenKind::LAngle, start),
-            b'>' => self.make_token(TokenKind::RAngle, start),
+            b'<' => {
+                if self.peek() == Some(b'=') {
+                    self.pos += 1;
+                    self.make_token(TokenKind::Le, start)
+                } else {
+                    self.make_token(TokenKind::LAngle, start)
+                }
+            }
+            b'>' => {
+                if self.peek() == Some(b'=') {
+                    self.pos += 1;
+                    self.make_token(TokenKind::Ge, start)
+                } else {
+                    self.make_token(TokenKind::RAngle, start)
+                }
+            }
             b':' => self.make_token(TokenKind::Colon, start),
             b',' => self.make_token(TokenKind::Comma, start),
-            b'.' => self.make_token(TokenKind::Dot, start),
-            b'=' => self.make_token(TokenKind::Eq, start),
             b'^' => self.make_token(TokenKind::Caret, start),
             b'-' => self.make_token(TokenKind::Minus, start),
+            b'+' => self.make_token(TokenKind::Plus, start),
+            b'*' => self.make_token(TokenKind::Star, start),
+            b'/' => self.make_token(TokenKind::Slash, start),
+
+            // Multi-character punctuation
+            b'.' => {
+                if self.peek() == Some(b'.') {
+                    self.pos += 1;
+                    if self.peek() == Some(b'<') {
+                        self.pos += 1;
+                        self.make_token(TokenKind::DotDotLt, start)
+                    } else {
+                        self.make_token(TokenKind::DotDot, start)
+                    }
+                } else {
+                    self.make_token(TokenKind::Dot, start)
+                }
+            }
+            b'=' => {
+                if self.peek() == Some(b'=') {
+                    self.pos += 1;
+                    self.make_token(TokenKind::EqEq, start)
+                } else {
+                    self.make_token(TokenKind::Eq, start)
+                }
+            }
+            b'!' => {
+                if self.peek() == Some(b'=') {
+                    self.pos += 1;
+                    self.make_token(TokenKind::Ne, start)
+                } else {
+                    self.make_token(TokenKind::Bang, start)
+                }
+            }
+            b'&' => {
+                if self.peek() == Some(b'&') {
+                    self.pos += 1;
+                    self.make_token(TokenKind::AndAnd, start)
+                } else {
+                    self.diagnostics.push(Diagnostic::error(
+                        Span::new(start, 1),
+                        ErrorClass::InvalidCharacter,
+                        "unexpected character: &",
+                    ));
+                    self.make_token(TokenKind::Error, start)
+                }
+            }
+            b'|' => {
+                if self.peek() == Some(b'|') {
+                    self.pos += 1;
+                    self.make_token(TokenKind::OrOr, start)
+                } else {
+                    self.diagnostics.push(Diagnostic::error(
+                        Span::new(start, 1),
+                        ErrorClass::InvalidCharacter,
+                        "unexpected character: |",
+                    ));
+                    self.make_token(TokenKind::Error, start)
+                }
+            }
 
             b'"' => self.lex_string(start),
 
@@ -283,16 +355,29 @@ impl<'a> Lexer<'a> {
             "message" => TokenKind::KwMessage,
             "enum" => TokenKind::KwEnum,
             "flags" => TokenKind::KwFlags,
+            "bits" => TokenKind::KwBits,
             "union" => TokenKind::KwUnion,
             "newtype" => TokenKind::KwNewtype,
             "config" => TokenKind::KwConfig,
+            "type" => TokenKind::KwType,
+            "const" => TokenKind::KwConst,
             "optional" => TokenKind::KwOptional,
             "array" => TokenKind::KwArray,
+            "set" => TokenKind::KwSet,
             "map" => TokenKind::KwMap,
             "result" => TokenKind::KwResult,
             "true" => TokenKind::KwTrue,
             "false" => TokenKind::KwFalse,
             "none" => TokenKind::KwNone,
+            "where" => TokenKind::KwWhere,
+            "in" => TokenKind::KwIn,
+            "value" => TokenKind::KwValue,
+            "vec2" => TokenKind::KwVec2,
+            "vec3" => TokenKind::KwVec3,
+            "vec4" => TokenKind::KwVec4,
+            "quat" => TokenKind::KwQuat,
+            "mat3" => TokenKind::KwMat3,
+            "mat4" => TokenKind::KwMat4,
             _ => TokenKind::Ident(SmolStr::new(text)),
         };
 

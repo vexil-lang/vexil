@@ -1,0 +1,54 @@
+# §3.4: Fixed-size arrays — compile-time known length, no count prefix on wire.
+namespace test.fixed_array
+
+# Basic fixed array types
+message Basic {
+    # Fixed array of primitive types
+    a @0 : array<u8, 4>
+    b @1 : array<u32, 8>
+    c @2 : array<f64, 16>
+    
+    # Fixed array with string type
+    d @3 : array<string, 3>
+    
+    # Fixed array with user-defined type (forward ref)
+    e @4 : array<Point, 5>
+}
+
+message Point {
+    x @0 : f32
+    y @1 : f32
+}
+
+# Nested fixed arrays (fixed array of fixed arrays)
+message Nested {
+    # This is a fixed array of arrays (not a 2D fixed array)
+    a @0 : array<array<u8, 4>, 3>
+}
+
+# Fixed array with optional element type
+message WithOptional {
+    a @0 : array<optional<u32>, 10>
+}
+
+# Fixed array in union variant
+message WithUnion {
+    data @0 : Data
+}
+
+union Data {
+    FixedInts @0 { values @0 : array<i32, 4> }
+    FixedBytes @1 { bytes @0 : array<u8, 32> }
+}
+
+# Edge cases
+message EdgeCases {
+    # Single element fixed array (still valid)
+    single @0 : array<u8, 1>
+    
+    # Large fixed array
+    large @1 : array<u8, 1024>
+    
+    # Fixed array with hex size (should also work)
+    hex_sized @2 : array<u16, 0x10>
+}

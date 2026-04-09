@@ -35,6 +35,8 @@ pub mod codegen;
 pub mod compat;
 /// Diagnostic types for errors and warnings.
 pub mod diagnostic;
+/// Error utilities including edit distance for suggestions.
+pub mod errors;
 /// Intermediate representation: compiled schema, type registry, and type definitions.
 pub mod ir;
 /// Lexer: tokenises Vexil source text.
@@ -65,7 +67,9 @@ pub use project::compile_project;
 pub use project::ProjectResult;
 pub use resolve::SchemaLoader;
 
-pub use diagnostic::{Diagnostic, Severity};
+pub use diagnostic::{edit_distance, find_closest_match, find_similar_matches};
+pub use diagnostic::{Diagnostic, ErrorClass, ErrorCode, Note, Severity};
+pub use errors::{did_you_mean, edit_distance as errors_edit_distance};
 
 use ast::Schema;
 

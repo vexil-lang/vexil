@@ -7,8 +7,33 @@ Parses `.vexil` source, type-checks it, and produces a `CompiledSchema` that cod
 ## Pipeline
 
 ```
-source -> Lexer -> Parser -> AST -> Lower -> IR -> TypeCheck -> CompiledSchema
+source -> Lexer -> Parser -> AST -> Validate -> Lower -> IR -> TypeCheck -> CompiledSchema
 ```
+
+## Type system (v1.0)
+
+Vexil schemas support these declaration kinds:
+
+| Kind | Example | Wire impact |
+|------|---------|-------------|
+| `message` | `message Point { x @0 : f32 y @1 : f32 }` | Field packing |
+| `enum` | `enum Color : u8 { Red @0 Blue @1 }` | Compact ordinal |
+| `flags` | `flags Perm : u8 { Read @0 Write @1 }` | Bit set |
+| `union` | `union Shape { Circle @0 Rect @1 }` | Tagged variant |
+| `newtype` | `newtype UserId = u64` | Transparent wrapper |
+| `config` | `config Settings { debug @0 : bool = false }` | Compile-time only |
+| `type` | `type Token = u64` | Transparent alias |
+| `const` | `const MaxSize : u32 = 1024` | Compile-time only |
+
+Primitive types: `bool`, `u8`–`u64`, `i8`–`i64`, `f32`, `f64`, `fixed32` (Q16.16), `fixed64` (Q32.32).
+
+Parameterized types: `optional<T>`, `array<T>`, `array<T, N>`, `map<K,V>`, `result<T,E>`, `set<T>`.
+
+Geometric types: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` (T = fixed32/fixed64/f32/f64).
+
+Inline bitfields: `bits { r, w, x }`.
+
+Constraint expressions: `field @0 : type where value > 0 && value < 100`.
 
 ## Single-file compilation
 

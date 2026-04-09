@@ -1,7 +1,7 @@
 # Vexil Language — Formal Grammar
 #
 # Notation: Parsing Expression Grammar (PEG)
-# Reference: vexil-spec-draft.md v0.1.0-draft-r2
+# Reference: vexil-spec.md v1.0.0-draft
 # License:   CC-BY 4.0 (this document) / Apache-2.0 (reference implementation)
 #
 # PEG conventions used:
@@ -89,6 +89,8 @@ type-decl
     / union-decl
     / newtype-decl
     / config-decl
+    / type-alias-decl
+    / const-decl
 
 
 # ── message ────────────────────────────────────────────────────────────
@@ -176,6 +178,28 @@ config-field
     = annotation* field-name _ ':' _ type-expr _ '=' _ literal-value
 
 
+# ── type alias ─────────────────────────────────────────────────────────
+
+type-alias-decl
+    = annotation* KW_TYPE __ upper-ident _ '=' _ type-expr _
+
+
+# ── const ─────────────────────────────────────────────────────────────
+
+const-decl
+    = annotation* KW_CONST __ upper-ident _ ':' _ type-expr _ '=' _ const-expr _
+
+# Const expressions: literals, const references, and arithmetic
+const-expr
+    = const-expr-mul (_ ('+' / '-') _ const-expr-mul)*
+
+const-expr-mul
+    = const-expr-primary (_ ('*' / '/' / '%') _ const-expr-primary)*
+
+const-expr-primary
+    = dec-int / hex-int / upper-ident / '(' _ const-expr _ ')'
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # §5  Fields
 # ═══════════════════════════════════════════════════════════════════════
@@ -191,10 +215,53 @@ config-field
 #   @doc("X") x @0 @varint : u64 @delta (all positions)
 
 field
-    = field-annotations field-name _ ordinal field-annotations ':' _ type-expr field-annotations
+    = field-annotations field-name _ ordinal field-annotations ':' _ type-expr field-annotations where-clause?
 
 field-annotations
     = (_ annotation)*
+
+where-clause
+    = _ KW_WHERE _ constraint-expr
+
+# Constraint expressions for where clauses
+constraint-expr
+    = constraint-or
+
+constraint-or
+    = constraint-and (_ '||' _ constraint-and)*
+
+constraint-and
+    = constraint-primary (_ '&&' _ constraint-primary)*
+
+constraint-primary
+    = '!' _ constraint-primary
+    / constraint-comparison
+    / '(' _ constraint-expr _ ')'
+
+constraint-comparison
+    = constraint-value (_ ('==' / '!=' / '<' / '>' / '<=' / '>=') _ constraint-value)?
+    / constraint-value _ KW_IN _ range-expr
+
+constraint-value
+    = KW_LEN '(' _ KW_VALUE _ ')'   # len(value)
+    / KW_VALUE                      # value
+    / dec-int
+    / float-lit
+    / string-lit
+    / upper-ident                   # const reference
+
+range-expr
+    = range-inclusive
+    / range-exclusive
+
+range-inclusive
+    = range-bound '..' range-bound
+
+range-exclusive
+    = range-bound '..<' range-bound
+
+range-bound
+    = dec-int / float-lit / upper-ident
 
 # Field names use a relaxed identifier rule that permits keywords.
 # This is necessary because keywords like 'flags', 'type', 'hash', etc.
@@ -230,22 +297,42 @@ tombstone-arg
 # ═══════════════════════════════════════════════════════════════════════
 
 type-expr
-    = parameterized-type / named-type
+    = parameterized-type / named-type / inline-bits-type
 
 parameterized-type
-    = optional-type / array-type / map-type / result-type
+    = optional-type / array-type / fixed-array-type / map-type / result-type / set-type / geometric-type
 
 optional-type
     = KW_OPTIONAL _ '<' _ type-expr _ '>'
 
+# Variable-length array: array<T>
 array-type
-    = KW_ARRAY _ '<' _ type-expr _ '>'
+    = KW_ARRAY _ '<' _ type-expr _ '>' !(_ ',')
+
+# Fixed-size array: array<T, N> where N is a const expression
+fixed-array-type
+    = KW_ARRAY _ '<' _ type-expr _ ',' _ const-expr _ '>'
 
 map-type
     = KW_MAP _ '<' _ type-expr _ ',' _ type-expr _ '>'
 
 result-type
     = KW_RESULT _ '<' _ type-expr _ ',' _ type-expr _ '>'
+
+# Set type: set<T>
+set-type
+    = KW_SET _ '<' _ type-expr _ '>'
+
+# Geometric types: vec2<T>, vec3<T>, vec4<T>, quat<T>, mat3<T>, mat4<T>
+geometric-type
+    = ('vec2' / 'vec3' / 'vec4' / 'quat' / 'mat3' / 'mat4') !ident-continue _ '<' _ type-expr _ '>'
+
+# Inline bitfield: bits { r, w, x }
+inline-bits-type
+    = KW_BITS _ '{' _ bits-name-list _ '}'
+
+bits-name-list
+    = ident (_ ',' _ ident)*
 
 named-type
     = qualified-type / primitive-type / sub-byte-type / semantic-type / upper-ident
@@ -260,6 +347,7 @@ qualified-type
 
 primitive-type
     = 'bool' !ident-continue / 'void' !ident-continue
+    / 'fixed64' !ident-continue / 'fixed32' !ident-continue
     / 'u64'  !ident-continue / 'u32'  !ident-continue
     / 'u16'  !ident-continue / 'u8'   !ident-continue
     / 'i64'  !ident-continue / 'i32'  !ident-continue
@@ -373,9 +461,12 @@ ident-continue
 
 keyword
     = ( 'namespace' / 'import' / 'from' / 'as' / 'none'
-      / 'message' / 'enum' / 'flags' / 'union' / 'newtype' / 'config'
-      / 'optional' / 'array' / 'map' / 'result'
+      / 'message' / 'enum' / 'flags' / 'union' / 'newtype' / 'config' / 'type' / 'const'
+      / 'optional' / 'array' / 'map' / 'result' / 'set'
       / 'bool' / 'void' / 'string' / 'bytes' / 'rgb' / 'uuid' / 'timestamp' / 'hash'
+      / 'fixed32' / 'fixed64'
+      / 'bits'
+      / 'where' / 'in' / 'len' / 'value'
       / 'true' / 'false'
       / 'u8' / 'u16' / 'u32' / 'u64'
       / 'i8' / 'i16' / 'i32' / 'i64'
@@ -396,10 +487,18 @@ KW_FLAGS     = 'flags'     !ident-continue
 KW_UNION     = 'union'     !ident-continue
 KW_NEWTYPE   = 'newtype'   !ident-continue
 KW_CONFIG    = 'config'    !ident-continue
+KW_TYPE      = 'type'      !ident-continue
+KW_CONST     = 'const'     !ident-continue
 KW_OPTIONAL  = 'optional'  !ident-continue
 KW_ARRAY     = 'array'     !ident-continue
 KW_MAP       = 'map'       !ident-continue
 KW_RESULT    = 'result'    !ident-continue
+KW_SET       = 'set'       !ident-continue
+KW_BITS      = 'bits'      !ident-continue
+KW_WHERE     = 'where'     !ident-continue
+KW_IN        = 'in'        !ident-continue
+KW_LEN       = 'len'       !ident-continue
+KW_VALUE     = 'value'     !ident-continue
 
 
 # ── Integer literals ───────────────────────────────────────────────────

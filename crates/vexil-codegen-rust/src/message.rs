@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{
-    Encoding, FieldEncoding, MessageDef, ResolvedType, TombstoneDef, TypeDef, TypeId, TypeRegistry,
+    CmpOp, ConstraintOperand, Encoding, FieldConstraint, FieldEncoding, MessageDef, ResolvedType,
+    TombstoneDef, TypeDef, TypeId, TypeRegistry,
 };
 
 use crate::annotations::{emit_field_annotations, emit_tombstones, emit_type_annotations};
@@ -20,6 +21,7 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     match ty {
         ResolvedType::Primitive(PrimitiveType::Bool) => false,
         ResolvedType::SubByte(_) => false,
+        ResolvedType::BitsInline(names) => names.len() >= 8,
         ResolvedType::Named(id) => {
             // Check if this is an exhaustive enum with small wire_bits
             if let Some(TypeDef::Enum(e)) = registry.get(*id) {
@@ -41,8 +43,8 @@ fn primitive_bits(p: &PrimitiveType) -> u8 {
     match p {
         PrimitiveType::I8 | PrimitiveType::U8 => 8,
         PrimitiveType::I16 | PrimitiveType::U16 => 16,
-        PrimitiveType::I32 | PrimitiveType::U32 | PrimitiveType::F32 => 32,
-        PrimitiveType::I64 | PrimitiveType::U64 | PrimitiveType::F64 => 64,
+        PrimitiveType::I32 | PrimitiveType::U32 | PrimitiveType::F32 | PrimitiveType::Fixed32 => 32,
+        PrimitiveType::I64 | PrimitiveType::U64 | PrimitiveType::F64 | PrimitiveType::Fixed64 => 64,
         _ => 0,
     }
 }
@@ -59,8 +61,134 @@ fn is_copy_type(ty: &ResolvedType) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// emit_write
+// Constraint validation
 // ---------------------------------------------------------------------------
+
+/// Generate a Rust boolean expression for a field constraint.
+/// `access` is the Rust expression for the field value (e.g., `self.field`).
+/// Returns a string like `field >= 0 && field <= 100`.
+fn generate_constraint_expr(constraint: &FieldConstraint, access: &str) -> String {
+    match constraint {
+        FieldConstraint::And(left, right) => {
+            let left_expr = generate_constraint_expr(left, access);
+            let right_expr = generate_constraint_expr(right, access);
+            format!("({} && {})", left_expr, right_expr)
+        }
+        FieldConstraint::Or(left, right) => {
+            let left_expr = generate_constraint_expr(left, access);
+            let right_expr = generate_constraint_expr(right, access);
+            format!("({} || {})", left_expr, right_expr)
+        }
+        FieldConstraint::Not(inner) => {
+            let inner_expr = generate_constraint_expr(inner, access);
+            format!("!({})", inner_expr)
+        }
+        FieldConstraint::Cmp { op, operand } => {
+            let op_str = cmp_op_to_str(*op);
+            let operand_str = operand_to_rust(operand);
+            format!("{} {} {}", access, op_str, operand_str)
+        }
+        FieldConstraint::Range {
+            low,
+            high,
+            exclusive_high,
+        } => {
+            let low_str = operand_to_rust(low);
+            let high_str = operand_to_rust(high);
+            if *exclusive_high {
+                format!("{} >= {} && {} < {}", access, low_str, access, high_str)
+            } else {
+                format!("{} >= {} && {} <= {}", access, low_str, access, high_str)
+            }
+        }
+        FieldConstraint::LenCmp { op, operand } => {
+            let op_str = cmp_op_to_str(*op);
+            let operand_str = operand_to_rust(operand);
+            format!("({}).len() {} {}", access, op_str, operand_str)
+        }
+        FieldConstraint::LenRange {
+            low,
+            high,
+            exclusive_high,
+        } => {
+            let low_str = operand_to_rust(low);
+            let high_str = operand_to_rust(high);
+            let len_access = format!("({}).len()", access);
+            if *exclusive_high {
+                format!(
+                    "{} >= {} && {} < {}",
+                    len_access, low_str, len_access, high_str
+                )
+            } else {
+                format!(
+                    "{} >= {} && {} <= {}",
+                    len_access, low_str, len_access, high_str
+                )
+            }
+        }
+    }
+}
+
+fn cmp_op_to_str(op: CmpOp) -> &'static str {
+    match op {
+        CmpOp::Eq => "==",
+        CmpOp::Ne => "!=",
+        CmpOp::Lt => "<",
+        CmpOp::Gt => ">",
+        CmpOp::Le => "<=",
+        CmpOp::Ge => ">=",
+    }
+}
+
+fn operand_to_rust(operand: &ConstraintOperand) -> String {
+    match operand {
+        ConstraintOperand::Int(i) => i.to_string(),
+        ConstraintOperand::Float(f) => f.to_string(),
+        ConstraintOperand::String(s) => format!("{:?}", s),
+        ConstraintOperand::Bool(b) => b.to_string(),
+        ConstraintOperand::ConstRef(name) => name.to_string(),
+    }
+}
+
+/// Emit constraint validation code that returns an error if the constraint is violated.
+/// For pack(): validates before encoding.
+/// For unpack(): validates after decoding.
+fn emit_constraint_validation(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    access: &str,
+    field_name: &str,
+) {
+    let condition = generate_constraint_expr(constraint, access);
+    let negated_condition = format!("!({})", condition);
+    w.open_block(&format!("if {}", negated_condition));
+    w.line(&format!(
+        "return Err(vexil_runtime::EncodeError::ConstraintViolation {{ field: \"{}\", message: format!(\"value violates constraint: expected `{}`\", {}) }});",
+        field_name,
+        condition.replace("\\\"", "\"").replace("\n", ""),
+        access
+    ));
+    w.close_block();
+}
+
+/// Emit constraint validation code for unpack that returns a DecodeError if the constraint is violated.
+fn emit_constraint_validation_unpack(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    access: &str,
+    field_name: &str,
+) {
+    let condition = generate_constraint_expr(constraint, access);
+    let negated_condition = format!("!({})", condition);
+    w.open_block(&format!("if {}", negated_condition));
+    w.line(&format!(
+        "return Err(vexil_runtime::DecodeError::InvalidValue {{ field: \"{}\", message: format!(\"value violates constraint: expected `{}`\", {}) }});",
+        field_name,
+        condition.replace("\\\"", "\"").replace("\n", ""),
+        access
+    ));
+    w.close_block();
+}
 
 /// Emit code to write a field to `w: &mut BitWriter`.
 ///
@@ -116,6 +244,7 @@ pub fn emit_write(
     if let Some(limit) = enc.limit {
         match ty {
             ResolvedType::Array(_)
+            | ResolvedType::Set(_)
             | ResolvedType::Map(_, _)
             | ResolvedType::Semantic(SemanticType::String)
             | ResolvedType::Semantic(SemanticType::Bytes) => {
@@ -151,10 +280,16 @@ fn emit_write_type(
             PrimitiveType::I64 => w.line(&format!("w.write_i64({access});")),
             PrimitiveType::F32 => w.line(&format!("w.write_f32({access});")),
             PrimitiveType::F64 => w.line(&format!("w.write_f64({access});")),
+            PrimitiveType::Fixed32 => w.line(&format!("w.write_i32({access});")),
+            PrimitiveType::Fixed64 => w.line(&format!("w.write_i64({access});")),
             PrimitiveType::Void => {} // 0 bits — nothing to write
         },
         ResolvedType::SubByte(s) => {
             let bits = s.bits;
+            w.line(&format!("w.write_bits({access} as u64, {bits}_u8);"));
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
             w.line(&format!("w.write_bits({access} as u64, {bits}_u8);"));
         }
         ResolvedType::Semantic(s) => match s {
@@ -197,6 +332,13 @@ fn emit_write_type(
         ResolvedType::Array(inner) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
             w.open_block(&format!("for item in &{access}"));
+            let item_access = if is_copy_type(inner) { "*item" } else { "item" };
+            emit_write_type(w, item_access, inner, registry, field_name);
+            w.close_block();
+        }
+        ResolvedType::Set(inner) => {
+            w.line(&format!("w.write_leb128({access}.len() as u64);"));
+            w.open_block(&format!("for item in {access}"));
             let item_access = if is_copy_type(inner) { "*item" } else { "item" };
             emit_write_type(w, item_access, inner, registry, field_name);
             w.close_block();
@@ -325,6 +467,8 @@ fn emit_read_type(
             PrimitiveType::I64 => w.line(&format!("let {var_name} = r.read_i64()?;")),
             PrimitiveType::F32 => w.line(&format!("let {var_name} = r.read_f32()?;")),
             PrimitiveType::F64 => w.line(&format!("let {var_name} = r.read_f64()?;")),
+            PrimitiveType::Fixed32 => w.line(&format!("let {var_name} = r.read_i32()?;")),
+            PrimitiveType::Fixed64 => w.line(&format!("let {var_name} = r.read_i64()?;")),
             PrimitiveType::Void => w.line(&format!("let {var_name} = ();")),
         },
         ResolvedType::SubByte(s) => {
@@ -340,6 +484,13 @@ fn emit_read_type(
                     "let {var_name} = r.read_bits({bits}_u8)? as {uint};"
                 ));
             }
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len() as u8;
+            let uint = crate::types::containing_int_type(bits);
+            w.line(&format!(
+                "let {var_name} = r.read_bits({bits}_u8)? as {uint};"
+            ));
         }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => {
@@ -439,6 +590,30 @@ fn emit_read_type(
             w.line(&format!("{var_name}.push({var_name}_item);"));
             w.close_block();
         }
+        ResolvedType::Set(inner) => {
+            w.line(&format!(
+                "let {var_name}_len = r.read_leb128(10_u8)? as usize;"
+            ));
+            if let Some(lim) = limit {
+                w.line(&format!(
+                    "if {var_name}_len as u64 > {lim}_u64 {{ return Err(vexil_runtime::DecodeError::LimitExceeded {{ field: \"{field_name}\", limit: {lim}_u64, actual: {var_name}_len as u64 }}); }}"
+                ));
+            }
+            w.line(&format!(
+                "let mut {var_name} = std::collections::BTreeSet::new();"
+            ));
+            w.open_block(&format!("for _ in 0..{var_name}_len"));
+            emit_read_type(
+                w,
+                &format!("{var_name}_item"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            w.line(&format!("{var_name}.insert({var_name}_item);"));
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!(
                 "let {var_name}_len = r.read_leb128(10_u8)? as usize;"
@@ -503,6 +678,8 @@ fn emit_tombstone_read(w: &mut CodeWriter, ty: &ResolvedType, registry: &TypeReg
             PrimitiveType::I64 => w.line("let _ = r.read_i64()?;"),
             PrimitiveType::F32 => w.line("let _ = r.read_f32()?;"),
             PrimitiveType::F64 => w.line("let _ = r.read_f64()?;"),
+            PrimitiveType::Fixed32 => w.line("let _ = r.read_i32()?;"),
+            PrimitiveType::Fixed64 => w.line("let _ = r.read_i64()?;"),
             PrimitiveType::Void => {} // 0 bits — nothing to read
         },
         ResolvedType::SubByte(s) => {
@@ -542,6 +719,13 @@ fn emit_tombstone_read(w: &mut CodeWriter, ty: &ResolvedType, registry: &TypeReg
             w.close_block();
         }
         ResolvedType::Array(inner) => {
+            let len_var = format!("_tombstone_{idx}_len");
+            w.line(&format!("let {len_var} = r.read_leb128(10_u8)? as usize;"));
+            w.open_block(&format!("for _ in 0..{len_var}"));
+            emit_tombstone_read(w, inner, registry, idx);
+            w.close_block();
+        }
+        ResolvedType::Set(inner) => {
             let len_var = format!("_tombstone_{idx}_len");
             w.line(&format!("let {len_var} = r.read_leb128(10_u8)? as usize;"));
             w.open_block(&format!("for _ in 0..{len_var}"));
@@ -638,6 +822,10 @@ pub fn emit_message(
     w.open_block("fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError>");
     for field in &msg.fields {
         let access = format!("self.{}", field.name);
+        // Validate constraint before encoding
+        if let Some(constraint) = &field.constraint {
+            emit_constraint_validation(w, constraint, &access, field.name.as_str());
+        }
         emit_write(
             w,
             &access,
@@ -689,6 +877,10 @@ pub fn emit_message(
                     registry,
                     var_name,
                 );
+                // Validate constraint after decoding
+                if let Some(constraint) = &field.constraint {
+                    emit_constraint_validation_unpack(w, constraint, var_name, var_name);
+                }
             }
             DecodeAction::Tombstone(tombstone) => {
                 if let Some(ref ty) = tombstone.original_type {

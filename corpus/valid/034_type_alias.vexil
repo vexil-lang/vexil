@@ -1,0 +1,9 @@
+namespace test.aliases
+
+type UserId = u64
+type Score = fixed32
+
+message GameState {
+    player_id @0 : UserId
+    score     @1 : Score
+}

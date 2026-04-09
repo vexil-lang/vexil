@@ -131,7 +131,17 @@ fn compute_resolved_type_wire_size(
             min_bits: 8,
             max_bits: None,
         },
-        ResolvedType::Map(_, _) => WireSize::Variable {
+        ResolvedType::FixedArray(inner, size) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            match inner_ws {
+                WireSize::Fixed(bits) => WireSize::Fixed(bits * size),
+                WireSize::Variable { min_bits, .. } => WireSize::Variable {
+                    min_bits: min_bits * size,
+                    max_bits: None,
+                },
+            }
+        }
+        ResolvedType::Map(_, _) | ResolvedType::Set(_) => WireSize::Variable {
             min_bits: 8,
             max_bits: None,
         },
@@ -150,6 +160,31 @@ fn compute_resolved_type_wire_size(
                 max_bits: max,
             }
         }
+        ResolvedType::Vec2(inner) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            multiply_wire_size(&inner_ws, 2)
+        }
+        ResolvedType::Vec3(inner) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            multiply_wire_size(&inner_ws, 3)
+        }
+        ResolvedType::Vec4(inner) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            multiply_wire_size(&inner_ws, 4)
+        }
+        ResolvedType::Quat(inner) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            multiply_wire_size(&inner_ws, 4)
+        }
+        ResolvedType::Mat3(inner) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            multiply_wire_size(&inner_ws, 9)
+        }
+        ResolvedType::Mat4(inner) => {
+            let inner_ws = compute_resolved_type_wire_size(inner, compiled, computing);
+            multiply_wire_size(&inner_ws, 16)
+        }
+        ResolvedType::BitsInline(names) => WireSize::Fixed(names.len() as u64),
     }
 }
 
@@ -158,8 +193,8 @@ fn primitive_wire_size(p: &PrimitiveType) -> WireSize {
         PrimitiveType::Bool => 1,
         PrimitiveType::U8 | PrimitiveType::I8 => 8,
         PrimitiveType::U16 | PrimitiveType::I16 => 16,
-        PrimitiveType::U32 | PrimitiveType::I32 | PrimitiveType::F32 => 32,
-        PrimitiveType::U64 | PrimitiveType::I64 | PrimitiveType::F64 => 64,
+        PrimitiveType::U32 | PrimitiveType::I32 | PrimitiveType::F32 | PrimitiveType::Fixed32 => 32,
+        PrimitiveType::U64 | PrimitiveType::I64 | PrimitiveType::F64 | PrimitiveType::Fixed64 => 64,
         PrimitiveType::Void => 0,
     };
     WireSize::Fixed(bits)
@@ -241,7 +276,7 @@ fn named_type_wire_size(
             }
             compute_union_wire_size(id, compiled, computing)
         }
-        Some(TypeDef::Config(_)) | None => WireSize::Variable {
+        Some(TypeDef::Config(_)) | Some(TypeDef::GenericAlias(_)) | None => WireSize::Variable {
             min_bits: 0,
             max_bits: None,
         },
@@ -402,6 +437,17 @@ fn wire_size_max_bits(ws: &WireSize) -> Option<u64> {
     }
 }
 
+/// Multiply a wire size by a constant factor (for geometric types).
+fn multiply_wire_size(ws: &WireSize, multiplier: u64) -> WireSize {
+    match ws {
+        WireSize::Fixed(bits) => WireSize::Fixed(bits * multiplier),
+        WireSize::Variable { min_bits, max_bits } => WireSize::Variable {
+            min_bits: min_bits * multiplier,
+            max_bits: max_bits.map(|m| m * multiplier),
+        },
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Recursive type detection
 // ---------------------------------------------------------------------------
@@ -556,13 +602,27 @@ fn walk_type_for_recursion(ty: &ResolvedType, direct: bool, state: &mut Recursio
         ResolvedType::Optional(inner) | ResolvedType::Array(inner) => {
             walk_type_for_recursion(inner, false, state);
         }
+        ResolvedType::FixedArray(inner, _) => {
+            walk_type_for_recursion(inner, false, state);
+        }
         ResolvedType::Map(k, v) => {
             walk_type_for_recursion(k, false, state);
             walk_type_for_recursion(v, false, state);
         }
+        ResolvedType::Set(inner) => {
+            walk_type_for_recursion(inner, false, state);
+        }
         ResolvedType::Result(ok, err) => {
             walk_type_for_recursion(ok, false, state);
             walk_type_for_recursion(err, false, state);
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            walk_type_for_recursion(inner, false, state);
         }
         _ => {} // Primitive, SubByte, Semantic — terminal
     }
