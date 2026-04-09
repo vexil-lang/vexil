@@ -360,9 +360,9 @@ fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
             Decl::Union(d) => d.name.node.clone(),
             Decl::Newtype(d) => d.name.node.clone(),
             Decl::Config(d) => d.name.node.clone(),
+            Decl::Trait(d) => d.name.node.clone(),
             Decl::Alias(_) => continue, // Aliases don't get TypeIds, they use alias_map
             Decl::Const(_) => continue, // Consts don't get TypeIds, they use constants map
-            Decl::Trait(_) => continue, // Traits don't get TypeIds
             Decl::Impl(_) => continue,  // Impls don't get TypeIds
         };
         ctx.local_names.insert(name.clone());
@@ -391,7 +391,8 @@ fn lower_decl(decl: &Decl, span: Span, ctx: &mut LowerCtx) -> TypeDef {
         Decl::Union(d) => TypeDef::Union(lower_union(d, span, ctx)),
         Decl::Newtype(d) => TypeDef::Newtype(lower_newtype(d, span, ctx)),
         Decl::Config(d) => TypeDef::Config(lower_config(d, span, ctx)),
-        Decl::Alias(_) | Decl::Const(_) | Decl::Trait(_) | Decl::Impl(_) => {
+        Decl::Trait(d) => TypeDef::Trait(lower_trait(d, span, ctx)),
+        Decl::Alias(_) | Decl::Const(_) | Decl::Impl(_) => {
             // Aliases and consts are handled separately in lower_with_deps after all regular
             // declarations are lowered. This ensures dependencies are resolved.
             // Return a dummy TypeDef that should never be used.
@@ -655,6 +656,66 @@ fn lower_config(cfg: &crate::ast::ConfigDecl, span: Span, ctx: &mut LowerCtx) ->
         span,
         fields,
         annotations: resolve_annotations(&cfg.annotations),
+    }
+}
+
+/// Lower a trait declaration to IR.
+fn lower_trait(
+    decl: &crate::ast::TraitDecl,
+    span: Span,
+    ctx: &mut LowerCtx,
+) -> crate::ir::TraitDef {
+    let name = decl.name.node.clone();
+
+    // Lower type parameters
+    let type_params = decl.type_params.clone();
+
+    // Lower required fields
+    let mut fields = Vec::new();
+    for field in &decl.fields {
+        let all_annotations: Vec<&crate::ast::Annotation> = field
+            .pre_annotations
+            .iter()
+            .chain(field.post_ordinal_annotations.iter())
+            .chain(field.post_type_annotations.iter())
+            .collect();
+        let field_def = crate::ir::TraitFieldDef {
+            name: field.name.node.clone(),
+            ty: resolve_type_expr(&field.ty.node, field.ty.span, ctx),
+            ordinal: field.ordinal.node,
+            annotations: resolve_annotations_refs(&all_annotations),
+        };
+        fields.push(field_def);
+    }
+
+    // Lower function signatures
+    let functions = decl
+        .functions
+        .iter()
+        .map(|fn_decl| crate::ir::TraitFnDef {
+            name: fn_decl.name.node.clone(),
+            params: fn_decl
+                .params
+                .iter()
+                .map(|p| crate::ir::FnParamDef {
+                    name: p.name.node.clone(),
+                    ty: resolve_type_expr(&p.ty.node, p.ty.span, ctx),
+                })
+                .collect(),
+            return_type: fn_decl
+                .return_type
+                .as_ref()
+                .map(|ty| resolve_type_expr(&ty.node, ty.span, ctx)),
+        })
+        .collect();
+
+    crate::ir::TraitDef {
+        name,
+        type_params,
+        fields,
+        functions,
+        annotations: resolve_annotations(&decl.annotations),
+        span,
     }
 }
 

@@ -703,53 +703,212 @@ fn emit_read_type(
             ));
         }
         ResolvedType::Vec2(inner) => {
-            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
-            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
+            let inner_type =
+                crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!(
                 "let {var_name} = vexil_runtime::Vec2::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y }};"
             ));
         }
         ResolvedType::Vec3(inner) => {
-            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
-            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_z"), inner, registry, field_name, None);
+            let inner_type =
+                crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!(
                 "let {var_name} = vexil_runtime::Vec3::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y, z: {var_name}_z }};"
             ));
         }
         ResolvedType::Vec4(inner) => {
-            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
-            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_w"), inner, registry, field_name, None);
+            let inner_type =
+                crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_w"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!(
                 "let {var_name} = vexil_runtime::Vec4::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y, z: {var_name}_z, w: {var_name}_w }};"
             ));
         }
         ResolvedType::Quat(inner) => {
-            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
-            emit_read_type(w, &format!("{var_name}_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_w"), inner, registry, field_name, None);
+            let inner_type =
+                crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_w"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!(
                 "let {var_name} = vexil_runtime::Quat::<{inner_type}> {{ x: {var_name}_x, y: {var_name}_y, z: {var_name}_z, w: {var_name}_w }};"
             ));
         }
         ResolvedType::Mat3(inner) => {
-            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
-            emit_read_type(w, &format!("{var_name}_c0_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c0_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c0_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_z"), inner, registry, field_name, None);
+            let inner_type =
+                crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!(
                 "let {var_name} = vexil_runtime::Mat3::<{inner_type}> {{ cols: ["
             ));
@@ -762,26 +921,139 @@ fn emit_read_type(
             w.line(&format!(
                 "    vexil_runtime::Vec3 {{ x: {var_name}_c2_x, y: {var_name}_c2_y, z: {var_name}_c2_z }},"
             ));
-            w.line(&format!("]; }};"));
+            w.line(&format!("] }};"));
         }
         ResolvedType::Mat4(inner) => {
-            let inner_type = crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
-            emit_read_type(w, &format!("{var_name}_c0_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c0_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c0_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c0_w"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c1_w"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c2_w"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c3_x"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c3_y"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c3_z"), inner, registry, field_name, None);
-            emit_read_type(w, &format!("{var_name}_c3_w"), inner, registry, field_name, None);
+            let inner_type =
+                crate::types::rust_type(inner, registry, &std::collections::HashSet::new(), None);
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c0_w"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c1_w"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c2_w"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c3_x"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c3_y"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c3_z"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
+            emit_read_type(
+                w,
+                &format!("{var_name}_c3_w"),
+                inner,
+                registry,
+                field_name,
+                None,
+            );
             w.line(&format!(
                 "let {var_name} = vexil_runtime::Mat4::<{inner_type}> {{ cols: ["
             ));
@@ -797,7 +1069,7 @@ fn emit_read_type(
             w.line(&format!(
                 "    vexil_runtime::Vec4 {{ x: {var_name}_c3_x, y: {var_name}_c3_y, z: {var_name}_c3_z, w: {var_name}_c3_w }},"
             ));
-            w.line(&format!("]; }};"));
+            w.line(&format!("] }};"));
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!(

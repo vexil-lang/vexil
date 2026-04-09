@@ -8,26 +8,28 @@ pub const SCHEMA_HASH: [u8; 32] = [0xf4, 0x47, 0xd3, 0x4c, 0x08, 0xcc, 0x78, 0xb
 // ── Transform ──
 #[derive(Debug, Clone, PartialEq)]
 pub struct Transform {
-    pub pos: [i64; 3],
-    pub rot: [i64; 4],
-    pub gl_pos: [f32; 3],
-    pub model: [f32; 16],
+    pub pos: vexil_runtime::Vec3<i64>,
+    pub rot: vexil_runtime::Quat<i64>,
+    pub gl_pos: vexil_runtime::Vec3<f32>,
+    pub model: vexil_runtime::Mat4<f32>,
     pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for Transform {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        for item in self.pos.iter() {
-            w.write_i64(*item);
+        for c in [&self.pos.x, &self.pos.y, &self.pos.z] {
+            w.write_i64(*c);
         }
-        for item in self.rot.iter() {
-            w.write_i64(*item);
+        for c in [&self.rot.x, &self.rot.y, &self.rot.z, &self.rot.w] {
+            w.write_i64(*c);
         }
-        for item in self.gl_pos.iter() {
-            w.write_f32(*item);
+        for c in [&self.gl_pos.x, &self.gl_pos.y, &self.gl_pos.z] {
+            w.write_f32(*c);
         }
-        for item in self.model.iter() {
-            w.write_f32(*item);
+        for col in &self.model.cols {
+            for c in [&col.x, &col.y, &col.z, &col.w] {
+                w.write_f32(*c);
+            }
         }
         w.flush_to_byte_boundary();
         if !self._unknown.is_empty() {
@@ -39,30 +41,41 @@ impl vexil_runtime::Pack for Transform {
 
 impl vexil_runtime::Unpack for Transform {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
-        let mut pos_vec = Vec::with_capacity(3_usize);
-        for _ in 0..3_usize {
-            let pos_item = r.read_i64()?;
-            pos_vec.push(pos_item);
-        }
-        let pos: [i64; 3] = pos_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
-        let mut rot_vec = Vec::with_capacity(4_usize);
-        for _ in 0..4_usize {
-            let rot_item = r.read_i64()?;
-            rot_vec.push(rot_item);
-        }
-        let rot: [i64; 4] = rot_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
-        let mut gl_pos_vec = Vec::with_capacity(3_usize);
-        for _ in 0..3_usize {
-            let gl_pos_item = r.read_f32()?;
-            gl_pos_vec.push(gl_pos_item);
-        }
-        let gl_pos: [f32; 3] = gl_pos_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
-        let mut model_vec = Vec::with_capacity(16_usize);
-        for _ in 0..16_usize {
-            let model_item = r.read_f32()?;
-            model_vec.push(model_item);
-        }
-        let model: [f32; 16] = model_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
+        let pos_x = r.read_i64()?;
+        let pos_y = r.read_i64()?;
+        let pos_z = r.read_i64()?;
+        let pos = vexil_runtime::Vec3::<i64> { x: pos_x, y: pos_y, z: pos_z };
+        let rot_x = r.read_i64()?;
+        let rot_y = r.read_i64()?;
+        let rot_z = r.read_i64()?;
+        let rot_w = r.read_i64()?;
+        let rot = vexil_runtime::Quat::<i64> { x: rot_x, y: rot_y, z: rot_z, w: rot_w };
+        let gl_pos_x = r.read_f32()?;
+        let gl_pos_y = r.read_f32()?;
+        let gl_pos_z = r.read_f32()?;
+        let gl_pos = vexil_runtime::Vec3::<f32> { x: gl_pos_x, y: gl_pos_y, z: gl_pos_z };
+        let model_c0_x = r.read_f32()?;
+        let model_c0_y = r.read_f32()?;
+        let model_c0_z = r.read_f32()?;
+        let model_c0_w = r.read_f32()?;
+        let model_c1_x = r.read_f32()?;
+        let model_c1_y = r.read_f32()?;
+        let model_c1_z = r.read_f32()?;
+        let model_c1_w = r.read_f32()?;
+        let model_c2_x = r.read_f32()?;
+        let model_c2_y = r.read_f32()?;
+        let model_c2_z = r.read_f32()?;
+        let model_c2_w = r.read_f32()?;
+        let model_c3_x = r.read_f32()?;
+        let model_c3_y = r.read_f32()?;
+        let model_c3_z = r.read_f32()?;
+        let model_c3_w = r.read_f32()?;
+        let model = vexil_runtime::Mat4::<f32> { cols: [
+            vexil_runtime::Vec4 { x: model_c0_x, y: model_c0_y, z: model_c0_z, w: model_c0_w },
+            vexil_runtime::Vec4 { x: model_c1_x, y: model_c1_y, z: model_c1_z, w: model_c1_w },
+            vexil_runtime::Vec4 { x: model_c2_x, y: model_c2_y, z: model_c2_z, w: model_c2_w },
+            vexil_runtime::Vec4 { x: model_c3_x, y: model_c3_y, z: model_c3_z, w: model_c3_w },
+        ] };
         r.flush_to_byte_boundary();
         let _unknown = Vec::new();
         Ok(Self {
@@ -79,22 +92,22 @@ impl vexil_runtime::Unpack for Transform {
 // ── Vectors ──
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vectors {
-    pub v2: [f64; 2],
-    pub v3: [f32; 3],
-    pub v4: [i32; 4],
+    pub v2: vexil_runtime::Vec2<f64>,
+    pub v3: vexil_runtime::Vec3<f32>,
+    pub v4: vexil_runtime::Vec4<i32>,
     pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for Vectors {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        for item in self.v2.iter() {
-            w.write_f64(*item);
+        for c in [&self.v2.x, &self.v2.y] {
+            w.write_f64(*c);
         }
-        for item in self.v3.iter() {
-            w.write_f32(*item);
+        for c in [&self.v3.x, &self.v3.y, &self.v3.z] {
+            w.write_f32(*c);
         }
-        for item in self.v4.iter() {
-            w.write_i32(*item);
+        for c in [&self.v4.x, &self.v4.y, &self.v4.z, &self.v4.w] {
+            w.write_i32(*c);
         }
         w.flush_to_byte_boundary();
         if !self._unknown.is_empty() {
@@ -106,24 +119,18 @@ impl vexil_runtime::Pack for Vectors {
 
 impl vexil_runtime::Unpack for Vectors {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
-        let mut v2_vec = Vec::with_capacity(2_usize);
-        for _ in 0..2_usize {
-            let v2_item = r.read_f64()?;
-            v2_vec.push(v2_item);
-        }
-        let v2: [f64; 2] = v2_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
-        let mut v3_vec = Vec::with_capacity(3_usize);
-        for _ in 0..3_usize {
-            let v3_item = r.read_f32()?;
-            v3_vec.push(v3_item);
-        }
-        let v3: [f32; 3] = v3_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
-        let mut v4_vec = Vec::with_capacity(4_usize);
-        for _ in 0..4_usize {
-            let v4_item = r.read_i32()?;
-            v4_vec.push(v4_item);
-        }
-        let v4: [i32; 4] = v4_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
+        let v2_x = r.read_f64()?;
+        let v2_y = r.read_f64()?;
+        let v2 = vexil_runtime::Vec2::<f64> { x: v2_x, y: v2_y };
+        let v3_x = r.read_f32()?;
+        let v3_y = r.read_f32()?;
+        let v3_z = r.read_f32()?;
+        let v3 = vexil_runtime::Vec3::<f32> { x: v3_x, y: v3_y, z: v3_z };
+        let v4_x = r.read_i32()?;
+        let v4_y = r.read_i32()?;
+        let v4_z = r.read_i32()?;
+        let v4_w = r.read_i32()?;
+        let v4 = vexil_runtime::Vec4::<i32> { x: v4_x, y: v4_y, z: v4_z, w: v4_w };
         r.flush_to_byte_boundary();
         let _unknown = Vec::new();
         Ok(Self {
@@ -139,18 +146,22 @@ impl vexil_runtime::Unpack for Vectors {
 // ── Matrices ──
 #[derive(Debug, Clone, PartialEq)]
 pub struct Matrices {
-    pub m3: [f64; 9],
-    pub m4: [f32; 16],
+    pub m3: vexil_runtime::Mat3<f64>,
+    pub m4: vexil_runtime::Mat4<f32>,
     pub _unknown: Vec<u8>,
 }
 
 impl vexil_runtime::Pack for Matrices {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        for item in self.m3.iter() {
-            w.write_f64(*item);
+        for col in &self.m3.cols {
+            for c in [&col.x, &col.y, &col.z] {
+                w.write_f64(*c);
+            }
         }
-        for item in self.m4.iter() {
-            w.write_f32(*item);
+        for col in &self.m4.cols {
+            for c in [&col.x, &col.y, &col.z, &col.w] {
+                w.write_f32(*c);
+            }
         }
         w.flush_to_byte_boundary();
         if !self._unknown.is_empty() {
@@ -162,18 +173,42 @@ impl vexil_runtime::Pack for Matrices {
 
 impl vexil_runtime::Unpack for Matrices {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
-        let mut m3_vec = Vec::with_capacity(9_usize);
-        for _ in 0..9_usize {
-            let m3_item = r.read_f64()?;
-            m3_vec.push(m3_item);
-        }
-        let m3: [f64; 9] = m3_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
-        let mut m4_vec = Vec::with_capacity(16_usize);
-        for _ in 0..16_usize {
-            let m4_item = r.read_f32()?;
-            m4_vec.push(m4_item);
-        }
-        let m4: [f32; 16] = m4_vec.try_into().map_err(|_| vexil_runtime::DecodeError::UnexpectedEof)?;
+        let m3_c0_x = r.read_f64()?;
+        let m3_c0_y = r.read_f64()?;
+        let m3_c0_z = r.read_f64()?;
+        let m3_c1_x = r.read_f64()?;
+        let m3_c1_y = r.read_f64()?;
+        let m3_c1_z = r.read_f64()?;
+        let m3_c2_x = r.read_f64()?;
+        let m3_c2_y = r.read_f64()?;
+        let m3_c2_z = r.read_f64()?;
+        let m3 = vexil_runtime::Mat3::<f64> { cols: [
+            vexil_runtime::Vec3 { x: m3_c0_x, y: m3_c0_y, z: m3_c0_z },
+            vexil_runtime::Vec3 { x: m3_c1_x, y: m3_c1_y, z: m3_c1_z },
+            vexil_runtime::Vec3 { x: m3_c2_x, y: m3_c2_y, z: m3_c2_z },
+        ] };
+        let m4_c0_x = r.read_f32()?;
+        let m4_c0_y = r.read_f32()?;
+        let m4_c0_z = r.read_f32()?;
+        let m4_c0_w = r.read_f32()?;
+        let m4_c1_x = r.read_f32()?;
+        let m4_c1_y = r.read_f32()?;
+        let m4_c1_z = r.read_f32()?;
+        let m4_c1_w = r.read_f32()?;
+        let m4_c2_x = r.read_f32()?;
+        let m4_c2_y = r.read_f32()?;
+        let m4_c2_z = r.read_f32()?;
+        let m4_c2_w = r.read_f32()?;
+        let m4_c3_x = r.read_f32()?;
+        let m4_c3_y = r.read_f32()?;
+        let m4_c3_z = r.read_f32()?;
+        let m4_c3_w = r.read_f32()?;
+        let m4 = vexil_runtime::Mat4::<f32> { cols: [
+            vexil_runtime::Vec4 { x: m4_c0_x, y: m4_c0_y, z: m4_c0_z, w: m4_c0_w },
+            vexil_runtime::Vec4 { x: m4_c1_x, y: m4_c1_y, z: m4_c1_z, w: m4_c1_w },
+            vexil_runtime::Vec4 { x: m4_c2_x, y: m4_c2_y, z: m4_c2_z, w: m4_c2_w },
+            vexil_runtime::Vec4 { x: m4_c3_x, y: m4_c3_y, z: m4_c3_z, w: m4_c3_w },
+        ] };
         r.flush_to_byte_boundary();
         let _unknown = Vec::new();
         Ok(Self {
