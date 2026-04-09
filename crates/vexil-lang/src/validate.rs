@@ -404,6 +404,9 @@ fn check_message_body(
         }
     }
 
+    // Track ordinal -> field name for conflict reporting
+    let mut ordinal_names: HashMap<u32, SmolStr> = HashMap::new();
+
     // Second pass: check fields
     for item in body {
         if let MessageBodyItem::Field(field) = item {
@@ -433,12 +436,24 @@ fn check_message_body(
             // Ordinal duplicate (field vs field)
             if !ordinal_set.insert(f.ordinal.node) && !tombstone_ordinals.contains(&f.ordinal.node)
             {
-                diags.push(Diagnostic::error(
-                    f.ordinal.span,
-                    ErrorClass::OrdinalDuplicate,
-                    format!("duplicate ordinal {}", f.ordinal.node),
-                ));
+                if let Some(existing) = ordinal_names.get(&f.ordinal.node) {
+                    diags.push(Diagnostic::error(
+                        f.ordinal.span,
+                        ErrorClass::OrdinalDuplicate,
+                        format!(
+                            "ordinal @{} conflicts with field `{}` (both use the same ordinal)",
+                            f.ordinal.node, existing
+                        ),
+                    ));
+                } else {
+                    diags.push(Diagnostic::error(
+                        f.ordinal.span,
+                        ErrorClass::OrdinalDuplicate,
+                        format!("duplicate ordinal @{}", f.ordinal.node),
+                    ));
+                }
             }
+            ordinal_names.insert(f.ordinal.node, f.name.node.clone());
 
             // Field name duplicate
             if !name_set.insert(&f.name.node) {
@@ -697,16 +712,14 @@ fn check_field_annotations(
             "delta" => {
                 if !is_delta_valid_type(ty) {
                     let type_str = format_type_expr(ty);
-                    let valid_annotations = valid_annotations_for_type(ty);
                     diags.push(
                         Diagnostic::error(
                             ann.span,
                             ErrorClass::DeltaInvalidTarget,
-                            format!("@delta is not valid on {type_str}"),
+                            format!(
+                                "@delta is not valid on {type_str}. Valid types for @delta: u8, u16, u32, u64, i8, i16, i32, i64, f32, f64, fixed32, fixed64"
+                            ),
                         )
-                        .with_note(Note::ValidOptions(
-                            valid_annotations.iter().map(|s| s.to_string()).collect(),
-                        ))
                         .with_help("@delta encodes differences between consecutive values, effective when values change slowly"),
                     );
                 }
@@ -714,16 +727,14 @@ fn check_field_annotations(
             "limit" => {
                 if !is_limit_valid_type(ty) {
                     let type_str = format_type_expr(ty);
-                    let valid_annotations = valid_annotations_for_type(ty);
                     diags.push(
                         Diagnostic::error(
                             ann.span,
                             ErrorClass::LimitInvalidTarget,
-                            format!("@limit is not valid on {type_str}"),
+                            format!(
+                                "@limit is not valid on {type_str}. Valid types for @limit: string, bytes, array, fixed_array, set, map"
+                            ),
                         )
-                        .with_note(Note::ValidOptions(
-                            valid_annotations.iter().map(|s| s.to_string()).collect(),
-                        ))
                         .with_help("@limit restricts the maximum size of collection types"),
                     );
                 }
@@ -820,8 +831,9 @@ fn is_valid_geometric_element_type(ty: &TypeExpr) -> bool {
     )
 }
 
-/// Returns a list of valid annotations for a given type.
+/// Returns the list of valid encoding annotations for a given type.
 /// Used to provide helpful error messages when an annotation is applied to an incompatible type.
+#[allow(dead_code)] // Will be used for improved error messages
 fn valid_annotations_for_type(ty: &TypeExpr) -> Vec<&'static str> {
     let mut valid = Vec::new();
 
@@ -889,6 +901,7 @@ fn check_limit_value(ann: &Annotation, ty: &TypeExpr, diags: &mut Vec<Diagnostic
 
 fn check_enum(en: &EnumDecl, diags: &mut Vec<Diagnostic>) {
     let mut ordinal_set: HashSet<u32> = HashSet::new();
+    let mut ordinal_names: HashMap<u32, SmolStr> = HashMap::new();
     let mut max_ordinal: u32 = 0;
 
     for item in &en.body {
@@ -910,12 +923,24 @@ fn check_enum(en: &EnumDecl, diags: &mut Vec<Diagnostic>) {
             }
 
             if !ordinal_set.insert(ord) {
-                diags.push(Diagnostic::error(
-                    v.node.ordinal.span,
-                    ErrorClass::EnumOrdinalDuplicate,
-                    format!("duplicate enum ordinal {ord}"),
-                ));
+                if let Some(existing) = ordinal_names.get(&ord) {
+                    diags.push(Diagnostic::error(
+                        v.node.ordinal.span,
+                        ErrorClass::EnumOrdinalDuplicate,
+                        format!(
+                            "enum ordinal @{} conflicts with variant `{}` (both use the same ordinal)",
+                            ord, existing
+                        ),
+                    ));
+                } else {
+                    diags.push(Diagnostic::error(
+                        v.node.ordinal.span,
+                        ErrorClass::EnumOrdinalDuplicate,
+                        format!("duplicate enum ordinal @{}", ord),
+                    ));
+                }
             }
+            ordinal_names.insert(ord, v.node.name.node.clone());
 
             if ord > max_ordinal {
                 max_ordinal = ord;
@@ -970,6 +995,7 @@ fn check_flags(flags: &FlagsDecl, diags: &mut Vec<Diagnostic>) {
 
 fn check_union(un: &UnionDecl, ctx: &ValidationContext<'_>, diags: &mut Vec<Diagnostic>) {
     let mut ordinal_set: HashSet<u32> = HashSet::new();
+    let mut ordinal_names: HashMap<u32, SmolStr> = HashMap::new();
 
     for item in &un.body {
         if let UnionBodyItem::Tombstone(ts) = item {
@@ -990,12 +1016,24 @@ fn check_union(un: &UnionDecl, ctx: &ValidationContext<'_>, diags: &mut Vec<Diag
             }
 
             if !ordinal_set.insert(ord) {
-                diags.push(Diagnostic::error(
-                    v.node.ordinal.span,
-                    ErrorClass::UnionOrdinalDuplicate,
-                    format!("duplicate union variant ordinal {ord}"),
-                ));
+                if let Some(existing) = ordinal_names.get(&ord) {
+                    diags.push(Diagnostic::error(
+                        v.node.ordinal.span,
+                        ErrorClass::UnionOrdinalDuplicate,
+                        format!(
+                            "union variant ordinal @{} conflicts with variant `{}` (both use the same ordinal)",
+                            ord, existing
+                        ),
+                    ));
+                } else {
+                    diags.push(Diagnostic::error(
+                        v.node.ordinal.span,
+                        ErrorClass::UnionOrdinalDuplicate,
+                        format!("duplicate union variant ordinal @{}", ord),
+                    ));
+                }
             }
+            ordinal_names.insert(ord, v.node.name.node.clone());
 
             check_message_body(&v.node.fields, ctx, diags);
         }
