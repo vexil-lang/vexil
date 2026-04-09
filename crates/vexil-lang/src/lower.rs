@@ -719,6 +719,40 @@ fn lower_trait(
     }
 }
 
+/// Lower an impl declaration to IR.
+fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> crate::ir::ImplDef {
+    let trait_name = decl.trait_name.node.clone();
+
+    // Resolve the target type name to a TypeId
+    let target_type_name = decl.target_type.node.as_str();
+    let target_type = if let Some(id) = ctx.registry.lookup(target_type_name) {
+        crate::ir::ResolvedType::Named(id)
+    } else if ctx.local_names.contains(target_type_name) {
+        // Type should be registered but isn't yet - this shouldn't happen
+        crate::ir::ResolvedType::Named(crate::ir::types::POISON_TYPE_ID)
+    } else {
+        // External type - register a stub
+        let id = ctx.registry.register_stub(SmolStr::new(target_type_name));
+        crate::ir::ResolvedType::Named(id)
+    };
+
+    // TODO: Handle type arguments for generic traits
+    let type_args = vec![];
+
+    // TODO: Function implementations in impl blocks
+    // The AST ImplDecl doesn't have functions yet, so we leave it empty
+    let functions = vec![];
+
+    crate::ir::ImplDef {
+        trait_name,
+        target_type,
+        type_args,
+        functions,
+        annotations: resolve_annotations(&decl.annotations),
+        span,
+    }
+}
+
 fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> ResolvedType {
     match expr {
         TypeExpr::Primitive(p) => ResolvedType::Primitive(*p),
