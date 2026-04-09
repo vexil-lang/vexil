@@ -46,6 +46,8 @@ struct LowerCtx {
     /// TypeIds of generic aliases registered during lowering.
     /// These are added to the declarations list after processing.
     generic_alias_ids: Vec<TypeId>,
+    /// Collected impl definitions for conformance checking.
+    impls: Vec<TypeId>,
 }
 
 impl LowerCtx {
@@ -59,6 +61,7 @@ impl LowerCtx {
             constants: HashMap::new(),
             const_decls: HashMap::new(),
             generic_alias_ids: Vec::new(),
+            impls: Vec::new(),
         }
     }
 
@@ -86,9 +89,10 @@ pub fn lower_with_deps(
     register_import_types(schema, &mut ctx, deps);
     let decl_ids = register_declarations(schema, &mut ctx);
 
-    // First pass: lower non-alias, non-const declarations
+    // First pass: lower non-alias, non-const, non-impl declarations
     let mut alias_decls: Vec<&crate::ast::AliasDecl> = Vec::new();
     let mut const_decls: Vec<&crate::ast::ConstDecl> = Vec::new();
+    let mut impl_decls: Vec<(&crate::ast::ImplDecl, Span)> = Vec::new();
     for (decl_spanned, &id) in schema.declarations.iter().zip(decl_ids.iter()) {
         match &decl_spanned.node {
             Decl::Alias(alias) => {
@@ -100,6 +104,9 @@ pub fn lower_with_deps(
                 ctx.const_decls
                     .insert(c.name.node.clone(), (c.clone(), decl_spanned.span));
             }
+            Decl::Impl(i) => {
+                impl_decls.push((i, decl_spanned.span));
+            }
             _ => {
                 let def = lower_decl(&decl_spanned.node, decl_spanned.span, &mut ctx);
                 // Replace the placeholder registered earlier.
@@ -109,6 +116,19 @@ pub fn lower_with_deps(
                 }
             }
         }
+    }
+
+    // Process impl declarations after all types are registered
+    for (impl_decl, span) in impl_decls {
+        let impl_def = lower_impl(impl_decl, span, &mut ctx);
+        // Generate a unique name for the impl based on trait and target type
+        let impl_name = SmolStr::new(format!(
+            "__impl_{:?}_{:?}",
+            impl_def.trait_name, impl_def.target_type
+        ));
+        let type_def = TypeDef::Impl(impl_def);
+        let id = ctx.registry.register(impl_name, type_def);
+        ctx.impls.push(id);
     }
 
     // Second pass: process aliases after all regular declarations exist

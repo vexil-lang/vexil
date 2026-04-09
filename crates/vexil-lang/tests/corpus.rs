@@ -207,6 +207,11 @@ fn valid_036_where_clause() {
     parse_valid("036_where_clause.vexil");
 }
 
+#[test]
+fn valid_042_trait_impl() {
+    parse_valid("042_trait_impl.vexil");
+}
+
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================
