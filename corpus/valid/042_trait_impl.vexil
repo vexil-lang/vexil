@@ -1,31 +1,21 @@
-namespace test.traits
+// Trait/impl system test
 
-trait SensorData {
-    sensor_id @0 : u32
-    timestamp @1 : u64
+namespace test.trait_impl;
+
+/// Trait for timestamped messages
+trait Timestamped {
+    @1 timestamp: u64;
+
+    fn get_timestamp() -> u64;
 }
 
-trait Validatable {
-    fn validate() -> bool
+/// Event with timestamp
+message Event {
+    @1 timestamp: u64;
+    @2 data: bytes;
 }
 
-trait Tagged {
-    tag @0 : string
-    label @1 : string
+/// Impl of Timestamped for Event
+impl Timestamped for Event {
+    fn get_timestamp() -> u64;
 }
-
-message TemperatureReading {
-    sensor_id @0 : u32
-    timestamp @1 : u64
-    value @2 : fixed32
-}
-
-impl SensorData for TemperatureReading { }
-
-message TaggedItem {
-    tag @0 : string
-    label @1 : string
-    data @2 : bytes
-}
-
-impl Tagged for TaggedItem { }
