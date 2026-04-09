@@ -286,6 +286,21 @@ fn emit_write_type(
             emit_write_type(w, "item", inner, registry, writer);
             w.close_block();
         }
+        ResolvedType::FixedArray(inner, _size) => {
+            w.open_block(&format!("for (const item of {access})"));
+            emit_write_type(w, "item", inner, registry, writer);
+            w.close_block();
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            w.open_block(&format!("for (const item of {access})"));
+            emit_write_type(w, "item", inner, registry, writer);
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.writeLeb128({access}.size);"));
             w.open_block(&format!("for (const [mapK, mapV] of {access})"));
@@ -506,6 +521,36 @@ fn emit_read_type(
             w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
             emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
             w.line(&format!("{var_name}.add({var_name}_item);"));
+            w.close_block();
+        }
+        ResolvedType::FixedArray(inner, size) => {
+            let n = *size;
+            let inner_ts = ts_type(inner, registry);
+            w.line(&format!("const {var_name}: {inner_ts}[] = [];"));
+            w.open_block(&format!("for (let i = 0; i < {n}; i++)"));
+            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
+            w.line(&format!("{var_name}.push({var_name}_item);"));
+            w.close_block();
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            let n = match ty {
+                ResolvedType::Vec2(_) => 2,
+                ResolvedType::Vec3(_) => 3,
+                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
+                ResolvedType::Mat3(_) => 9,
+                ResolvedType::Mat4(_) => 16,
+                _ => unreachable!(),
+            };
+            let inner_ts = ts_type(inner, registry);
+            w.line(&format!("const {var_name}: {inner_ts}[] = [];"));
+            w.open_block(&format!("for (let i = 0; i < {n}; i++)"));
+            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
+            w.line(&format!("{var_name}.push({var_name}_item);"));
             w.close_block();
         }
         ResolvedType::Map(k, v) => {

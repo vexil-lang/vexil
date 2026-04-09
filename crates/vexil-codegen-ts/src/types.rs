@@ -39,6 +39,26 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             format!("{{ ok: {ok_str} }} | {{ err: {err_str} }}")
         }
         ResolvedType::BitsInline(_) => "number".to_string(),
+        ResolvedType::Vec2(inner) => {
+            let inner_str = ts_type(inner, registry);
+            format!("[{inner_str}, {inner_str}]")
+        }
+        ResolvedType::Vec3(inner) => {
+            let inner_str = ts_type(inner, registry);
+            format!("[{inner_str}, {inner_str}, {inner_str}]")
+        }
+        ResolvedType::Vec4(inner) | ResolvedType::Quat(inner) => {
+            let inner_str = ts_type(inner, registry);
+            format!("[{inner_str}, {inner_str}, {inner_str}, {inner_str}]")
+        }
+        ResolvedType::Mat3(inner) => {
+            let inner_str = ts_type(inner, registry);
+            format!("{inner_str}[]") // 9 elements
+        }
+        ResolvedType::Mat4(inner) => {
+            let inner_str = ts_type(inner, registry);
+            format!("{inner_str}[]") // 16 elements
+        }
         _ => "unknown".to_string(),
     }
 }
