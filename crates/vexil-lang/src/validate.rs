@@ -423,6 +423,10 @@ fn check_message_body(
 
     // Second pass: check fields
     for item in body {
+        if let MessageBodyItem::Invariant(_inv) = item {
+            // Invariant validation deferred to codegen phase
+            continue;
+        }
         if let MessageBodyItem::Field(field) = item {
             let f = &field.node;
 

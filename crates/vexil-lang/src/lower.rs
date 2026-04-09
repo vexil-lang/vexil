@@ -414,6 +414,7 @@ fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) 
         match item {
             MessageBodyItem::Field(f) => fields.push(lower_field(&f.node, f.span, ctx)),
             MessageBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span, ctx)),
+            MessageBodyItem::Invariant(_) => {} // invariants lowered with message
         }
     }
 
@@ -535,6 +536,7 @@ fn lower_union(un: &crate::ast::UnionDecl, span: Span, ctx: &mut LowerCtx) -> Un
                         MessageBodyItem::Tombstone(t) => {
                             tombstones.push(lower_tombstone(&t.node, t.span, ctx))
                         }
+                        MessageBodyItem::Invariant(_) => {} // invariants lowered with message
                     }
                 }
                 variants.push(UnionVariantDef {

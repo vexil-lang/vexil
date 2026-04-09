@@ -122,6 +122,7 @@ pub enum TokenKind {
     KwImpl,
     KwFor,
     KwFn,
+    KwInvariant,
 
     /// `optional` keyword.
     KwOptional,

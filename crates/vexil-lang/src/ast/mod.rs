@@ -111,6 +111,18 @@ pub enum MessageBodyItem {
     Field(Spanned<MessageField>),
     /// A tombstoned (removed) field ordinal.
     Tombstone(Spanned<Tombstone>),
+    /// A named invariant condition (cross-field constraint).
+    Invariant(Spanned<MessageInvariant>),
+}
+
+/// A named invariant within a message body.
+/// Example: `invariant AmountNonNegative { amount >= 0 }`
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageInvariant {
+    /// Optional name for the invariant.
+    pub name: Option<Spanned<SmolStr>>,
+    /// The condition expression.
+    pub condition: Spanned<WhereExpr>,
 }
 
 /// A single field within a message or union variant.

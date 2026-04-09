@@ -365,6 +365,7 @@ impl<'a> Lexer<'a> {
             "impl" => TokenKind::KwImpl,
             "for" => TokenKind::KwFor,
             "fn" => TokenKind::KwFn,
+            "invariant" => TokenKind::KwInvariant,
             "optional" => TokenKind::KwOptional,
             "array" => TokenKind::KwArray,
             "set" => TokenKind::KwSet,

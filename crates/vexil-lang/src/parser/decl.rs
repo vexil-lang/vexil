@@ -1,8 +1,9 @@
 use crate::ast::{
     AliasDecl, Annotation, BinOpKind, CmpOp, ConfigDecl, ConfigField, ConstDecl, ConstExpr, Decl,
     EnumBacking, EnumBodyItem, EnumDecl, EnumVariant, FlagsBit, FlagsBodyItem, FlagsDecl, FnParam,
-    ImplDecl, MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, Tombstone, TombstoneArg,
-    TraitDecl, TraitFnDecl, UnionBodyItem, UnionDecl, UnionVariant, WhereExpr, WhereOperand,
+    ImplDecl, MessageBodyItem, MessageDecl, MessageField, MessageInvariant, NewtypeDecl, Tombstone,
+    TombstoneArg, TraitDecl, TraitFnDecl, UnionBodyItem, UnionDecl, UnionVariant, WhereExpr,
+    WhereOperand,
 };
 use crate::diagnostic::ErrorClass;
 use crate::lexer::token::TokenKind;
@@ -151,6 +152,13 @@ fn parse_message_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> Messa
         if is_at_tombstone(p) {
             let ts = parse_tombstone(p);
             body.push(MessageBodyItem::Tombstone(ts));
+            continue;
+        }
+
+        // Check for invariant
+        if p.at(&TokenKind::KwInvariant) {
+            let inv = parse_message_invariant(p);
+            body.push(MessageBodyItem::Invariant(inv));
             continue;
         }
 
@@ -678,6 +686,37 @@ fn parse_tombstone(p: &mut Parser<'_>) -> Spanned<Tombstone> {
             original_type,
         },
         span,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Invariant
+// ---------------------------------------------------------------------------
+
+fn parse_message_invariant(p: &mut Parser<'_>) -> Spanned<MessageInvariant> {
+    let start = p.current_offset();
+    p.advance(); // consume KwInvariant
+
+    // Optional name: invariant Name { ... } or just invariant { ... }
+    let name = if let TokenKind::UpperIdent(s) = p.peek_kind() {
+        let n = Spanned::new(s.clone(), p.peek().span);
+        p.advance();
+        Some(n)
+    } else {
+        None
+    };
+
+    p.expect(&TokenKind::LBrace);
+
+    // Parse the condition expression (reuse where clause expression parsing)
+    let condition = parse_where_or(p);
+
+    p.expect(&TokenKind::RBrace);
+
+    let end = p.current_offset();
+    Spanned::new(
+        MessageInvariant { name, condition },
+        Span::new(start, end - start),
     )
 }
 

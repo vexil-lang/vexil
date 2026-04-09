@@ -1,0 +1,14 @@
+namespace test.inv
+
+message Balance {
+    amount @0 : fixed64
+    invariant AmountNonNegative { value >= 0 }
+}
+
+message Transfer {
+    from @0 : fixed64
+    to @1 : fixed64
+    amount @2 : fixed64
+    invariant { value >= 0 }
+    invariant PositiveAmount { value > 0 }
+}
