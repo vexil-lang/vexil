@@ -12,7 +12,7 @@
 | `fixed32` | 32 bits | Q16.16 fixed-point (two's complement) |
 | `fixed64` | 64 bits | Q32.32 fixed-point (two's complement) |
 
-Fixed-point types (`fixed32`, `fixed64`) provide deterministic fractional arithmetic. Unlike IEEE 754 floats, the same operation always produces the same result across platforms — essential for simulation, networking, and content-addressed data.
+Fixed-point types (`fixed32`, `fixed64`) give you deterministic fractional arithmetic. The same operation gives the same result on every platform — unlike IEEE 754 floats, which can vary between ARM and x86 due to rounding mode differences. We use fixed-point for simulation in the Orix ecosystem where every node must compute identical results.
 
 The `@varint` annotation is valid on `fixed32` and `fixed64`, encoding the raw `i32`/`i64` as unsigned LEB128 for variable-length wire representation.
 
@@ -23,7 +23,7 @@ The `@varint` annotation is valid on `fixed32` and `fixed64`, encoding the raw `
 | `u1` -- `u7` | 1--7 bits | Unsigned sub-byte integers |
 | `i2` -- `i7` | 2--7 bits | Signed sub-byte integers |
 
-Sub-byte fields are packed LSB-first within each byte. This is unique to Vexil -- Protocol Buffers and other formats cannot represent fields smaller than one byte.
+Sub-byte fields are packed LSB-first within each byte. Protobuf and FlatBuffers can't do sub-byte fields — everything has to be at least a byte.
 
 ## Semantic types
 
