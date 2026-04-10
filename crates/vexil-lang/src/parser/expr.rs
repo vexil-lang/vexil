@@ -1,8 +1,12 @@
 use super::Parser;
-use crate::ast::{DefaultValue, PrimitiveType, SemanticType, SubByteType, TypeExpr};
+use crate::ast::{
+    BinOpKind, DefaultValue, Expr, PrimitiveType, SemanticType, Statement, SubByteType, TypeExpr,
+    UnaryOpKind,
+};
 use crate::diagnostic::ErrorClass;
 use crate::lexer::token::TokenKind;
-use crate::span::Spanned;
+use crate::span::{Span, Spanned};
+use smol_str::SmolStr;
 
 // ---------------------------------------------------------------------------
 // Type expression parsing
@@ -365,4 +369,329 @@ pub(crate) fn parse_literal_value(p: &mut Parser<'_>) -> Spanned<DefaultValue> {
             Spanned::new(DefaultValue::None, span)
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Expression parsing
+// ---------------------------------------------------------------------------
+
+/// Parse a primary expression (literals, identifiers, self, parens).
+pub(crate) fn parse_primary_expr(p: &mut Parser<'_>) -> Spanned<Expr> {
+    let start = p.current_offset();
+
+    match p.peek_kind().clone() {
+        TokenKind::DecInt(v) => {
+            p.advance();
+            Spanned::new(Expr::Int(v as i64), p.span_from(start))
+        }
+        TokenKind::HexInt(v) => {
+            p.advance();
+            Spanned::new(Expr::Int(v as i64), p.span_from(start))
+        }
+        TokenKind::FloatLit(v) => {
+            p.advance();
+            Spanned::new(Expr::Float(v), p.span_from(start))
+        }
+        TokenKind::Ident(s) | TokenKind::UpperIdent(s) => {
+            p.advance();
+            let expr = Expr::Ident(s.clone());
+
+            // Check for field access or method call
+            let mut expr = Spanned::new(expr, p.span_from(start));
+            loop {
+                if p.at(&TokenKind::Dot) {
+                    p.advance();
+                    let field_name = match p.peek_kind().as_field_name() {
+                        Some(name) => {
+                            let span = p.peek().span;
+                            p.advance();
+                            Spanned::new(name, span)
+                        }
+                        None => {
+                            p.emit(
+                                p.peek().span,
+                                ErrorClass::UnexpectedToken,
+                                "expected field name",
+                            );
+                            Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset()))
+                        }
+                    };
+
+                    // Check if this is a method call
+                    if p.at(&TokenKind::LParen) {
+                        let args = parse_call_args(p);
+                        expr = Spanned::new(
+                            Expr::MethodCall(Box::new(expr.node), field_name, args),
+                            p.span_from(start),
+                        );
+                    } else {
+                        expr = Spanned::new(
+                            Expr::FieldAccess(Box::new(expr.node), field_name),
+                            p.span_from(start),
+                        );
+                    }
+                } else if p.at(&TokenKind::LParen) {
+                    // Function call
+                    let args = parse_call_args(p);
+                    expr = Spanned::new(Expr::Call(Box::new(expr.node), args), p.span_from(start));
+                } else {
+                    break;
+                }
+            }
+
+            expr
+        }
+        TokenKind::StringLit(s) => {
+            p.advance();
+            Spanned::new(Expr::String(s.clone()), p.span_from(start))
+        }
+        TokenKind::KwTrue => {
+            p.advance();
+            Spanned::new(Expr::Bool(true), p.span_from(start))
+        }
+        TokenKind::KwFalse => {
+            p.advance();
+            Spanned::new(Expr::Bool(false), p.span_from(start))
+        }
+        TokenKind::KwResult => {
+            // 'result' keyword can be used as an identifier (e.g., variable name)
+            p.advance();
+            Spanned::new(Expr::Ident(SmolStr::new("result")), p.span_from(start))
+        }
+        TokenKind::KwSelf => {
+            p.advance();
+            let mut expr = Spanned::new(Expr::SelfRef, p.span_from(start));
+            // Handle field access and method calls on self
+            loop {
+                if p.at(&TokenKind::Dot) {
+                    p.advance();
+                    let field_name = match p.peek_kind().as_field_name() {
+                        Some(name) => {
+                            let span = p.peek().span;
+                            p.advance();
+                            Spanned::new(name, span)
+                        }
+                        None => {
+                            p.emit(
+                                p.peek().span,
+                                ErrorClass::UnexpectedToken,
+                                "expected field name",
+                            );
+                            Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset()))
+                        }
+                    };
+
+                    // Check if this is a method call
+                    if p.at(&TokenKind::LParen) {
+                        let args = parse_call_args(p);
+                        expr = Spanned::new(
+                            Expr::MethodCall(Box::new(expr.node), field_name, args),
+                            p.span_from(start),
+                        );
+                    } else {
+                        expr = Spanned::new(
+                            Expr::FieldAccess(Box::new(expr.node), field_name),
+                            p.span_from(start),
+                        );
+                    }
+                } else {
+                    break;
+                }
+            }
+            expr
+        }
+        TokenKind::LParen => {
+            p.advance();
+            let expr = parse_expr(p);
+            p.expect(&TokenKind::RParen);
+            expr
+        }
+        TokenKind::Minus => {
+            p.advance();
+            let expr = parse_primary_expr(p);
+            Spanned::new(
+                Expr::Unary(UnaryOpKind::Neg, Box::new(expr.node)),
+                p.span_from(start),
+            )
+        }
+        TokenKind::Bang => {
+            p.advance();
+            let expr = parse_primary_expr(p);
+            Spanned::new(
+                Expr::Unary(UnaryOpKind::Not, Box::new(expr.node)),
+                p.span_from(start),
+            )
+        }
+        _ => {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected expression",
+            );
+            Spanned::new(Expr::Int(0), Span::empty(p.current_offset()))
+        }
+    }
+}
+
+/// Parse function call arguments.
+pub(crate) fn parse_call_args(p: &mut Parser<'_>) -> Vec<Expr> {
+    p.expect(&TokenKind::LParen);
+    let mut args = Vec::new();
+
+    while !p.at(&TokenKind::RParen) && !p.at_eof() {
+        args.push(parse_expr(p).node);
+
+        if p.at(&TokenKind::Comma) {
+            p.advance();
+        } else if !p.at(&TokenKind::RParen) {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected ',' or ')'",
+            );
+            break;
+        }
+    }
+
+    p.expect(&TokenKind::RParen);
+    args
+}
+
+/// Parse expression with operator precedence.
+pub(crate) fn parse_expr(p: &mut Parser<'_>) -> Spanned<Expr> {
+    parse_binary_expr(p, 0)
+}
+
+fn parse_binary_expr(p: &mut Parser<'_>, min_prec: u8) -> Spanned<Expr> {
+    let start = p.current_offset();
+    let mut lhs = parse_primary_expr(p);
+
+    loop {
+        let op = match peek_binary_op(p) {
+            Some(op) if precedence(&op) >= min_prec => op,
+            _ => break,
+        };
+
+        let prec = precedence(&op);
+        p.advance(); // consume operator
+
+        let rhs = parse_binary_expr(p, prec + 1);
+
+        lhs = Spanned::new(
+            Expr::Binary(op, Box::new(lhs.node), Box::new(rhs.node)),
+            p.span_from(start),
+        );
+    }
+
+    lhs
+}
+
+fn peek_binary_op(p: &Parser<'_>) -> Option<BinOpKind> {
+    match p.peek_kind() {
+        TokenKind::Plus => Some(BinOpKind::Add),
+        TokenKind::Minus => Some(BinOpKind::Sub),
+        TokenKind::Star => Some(BinOpKind::Mul),
+        TokenKind::Slash => Some(BinOpKind::Div),
+        TokenKind::EqEq => Some(BinOpKind::Eq),
+        TokenKind::Ne => Some(BinOpKind::Ne),
+        TokenKind::LAngle => Some(BinOpKind::Lt),
+        TokenKind::Le => Some(BinOpKind::Le),
+        TokenKind::RAngle => Some(BinOpKind::Gt),
+        TokenKind::Ge => Some(BinOpKind::Ge),
+        _ => None,
+    }
+}
+
+fn precedence(op: &BinOpKind) -> u8 {
+    match op {
+        BinOpKind::Mul | BinOpKind::Div => 4,
+        BinOpKind::Add | BinOpKind::Sub => 3,
+        BinOpKind::Eq | BinOpKind::Ne => 2,
+        BinOpKind::Lt | BinOpKind::Le | BinOpKind::Gt | BinOpKind::Ge => 2,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Statement parsing
+// ---------------------------------------------------------------------------
+
+/// Parse a statement.
+pub(crate) fn parse_statement(p: &mut Parser<'_>) -> Option<Statement> {
+    match p.peek_kind() {
+        TokenKind::KwLet => Some(parse_let_stmt(p)),
+        TokenKind::KwReturn => Some(parse_return_stmt(p)),
+        _ => {
+            // Try as expression statement or assignment
+            let start_pos = p.current_offset();
+            let expr = parse_expr(p);
+            // Ensure we always make progress to prevent infinite loops
+            if p.current_offset() == start_pos {
+                // Expression parsing didn't advance - skip the problematic token
+                p.advance();
+                return None;
+            }
+            if p.at(&TokenKind::Eq) {
+                p.advance();
+                let value = parse_expr(p);
+                Some(Statement::Assign {
+                    target: expr.node,
+                    value: value.node,
+                })
+            } else {
+                Some(Statement::Expr(expr.node))
+            }
+        }
+    }
+}
+
+fn parse_let_stmt(p: &mut Parser<'_>) -> Statement {
+    p.advance(); // consume 'let'
+
+    let name = match p.peek_kind() {
+        TokenKind::Ident(s) => {
+            let name = s.clone();
+            let span = p.peek().span;
+            p.advance();
+            Spanned::new(name, span)
+        }
+        // Keywords that can be used as identifiers (variable names)
+        TokenKind::KwResult => {
+            let span = p.peek().span;
+            p.advance();
+            Spanned::new(SmolStr::new("result"), span)
+        }
+        _ => {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected identifier",
+            );
+            Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset()))
+        }
+    };
+
+    // Optional type annotation
+    let ty = if p.at(&TokenKind::Colon) {
+        p.advance();
+        Some(parse_type_expr(p))
+    } else {
+        None
+    };
+
+    p.expect(&TokenKind::Eq);
+    let value = parse_expr(p).node;
+
+    Statement::Let { name, ty, value }
+}
+
+fn parse_return_stmt(p: &mut Parser<'_>) -> Statement {
+    p.advance(); // consume 'return'
+
+    let value = if !p.at(&TokenKind::RBrace) && !p.at_eof() {
+        Some(parse_expr(p).node)
+    } else {
+        None
+    };
+
+    Statement::Return(value)
 }

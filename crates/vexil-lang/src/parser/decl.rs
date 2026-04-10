@@ -10,7 +10,7 @@ use crate::lexer::token::TokenKind;
 use crate::span::{Span, Spanned};
 use smol_str::SmolStr;
 
-use super::expr::{parse_literal_value, parse_type_expr};
+use super::expr::{parse_literal_value, parse_statement, parse_type_expr};
 use super::{parse_annotation_value, parse_annotations, Parser};
 
 // ---------------------------------------------------------------------------
@@ -1804,9 +1804,23 @@ fn parse_impl_fn_decl(p: &mut Parser<'_>) -> ImplFnDecl {
         None
     };
 
-    // For now, functions in impl are always external (no body)
-    // TODO: support block bodies: { statements }
-    let body = ImplFnBody::External;
+    // Parse body: either external (no body) or block
+    let body = if p.at(&TokenKind::LBrace) {
+        p.advance(); // consume LBrace
+
+        let mut statements = Vec::new();
+        while !p.at(&TokenKind::RBrace) && !p.at_eof() {
+            if let Some(stmt) = parse_statement(p) {
+                statements.push(stmt);
+            }
+        }
+
+        p.expect(&TokenKind::RBrace);
+        ImplFnBody::Block(statements)
+    } else {
+        // External function - no body needed
+        ImplFnBody::External
+    };
 
     ImplFnDecl {
         annotations: Vec::new(), // TODO: parse annotations on impl fns

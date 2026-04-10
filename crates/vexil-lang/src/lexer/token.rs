@@ -161,6 +161,12 @@ pub enum TokenKind {
     KwIn,
     /// `value` pseudo-keyword (constraint operand).
     KwValue,
+    /// `self` keyword (impl block receiver).
+    KwSelf,
+    /// `let` keyword (variable binding).
+    KwLet,
+    /// `return` keyword (function return).
+    KwReturn,
 
     // Special
     /// End of file marker.
@@ -204,6 +210,9 @@ impl TokenKind {
                 | TokenKind::KwQuat
                 | TokenKind::KwMat3
                 | TokenKind::KwMat4
+                | TokenKind::KwSelf
+                | TokenKind::KwLet
+                | TokenKind::KwReturn
         )
     }
 
@@ -241,6 +250,9 @@ impl TokenKind {
             TokenKind::KwQuat => Some("quat".into()),
             TokenKind::KwMat3 => Some("mat3".into()),
             TokenKind::KwMat4 => Some("mat4".into()),
+            TokenKind::KwSelf => Some("self".into()),
+            TokenKind::KwLet => Some("let".into()),
+            TokenKind::KwReturn => Some("return".into()),
             _ => None,
         }
     }

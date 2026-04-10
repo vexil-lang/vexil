@@ -1442,6 +1442,8 @@ fn eval_const_expr(
                         Some(left_val / right_val)
                     }
                 }
+                // Comparison operators not valid in const expressions
+                _ => None,
             }
         }
         _ => None,

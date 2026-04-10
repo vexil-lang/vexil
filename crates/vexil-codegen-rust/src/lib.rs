@@ -18,6 +18,7 @@ pub mod delta;
 pub mod emit;
 pub mod enum_gen;
 pub mod flags;
+pub mod fn_body;
 pub mod message;
 pub mod newtype;
 pub mod types;
@@ -137,6 +138,9 @@ pub(crate) fn generate_with_imports(
             TypeDef::Config(cfg) => {
                 config::emit_config(&mut w, cfg, &compiled.registry, &needs_box);
             }
+            TypeDef::Impl(impl_def) => {
+                emit_impl(&mut w, impl_def);
+            }
             _ => {} // non_exhaustive guard
         }
     }
@@ -213,6 +217,124 @@ fn resolved_type_uses_map(ty: &ResolvedType) -> bool {
         ResolvedType::Result(ok, err) => resolved_type_uses_map(ok) || resolved_type_uses_map(err),
         _ => false,
     }
+}
+
+/// Simple type emission for function parameters and return types.
+fn simple_rust_type(ty: &vexil_lang::ir::ResolvedType) -> String {
+    use vexil_lang::ast::{PrimitiveType, SemanticType};
+    use vexil_lang::ir::ResolvedType;
+
+    match ty {
+        ResolvedType::Primitive(p) => match p {
+            PrimitiveType::Bool => "bool".to_string(),
+            PrimitiveType::U8 => "u8".to_string(),
+            PrimitiveType::U16 => "u16".to_string(),
+            PrimitiveType::U32 => "u32".to_string(),
+            PrimitiveType::U64 => "u64".to_string(),
+            PrimitiveType::I8 => "i8".to_string(),
+            PrimitiveType::I16 => "i16".to_string(),
+            PrimitiveType::I32 => "i32".to_string(),
+            PrimitiveType::I64 => "i64".to_string(),
+            PrimitiveType::F32 => "f32".to_string(),
+            PrimitiveType::F64 => "f64".to_string(),
+            PrimitiveType::Fixed32 => "i32".to_string(),
+            PrimitiveType::Fixed64 => "i64".to_string(),
+            PrimitiveType::Void => "()".to_string(),
+        },
+        ResolvedType::Semantic(s) => match s {
+            SemanticType::String => "String".to_string(),
+            SemanticType::Bytes => "Vec<u8>".to_string(),
+            SemanticType::Rgb => "Rgb".to_string(),
+            SemanticType::Uuid => "[u8; 16]".to_string(),
+            SemanticType::Timestamp => "i64".to_string(),
+            SemanticType::Hash => "[u8; 32]".to_string(),
+        },
+        ResolvedType::Optional(inner) => {
+            let inner_str = simple_rust_type(inner);
+            format!("Option<{}>", inner_str)
+        }
+        ResolvedType::Array(inner) => {
+            let inner_str = simple_rust_type(inner);
+            format!("Vec<{}>", inner_str)
+        }
+        ResolvedType::FixedArray(inner, size) => {
+            let inner_str = simple_rust_type(inner);
+            format!("[{}; {}]", inner_str, size)
+        }
+        ResolvedType::Named(_) => "/* Named type */".to_string(),
+        _ => "/* Complex type */".to_string(),
+    }
+}
+
+/// Emit an impl block for a trait implementation.
+fn emit_impl(w: &mut crate::emit::CodeWriter, impl_def: &vexil_lang::ir::ImplDef) {
+    use vexil_lang::ir::ResolvedType;
+
+    // Get the target type name
+    let target_type_str = match &impl_def.target_type {
+        ResolvedType::Named(id) => format!("Type{id:?}"),
+        ResolvedType::Primitive(p) => simple_rust_type(&ResolvedType::Primitive(*p)),
+        other => simple_rust_type(other),
+    };
+
+    // Generate the trait implementation
+    let trait_name = &impl_def.trait_name;
+    w.blank();
+    w.line(&format!("impl {trait_name} for {target_type_str} {{"));
+
+    // Emit each function
+    for func in &impl_def.functions {
+        emit_impl_fn(w, func);
+    }
+
+    w.line("}");
+}
+
+/// Emit a single function within an impl block.
+fn emit_impl_fn(w: &mut crate::emit::CodeWriter, func: &vexil_lang::ir::ImplFnDef) {
+    use vexil_lang::ir::FnBody;
+
+    let fn_name = &func.name;
+
+    // Build parameter list
+    let mut params = Vec::new();
+    params.push("&self".to_string());
+    for param in &func.params {
+        let ty_str = simple_rust_type(&param.ty);
+        params.push(format!("{}: {}", param.name, ty_str));
+    }
+
+    // Build return type
+    let return_str = if let Some(ret_ty) = &func.return_type {
+        let ty_str = simple_rust_type(ret_ty);
+        format!(" -> {}", ty_str)
+    } else {
+        String::new()
+    };
+
+    // Emit function signature
+    w.indent();
+    w.line(&format!(
+        "fn {}({}){} {{",
+        fn_name,
+        params.join(", "),
+        return_str
+    ));
+
+    // Emit function body
+    match &func.body {
+        FnBody::External => {
+            w.indent();
+            w.line("unimplemented!(\"external function\")");
+            w.dedent();
+        }
+        FnBody::Block(stmts) => {
+            crate::fn_body::emit_fn_body(w, &FnBody::Block(stmts.clone()));
+        }
+    }
+
+    w.line("}");
+    w.dedent();
 }
 
 #[cfg(test)]

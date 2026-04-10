@@ -395,11 +395,76 @@ pub struct ImplFnDef {
     pub body: FnBody, // For now, just store signature; body comes later
 }
 
-/// Function body (placeholder for now).
+/// Binary operators in IR expressions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+/// Unary operators in IR expressions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Neg,
+    Not,
+}
+
+/// IR expression.
+#[derive(Debug, Clone)]
+pub enum Expr {
+    Int(i64),
+    UInt(u64),
+    Float(f64),
+    Bool(bool),
+    String(String),
+    /// Local variable or parameter reference.
+    Local(SmolStr),
+    /// Field access on self or another expression.
+    FieldAccess(Box<Expr>, SmolStr),
+    /// Function call (resolved to specific function).
+    Call(SmolStr, Vec<Expr>),
+    /// Trait method call - will be resolved to specific impl.
+    TraitMethodCall {
+        trait_name: SmolStr,
+        method_name: SmolStr,
+        receiver: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    Binary(BinOp, Box<Expr>, Box<Expr>),
+    Unary(UnaryOp, Box<Expr>),
+    /// Self reference.
+    SelfRef,
+}
+
+/// IR statement.
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Expr(Expr),
+    Let {
+        name: SmolStr,
+        ty: Option<ResolvedType>,
+        value: Expr,
+    },
+    Return(Option<Expr>),
+    Assign {
+        target: Expr,
+        value: Expr,
+    },
+}
+
+/// Function body.
 #[derive(Debug, Clone)]
 pub enum FnBody {
     /// Implemented via FFI or native code (no Vexil source body).
     External,
-    /// TODO: Add expression-based body when we have expressions.
-    Unimplemented,
+    /// Block body with statements.
+    Block(Vec<Statement>),
 }

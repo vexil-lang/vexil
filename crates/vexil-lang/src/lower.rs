@@ -120,6 +120,10 @@ pub fn lower_with_deps(
 
     // Process impl declarations after all types are registered
     for (impl_decl, span) in impl_decls {
+        eprintln!(
+            "DEBUG: lowering impl for trait {:?}",
+            impl_decl.trait_name.node
+        );
         let impl_def = lower_impl(impl_decl, span, &mut ctx);
         // Generate a unique name for the impl based on trait and target type
         let impl_name = SmolStr::new(format!(
@@ -763,21 +767,30 @@ fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> cr
     let functions = decl
         .functions
         .iter()
-        .map(|f| crate::ir::ImplFnDef {
-            name: f.name.node.clone(),
-            params: f
-                .params
-                .iter()
-                .map(|p| crate::ir::FnParamDef {
-                    name: p.name.node.clone(),
-                    ty: resolve_type_expr(&p.ty.node, p.name.span, ctx),
-                })
-                .collect(),
-            return_type: f
-                .return_type
-                .as_ref()
-                .map(|t| resolve_type_expr(&t.node, span, ctx)),
-            body: crate::ir::FnBody::External, // TODO: support block bodies
+        .map(|f| {
+            let body = match &f.body {
+                crate::ast::ImplFnBody::External => crate::ir::FnBody::External,
+                crate::ast::ImplFnBody::Block(stmts) => {
+                    let ir_stmts = stmts.iter().map(|s| lower_statement(s, ctx)).collect();
+                    crate::ir::FnBody::Block(ir_stmts)
+                }
+            };
+            crate::ir::ImplFnDef {
+                name: f.name.node.clone(),
+                params: f
+                    .params
+                    .iter()
+                    .map(|p| crate::ir::FnParamDef {
+                        name: p.name.node.clone(),
+                        ty: resolve_type_expr(&p.ty.node, p.name.span, ctx),
+                    })
+                    .collect(),
+                return_type: f
+                    .return_type
+                    .as_ref()
+                    .map(|t| resolve_type_expr(&t.node, span, ctx)),
+                body,
+            }
         })
         .collect();
 
@@ -788,6 +801,108 @@ fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> cr
         functions,
         annotations: resolve_annotations(&decl.annotations),
         span,
+    }
+}
+
+/// Lower an expression from AST to IR.
+#[allow(clippy::only_used_in_recursion)]
+fn lower_expr(expr: &crate::ast::Expr, ctx: &mut LowerCtx) -> crate::ir::Expr {
+    use crate::ast::Expr as AstExpr;
+
+    match expr {
+        AstExpr::Int(v) => crate::ir::Expr::Int(*v),
+        AstExpr::UInt(v) => crate::ir::Expr::UInt(*v),
+        AstExpr::Float(v) => crate::ir::Expr::Float(*v),
+        AstExpr::Bool(v) => crate::ir::Expr::Bool(*v),
+        AstExpr::String(s) => crate::ir::Expr::String(s.clone()),
+        AstExpr::Ident(name) => crate::ir::Expr::Local(name.clone()),
+        AstExpr::SelfRef => crate::ir::Expr::SelfRef,
+        AstExpr::FieldAccess(obj, field) => {
+            let obj = lower_expr(obj, ctx);
+            crate::ir::Expr::FieldAccess(Box::new(obj), field.node.clone())
+        }
+        AstExpr::Call(func, args) => {
+            let func_name = match func.as_ref() {
+                AstExpr::Ident(name) => name.clone(),
+                _ => SmolStr::new("__error"),
+            };
+            let args = args.iter().map(|a| lower_expr(a, ctx)).collect();
+            crate::ir::Expr::Call(func_name, args)
+        }
+        AstExpr::MethodCall(receiver, method, args) => {
+            let receiver = lower_expr(receiver, ctx);
+            let args: Vec<_> = args.iter().map(|a| lower_expr(a, ctx)).collect();
+
+            // For now, emit trait method call - resolution happens later
+            crate::ir::Expr::TraitMethodCall {
+                trait_name: SmolStr::new("__unresolved"), // filled in by typeck
+                method_name: method.node.clone(),
+                receiver: Box::new(receiver),
+                args,
+            }
+        }
+        AstExpr::Binary(op, lhs, rhs) => {
+            let lhs = lower_expr(lhs, ctx);
+            let rhs = lower_expr(rhs, ctx);
+            let ir_op = lower_bin_op(*op);
+            crate::ir::Expr::Binary(ir_op, Box::new(lhs), Box::new(rhs))
+        }
+        AstExpr::Unary(op, expr) => {
+            let expr = lower_expr(expr, ctx);
+            let ir_op = lower_unary_op(*op);
+            crate::ir::Expr::Unary(ir_op, Box::new(expr))
+        }
+    }
+}
+
+/// Lower a binary operator from AST to IR.
+fn lower_bin_op(op: crate::ast::BinOpKind) -> crate::ir::BinOp {
+    use crate::ast::BinOpKind as Ast;
+    use crate::ir::BinOp as Ir;
+
+    match op {
+        Ast::Add => Ir::Add,
+        Ast::Sub => Ir::Sub,
+        Ast::Mul => Ir::Mul,
+        Ast::Div => Ir::Div,
+        Ast::Eq => Ir::Eq,
+        Ast::Ne => Ir::Ne,
+        Ast::Lt => Ir::Lt,
+        Ast::Le => Ir::Le,
+        Ast::Gt => Ir::Gt,
+        Ast::Ge => Ir::Ge,
+    }
+}
+
+/// Lower a unary operator from AST to IR.
+fn lower_unary_op(op: crate::ast::UnaryOpKind) -> crate::ir::UnaryOp {
+    use crate::ast::UnaryOpKind as Ast;
+    use crate::ir::UnaryOp as Ir;
+
+    match op {
+        Ast::Neg => Ir::Neg,
+        Ast::Not => Ir::Not,
+    }
+}
+
+/// Lower a statement from AST to IR.
+fn lower_statement(stmt: &crate::ast::Statement, ctx: &mut LowerCtx) -> crate::ir::Statement {
+    use crate::ast::Statement as Ast;
+
+    match stmt {
+        Ast::Expr(e) => crate::ir::Statement::Expr(lower_expr(e, ctx)),
+        Ast::Let { name, ty, value } => crate::ir::Statement::Let {
+            name: name.node.clone(),
+            ty: ty
+                .as_ref()
+                .map(|t| resolve_type_expr(&t.node, name.span, ctx)),
+            value: lower_expr(value, ctx),
+        },
+        Ast::Return(v) => crate::ir::Statement::Return(v.as_ref().map(|e| lower_expr(e, ctx))),
+        Ast::Assign { target, value } => crate::ir::Statement::Assign {
+            target: lower_expr(target, ctx),
+            value: lower_expr(value, ctx),
+        },
     }
 }
 
@@ -1416,6 +1531,8 @@ fn eval_const_expr(expr: &ConstExpr, values: &HashMap<SmolStr, ConstValue>) -> O
                         left_val.checked_div(right_val)
                     }
                 }
+                // Comparison operators not valid in const expressions
+                _ => None,
             }
         }
         _ => None,

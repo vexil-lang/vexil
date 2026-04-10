@@ -379,7 +379,7 @@ pub enum ConstExpr {
     },
 }
 
-/// Arithmetic operators for constant expressions.
+/// Arithmetic and comparison operators for expressions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOpKind {
     /// Addition.
@@ -390,6 +390,18 @@ pub enum BinOpKind {
     Mul,
     /// Division.
     Div,
+    /// Equality.
+    Eq,
+    /// Inequality.
+    Ne,
+    /// Less than.
+    Lt,
+    /// Less than or equal.
+    Le,
+    /// Greater than.
+    Gt,
+    /// Greater than or equal.
+    Ge,
 }
 
 // ---------------------------------------------------------------------------
@@ -455,8 +467,71 @@ pub struct ImplFnDecl {
 pub enum ImplFnBody {
     /// External function (no body, just semicolon).
     External,
-    /// TODO: Block-based body with statements/expressions.
-    Block,
+    /// Block body with statements.
+    Block(Vec<Statement>),
+}
+
+// ---------------------------------------------------------------------------
+// Expressions
+// ---------------------------------------------------------------------------
+
+/// A runtime expression in the Vexil AST.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Expr {
+    /// Integer literal.
+    Int(i64),
+    /// Unsigned integer literal.
+    UInt(u64),
+    /// Float literal.
+    Float(f64),
+    /// Boolean literal.
+    Bool(bool),
+    /// String literal.
+    String(String),
+    /// Identifier reference.
+    Ident(SmolStr),
+    /// Field access: `obj.field`.
+    FieldAccess(Box<Expr>, Spanned<SmolStr>),
+    /// Function call: `fn(args)`.
+    Call(Box<Expr>, Vec<Expr>),
+    /// Method call: `obj.method(args)` - crucial for trait dispatch.
+    MethodCall(Box<Expr>, Spanned<SmolStr>, Vec<Expr>),
+    /// Binary operation: `lhs op rhs`.
+    Binary(BinOpKind, Box<Expr>, Box<Expr>),
+    /// Unary operation: `op expr`.
+    Unary(UnaryOpKind, Box<Expr>),
+    /// Self reference within impl block.
+    SelfRef,
+}
+
+/// Unary operators.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOpKind {
+    /// Negation: `-expr`.
+    Neg,
+    /// Logical NOT: `!expr`.
+    Not,
+}
+
+// ---------------------------------------------------------------------------
+// Statements
+// ---------------------------------------------------------------------------
+
+/// A statement in a function body.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Statement {
+    /// Expression evaluated for side effects or return value.
+    Expr(Expr),
+    /// Variable binding: `let name: Type = value;`.
+    Let {
+        name: Spanned<SmolStr>,
+        ty: Option<Spanned<TypeExpr>>,
+        value: Expr,
+    },
+    /// Return statement: `return expr;`.
+    Return(Option<Expr>),
+    /// Assignment: `target = value;`.
+    Assign { target: Expr, value: Expr },
 }
 
 /// An implementation declaration for a trait on a type.
