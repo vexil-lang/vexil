@@ -1379,7 +1379,7 @@ pub fn evaluate_consts(schema: &Schema, diags: &mut Vec<Diagnostic>) -> HashMap<
     for name in eval_order {
         if let Some(c) = const_map.get(name) {
             match eval_const_expr(&c.value.node, &result, diags) {
-                Some(value) => {
+                Some((value, _)) => {
                     result.insert((*name).clone(), value);
                 }
                 None => {
@@ -1409,16 +1409,15 @@ fn eval_const_expr(
     expr: &ConstExpr,
     values: &HashMap<SmolStr, i64>,
     diags: &mut Vec<Diagnostic>,
-) -> Option<i64> {
+) -> Option<(i64, Span)> {
     match expr {
-        ConstExpr::Int(v) => Some(*v),
-        ConstExpr::UInt(v) => Some(*v as i64),
-        ConstExpr::Hex(v) => Some(*v as i64),
+        ConstExpr::Int(v) => Some((*v, Span::empty(0))),
+        ConstExpr::UInt(v) => Some((*v as i64, Span::empty(0))),
+        ConstExpr::Hex(v) => Some((*v as i64, Span::empty(0))),
         ConstExpr::ConstRef(name) => {
             if let Some(&val) = values.get(name) {
-                Some(val)
+                Some((val, Span::empty(0)))
             } else {
-                // Reference not found - will be caught as cycle or undefined ref
                 None
             }
         }
@@ -1427,22 +1426,21 @@ fn eval_const_expr(
             let right_val = eval_const_expr(right, values, diags)?;
 
             match op {
-                BinOpKind::Add => Some(left_val + right_val),
-                BinOpKind::Sub => Some(left_val - right_val),
-                BinOpKind::Mul => Some(left_val * right_val),
+                BinOpKind::Add => Some((left_val.0 + right_val.0, left_val.1)),
+                BinOpKind::Sub => Some((left_val.0 - right_val.0, left_val.1)),
+                BinOpKind::Mul => Some((left_val.0 * right_val.0, left_val.1)),
                 BinOpKind::Div => {
-                    if right_val == 0 {
+                    if right_val.0 == 0 {
                         diags.push(Diagnostic::error(
-                            Span::empty(0), // TODO: get proper span
+                            left_val.1,
                             ErrorClass::ConstDivByZero,
                             "division by zero in constant expression",
                         ));
                         None
                     } else {
-                        Some(left_val / right_val)
+                        Some((left_val.0 / right_val.0, left_val.1))
                     }
                 }
-                // Comparison operators not valid in const expressions
                 _ => None,
             }
         }
