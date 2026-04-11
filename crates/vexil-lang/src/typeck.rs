@@ -696,6 +696,19 @@ fn check_single_impl_conformance(
         return;
     };
 
+    if impl_def.type_args.len() != trait_def.type_params.len() {
+        diags.push(Diagnostic::error(
+            impl_def.span,
+            ErrorClass::UnresolvedType,
+            format!(
+                "trait '{}' has {} type parameters but impl provides {}",
+                impl_def.trait_name,
+                trait_def.type_params.len(),
+                impl_def.type_args.len()
+            ),
+        ));
+    }
+
     // Check target type has all required trait fields
     check_trait_fields(impl_def, trait_def, compiled, diags);
 
