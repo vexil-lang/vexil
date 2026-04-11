@@ -595,8 +595,8 @@ fn lower_union(un: &crate::ast::UnionDecl, span: Span, ctx: &mut LowerCtx) -> Un
 
 fn lower_newtype(nt: &crate::ast::NewtypeDecl, span: Span, ctx: &mut LowerCtx) -> NewtypeDef {
     let inner_type = resolve_type_expr(&nt.inner_type.node, nt.inner_type.span, ctx);
-    // TODO(typeck): resolve terminal_type through newtype chains.
-    // Currently safe because validate.rs rejects newtype-over-newtype.
+    // Terminal type is the innermost non-newtype.
+    // Validation rejects newtype-over-newtype chains, so this is safe.
     let terminal_type = inner_type.clone();
     NewtypeDef {
         name: nt.name.node.clone(),
