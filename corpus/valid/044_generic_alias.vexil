@@ -1,0 +1,10 @@
+namespace test.generic_alias
+
+# Generic type alias using optional
+type Optional<T> = optional<T>
+
+# Use the generic alias
+message Container {
+    name @0 : string
+    id @1 : Optional<u64>
+}

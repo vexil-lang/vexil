@@ -52,6 +52,8 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 040_inline_bits.vexil | §3.4 | Inline bitfield type: `bits { r, w, x }` with named bits |
 | 041_map_key_ordering.vexil | §3.4 | Map key canonical sort order for all valid key types |
 | 043_invariant.vexil | §4.1 | Named and unnamed invariant conditions in message bodies |
+| 044_generic_alias.vexil | §4.7 | Generic type alias with type parameter substitution |
+| 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
 
 ## Invalid Corpus (66 files)
 

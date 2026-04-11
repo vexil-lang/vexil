@@ -207,6 +207,46 @@ fn valid_036_where_clause() {
     parse_valid("036_where_clause.vexil");
 }
 
+#[test]
+fn valid_037_fixed_array() {
+    parse_valid("037_fixed_array.vexil");
+}
+
+#[test]
+fn valid_038_set() {
+    parse_valid("038_set.vexil");
+}
+
+#[test]
+fn valid_039_geometric() {
+    parse_valid("039_geometric.vexil");
+}
+
+#[test]
+fn valid_040_inline_bits() {
+    parse_valid("040_inline_bits.vexil");
+}
+
+#[test]
+fn valid_041_map_key_ordering() {
+    parse_valid("041_map_key_ordering.vexil");
+}
+
+#[test]
+fn valid_043_invariant() {
+    parse_valid("043_invariant.vexil");
+}
+
+#[test]
+fn valid_044_generic_alias() {
+    parse_valid("044_generic_alias.vexil");
+}
+
+#[test]
+fn valid_044_generic_simple() {
+    parse_valid("044_generic_simple.vexil");
+}
+
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================

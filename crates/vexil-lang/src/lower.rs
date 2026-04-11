@@ -1070,27 +1070,18 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
             ResolvedType::Mat4(Box::new(resolve_type_expr(&inner.node, inner.span, ctx)))
         }
         TypeExpr::Generic(name, arg) => {
-            // Generic type instantiation: Name<TypeArg>
-            // Look up the generic alias by name
             let alias_id = ctx.registry.lookup(name.as_str());
             match alias_id {
                 Some(id) => {
-                    // Check if it's a generic alias
-                    if let Some(TypeDef::GenericAlias(_alias_def)) = ctx.registry.get(id) {
-                        // TODO: Implement type substitution
-                        // For now, resolve the type argument and return it
-                        // This is a stub that allows parsing to work
-                        ctx.emit(
+                    if let Some(TypeDef::GenericAlias(alias_def)) = ctx.registry.get(id).cloned() {
+                        resolve_type_expr_with_substitution(
+                            &alias_def.target_type,
+                            &alias_def.type_params,
+                            std::slice::from_ref(&arg.node),
                             span,
-                            ErrorClass::AliasTargetNotFound,
-                            format!(
-                                "generic alias instantiation `{name}<...>` is not yet fully supported"
-                            ),
-                        );
-                        resolve_type_expr(&arg.node, arg.span, ctx)
+                            ctx,
+                        )
                     } else {
-                        // Not a generic alias - treat as regular named type
-                        // This could be an error or we could ignore the type arg
                         ctx.emit(
                             span,
                             ErrorClass::AliasTargetNotFound,
@@ -1110,6 +1101,167 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
             }
         }
         TypeExpr::BitsInline(names) => ResolvedType::BitsInline(names.clone()),
+    }
+}
+
+/// Substitute type parameters in a target type expression.
+///
+/// `type_params` contains the parameter names (e.g., `["T"]`).
+/// `type_args` contains the concrete types to substitute (e.g., `[u64]`).
+/// For each `Named(name)` in `expr`, if `name` matches a parameter, replace with the
+/// corresponding resolved type from `type_args`. Otherwise, resolve normally.
+fn resolve_type_expr_with_substitution(
+    expr: &TypeExpr,
+    type_params: &[SmolStr],
+    type_args: &[TypeExpr],
+    span: Span,
+    ctx: &mut LowerCtx,
+) -> ResolvedType {
+    match expr {
+        TypeExpr::Named(name) => {
+            if let Some(idx) = type_params.iter().position(|p| p.as_str() == name.as_str()) {
+                if idx < type_args.len() {
+                    return resolve_type_expr(&type_args[idx], span, ctx);
+                }
+            }
+            resolve_type_expr(expr, span, ctx)
+        }
+        TypeExpr::Optional(inner) => {
+            ResolvedType::Optional(Box::new(resolve_type_expr_with_substitution(
+                &inner.node,
+                type_params,
+                type_args,
+                inner.span,
+                ctx,
+            )))
+        }
+        TypeExpr::Array(inner) => {
+            ResolvedType::Array(Box::new(resolve_type_expr_with_substitution(
+                &inner.node,
+                type_params,
+                type_args,
+                inner.span,
+                ctx,
+            )))
+        }
+        TypeExpr::FixedArray(inner, size) => ResolvedType::FixedArray(
+            Box::new(resolve_type_expr_with_substitution(
+                &inner.node,
+                type_params,
+                type_args,
+                inner.span,
+                ctx,
+            )),
+            *size,
+        ),
+        TypeExpr::Set(inner) => ResolvedType::Set(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Map(key, value) => ResolvedType::Map(
+            Box::new(resolve_type_expr_with_substitution(
+                &key.node,
+                type_params,
+                type_args,
+                key.span,
+                ctx,
+            )),
+            Box::new(resolve_type_expr_with_substitution(
+                &value.node,
+                type_params,
+                type_args,
+                value.span,
+                ctx,
+            )),
+        ),
+        TypeExpr::Result(ok, err) => ResolvedType::Result(
+            Box::new(resolve_type_expr_with_substitution(
+                &ok.node,
+                type_params,
+                type_args,
+                ok.span,
+                ctx,
+            )),
+            Box::new(resolve_type_expr_with_substitution(
+                &err.node,
+                type_params,
+                type_args,
+                err.span,
+                ctx,
+            )),
+        ),
+        TypeExpr::Vec2(inner) => ResolvedType::Vec2(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Vec3(inner) => ResolvedType::Vec3(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Vec4(inner) => ResolvedType::Vec4(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Quat(inner) => ResolvedType::Quat(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Mat3(inner) => ResolvedType::Mat3(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Mat4(inner) => ResolvedType::Mat4(Box::new(resolve_type_expr_with_substitution(
+            &inner.node,
+            type_params,
+            type_args,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Generic(name, arg) => {
+            let alias_id = ctx.registry.lookup(name.as_str());
+            match alias_id {
+                Some(id) => {
+                    if let Some(TypeDef::GenericAlias(alias_def)) = ctx.registry.get(id).cloned() {
+                        resolve_type_expr_with_substitution(
+                            &alias_def.target_type,
+                            &alias_def.type_params,
+                            std::slice::from_ref(&arg.node),
+                            span,
+                            ctx,
+                        )
+                    } else {
+                        resolve_type_expr(expr, span, ctx)
+                    }
+                }
+                None => {
+                    ctx.emit(
+                        span,
+                        ErrorClass::UnresolvedType,
+                        format!("unresolved type `{name}`"),
+                    );
+                    ResolvedType::Named(ir::types::POISON_TYPE_ID)
+                }
+            }
+        }
+        _ => resolve_type_expr(expr, span, ctx),
     }
 }
 
