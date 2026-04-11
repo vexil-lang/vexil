@@ -804,9 +804,14 @@ fn check_trait_functions(impl_def: &ImplDef, trait_def: &TraitDef, diags: &mut V
 }
 
 fn types_compatible(a: &ResolvedType, b: &ResolvedType) -> bool {
-    // For now, exact match only
-    // TODO: handle generic substitution, subtyping
-    a == b
+    if a == b {
+        return true;
+    }
+
+    match (a, b) {
+        (ResolvedType::Named(id_a), ResolvedType::Named(id_b)) => id_a == id_b,
+        _ => false,
+    }
 }
 
 // ---------------------------------------------------------------------------
