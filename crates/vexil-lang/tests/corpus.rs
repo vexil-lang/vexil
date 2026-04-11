@@ -247,6 +247,11 @@ fn valid_044_generic_simple() {
     parse_valid("044_generic_simple.vexil");
 }
 
+#[test]
+fn valid_045_generic_trait() {
+    parse_valid("045_generic_trait.vexil");
+}
+
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================
