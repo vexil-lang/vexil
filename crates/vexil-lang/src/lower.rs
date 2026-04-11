@@ -93,7 +93,7 @@ pub fn lower_with_deps(
     let mut alias_decls: Vec<&crate::ast::AliasDecl> = Vec::new();
     let mut const_decls: Vec<&crate::ast::ConstDecl> = Vec::new();
     let mut impl_decls: Vec<(&crate::ast::ImplDecl, Span)> = Vec::new();
-    for (decl_spanned, &id) in schema.declarations.iter().zip(decl_ids.iter()) {
+    for decl_spanned in &schema.declarations {
         match &decl_spanned.node {
             Decl::Alias(alias) => {
                 alias_decls.push(alias);
@@ -108,9 +108,16 @@ pub fn lower_with_deps(
                 impl_decls.push((i, decl_spanned.span));
             }
             _ => {
+                // Skip - handled by register_declarations.id_map
+            }
+        }
+    }
+    // Second pass: lower the actual type definitions for non-impl declarations
+    for (decl_spanned, &id) in schema.declarations.iter().zip(decl_ids.iter()) {
+        match &decl_spanned.node {
+            Decl::Impl(_) => {}
+            _ => {
                 let def = lower_decl(&decl_spanned.node, decl_spanned.span, &mut ctx);
-                // Replace the placeholder registered earlier.
-                // get_mut returns Some because we registered with a concrete TypeDef, not a stub.
                 if let Some(slot) = ctx.registry.get_mut(id) {
                     *slot = def;
                 }
@@ -120,10 +127,6 @@ pub fn lower_with_deps(
 
     // Process impl declarations after all types are registered
     for (impl_decl, span) in impl_decls {
-        eprintln!(
-            "DEBUG: lowering impl for trait {:?}",
-            impl_decl.trait_name.node
-        );
         let impl_def = lower_impl(impl_decl, span, &mut ctx);
         // Generate a unique name for the impl based on trait and target type
         let impl_name = SmolStr::new(format!(

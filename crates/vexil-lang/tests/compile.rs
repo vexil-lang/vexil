@@ -665,3 +665,33 @@ message Alert {
         panic!("expected Message");
     }
 }
+
+#[test]
+fn impl_extra_functions_rejected() {
+    let schema = r#"
+        namespace test.extra_fn
+        
+        trait Foo {
+            fn method() -> u32
+        }
+        
+        message Bar {
+            value @0 : u32
+        }
+        
+        impl Foo for Bar {
+            fn method() -> u32
+            fn extra_method() -> u64
+        }
+        "#;
+
+    let result = vexil_lang::compile(schema);
+    let has_error = result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::Error);
+    assert!(
+        has_error,
+        "expected error for extra impl function not in Foo"
+    );
+}

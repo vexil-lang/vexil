@@ -775,7 +775,19 @@ fn check_trait_functions(impl_def: &ImplDef, trait_def: &TraitDef, diags: &mut V
         }
     }
 
-    // TODO: Check for extra functions in impl that aren't in trait?
+    for impl_fn in &impl_def.functions {
+        let found = trait_def.functions.iter().any(|f| f.name == impl_fn.name);
+        if !found {
+            diags.push(Diagnostic::error(
+                impl_def.span,
+                ErrorClass::UnresolvedType,
+                format!(
+                    "impl for '{:?}' has extra function '{}' not in trait '{}'",
+                    impl_def.target_type, impl_fn.name, trait_def.name
+                ),
+            ));
+        }
+    }
 }
 
 fn types_compatible(a: &ResolvedType, b: &ResolvedType) -> bool {
