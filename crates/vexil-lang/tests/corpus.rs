@@ -207,11 +207,6 @@ fn valid_036_where_clause() {
     parse_valid("036_where_clause.vexil");
 }
 
-#[test]
-fn valid_042_trait_impl() {
-    parse_valid("042_trait_impl.vexil");
-}
-
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================
@@ -668,4 +663,18 @@ fn invalid_020() {
         "020_config_encoding_annotation.vexil",
         ErrorClass::ConfigEncodingAnnotation,
     );
+}
+
+// =========================================================================
+// Impl semantic validation errors
+// =========================================================================
+
+#[test]
+fn invalid_065_impl_unknown_trait() {
+    parse_invalid("065_impl_unknown_trait.vexil", ErrorClass::UnknownType);
+}
+
+#[test]
+fn invalid_066_external_fn() {
+    parse_invalid("066_external_fn.vexil", ErrorClass::ImplFnExternal);
 }

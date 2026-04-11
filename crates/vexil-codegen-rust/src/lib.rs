@@ -324,8 +324,10 @@ fn emit_impl_fn(w: &mut crate::emit::CodeWriter, func: &vexil_lang::ir::ImplFnDe
     // Emit function body
     match &func.body {
         FnBody::External => {
+            // SAFETY: External functions are rejected at validation,
+            // so this branch should never be reached.
             w.indent();
-            w.line("unimplemented!(\"external function\")");
+            w.line("unreachable!()");
             w.dedent();
         }
         FnBody::Block(stmts) => {

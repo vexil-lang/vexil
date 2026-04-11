@@ -12,9 +12,9 @@ use smol_str::SmolStr;
 
 use crate::ast::{
     Annotation, AnnotationValue, BinOpKind, CmpOp, ConfigDecl, ConstDecl, ConstExpr, Decl,
-    EnumBacking, EnumBodyItem, EnumDecl, FlagsBodyItem, FlagsDecl, ImplDecl, ImportKind,
-    MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, PrimitiveType, Schema, SemanticType,
-    TypeExpr, UnionBodyItem, UnionDecl, WhereExpr, WhereOperand,
+    EnumBacking, EnumBodyItem, EnumDecl, FlagsBodyItem, FlagsDecl, ImplDecl, ImplFnBody,
+    ImportKind, MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, PrimitiveType, Schema,
+    SemanticType, TypeExpr, UnionBodyItem, UnionDecl, WhereExpr, WhereOperand,
 };
 use crate::diagnostic::{find_closest_match, Diagnostic, ErrorClass, Note};
 use crate::span::{Span, Spanned};
@@ -1485,6 +1485,21 @@ fn check_impl(impl_decl: &ImplDecl, ctx: &ValidationContext<'_>, diags: &mut Vec
                 ));
             }
         }
+    }
+
+    // Check: impl functions must have bodies (external functions are not allowed)
+    for func in &impl_decl.functions {
+        check_impl_fn(func, diags);
+    }
+}
+
+fn check_impl_fn(impl_fn: &crate::ast::ImplFnDecl, diags: &mut Vec<Diagnostic>) {
+    if matches!(impl_fn.body, ImplFnBody::External) {
+        diags.push(Diagnostic::error(
+            impl_fn.name.span,
+            ErrorClass::ImplFnExternal,
+            "external functions are not supported; function must have a body",
+        ));
     }
 }
 

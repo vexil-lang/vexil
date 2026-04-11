@@ -10,8 +10,9 @@ use crate::emit::CodeWriter;
 pub fn emit_fn_body(w: &mut CodeWriter, body: &FnBody) {
     match body {
         FnBody::External => {
-            // External function - generate unimplemented!() or FFI placeholder
-            w.line("unimplemented!(\"external function\")");
+            // SAFETY: External functions are rejected at validation,
+            // so this branch should never be reached.
+            w.line("unreachable!()");
         }
         FnBody::Block(stmts) => {
             w.indent();

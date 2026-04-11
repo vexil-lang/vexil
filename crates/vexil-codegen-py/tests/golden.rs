@@ -274,11 +274,6 @@ fn test_041_map_key_ordering() {
 }
 
 #[test]
-fn test_042_trait_impl() {
-    golden_test("042_trait_impl");
-}
-
-#[test]
 fn test_043_invariant() {
     golden_test("043_invariant");
 }

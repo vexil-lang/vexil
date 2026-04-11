@@ -114,6 +114,7 @@ pub enum ErrorCode {
     E130, // Import not found
     E131, // Ambiguous import
     E132, // Import name not found in namespace
+    E133, // Impl function external (no body)
 
     // Generic errors
     E999, // Unexpected token
@@ -199,6 +200,7 @@ impl ErrorCode {
             ErrorCode::E130 => "E130",
             ErrorCode::E131 => "E131",
             ErrorCode::E132 => "E132",
+            ErrorCode::E133 => "E133",
             ErrorCode::E999 => "E999",
         }
     }
@@ -300,6 +302,9 @@ pub enum ErrorClass {
     WhereClauseConstRefNotFound,
     WhereClauseOperatorInvalid,
 
+    // Impl
+    ImplFnExternal,
+
     // Generic
     UnexpectedToken,
     UnexpectedEof,
@@ -396,6 +401,9 @@ impl ErrorClass {
             ErrorClass::WhereClauseLenOnNonCollection => ErrorCode::E122,
             ErrorClass::WhereClauseConstRefNotFound => ErrorCode::E123,
             ErrorClass::WhereClauseOperatorInvalid => ErrorCode::E124,
+
+            // Impl
+            ErrorClass::ImplFnExternal => ErrorCode::E133,
 
             // Generic
             ErrorClass::UnexpectedToken => ErrorCode::E999,

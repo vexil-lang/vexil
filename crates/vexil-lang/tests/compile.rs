@@ -695,3 +695,29 @@ fn impl_extra_functions_rejected() {
         "expected error for extra impl function not in Foo"
     );
 }
+
+#[test]
+fn external_function_rejected() {
+    let schema = r#"
+        namespace test.external_fn
+        
+        trait Timestamped {
+            fn get_timestamp() -> u64
+        }
+        
+        message Event {
+            timestamp @0 : u64
+        }
+        
+        impl Timestamped for Event {
+            fn get_timestamp() -> u64
+        }
+        "#;
+
+    let result = vexil_lang::compile(schema);
+    let has_error = result
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == Severity::Error);
+    assert!(has_error, "expected error for external function");
+}
