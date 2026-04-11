@@ -18,7 +18,6 @@ Last updated: 2026-04-09
 - **No built-in compression:** Wire format is uncompressed. Layer zstd or LZ4 on top if you need it. We decided not to bake compression into the format because different use cases want different compression.
 - **No self-description:** The wire bytes contain no type info. Both sides need the schema. This is a design choice, not a gap — it keeps messages small. But it means you can't debug a packet without the schema file.
 - **Go backend lacks compliance vectors:** The Go codegen works (it compiles and produces code that looks right) but we haven't verified byte output against the Rust and TypeScript implementations. I'd manually verify bytes before shipping a cross-language protocol with Go.
-- **No security audit:** We haven't done one. The runtime has length limits and recursion depth caps, so the obvious DoS vectors are covered. But "obvious" and "all" are different words.
 
 ## What's Missing
 
@@ -27,8 +26,7 @@ Things that would be useful but aren't implemented:
 - **Reflection / runtime type info:** Generated code doesn't emit metadata for schema introspection. If you need it, you'll have to build it on top.
 - **Runtime type guards (TypeScript):** The generated TypeScript has interfaces but no runtime validation. You can't check "is this object a valid `SensorReading`?" without the schema.
 - **Schema registry:** No built-in distribution mechanism. The BLAKE3 hash gives you identity but not discovery.
-- **Python backend:** Doesn't exist. The `CodegenBackend` trait is designed for it, but nobody's written one.
-- **Wire size optimization for many-optionals:** Messages with lots of optional fields pay 1 bit per field for presence. A presence bitset could amortize this. Not urgent — 1 bit per field is pretty cheap already.
+- **Python backend lacks compliance vectors:** The Python codegen works but hasn't been verified against compliance vectors like Rust and TypeScript have been.
 
 ## Performance
 

@@ -295,6 +295,7 @@ crates/
 packages/
   runtime-ts/            # @vexil-lang/runtime -- TypeScript BitWriter/BitReader (npm)
   runtime-go/            # github.com/vexil-lang/vexil/packages/runtime-go -- Go runtime
+  runtime-py/            # vexil_runtime -- Python BitWriter/BitReader (PyPI)
 examples/
   sensor-packet/         # Sub-byte types, encoding annotations, compact enums
   command-protocol/      # Unions, flags, limits -- RPC-style protocol

@@ -921,7 +921,7 @@ fn emit_read_type(
             w.line(&format!(
                 "    vexil_runtime::Vec3 {{ x: {var_name}_c2_x, y: {var_name}_c2_y, z: {var_name}_c2_z }},"
             ));
-            w.line(&format!("] }};"));
+            w.line("] };");
         }
         ResolvedType::Mat4(inner) => {
             let inner_type =
@@ -1069,7 +1069,7 @@ fn emit_read_type(
             w.line(&format!(
                 "    vexil_runtime::Vec4 {{ x: {var_name}_c3_x, y: {var_name}_c3_y, z: {var_name}_c3_z, w: {var_name}_c3_w }},"
             ));
-            w.line(&format!("] }};"));
+            w.line("] };");
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!(

@@ -29,15 +29,15 @@
 **Objective:** Set up the package structure in a new repo or subdirectory.
 
 **Files:**
-- Create: `runtimes/python/vexil_runtime/__init__.py`
-- Create: `runtimes/python/vexil_runtime/bitio.py`
-- Create: `runtimes/python/vexil_runtime/pack.py`
-- Create: `runtimes/python/pyproject.toml`
+- Create: `packages/runtime-py/vexil_runtime/__init__.py`
+- Create: `packages/runtime-py/vexil_runtime/bitio.py`
+- Create: `packages/runtime-py/vexil_runtime/pack.py`
+- Create: `packages/runtime-py/pyproject.toml`
 
 **Step 1: Create directory structure**
 
 ```bash
-mkdir -p runtimes/python/vexil_runtime
+mkdir -p packages/runtime-py/vexil_runtime
 ```
 
 **Step 2: Create __init__.py**
@@ -300,7 +300,7 @@ packages = ["vexil_runtime"]
 **Step 6: Test locally**
 
 ```bash
-cd runtimes/python
+cd packages/runtime-py
 pip install -e .
 python -c "from vexil_runtime import BitWriter, BitReader; print('OK')"
 ```
@@ -308,7 +308,7 @@ python -c "from vexil_runtime import BitWriter, BitReader; print('OK')"
 **Step 7: Commit**
 
 ```bash
-git add runtimes/python/
+git add packages/runtime-py/
 git commit -m "feat: add Python runtime package with BitWriter/BitReader"
 ```
 
@@ -321,7 +321,7 @@ git commit -m "feat: add Python runtime package with BitWriter/BitReader"
 **Step 1: Build distribution**
 
 ```bash
-cd runtimes/python
+cd packages/runtime-py
 pip install build twine
 python -m build
 ```

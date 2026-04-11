@@ -1,8 +1,10 @@
 # Go Runtime Module Implementation Plan
 
+> **Superseded:** The Go runtime is now complete at [`packages/runtime-go`](https://github.com/vexil-lang/vexil/tree/main/packages/runtime-go). This document is historical.
+
 > **For Hermes:** Use subagent-driven-development skill to implement this task.
 
-**Goal:** Create `github.com/vexil-lang/vexil-runtime` Go module for Go codegen support.
+**Goal:** Create `github.com/vexil-lang/vexil/packages/runtime-go` Go module for Go codegen support.
 
 **Architecture:** Go module with bitio, pack/unpack support, geometric types.
 
@@ -27,15 +29,15 @@
 **Objective:** Set up Go module with runtime support.
 
 **Files:**
-- Create: `runtimes/go/go.mod`
-- Create: `runtimes/go/bitio/bitio.go`
-- Create: `runtimes/go/pack/pack.go`
+- Create: `packages/runtime-go/go.mod`
+- Create: `packages/runtime-go/bitio/bitio.go`
+- Create: `packages/runtime-go/pack/pack.go`
 
 **Step 1: Create directory structure**
 
 ```bash
-mkdir -p runtimes/go/bitio
-mkdir -p runtimes/go/pack
+mkdir -p packages/runtime-go/bitio
+mkdir -p packages/runtime-go/pack
 ```
 
 **Step 2: Create go.mod**
@@ -254,7 +256,7 @@ type Unpacker interface {
 **Step 5: Test locally**
 
 ```bash
-cd runtimes/go
+cd packages/runtime-go
 go mod tidy
 go test ./...
 ```
@@ -262,7 +264,7 @@ go test ./...
 **Step 6: Commit**
 
 ```bash
-git add runtimes/go/
+git add packages/runtime-go/
 git commit -m "feat: add Go runtime module with bitio and pack support"
 ```
 
@@ -275,8 +277,8 @@ git commit -m "feat: add Go runtime module with bitio and pack support"
 **Step 1: Create git tag**
 
 ```bash
-git tag -a runtimes/go/v0.1.0 -m "Go runtime v0.1.0"
-git push origin runtimes/go/v0.1.0
+git tag -a packages/runtime-go/v0.1.0 -m "Go runtime v0.1.0"
+git push origin packages/runtime-go/v0.1.0
 ```
 
 **Step 2: Verify**

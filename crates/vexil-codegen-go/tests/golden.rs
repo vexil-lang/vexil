@@ -112,3 +112,173 @@ fn test_027_delta_on_message() {
 fn test_028_typed_tombstone() {
     golden_test("028_typed_tombstone");
 }
+
+#[test]
+fn test_003_sub_byte() {
+    golden_test("003_sub_byte");
+}
+
+#[test]
+fn test_030_newtype_map_key() {
+    golden_test("030_newtype_map_key");
+}
+
+#[test]
+fn test_032_reserved_variant_names() {
+    golden_test("032_reserved_variant_names");
+}
+
+#[test]
+fn test_033_fixed_point() {
+    golden_test("033_fixed_point");
+}
+
+#[test]
+fn test_037_fixed_array() {
+    golden_test("037_fixed_array");
+}
+
+#[test]
+fn test_038_set() {
+    golden_test("038_set");
+}
+
+#[test]
+fn test_039_geometric() {
+    golden_test("039_geometric");
+}
+
+#[test]
+fn test_040_inline_bits() {
+    golden_test("040_inline_bits");
+}
+
+#[test]
+fn test_001_minimal() {
+    golden_test("001_minimal");
+}
+
+#[test]
+fn test_002_primitives() {
+    golden_test("002_primitives");
+}
+
+#[test]
+fn test_004_semantic_types() {
+    golden_test("004_semantic_types");
+}
+
+#[test]
+fn test_005_parameterized() {
+    golden_test("005_parameterized");
+}
+
+#[test]
+fn test_012_imports() {
+    golden_test("012_imports");
+}
+
+#[test]
+fn test_013_annotations() {
+    golden_test("013_annotations");
+}
+
+#[test]
+fn test_014_keywords_as_fields() {
+    golden_test("014_keywords_as_fields");
+}
+
+#[test]
+fn test_015_forward_refs() {
+    golden_test("015_forward_refs");
+}
+
+#[test]
+fn test_017_escapes() {
+    golden_test("017_escapes");
+}
+
+#[test]
+fn test_018_comments() {
+    golden_test("018_comments");
+}
+
+#[test]
+fn test_019_evolution_append_field() {
+    golden_test("019_evolution_append_field");
+}
+
+#[test]
+fn test_020_evolution_add_variant() {
+    golden_test("020_evolution_add_variant");
+}
+
+#[test]
+fn test_021_empty_optionals() {
+    golden_test("021_empty_optionals");
+}
+
+#[test]
+fn test_022_nested_schemas() {
+    golden_test("022_nested_schemas");
+}
+
+#[test]
+fn test_023_recursive_depth() {
+    golden_test("023_recursive_depth");
+}
+
+#[test]
+fn test_024_zero_length_payload() {
+    golden_test("024_zero_length_payload");
+}
+
+#[test]
+fn test_025_evolution_deprecate() {
+    golden_test("025_evolution_deprecate");
+}
+
+#[test]
+fn test_026_required_to_optional() {
+    golden_test("026_required_to_optional");
+}
+
+#[test]
+fn test_029_import_then_annotation() {
+    golden_test("029_import_then_annotation");
+}
+
+#[test]
+fn test_031_custom_annotations() {
+    golden_test("031_custom_annotations");
+}
+
+#[test]
+fn test_034_type_alias() {
+    golden_test("034_type_alias");
+}
+
+#[test]
+fn test_035_const() {
+    golden_test("035_const");
+}
+
+#[test]
+fn test_036_where_clause() {
+    golden_test("036_where_clause");
+}
+
+#[test]
+fn test_041_map_key_ordering() {
+    golden_test("041_map_key_ordering");
+}
+
+#[test]
+fn test_042_trait_impl() {
+    golden_test("042_trait_impl");
+}
+
+#[test]
+fn test_043_invariant() {
+    golden_test("043_invariant");
+}

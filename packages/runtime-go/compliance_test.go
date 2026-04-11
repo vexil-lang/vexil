@@ -247,3 +247,150 @@ func TestComplianceMessages(t *testing.T) {
 		})
 	}
 }
+
+func TestComplianceOptionals(t *testing.T) {
+	vectors := loadVectors[primitiveVector](t, "optionals.json")
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			w := NewBitWriter()
+			val := v.Value["v"]
+			if val == nil {
+				w.WriteBool(false)
+			} else {
+				w.WriteBool(true)
+				w.FlushToByteBoundary()
+				w.WriteU32(uint32(toFloat64(val)))
+			}
+			got := w.Finish()
+			want := hexToBytes(t, v.ExpectedBytes)
+			if !bytesEqual(got, want) {
+				t.Fatalf("got %X, want %X", got, want)
+			}
+		})
+	}
+}
+
+func TestComplianceEnums(t *testing.T) {
+	vectors := loadVectors[primitiveVector](t, "enums.json")
+	variantMap := map[string]int{"Active": 0, "Inactive": 1}
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			w := NewBitWriter()
+			variant := v.Value["v"].(string)
+			discriminant := variantMap[variant]
+			w.WriteBits(uint64(discriminant), 1)
+			got := w.Finish()
+			want := hexToBytes(t, v.ExpectedBytes)
+			if !bytesEqual(got, want) {
+				t.Fatalf("got %X, want %X", got, want)
+			}
+		})
+	}
+}
+
+func TestComplianceUnions(t *testing.T) {
+	vectors := loadVectors[primitiveVector](t, "unions.json")
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			w := NewBitWriter()
+			unionVal := v.Value["v"].(map[string]interface{})
+			variant := unionVal["variant"].(string)
+			discriminant := 0
+			if variant == "Rect" {
+				discriminant = 1
+			}
+
+			pw := NewBitWriter()
+			if variant == "Circle" {
+				pw.WriteF32(float32(toFloat64(unionVal["radius"])))
+			} else {
+				pw.WriteF32(float32(toFloat64(unionVal["w"])))
+				pw.WriteF32(float32(toFloat64(unionVal["h"])))
+			}
+			payload := pw.Finish()
+
+			w.WriteLeb128(uint64(discriminant))
+			w.WriteLeb128(uint64(len(payload)))
+			w.WriteRawBytes(payload)
+			got := w.Finish()
+			want := hexToBytes(t, v.ExpectedBytes)
+			if !bytesEqual(got, want) {
+				t.Fatalf("got %X, want %X", got, want)
+			}
+		})
+	}
+}
+
+func TestComplianceArraysMaps(t *testing.T) {
+	vectors := loadVectors[primitiveVector](t, "arrays_maps.json")
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			w := NewBitWriter()
+			val := v.Value["v"]
+			if arr, ok := val.([]interface{}); ok {
+				w.WriteLeb128(uint64(len(arr)))
+				for _, elem := range arr {
+					w.WriteU32(uint32(toFloat64(elem)))
+				}
+			} else if m, ok := val.(map[string]interface{}); ok {
+				entries := len(m)
+				w.WriteLeb128(uint64(entries))
+				for k, val := range m {
+					w.WriteString(k)
+					w.WriteU32(uint32(toFloat64(val)))
+				}
+			}
+			got := w.Finish()
+			want := hexToBytes(t, v.ExpectedBytes)
+			if !bytesEqual(got, want) {
+				t.Fatalf("got %X, want %X", got, want)
+			}
+		})
+	}
+}
+
+func TestComplianceEvolution(t *testing.T) {
+	data, err := os.ReadFile("../../compliance/vectors/evolution.json")
+	if err != nil {
+		t.Fatalf("failed to read evolution.json: %v", err)
+	}
+	var vectors []struct {
+		Name        string                 `json:"name"`
+		SchemaV1    string                 `json:"schema_v1"`
+		SchemaV2    string                 `json:"schema_v2"`
+		Type        string                 `json:"type"`
+		ValueV1     map[string]interface{} `json:"value_v1"`
+		ValueV2     map[string]interface{} `json:"value_v2"`
+		EncodedV1   string                 `json:"encoded_v1"`
+		EncodedV2   string                 `json:"encoded_v2"`
+		DecodedAsV1 map[string]interface{} `json:"decoded_as_v1"`
+		DecodedAsV2 map[string]interface{} `json:"decoded_as_v2"`
+		Notes       string                 `json:"notes"`
+	}
+	if err := json.Unmarshal(data, &vectors); err != nil {
+		t.Fatalf("failed to parse evolution.json: %v", err)
+	}
+
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			if v.Name == "v1_encode_v2_decode_appended_field" {
+				w := NewBitWriter()
+				w.WriteU32(uint32(toFloat64(v.ValueV1["x"])))
+				got := w.Finish()
+				want := hexToBytes(t, v.EncodedV1)
+				if !bytesEqual(got, want) {
+					t.Fatalf("v1 encode: got %X, want %X", got, want)
+				}
+			} else if v.Name == "v2_encode_v1_decode_trailing_ignored" {
+				w := NewBitWriter()
+				w.WriteU32(uint32(toFloat64(v.ValueV2["x"])))
+				w.WriteU16(uint16(toFloat64(v.ValueV2["y"])))
+				got := w.Finish()
+				want := hexToBytes(t, v.EncodedV2)
+				if !bytesEqual(got, want) {
+					t.Fatalf("v2 encode: got %X, want %X", got, want)
+				}
+			}
+		})
+	}
+}

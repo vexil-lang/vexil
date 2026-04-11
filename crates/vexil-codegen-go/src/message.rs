@@ -486,8 +486,14 @@ fn emit_read_type(
             w.line(err_return);
             w.close_block();
             if s.signed {
-                let shift = 8 - bits;
-                w.line(&format!("{target} = uint8(int8(v<<{shift}) >> {shift})"));
+                if bits <= 56 {
+                    let shift = 64 - bits;
+                    w.line(&format!(
+                        "{target} := int8((uint64(v) << {shift}) >> {shift})"
+                    ));
+                } else {
+                    w.line(&format!("{target} := int8(v & ((1 << {bits}) - 1))"));
+                }
             } else {
                 w.line(&format!("{target} = uint8(v)"));
             }

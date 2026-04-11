@@ -1759,6 +1759,7 @@ fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl
 }
 
 fn parse_impl_fn_decl(p: &mut Parser<'_>) -> ImplFnDecl {
+    let annotations = parse_annotations(p);
     p.advance(); // consume KwFn
 
     // Function name
@@ -1823,7 +1824,7 @@ fn parse_impl_fn_decl(p: &mut Parser<'_>) -> ImplFnDecl {
     };
 
     ImplFnDecl {
-        annotations: Vec::new(), // TODO: parse annotations on impl fns
+        annotations,
         name,
         params,
         return_type,
