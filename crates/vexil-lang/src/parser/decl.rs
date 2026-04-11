@@ -1713,6 +1713,24 @@ fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl
     let trait_name = parse_decl_name(p)
         .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
 
+    // Optional type arguments for generic traits (e.g., `<u64>` in `impl Tagged<u64>`)
+    let type_args = if p.at(&TokenKind::LAngle) {
+        p.advance(); // consume LAngle
+        let mut args = Vec::new();
+        while !p.at(&TokenKind::RAngle) && !p.at_eof() {
+            args.push(parse_type_expr(p));
+            if p.at(&TokenKind::Comma) {
+                p.advance();
+            } else {
+                break;
+            }
+        }
+        p.expect(&TokenKind::RAngle);
+        args
+    } else {
+        Vec::new()
+    };
+
     // For keyword
     if !p.at(&TokenKind::KwFor) {
         p.emit(
@@ -1753,6 +1771,7 @@ fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl
     ImplDecl {
         annotations,
         trait_name,
+        type_args,
         target_type,
         functions,
     }

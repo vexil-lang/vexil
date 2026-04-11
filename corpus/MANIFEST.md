@@ -54,6 +54,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 043_invariant.vexil | §4.1 | Named and unnamed invariant conditions in message bodies |
 | 044_generic_alias.vexil | §4.7 | Generic type alias with type parameter substitution |
 | 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
+| 045_generic_trait.vexil | §4.9 | Generic trait impl with type arguments (`impl Tagged<u64>`) |
 
 ## Invalid Corpus (66 files)
 

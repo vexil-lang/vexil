@@ -1,0 +1,13 @@
+namespace test.generic_trait
+
+trait Tagged<T> {
+    tag @0 : T
+    label @1 : string
+}
+
+message Event {
+    tag @0 : u64
+    label @1 : string
+}
+
+impl Tagged<u64> for Event { }

@@ -541,6 +541,8 @@ pub struct ImplDecl {
     pub annotations: Vec<Annotation>,
     /// The trait being implemented.
     pub trait_name: Spanned<SmolStr>,
+    /// Optional type arguments for generic traits (e.g., `<u64>` in `impl Tagged<u64>`).
+    pub type_args: Vec<Spanned<TypeExpr>>,
     /// The target type receiving the implementation.
     pub target_type: Spanned<SmolStr>,
     /// Function implementations.

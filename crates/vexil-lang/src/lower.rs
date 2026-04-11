@@ -763,8 +763,12 @@ fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> cr
         crate::ir::ResolvedType::Named(id)
     };
 
-    // TODO: Handle type arguments for generic traits
-    let type_args = vec![];
+    // Lower type arguments for generic traits
+    let type_args: Vec<ResolvedType> = decl
+        .type_args
+        .iter()
+        .map(|arg| resolve_type_expr(&arg.node, arg.span, ctx))
+        .collect();
 
     // Lower function implementations
     let functions = decl
