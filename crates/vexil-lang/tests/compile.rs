@@ -721,3 +721,125 @@ fn external_function_rejected() {
         .any(|d| d.severity == Severity::Error);
     assert!(has_error, "expected error for external function");
 }
+
+/// Generic trait conformance: type arguments are properly substituted
+/// before comparing field types.
+#[test]
+fn generic_trait_impl_type_arg_substitution() {
+    let schema = r#"
+        namespace test.generic_impl
+        
+        trait Tagged<T> {
+            tag @0 : T
+            label @1 : string
+        }
+        
+        message Event {
+            tag @0 : u64
+            label @1 : string
+        }
+        
+        impl Tagged<u64> for Event { }
+        "#;
+
+    let result = vexil_lang::compile(schema);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "expected no errors for valid generic impl, got: {errors:#?}"
+    );
+    assert!(result.compiled.is_some(), "expected CompiledSchema");
+}
+
+/// Generic trait impl with wrong type should fail conformance.
+#[test]
+fn generic_trait_impl_wrong_type_rejected() {
+    let schema = r#"
+        namespace test.wrong_type
+        
+        trait Tagged<T> {
+            tag @0 : T
+        }
+        
+        message Event {
+            tag @0 : string  # wrong type - should be u64
+        }
+        
+        impl Tagged<u64> for Event { }
+        "#;
+
+    let result = vexil_lang::compile(schema);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        !errors.is_empty(),
+        "expected error for type mismatch in generic impl"
+    );
+}
+
+/// Generic trait impl with type parameter in nested position.
+#[test]
+fn generic_trait_nested_type_parameter() {
+    let schema = r#"
+        namespace test.nested
+        
+        trait Container<T> {
+            items @0 : array<T>
+        }
+        
+        message EventList {
+            items @0 : array<u64>
+        }
+        
+        impl Container<u64> for EventList { }
+        "#;
+
+    let result = vexil_lang::compile(schema);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "expected no errors for nested type param, got: {errors:#?}"
+    );
+}
+
+/// Generic trait impl with multiple type parameters.
+#[test]
+fn generic_trait_multi_type_params() {
+    let schema = r#"
+        namespace test.multi
+        
+        trait Pair<A, B> {
+            first @0 : A
+            second @1 : B
+        }
+        
+        message KeyValue {
+            first @0 : u32
+            second @1 : string
+        }
+        
+        impl Pair<u32, string> for KeyValue { }
+        "#;
+
+    let result = vexil_lang::compile(schema);
+    let errors: Vec<_> = result
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "expected no errors for multi-param generic impl, got: {errors:#?}"
+    );
+}

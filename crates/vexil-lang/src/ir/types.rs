@@ -22,7 +22,7 @@ impl TypeId {
 }
 
 /// Sentinel for unresolvable types (poison value).
-pub(crate) const POISON_TYPE_ID: TypeId = TypeId(u32::MAX);
+pub const POISON_TYPE_ID: TypeId = TypeId(u32::MAX);
 
 /// Central type store. All cross-references use TypeId.
 #[derive(Debug, Clone)]

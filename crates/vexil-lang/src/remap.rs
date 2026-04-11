@@ -353,6 +353,7 @@ fn remap_trait_def(t: &TraitDef, id_map: &HashMap<TypeId, TypeId>) -> TraitDef {
             .map(|f| TraitFieldDef {
                 name: f.name.clone(),
                 ty: remap_resolved_type(&f.ty, id_map),
+                unresolved_ty: f.unresolved_ty.clone(),
                 ordinal: f.ordinal,
                 annotations: f.annotations.clone(),
             })
@@ -368,6 +369,7 @@ fn remap_trait_def(t: &TraitDef, id_map: &HashMap<TypeId, TypeId>) -> TraitDef {
                     .map(|p| FnParamDef {
                         name: p.name.clone(),
                         ty: remap_resolved_type(&p.ty, id_map),
+                        unresolved_ty: p.unresolved_ty.clone(),
                     })
                     .collect(),
                 return_type: f
@@ -401,6 +403,7 @@ fn remap_impl_def(i: &ImplDef, id_map: &HashMap<TypeId, TypeId>) -> ImplDef {
                     .map(|p| FnParamDef {
                         name: p.name.clone(),
                         ty: remap_resolved_type(&p.ty, id_map),
+                        unresolved_ty: p.unresolved_ty.clone(),
                     })
                     .collect(),
                 return_type: f

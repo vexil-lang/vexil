@@ -8,9 +8,12 @@
 
 use std::collections::HashSet;
 
-use crate::ast::{EnumBacking, PrimitiveType, SemanticType};
+use crate::ast::{EnumBacking, PrimitiveType, SemanticType, TypeExpr};
 use crate::diagnostic::{Diagnostic, ErrorClass};
-use crate::ir::{CompiledSchema, Encoding, FieldEncoding, ResolvedType, TypeDef, TypeId, WireSize};
+use crate::ir::{
+    CompiledSchema, Encoding, FieldEncoding, ResolvedType, TypeDef, TypeId, WireSize,
+    POISON_TYPE_ID,
+};
 
 /// Type-check and compute wire sizes. Mutates the schema to fill in wire_size fields.
 pub fn check(compiled: &mut CompiledSchema) -> Vec<Diagnostic> {
@@ -748,10 +751,25 @@ fn check_trait_fields(
         }
     };
 
+    // Build type parameter names from trait def
+    let type_param_names: Vec<&str> = trait_def
+        .type_params
+        .iter()
+        .map(|p| p.name.node.as_str())
+        .collect();
+
     // Check each required trait field exists on target
     for trait_field in &trait_def.fields {
+        // Substitute type arguments into the trait field's unresolved type
+        let substituted_ty = substitute_into_type_expr(
+            &trait_field.unresolved_ty,
+            &type_param_names,
+            &impl_def.type_args,
+            compiled,
+        );
+
         let found = target_fields.iter().any(|f| {
-            f.name == trait_field.name && types_compatible(&f.resolved_type, &trait_field.ty)
+            f.name == trait_field.name && types_compatible(&f.resolved_type, &substituted_ty)
         });
 
         if !found {
@@ -760,7 +778,7 @@ fn check_trait_fields(
                 ErrorClass::UnresolvedType,
                 format!(
                     "impl for '{:?}' missing required trait field '{}' of type '{:?}'",
-                    impl_def.target_type, trait_field.name, trait_field.ty
+                    impl_def.target_type, trait_field.name, substituted_ty
                 ),
             ));
         }
@@ -811,6 +829,197 @@ fn types_compatible(a: &ResolvedType, b: &ResolvedType) -> bool {
     match (a, b) {
         (ResolvedType::Named(id_a), ResolvedType::Named(id_b)) => id_a == id_b,
         _ => false,
+    }
+}
+
+/// Substitute type arguments into a type expression for trait conformance checking.
+///
+/// `type_params` contains the parameter names from the trait (e.g., `["T"]`).
+/// `type_args` contains the concrete types from the impl (e.g., `[u64]`).
+/// For each `Named(name)` in `expr`, if `name` matches a parameter, replace with the
+/// corresponding type from `type_args`. Otherwise, resolve via registry lookup.
+fn substitute_into_type_expr(
+    expr: &TypeExpr,
+    type_params: &[&str],
+    type_args: &[ResolvedType],
+    compiled: &CompiledSchema,
+) -> ResolvedType {
+    match expr {
+        TypeExpr::Named(name) => {
+            if let Some(idx) = type_params.iter().position(|&p| p == name.as_str()) {
+                if idx < type_args.len() {
+                    return type_args[idx].clone();
+                }
+            }
+            resolve_type_name(name, compiled)
+        }
+        TypeExpr::Primitive(p) => ResolvedType::Primitive(*p),
+        TypeExpr::SubByte(s) => ResolvedType::SubByte(*s),
+        TypeExpr::Semantic(s) => ResolvedType::Semantic(*s),
+        TypeExpr::Generic(name, arg) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &arg.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Named(resolve_generic_type(name, *inner, compiled))
+        }
+        TypeExpr::Optional(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Optional(inner)
+        }
+        TypeExpr::Array(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Array(inner)
+        }
+        TypeExpr::FixedArray(inner, size) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::FixedArray(inner, *size)
+        }
+        TypeExpr::Set(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Set(inner)
+        }
+        TypeExpr::Map(key, value) => {
+            let key = Box::new(substitute_into_type_expr(
+                &key.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            let value = Box::new(substitute_into_type_expr(
+                &value.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Map(key, value)
+        }
+        TypeExpr::Result(ok, err) => {
+            let ok = Box::new(substitute_into_type_expr(
+                &ok.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            let err = Box::new(substitute_into_type_expr(
+                &err.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Result(ok, err)
+        }
+        TypeExpr::Vec2(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Vec2(inner)
+        }
+        TypeExpr::Vec3(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Vec3(inner)
+        }
+        TypeExpr::Vec4(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Vec4(inner)
+        }
+        TypeExpr::Quat(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Quat(inner)
+        }
+        TypeExpr::Mat3(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Mat3(inner)
+        }
+        TypeExpr::Mat4(inner) => {
+            let inner = Box::new(substitute_into_type_expr(
+                &inner.node,
+                type_params,
+                type_args,
+                compiled,
+            ));
+            ResolvedType::Mat4(inner)
+        }
+        TypeExpr::BitsInline(names) => ResolvedType::BitsInline(names.clone()),
+        TypeExpr::Qualified(ns, name) => {
+            let qualified_name: SmolStr = format!("{ns}.{name}").into();
+            resolve_type_name(&qualified_name, compiled)
+        }
+    }
+}
+
+/// Resolve a generic type instantiation (e.g., `Vec<u64>`) by looking up the alias
+/// and substituting type arguments.
+fn resolve_generic_type(
+    name: &SmolStr,
+    inner_type: ResolvedType,
+    compiled: &CompiledSchema,
+) -> TypeId {
+    if let Some((_, crate::ir::TypeDef::GenericAlias(alias_def))) =
+        compiled.find_type(name.as_str())
+    {
+        let type_params: Vec<&str> = alias_def.type_params.iter().map(|p| p.as_str()).collect();
+        let type_args = vec![inner_type];
+        let substituted =
+            substitute_into_type_expr(&alias_def.target_type, &type_params, &type_args, compiled);
+        if let ResolvedType::Named(id) = substituted {
+            return id;
+        }
+    }
+    POISON_TYPE_ID
+}
+
+/// Resolve a named type to a ResolvedType by looking it up in the registry.
+fn resolve_type_name(name: &SmolStr, compiled: &CompiledSchema) -> ResolvedType {
+    if let Some((id, _)) = compiled.find_type(name.as_str()) {
+        ResolvedType::Named(id)
+    } else {
+        ResolvedType::Named(POISON_TYPE_ID)
     }
 }
 

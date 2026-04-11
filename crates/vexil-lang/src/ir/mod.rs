@@ -11,6 +11,7 @@ pub mod types;
 pub use types::{
     CustomAnnotation, CustomAnnotationArg, CustomAnnotationValue, DeprecatedInfo, Encoding,
     FieldEncoding, ResolvedAnnotations, ResolvedType, TombstoneDef, TypeId, TypeRegistry, WireSize,
+    POISON_TYPE_ID,
 };
 
 use crate::ast::{DefaultValue, EnumBacking};
@@ -356,6 +357,7 @@ pub struct TraitDef {
 pub struct TraitFieldDef {
     pub name: SmolStr,
     pub ty: ResolvedType,
+    pub unresolved_ty: crate::ast::TypeExpr,
     pub ordinal: u32,
     pub annotations: ResolvedAnnotations,
 }
@@ -373,6 +375,7 @@ pub struct TraitFnDef {
 pub struct FnParamDef {
     pub name: SmolStr,
     pub ty: ResolvedType,
+    pub unresolved_ty: crate::ast::TypeExpr,
 }
 
 /// An implementation of a trait for a specific type.

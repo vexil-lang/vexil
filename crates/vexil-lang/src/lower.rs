@@ -686,6 +686,36 @@ fn lower_config(cfg: &crate::ast::ConfigDecl, span: Span, ctx: &mut LowerCtx) ->
     }
 }
 
+/// Check if a type expression contains any of the given type parameters.
+fn contains_type_param(expr: &TypeExpr, type_params: &std::collections::HashSet<SmolStr>) -> bool {
+    match expr {
+        TypeExpr::Named(name) => type_params.contains(name),
+        TypeExpr::Primitive(_) | TypeExpr::SubByte(_) | TypeExpr::Semantic(_) => false,
+        TypeExpr::Generic(_, arg) => contains_type_param(&arg.node, type_params),
+        TypeExpr::Optional(inner) => contains_type_param(&inner.node, type_params),
+        TypeExpr::Array(inner) => contains_type_param(&inner.node, type_params),
+        TypeExpr::FixedArray(inner, _) => contains_type_param(&inner.node, type_params),
+        TypeExpr::Set(inner) => contains_type_param(&inner.node, type_params),
+        TypeExpr::Map(key, value) => {
+            contains_type_param(&key.node, type_params)
+                || contains_type_param(&value.node, type_params)
+        }
+        TypeExpr::Result(ok, err) => {
+            contains_type_param(&ok.node, type_params)
+                || contains_type_param(&err.node, type_params)
+        }
+        TypeExpr::Vec2(inner) | TypeExpr::Vec3(inner) | TypeExpr::Vec4(inner) => {
+            contains_type_param(&inner.node, type_params)
+        }
+        TypeExpr::Quat(inner) => contains_type_param(&inner.node, type_params),
+        TypeExpr::Mat3(inner) | TypeExpr::Mat4(inner) => {
+            contains_type_param(&inner.node, type_params)
+        }
+        TypeExpr::BitsInline(_) => false,
+        TypeExpr::Qualified(_, _) => false,
+    }
+}
+
 /// Lower a trait declaration to IR.
 fn lower_trait(
     decl: &crate::ast::TraitDecl,
@@ -698,7 +728,17 @@ fn lower_trait(
     let type_params = decl.type_params.clone();
 
     // Lower required fields
+    // Note: we don't resolve type parameters during trait lowering.
+    // For generic traits, the trait field types may reference type parameters.
+    // We store both the resolved type (for wire size calculation) and the
+    // unresolved type expression (for conformance checking with impl type args).
     let mut fields = Vec::new();
+    let type_param_names: std::collections::HashSet<SmolStr> = decl
+        .type_params
+        .iter()
+        .map(|p| p.name.node.clone())
+        .collect();
+
     for field in &decl.fields {
         let all_annotations: Vec<&crate::ast::Annotation> = field
             .pre_annotations
@@ -706,9 +746,19 @@ fn lower_trait(
             .chain(field.post_ordinal_annotations.iter())
             .chain(field.post_type_annotations.iter())
             .collect();
+
+        // Check if the field type contains any type parameters from this trait
+        let field_ty_resolved = if contains_type_param(&field.ty.node, &type_param_names) {
+            // Don't resolve type parameters - leave as POISON_TYPE_ID marker
+            ResolvedType::Named(ir::types::POISON_TYPE_ID)
+        } else {
+            resolve_type_expr(&field.ty.node, field.ty.span, ctx)
+        };
+
         let field_def = crate::ir::TraitFieldDef {
             name: field.name.node.clone(),
-            ty: resolve_type_expr(&field.ty.node, field.ty.span, ctx),
+            ty: field_ty_resolved,
+            unresolved_ty: field.ty.node.clone(),
             ordinal: field.ordinal.node,
             annotations: resolve_annotations_refs(&all_annotations),
         };
@@ -727,6 +777,7 @@ fn lower_trait(
                 .map(|p| crate::ir::FnParamDef {
                     name: p.name.node.clone(),
                     ty: resolve_type_expr(&p.ty.node, p.ty.span, ctx),
+                    unresolved_ty: p.ty.node.clone(),
                 })
                 .collect(),
             return_type: fn_decl
@@ -790,6 +841,7 @@ fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> cr
                     .map(|p| crate::ir::FnParamDef {
                         name: p.name.node.clone(),
                         ty: resolve_type_expr(&p.ty.node, p.name.span, ctx),
+                        unresolved_ty: p.ty.node.clone(),
                     })
                     .collect(),
                 return_type: f
