@@ -10,6 +10,6 @@
     "@vexil-lang/runtime": "file:../../../packages/runtime-ts"
   },
   "devDependencies": {
-    "tsx": "^4.0.0"
+    "tsx": "^4.22.4"
   }
 }
