@@ -27,7 +27,7 @@ class Basic:
         if self.a is not None:
             w.write_u32(self.a)
         w.write_leb128(len(self.b))
-        for item in {access}:
+        for item in self.b:
             w.write_string(item)
         w.write_leb128(len(self.c))
         for map_k, map_v in self.c.items():
@@ -102,10 +102,10 @@ class Nested:
         w.flush_to_byte_boundary()
         if self.a is not None:
             w.write_leb128(len(self.a))
-            for item in {access}:
+            for item in self.a:
                 w.write_string(item)
         w.write_leb128(len(self.b))
-        for item in {access}:
+        for item in self.b:
             w.write_bool(item is not None)
             w.flush_to_byte_boundary()
             if item is not None:
@@ -114,7 +114,7 @@ class Nested:
         for map_k, map_v in self.c.items():
             w.write_string(map_k)
             w.write_leb128(len(map_v))
-            for item in {access}:
+            for item in map_v:
                 w.write_u8(item)
         if self.d[0]:
             w.write_bool(True)
@@ -136,7 +136,7 @@ class Nested:
             if self.g[0]:
                 w.write_bool(True)
                 w.write_leb128(len(self.g[1]))
-                for item in {access}:
+                for item in self.g[1]:
                     w.write_string(item)
             else:
                 w.write_bool(False)

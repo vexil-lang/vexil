@@ -1,14 +1,14 @@
 # Vexil
 
-**Vexil** (Validated Exchange Language) is a typed schema definition language with first-class encoding semantics. It describes the shape, constraints, and wire encoding of data crossing system boundaries.
+Vexil (Validated Exchange Language) is a typed schema language where the wire encoding is part of the type system. It describes the shape, constraints, and wire encoding of data crossing system boundaries.
 
 ## What makes Vexil different?
 
-**Encoding is part of the type system.** The type `u4` means exactly 4 bits on the wire. The annotation `@varint` on a `u64` changes the wire encoding to unsigned LEB128. The schema IS the wire contract, not just the shape contract.
+**Encoding is part of the type system.** `u4` means exactly 4 bits on the wire. `@varint` on a `u64` switches to unsigned LEB128. The schema IS the wire contract, not a hint about the wire format.
 
-**Deterministic encoding.** Same data always produces identical bytes. This enables BLAKE3 content addressing, deduplication, and replay detection -- things that Protocol Buffers, Cap'n Proto, and FlatBuffers cannot guarantee.
+**Deterministic encoding.** Same data always produces identical bytes. This enables BLAKE3 content addressing, deduplication, and replay detection. These are things Protobuf, Cap'n Proto, and FlatBuffers don't guarantee.
 
-**Multi-language.** Generate code for Rust, TypeScript, and Go from the same `.vexil` schema. All three produce byte-identical wire output, verified by compliance vectors.
+**Multi-language.** Generate Rust, TypeScript, Go, and Python from the same `.vexil` schema. All backends produce byte-identical output, verified by compliance vectors.
 
 ## Quick example
 

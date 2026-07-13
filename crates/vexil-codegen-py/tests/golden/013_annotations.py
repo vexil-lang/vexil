@@ -175,7 +175,7 @@ class Limited:
         w = _BitWriter()
         w.write_string(self.body)
         w.write_leb128(len(self.tags))
-        for item in {access}:
+        for item in self.tags:
             w.write_string(item)
         w.write_leb128(len(self.headers))
         for map_k, map_v in self.headers.items():

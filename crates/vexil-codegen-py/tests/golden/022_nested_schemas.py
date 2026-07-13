@@ -80,7 +80,7 @@ class Canvas:
         w.write_message(self.bounds)
         w.write_string(self.name)
         w.write_leb128(len(self.layers))
-        for item in {access}:
+        for item in self.layers:
             w.write_message(item)
         w.flush_to_byte_boundary()
         if self.unknown:

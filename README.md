@@ -1,5 +1,5 @@
 <h1 align="center">Vexil</h1>
-<p align="center"><em>A typed schema definition language with first-class encoding semantics.</em></p>
+<p align="center"><em>Typed schema language. The encoding is part of the type.</em></p>
 
 <p align="center">
   <a href="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml">
@@ -17,9 +17,9 @@
 
 ---
 
-Vexil describes both the shape *and* the wire encoding of data crossing system boundaries. The type `u4` occupies exactly 4 bits. The annotation `@varint` switches a field to LEB128. The schema is the wire contract, not just the shape contract.
+Vexil describes both the shape *and* the wire encoding of data crossing system boundaries. `u4` is 4 bits, no negotiation. `@varint` on a `u64` makes it unsigned LEB128. The schema is the wire contract, not a hint about the wire format.
 
-Each schema produces a deterministic BLAKE3 hash, embedded in generated code at compile time. If a sender and receiver compile against different schemas, the mismatch is detectable before any data is read.
+Each schema produces a deterministic BLAKE3 hash embedded in generated code at compile time. If two parties compile against different schemas, the mismatch is detectable before any data is read. No silent corruption, no "works on my machine."
 
 ## Quick look
 
@@ -80,29 +80,29 @@ const decoded = decodeSensorReading(r);
 
 ## What Vexil does
 
-- `u1`..`u64` and `i2`..`i64` occupy exactly N bits on the wire, LSB-first
-- `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), and `@delta` (per-field delta from previous value) are declared in the schema
+- `u1`..`u64` and `i2`..`i64` -- exactly N bits on the wire, LSB-first
+- `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), `@delta` (per-field delta from previous) -- declare encoding in the schema
 - **Ten declaration kinds**: `message`, `enum`, `flags`, `union`, `newtype`, `config`, `type` (alias), `const`, `trait`, `impl`
-- **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) — deterministic fractional arithmetic, no IEEE 754 surprises
-- **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` — T can be fixed32, fixed64, f32, or f64
-- **Fixed-size arrays**: `array<T, N>` — no length prefix on wire, size is part of the schema
-- **Set type**: `set<T>` — sorted on encode, duplicates silently dropped
-- **Inline bitfields**: `bits { a, b, c }` — anonymous flags, exactly N bits
-- **Type aliases**: `type UserId = u64` — same wire encoding, better names
-- **Compile-time constants**: `const MaxSize : u32 = 1024` — usable in array sizes and where clauses
-- **Where clauses**: `field @0 : u32 where value > 0` — validated on encode and decode
-- **Traits and impl**: `trait SensorData { sensor_id @0 : u32 }` — structural contracts, zero wire impact
-- **Invariants**: `invariant { value >= 0 }` — cross-field conditions in messages
-- **Type param bounds**: `type Sorted<T: Ord> = array<T>` — constrain generic types
-- BLAKE3 hash of the canonical schema form, embedded as a compile-time constant in generated code
-- Rust, TypeScript, Go, and Python backends from the same schema, byte-identical output verified by compliance vectors
-- Same data always produces the same bytes — no maps with random iteration order, no padding variance
+- **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) -- deterministic fractional arithmetic, no IEEE 754 surprises
+- **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` -- T can be fixed32, fixed64, f32, or f64
+- **Fixed-size arrays**: `array<T, N>` -- no length prefix on wire, size is part of the schema
+- **Set type**: `set<T>` -- sorted on encode, duplicates silently dropped
+- **Inline bitfields**: `bits { a, b, c }` -- anonymous flags, exactly N bits
+- **Type aliases**: `type UserId = u64` -- same wire encoding, better names
+- **Compile-time constants**: `const MaxSize : u32 = 1024` -- usable in array sizes and where clauses
+- **Where clauses**: `field @0 : u32 where value > 0` -- validated on encode and decode, invalid data never touches the wire
+- **Traits and impl**: `trait SensorData { sensor_id @0 : u32 }` -- structural contracts, zero wire impact
+- **Invariants**: `invariant { value >= 0 }` -- cross-field conditions in messages
+- **Type param bounds**: `type Sorted<T: Ord> = array<T>` -- constrain generic types
+- BLAKE3 hash of the canonical schema form embedded as a compile-time constant in generated code
+- Rust, TypeScript, Go, and Python backends from the same schema -- byte-identical output, verified by compliance vectors
+- Same data always produces the same bytes -- no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
-- 108-file conformance corpus (43 valid, 65 invalid) that any implementation must pass
+- 108-file conformance corpus (43 valid, 65 invalid) that any conformant implementation must pass
 
 ## Fixed-Point Types
 
-`fixed32` is Q16.16 (32 bits, ~0.000015 precision). `fixed64` is Q32.32 (64 bits, ~9 decimal digits). Unlike IEEE 754 floats, the same operation produces the same result on every platform. We use this in the Orix ecosystem for deterministic simulation — every tick computes identically regardless of CPU or compiler.
+`fixed32` is Q16.16 (32 bits, ~0.000015 precision). `fixed64` is Q32.32 (64 bits, ~9 decimal digits). Unlike IEEE 754 floats, the same operation produces the same result on every platform. We use this in the Orix ecosystem for deterministic simulation. Every tick computes identically regardless of CPU or compiler.
 
 ```vexil
 message Position {
@@ -127,7 +127,7 @@ message Transform {
 
 ## Fixed-Size Arrays and Sets
 
-`array<T, N>` has no count prefix — just N elements on the wire. `set<T>` is sorted on encode so the wire is deterministic regardless of insertion order:
+`array<T, N>` has no count prefix. Just N elements on the wire. `set<T>` is sorted on encode so the wire is deterministic regardless of insertion order:
 
 ```vexil
 const Vertices = 256
@@ -152,7 +152,7 @@ Five flags, five bits on the wire. That's it.
 
 ## Type Aliases and Constants
 
-Aliases are transparent — `type UserId = u64` means `UserId` and `u64` produce identical bytes. Constants can reference each other with simple arithmetic:
+Aliases are transparent. `type UserId = u64` means `UserId` and `u64` produce identical bytes. Constants can reference each other with simple arithmetic:
 
 ```vexil
 type UserId = u64
@@ -183,15 +183,15 @@ Cross-field constraints (`where amount <= balance`) and regex matching are defer
 
 | | Vexil | Protobuf | Cap'n Proto | FlatBuffers |
 |---|:---:|:---:|:---:|:---:|
-| Sub-byte types (`u1`..`u63`) | **Yes** | -- | -- | -- |
-| Encoding annotations in schema | **Yes** | -- | -- | -- |
-| Schema hash (mismatch detection) | **BLAKE3** | -- | -- | -- |
-| LSB-first bit packing | **Yes** | -- | -- | -- |
+| Sub-byte types (`u1`..`u63`) | Yes | No | No | No |
+| Encoding annotations in schema | Yes | No | No | No |
+| Schema hash (mismatch detection) | BLAKE3 | No | No | No |
+| LSB-first bit packing | Yes | No | No | No |
 | Self-describing wire format | No | Optional | No | Optional |
-| Zero-copy decode | **Yes** | No | **Yes** | **Yes** |
-| Deterministic encoding | **Yes** | No (maps) | No (padding) | No (vtables) |
-| Schema evolution | **Yes** | **Yes** | **Yes** | **Yes** |
-| Language targets | Rust, TS, Go, Python | **Many** | **Many** | **Many** |
+| Zero-copy decode | Yes | No | Yes | Yes |
+| Deterministic encoding | Yes | No (maps) | No (padding) | No (vtables) |
+| Schema evolution | Yes | Yes | Yes | Yes |
+| Language targets | Rust, TS, Go, Python | Many | Many | Many |
 
 ## Install
 
@@ -201,12 +201,13 @@ cargo install vexilc
 
 Pre-built binaries for Linux, Windows, and macOS are on the [Releases page](https://github.com/vexil-lang/vexil/releases).
 
-To build from source (requires Rust 1.94+):
+To build from source -- requires Rust 1.94 or later:
 
 ```sh
 git clone https://github.com/vexil-lang/vexil
 cd vexil
 cargo build --release --bin vexilc
+# binary ends up at target/release/vexilc
 ```
 
 ## Usage
@@ -214,7 +215,7 @@ cargo build --release --bin vexilc
 ### CLI
 
 ```sh
-# Check a schema for errors (prints BLAKE3 hash on success)
+# Check a schema -- prints BLAKE3 hash on success
 vexilc check schema.vexil
 
 # Generate code
@@ -232,7 +233,7 @@ vexilc watch root.vexil --include ./schemas --output ./generated
 # Print BLAKE3 schema hash
 vexilc hash schema.vexil
 
-# Check schema compatibility (breaking change detection)
+# Breaking change detection
 vexilc compat old.vexil new.vexil
 
 # Schema-driven data tools
@@ -240,7 +241,7 @@ vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
 vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
 ```
 
-Errors render with source spans:
+Errors include source spans:
 
 ```
 Error: duplicate field name
@@ -270,6 +271,8 @@ if let Some(compiled) = result.compiled {
 }
 ```
 
+The `compile()` function returns a result with diagnostics (warnings and errors) and an optional compiled schema. Pass the compiled schema to any `CodegenBackend` implementation. See the `CodegenBackend` trait docs for the details.
+
 ## Repository layout
 
 ```
@@ -277,11 +280,11 @@ spec/
   vexil-spec.md          # Language specification (normative, S1-S14)
   vexil-grammar.peg      # Formal PEG grammar
 corpus/
-  valid/                 # 43 schemas -- conformant impl must accept all
-  invalid/               # 65 schemas -- conformant impl must reject all
+  valid/                 # 43 schemas -- a conformant impl must accept all
+  invalid/               # 65 schemas -- a conformant impl must reject all
   projects/              # Multi-file integration tests
 compliance/
-  vectors/               # Golden byte vectors, cross-implementation contract
+  vectors/               # Golden byte vectors -- cross-implementation contract
 crates/
   vexil-lang/            # Compiler: lexer, parser, IR, type checker, canonical hash
   vexil-codegen-rust/    # Rust code generation
@@ -289,7 +292,7 @@ crates/
   vexil-codegen-go/      # Go code generation
   vexil-codegen-py/      # Python code generation
   vexil-runtime/         # Rust runtime: BitWriter/BitReader, Pack/Unpack, LEB128, ZigZag
-  vexilc/                # CLI with ariadne error rendering
+  vexilc/                # CLI -- check, codegen, build, watch, hash, compat, pack, unpack
   vexil-store/           # .vx text and .vxb binary file formats
   vexil-bench/           # Encode/decode benchmarks (Criterion)
 packages/
@@ -310,7 +313,7 @@ examples/
 - [FAQ](FAQ.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
-- [**vexmon**](https://github.com/vexil-lang/vexmon) — real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)
+- [**vexmon**](https://github.com/vexil-lang/vexmon) -- real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)
 - API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-codegen-py](https://docs.rs/vexil-codegen-py) | [vexil-store](https://docs.rs/vexil-store)
 
 ## Contributing

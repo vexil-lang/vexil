@@ -22,7 +22,7 @@ class TreeNode:
         w = _BitWriter()
         w.write_i32(self.value)
         w.write_leb128(len(self.children))
-        for item in {access}:
+        for item in self.children:
             w.write_message(item)
         w.flush_to_byte_boundary()
         if self.unknown:

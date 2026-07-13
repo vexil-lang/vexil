@@ -39,10 +39,10 @@ Error: unknown type `strin`
 
 ## Understand the schema
 
-- **`namespace hello`** -- every schema needs a namespace
-- **`message Greeting`** -- a struct-like type with ordered fields
-- **`@0`, `@1`, `@2`** -- ordinals determine wire order (not source order)
-- **`: string`, `: u32`** -- field types determine encoding
+- `namespace hello` -- every schema needs a namespace, keeps types from colliding
+- `message Greeting` -- a struct-like type with named, ordered fields
+- `@0`, `@1`, `@2` -- ordinals determine wire order, not source order. Swap lines around, the wire format stays the same
+- `: string`, `: u32` -- field types determine encoding and size
 
 ## Schema hash
 
@@ -53,4 +53,4 @@ vexilc hash hello.vexil
 # a1b2c3d4...  hello.vexil
 ```
 
-Two schemas with identical content produce identical hashes, regardless of whitespace or comments. The hash is computed from the canonical form of the schema, not the raw source text.
+Two schemas with identical content produce identical hashes regardless of whitespace or comments. The hash is computed from the canonical form, not the raw source text.
