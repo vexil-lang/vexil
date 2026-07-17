@@ -190,7 +190,216 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_responsibilities_repository(root)?;
     validate_privileged_operations_repository(root)?;
     validate_stewardship_exercises_repository(root)?;
+    validate_external_controls_repository(root)?;
     validate_public_boundary(root)?;
+    Ok(())
+}
+
+/// Validates the public, offline Epic 2 evidence package.  It deliberately
+/// validates records and committed workflow source only: neither source is
+/// evidence that a provider-side setting has been remediated.
+pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> {
+    validate_schema_syntax(root)?;
+    let expected = read_json(&root.join("release/controls/expected-controls.json"))?;
+    let baseline = read_json(&root.join("release/controls/observations/baseline-2026-07-13.json"))?;
+    let remediation =
+        read_json(&root.join("release/controls/remediation-plan-github-protections.json"))?;
+    let custody = read_json(&root.join("release/identities/custody.json"))?;
+    let exercise_plan = read_json(&root.join("release/exercises/revocation-exercise-plan.json"))?;
+    let exercise_result =
+        read_json(&root.join("release/exercises/revocation-exercise-result.json"))?;
+
+    for (label, record) in [
+        ("expected external controls", &expected),
+        ("external-control baseline", &baseline),
+        ("external-control remediation plan", &remediation),
+        ("identity custody inventory", &custody),
+        ("revocation exercise plan", &exercise_plan),
+        ("revocation exercise result", &exercise_result),
+    ] {
+        ensure_no_private_leakage(&record.to_string())?;
+        let object = object(record, label)?;
+        if !object.contains_key("$schema")
+            || !object.contains_key("$id")
+            || !object.contains_key("version")
+        {
+            return Err(format!(
+                "{label} must have public schema, identifier, and version fields"
+            ));
+        }
+        let id = text(object.get("$id"), "public record id")?;
+        if !id.starts_with("https://vexil.dev/release/") {
+            return Err(format!("{label} must use a public vexil.dev identifier"));
+        }
+    }
+
+    validate_external_control_schema(root, &expected)?;
+    validate_external_observation_schema(root, &baseline)?;
+    validate_observation_inventory(root)?;
+    validate_external_remediation_schema(root, &remediation)?;
+    validate_identity_custody_schema(root, &custody)?;
+    validate_revocation_exercise_schema(root, &exercise_plan)?;
+    validate_revocation_exercise_schema(root, &exercise_result)?;
+
+    let expected_rows = array(
+        object(&expected, "expected external controls")?.get("assertions"),
+        "expected external-control assertions",
+    )?;
+    let mut expected_ids = BTreeSet::new();
+    for row in expected_rows {
+        let row = object(row, "expected external-control assertion")?;
+        let id = text(row.get("id"), "expected control id")?;
+        if !expected_ids.insert(id) {
+            return Err(
+                "expected external-control identifiers must be stable and unique".to_owned(),
+            );
+        }
+        if text(
+            object(required_value(row, "query")?, "expected control query")?.get("method"),
+            "expected control query method",
+        )? != "GET"
+        {
+            return Err("expected external-control queries must remain GET-only".to_owned());
+        }
+    }
+    let baseline_root = object(&baseline, "external-control baseline")?;
+    let baseline_rows = array(baseline_root.get("results"), "baseline observation results")?;
+    let mut baseline_ids = BTreeSet::new();
+    for row in baseline_rows {
+        let row = object(row, "baseline observation result")?;
+        let id = text(row.get("assertionId"), "baseline assertion id")?;
+        if !baseline_ids.insert(id) {
+            return Err(
+                "baseline observation cannot contain conflicting assertion identities".to_owned(),
+            );
+        }
+        if text(row.get("status"), "baseline result status")? == "compliant" {
+            return Err(
+                "the known recovery baseline cannot claim compliant provider controls".to_owned(),
+            );
+        }
+    }
+    if baseline_ids != expected_ids {
+        return Err(
+            "baseline observation must cover every expected control exactly once".to_owned(),
+        );
+    }
+    let remediation_root = object(&remediation, "external-control remediation plan")?;
+    let remediation_baseline = object(
+        required_value(remediation_root, "baselineObservation")?,
+        "remediation baseline observation",
+    )?;
+    let stable_identity = object(
+        required_value(baseline_root, "stableIdentity")?,
+        "baseline stable identity",
+    )?;
+    if text(
+        remediation_baseline.get("normalizedStateDigest"),
+        "remediation baseline digest",
+    )? != text(
+        stable_identity.get("normalizedStateDigest"),
+        "baseline digest",
+    )? {
+        return Err("remediation plan must bind to the retained baseline stable digest".to_owned());
+    }
+
+    let expected_text = expected.to_string();
+    for required in [
+        "branch",
+        "tag",
+        "release",
+        "environment",
+        "workflow",
+        "trusted",
+        "revocation",
+    ] {
+        if !expected_text.to_ascii_lowercase().contains(required) {
+            return Err(format!(
+                "expected external controls omit required {required} assertion"
+            ));
+        }
+    }
+    let baseline_text = baseline.to_string().to_ascii_lowercase();
+    if !baseline_text.contains("2026-07-13")
+        || !baseline_text.contains("noncompliant")
+        || baseline_text.contains("compliant") && !baseline_text.contains("noncompliant")
+    {
+        return Err("the retained recovery baseline must remain dated and noncompliant".to_owned());
+    }
+    let remediation_text = remediation.to_string().to_ascii_lowercase();
+    if !(remediation_text.contains("unexecuted") || remediation_text.contains("not-executed"))
+        || !remediation_text.contains("repository administrator")
+        || !remediation_text.contains("historical")
+    {
+        return Err("remediation plan must retain the administrator boundary, unexecuted state, and historical-identity exclusion".to_owned());
+    }
+    let custody_text = custody.to_string().to_ascii_lowercase();
+    for required in ["pypi", "unresolved", "continuity", "blocked", "trusted"] {
+        if !custody_text.contains(required) {
+            return Err(format!(
+                "identity custody inventory must retain {required} as a fail-closed state"
+            ));
+        }
+    }
+    let exercise_plan_text = exercise_plan.to_string().to_ascii_lowercase();
+    let exercise_result_text = exercise_result.to_string().to_ascii_lowercase();
+    if !exercise_plan_text.contains("non-production")
+        || !exercise_plan_text.contains("blocked")
+        || !(exercise_result_text.contains("not-executed")
+            || exercise_result_text.contains("unexecuted"))
+    {
+        return Err("revocation exercise records must retain safe non-production preconditions and an unexecuted blocker".to_owned());
+    }
+    validate_workflow_static_isolation(root)?;
+    Ok(())
+}
+
+pub fn validate_workflow_static_isolation(root: &Path) -> Result<(), String> {
+    let workflows = root.join(".github/workflows");
+    for entry in fs::read_dir(&workflows)
+        .map_err(|error| format!("read {}: {error}", workflows.display()))?
+    {
+        let path = entry
+            .map_err(|error| format!("read {} entry: {error}", workflows.display()))?
+            .path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("yml") {
+            continue;
+        }
+        let source = fs::read_to_string(&path)
+            .map_err(|error| format!("read {}: {error}", path.display()))?;
+        let lower = source.to_ascii_lowercase();
+        if lower.contains("pull_request_target") {
+            return Err(format!(
+                "workflow {} must not run untrusted code through pull_request_target",
+                path.display()
+            ));
+        }
+        if lower.contains("permissions: write-all") || lower.contains("permissions: \"write-all\"")
+        {
+            return Err(format!(
+                "workflow {} must not request write-all permissions",
+                path.display()
+            ));
+        }
+        let privileged = lower.contains("environment:")
+            || lower.contains("id-token: write")
+            || lower.contains("contents: write")
+            || lower.contains("packages: write");
+        if privileged {
+            for line in source.lines().filter(|line| line.contains("uses:")) {
+                let reference = line.split("uses:").nth(1).unwrap_or_default().trim();
+                let revision = reference.rsplit_once('@').map(|(_, revision)| revision);
+                if !revision.is_some_and(|revision| {
+                    revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit())
+                }) {
+                    return Err(format!(
+                        "privileged workflow {} must pin Action ref {reference} to a full commit SHA",
+                        path.display()
+                    ));
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -600,13 +809,18 @@ fn validate_emergency_runbook_authority(authority: &Value) -> Result<(), String>
 fn validate_emergency_control_inventory(root: &Path, content: &str) -> Result<(), String> {
     let release_workflow = fs::read_to_string(root.join(".github/workflows/release.yml"))
         .map_err(|error| format!("read release workflow control surface: {error}"))?;
-    if !release_workflow.contains("secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN")
-        || !content.contains("RELEASE_TOKEN")
-        || !content.contains("GITHUB_TOKEN")
+    let legacy_credential_route = "secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN";
+    if release_workflow.contains(legacy_credential_route)
+        && (!content.contains("RELEASE_TOKEN") || !content.contains("GITHUB_TOKEN"))
     {
         return Err(
             "emergency-stop inventory must name every current release credential route".to_owned(),
         );
+    }
+    if !release_workflow.contains(legacy_credential_route)
+        && !content.contains("No active release credential route")
+    {
+        return Err("emergency-stop inventory must distinguish a removed committed credential route from live provider evidence".to_owned());
     }
     Ok(())
 }
@@ -3330,6 +3544,105 @@ pub fn validate_stewardship_exercise_schema(root: &Path, record: &Value) -> Resu
     )
 }
 
+pub fn validate_external_control_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/external-control.schema.json",
+        record,
+        "expected external controls",
+    )
+}
+
+pub fn validate_external_observation_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/external-observation.schema.json",
+        record,
+        "external-control observation",
+    )
+}
+
+fn validate_observation_inventory(root: &Path) -> Result<(), String> {
+    let directory = root.join("release/controls/observations");
+    let mut paths = fs::read_dir(&directory)
+        .map_err(|error| format!("cannot read observation inventory: {error}"))?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("cannot enumerate observation inventory: {error}"))?;
+    paths.sort();
+
+    for path in paths
+        .into_iter()
+        .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+    {
+        let record = read_json(&path)?;
+        validate_external_observation_schema(root, &record)?;
+        ensure_no_private_leakage(&record.to_string())?;
+
+        let collection = object(
+            required_value(
+                object(&record, "external-control observation")?,
+                "collection",
+            )?,
+            "external-control observation collection",
+        )?;
+        match text(
+            collection.get("credentialMode"),
+            "observation credential mode",
+        )? {
+            "no-write-capable-credential" => {}
+            "owner-authorized-write-capable-read-only" => {
+                let authorization = object(
+                    required_value(collection, "credentialAuthorization")?,
+                    "owner-authorized observation credential exception",
+                )?;
+                if text(authorization.get("status"), "credential exception status")?
+                    != "explicit-owner-authorized-procedural-audit-exception"
+                    || text(
+                        authorization.get("allowedOperations"),
+                        "credential exception operations",
+                    )? != "GET only"
+                    || authorization
+                        .get("leastPrivilegeEnforced")
+                        .and_then(Value::as_bool)
+                        != Some(false)
+                {
+                    return Err("owner-authorized credential exception must retain its GET-only and least-privilege-deviation evidence".to_owned());
+                }
+            }
+            other => return Err(format!("unsupported observation credential mode: {other}")),
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_external_remediation_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/external-remediation.schema.json",
+        record,
+        "external-control remediation",
+    )
+}
+
+pub fn validate_identity_custody_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/identity-custody.schema.json",
+        record,
+        "identity custody inventory",
+    )
+}
+
+pub fn validate_revocation_exercise_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/revocation-exercise.schema.json",
+        record,
+        "revocation exercise",
+    )
+}
+
 fn validate_schema_instance(
     root: &Path,
     schema_relative: &str,
@@ -3366,6 +3679,26 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
         (
             "release/schemas/stewardship-exercise.schema.json",
             "https://vexil.dev/release/schemas/stewardship-exercise.schema.json",
+        ),
+        (
+            "release/schemas/external-control.schema.json",
+            "https://vexil.dev/release/schemas/external-control.schema.json",
+        ),
+        (
+            "release/schemas/external-observation.schema.json",
+            "https://vexil.dev/release/schemas/external-observation.schema.json",
+        ),
+        (
+            "release/schemas/external-remediation.schema.json",
+            "https://vexil.dev/release/schemas/external-remediation.schema.json",
+        ),
+        (
+            "release/schemas/identity-custody.schema.json",
+            "https://vexil.dev/release/schemas/identity-custody.schema.json",
+        ),
+        (
+            "release/schemas/revocation-exercise.schema.json",
+            "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
         ),
     ] {
         let schema_value = read_json(&root.join(relative))?;

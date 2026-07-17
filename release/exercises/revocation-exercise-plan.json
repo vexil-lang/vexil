@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/exercises/revocation-exercise-plan.json",
+  "exerciseSchema": "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
+  "version": "1.0",
+  "recordId": "REV-2026-07-17-PLAN",
+  "recordKind": "revocation-exercise-plan",
+  "status": "blocked-unexecuted",
+  "scope": "No provider-backed exercise target is currently approved; active production custody is explicitly out of scope.",
+  "safetyBoundary": {"target": "approved-non-production-test-identity-or-individually-reviewed-reversible-path", "requiredPrecondition": "A separate reviewed safe identity/path, exact target scope, expected denial query, restoration owner, provider audit reference, and fresh control evidence must exist before execution.", "prohibitedEffects": ["active production identity disruption", "tag creation or mutation", "GitHub release changes", "package publication", "deployment", "Manifest approval", "publication approval", "risk acceptance", "evidence rewrite", "completion declaration"], "stopCondition": "Stop before a provider call when any safe precondition is absent, ambiguous, stale, or would touch active production custody."},
+  "participants": [{"actorId": "github:furkanmamuk", "assertedRole": "repository-administrator", "assignmentId": "assignment-repository-administrator-2026-07-14"}],
+  "evidence": {"secretsIncluded": false, "providerAuditReference": "not-available-until-an-approved-safe-exercise-is-scheduled", "outcome": "No exercise has been executed; this plan neither proves revocation nor grants a provider write."},
+  "publicationReadiness": "blocked"
+}

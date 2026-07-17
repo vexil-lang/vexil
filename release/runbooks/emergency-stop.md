@@ -10,7 +10,7 @@
 | Release workflow | `.github/workflows/release.yml` | `repository-administrator` | Epic 2 verified workflow stop control | unverified Epic 2 blocker |
 | npm publication workflow | `.github/workflows/npm-publish.yml` | `repository-administrator` | Epic 2 verified workflow and trusted-publishing control | unverified Epic 2 blocker |
 | Documentation workflow and environment | `.github/workflows/docs.yml`, `github-pages` | `repository-administrator` | Epic 2 verified workflow and environment control | unverified Epic 2 blocker |
-| Release automation identity | GitHub Actions `RELEASE_TOKEN` or fallback `GITHUB_TOKEN` in `release.yml` | `repository-administrator` | Epic 2 verified identity selection and revocation control | unverified Epic 2 blocker |
+| Release automation identity | No active release credential route is committed in `release.yml`; future privileged identity remains provider evidence | `repository-administrator` | Epic 2 verified identity selection and revocation control | unverified Epic 2 blocker |
 | npm publication identity | npm trusted publishing in `npm-publish.yml` | `repository-administrator` | Epic 2 verified registry identity and revocation control | unverified Epic 2 blocker |
 
 | Decision point | Asserted role | Allowed action | Prohibited action | Evidence destination | Prerequisite | Stop condition | Follow-up owner | Tabletop-only |

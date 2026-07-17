@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/external-remediation.schema.json",
+  "title": "Vexil Reviewed External-Control Remediation Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "remediationSchema", "version", "recordId", "status", "baselineObservation", "owner", "review", "changes", "nonEffects", "postChangeObservation", "publicationReadiness"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string"}, "remediationSchema": {"const": "https://vexil.dev/release/schemas/external-remediation.schema.json"}, "version": {"const": "1.0"}, "recordId": {"type": "string", "pattern": "^ECR-"}, "status": {"const": "reviewed-not-executed"}, "baselineObservation": {"$ref": "#/$defs/evidence"}, "owner": {"$ref": "#/$defs/owner"}, "review": {"$ref": "#/$defs/review"}, "changes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/change"}}, "nonEffects": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "postChangeObservation": {"const": "required-fresh-independent-read-only-observation"}, "publicationReadiness": {"const": "blocked"}
+  },
+  "$defs": {
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["recordId", "path", "normalizedStateDigest"], "properties": {"recordId": {"type": "string"}, "path": {"type": "string"}, "normalizedStateDigest": {"type": "string", "pattern": "^sha256:"}}},
+    "owner": {"type": "object", "additionalProperties": false, "required": ["actorId", "roleId", "assignmentId"], "properties": {"actorId": {"const": "github:furkanmamuk"}, "roleId": {"const": "repository-administrator"}, "assignmentId": {"const": "assignment-repository-administrator-2026-07-14"}}},
+    "review": {"type": "object", "additionalProperties": false, "required": ["status", "auditReference", "approvedProviderWrite"], "properties": {"status": {"const": "reviewed-plan-only"}, "auditReference": {"type": "string", "minLength": 1}, "approvedProviderWrite": {"const": false}}},
+    "change": {"type": "object", "additionalProperties": false, "required": ["id", "target", "expectedControlIds", "manualAction", "stopCondition", "rollback", "historicalInvariant"], "properties": {"id": {"type": "string"}, "target": {"type": "string"}, "expectedControlIds": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^EC-"}}, "manualAction": {"type": "string"}, "stopCondition": {"type": "string"}, "rollback": {"type": "string"}, "historicalInvariant": {"const": "Do not create, move, delete, rename, replace, or rewrite Historical Tags or historical release assets."}}}
+  }
+}

@@ -26,6 +26,9 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # CI is advisory: it receives only repository read access and no environment.
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -37,6 +40,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Install protoc
         uses: arduino/setup-protoc@v3
@@ -64,11 +69,15 @@ jobs:
   ts-runtime:
     name: TypeScript runtime
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: packages/runtime-ts
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -90,11 +99,15 @@ jobs:
   go-runtime:
     name: Go runtime
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: packages/runtime-go
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -110,8 +123,12 @@ jobs:
   msrv:
     name: MSRV (1.94)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Install protoc
         uses: arduino/setup-protoc@v3

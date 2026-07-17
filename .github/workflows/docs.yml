@@ -1,26 +1,33 @@
-name: Deploy Documentation
+name: Build Documentation (deployment disabled)
 
 on:
   push:
     branches: [main]
     paths:
       - 'docs/book/**'
+  pull_request:
+    paths:
+      - 'docs/book/**'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: documentation-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # This advisory build intentionally has no environment, deployment, OIDC,
+    # or provider-write authority.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install mdbook
         run: |
@@ -31,18 +38,7 @@ jobs:
       - name: Build book
         run: cd docs/book && mdbook build
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: target/book
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Record deployment boundary
+        run: |
+          echo "Documentation was built only. GitHub Pages deployment is disabled pending verified Epic 2 external controls."
+          echo "Provider environment approval does not authorize a Release Manifest or publication."

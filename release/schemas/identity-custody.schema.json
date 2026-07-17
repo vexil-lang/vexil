@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/identity-custody.schema.json",
+  "title": "Vexil Publication Identity and Custody Inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "custodySchema", "version", "continuity", "identities", "publicationReadiness"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string"}, "custodySchema": {"const": "https://vexil.dev/release/schemas/identity-custody.schema.json"}, "version": {"const": "1.0"}, "continuity": {"const": "unresolved-no-distinct-custodian"}, "identities": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/identity"}}, "publicationReadiness": {"const": "blocked"}
+  },
+  "$defs": {
+    "owner": {"type": "object", "additionalProperties": false, "required": ["actorId", "roleId", "assignmentId"], "properties": {"actorId": {"const": "github:furkanmamuk"}, "roleId": {"const": "repository-administrator"}, "assignmentId": {"const": "assignment-repository-administrator-2026-07-14"}}},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["id", "target", "scope", "primaryCustodian", "continuityPath", "authenticationMode", "trustedIssuerBinding", "observationStatus", "revocationPath", "evidenceQuery", "releaseSetBoundary", "status"], "properties": {"id": {"type": "string", "pattern": "^IC-"}, "target": {"type": "string"}, "scope": {"type": "string"}, "primaryCustodian": {"$ref": "#/$defs/owner"}, "continuityPath": {"const": "unresolved-no-distinct-custodian"}, "authenticationMode": {"enum": ["trusted-publisher-required", "protected-tag-authority-required", "unresolved-no-identity" ]}, "trustedIssuerBinding": {"type": "string"}, "observationStatus": {"enum": ["unknown", "unresolved"]}, "revocationPath": {"type": "string"}, "evidenceQuery": {"type": "string"}, "releaseSetBoundary": {"const": "Inventory only; this record neither selects nor includes a Release Unit."}, "status": {"enum": ["blocked", "unresolved-pypi-ownership"]}}}
+  }
+}

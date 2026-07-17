@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "title": "Vexil External Control Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "observationSchema", "version", "recordId", "provider", "scope", "observedAtUtc", "collection", "stableIdentity", "results", "publicationReadiness"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"type": "string"},
+    "observationSchema": {"const": "https://vexil.dev/release/schemas/external-observation.schema.json"},
+    "version": {"const": "1.0"},
+    "recordId": {"type": "string", "pattern": "^ECO-"},
+    "provider": {"const": "github"},
+    "scope": {"const": "vexil-lang/vexil"},
+    "observedAtUtc": {"type": "string", "format": "date-time"},
+    "collection": {"$ref": "#/$defs/collection"},
+    "stableIdentity": {"$ref": "#/$defs/identity"},
+    "results": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/result"}},
+    "publicationReadiness": {"const": "blocked"}
+  },
+  "$defs": {
+    "collection": {"type": "object", "additionalProperties": false, "required": ["mode", "providerInterface", "credentialMode", "mutationGuard"], "properties": {"mode": {"const": "read-only"}, "providerInterface": {"type": "string", "minLength": 1}, "credentialMode": {"enum": ["no-write-capable-credential", "owner-authorized-write-capable-read-only"]}, "mutationGuard": {"const": "GET-only; auto-remediation and provider writes are rejected before collection"}, "credentialAuthorization": {"$ref": "#/$defs/credentialAuthorization"}}, "allOf": [{"if": {"properties": {"credentialMode": {"const": "owner-authorized-write-capable-read-only"}}}, "then": {"required": ["credentialAuthorization"]}}]},
+    "credentialAuthorization": {"type": "object", "additionalProperties": false, "required": ["status", "authorizedBy", "authorizationReference", "leastPrivilegeEnforced", "allowedOperations"], "properties": {"status": {"const": "explicit-owner-authorized-procedural-audit-exception"}, "authorizedBy": {"type": "string", "minLength": 1}, "authorizationReference": {"type": "string", "minLength": 1}, "leastPrivilegeEnforced": {"const": false}, "allowedOperations": {"const": "GET only"}}},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["normalizedStateDigest", "responseDigest", "collectionTimestampExcluded"], "properties": {"normalizedStateDigest": {"type": "string", "pattern": "^sha256:"}, "responseDigest": {"type": "string", "pattern": "^sha256:"}, "collectionTimestampExcluded": {"const": true}}},
+    "result": {"type": "object", "additionalProperties": false, "required": ["assertionId", "query", "status", "observedValue", "diagnostic", "evidenceReference"], "properties": {"assertionId": {"type": "string", "pattern": "^EC-"}, "query": {"type": "object", "additionalProperties": false, "required": ["method", "path"], "properties": {"method": {"const": "GET"}, "path": {"type": "string", "pattern": "^/"}}}, "status": {"enum": ["compliant", "noncompliant", "unknown"]}, "observedValue": {"type": "string", "minLength": 1}, "diagnostic": {"type": "string", "minLength": 1}, "evidenceReference": {"type": "string", "minLength": 1}}}
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
+  "title": "Vexil Safe Revocation Exercise Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "exerciseSchema", "version", "recordId", "recordKind", "status", "scope", "safetyBoundary", "participants", "evidence", "publicationReadiness"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string"}, "exerciseSchema": {"const": "https://vexil.dev/release/schemas/revocation-exercise.schema.json"}, "version": {"const": "1.0"}, "recordId": {"type": "string", "pattern": "^REV-"}, "recordKind": {"enum": ["revocation-exercise-plan", "revocation-exercise-result"]}, "status": {"enum": ["blocked-unexecuted", "unexecuted"]}, "scope": {"type": "string"}, "safetyBoundary": {"$ref": "#/$defs/boundary"}, "participants": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/participant"}}, "evidence": {"$ref": "#/$defs/evidence"}, "publicationReadiness": {"const": "blocked"}
+  },
+  "$defs": {
+    "boundary": {"type": "object", "additionalProperties": false, "required": ["target", "requiredPrecondition", "prohibitedEffects", "stopCondition"], "properties": {"target": {"const": "approved-non-production-test-identity-or-individually-reviewed-reversible-path"}, "requiredPrecondition": {"type": "string"}, "prohibitedEffects": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "stopCondition": {"type": "string"}}},
+    "participant": {"type": "object", "additionalProperties": false, "required": ["actorId", "assertedRole", "assignmentId"], "properties": {"actorId": {"const": "github:furkanmamuk"}, "assertedRole": {"const": "repository-administrator"}, "assignmentId": {"const": "assignment-repository-administrator-2026-07-14"}}},
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["secretsIncluded", "providerAuditReference", "outcome"], "properties": {"secretsIncluded": {"const": false}, "providerAuditReference": {"type": "string"}, "outcome": {"type": "string"}}}
+  }
+}

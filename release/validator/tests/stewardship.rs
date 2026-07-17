@@ -10,6 +10,49 @@ fn canonical_contract_and_all_fixtures_have_the_expected_result() {
 }
 
 #[test]
+fn external_control_records_and_workflows_fail_closed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    vexil_release_governance_validator::validate_external_controls_repository(&root)
+        .expect("canonical Epic 2 offline records must validate");
+
+    let mut baseline: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/controls/observations/baseline-2026-07-13.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    baseline["observationStatus"] = Value::String("compliant".into());
+    let rendered = baseline.to_string().to_ascii_lowercase();
+    assert!(rendered.contains("compliant"));
+    assert!(rendered.contains("2026-07-13"));
+
+    let authorized_path =
+        root.join("release/controls/observations/owner-authorized-github-audit-2026-07-17.json");
+    let authorized: Value =
+        serde_json::from_str(&fs::read_to_string(authorized_path).unwrap()).unwrap();
+    vexil_release_governance_validator::validate_external_observation_schema(&root, &authorized)
+        .expect("the owner-authorized GET-only observation must validate");
+
+    let mut missing_authorization = authorized.clone();
+    missing_authorization["collection"]
+        .as_object_mut()
+        .unwrap()
+        .remove("credentialAuthorization");
+    vexil_release_governance_validator::validate_external_observation_schema(
+        &root,
+        &missing_authorization,
+    )
+    .expect_err("a write-capable observation credential must retain explicit owner authorization");
+
+    let mut write_operation = authorized;
+    write_operation["results"][0]["query"]["method"] = Value::String("POST".into());
+    vexil_release_governance_validator::validate_external_observation_schema(
+        &root,
+        &write_operation,
+    )
+    .expect_err("an owner authorization cannot permit a provider write");
+}
+
+#[test]
 fn authority_schema_and_semantic_boundaries_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let canonical: Value =
@@ -356,6 +399,8 @@ fn isolated_public_copy_needs_no_private_bmad_directory() {
     fs::create_dir_all(isolated.join("release/advisory")).unwrap();
     fs::create_dir_all(isolated.join("release/privileged")).unwrap();
     fs::create_dir_all(isolated.join("release/exercises")).unwrap();
+    fs::create_dir_all(isolated.join("release/controls/observations")).unwrap();
+    fs::create_dir_all(isolated.join("release/identities")).unwrap();
     fs::create_dir_all(isolated.join("docs/book/src/release")).unwrap();
     fs::create_dir_all(isolated.join(".github/workflows")).unwrap();
     for relative in [
@@ -365,11 +410,22 @@ fn isolated_public_copy_needs_no_private_bmad_directory() {
         "release/schemas/retired-bot-responsibility.schema.json",
         "release/schemas/privileged-operation.schema.json",
         "release/schemas/stewardship-exercise.schema.json",
+        "release/schemas/external-control.schema.json",
+        "release/schemas/external-observation.schema.json",
+        "release/schemas/external-remediation.schema.json",
+        "release/schemas/identity-custody.schema.json",
+        "release/schemas/revocation-exercise.schema.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
         "release/advisory/automation-contract.json",
         "release/privileged/operations-contract.json",
         "release/exercises/tabletop-stewardship-continuity-2026-07-14.json",
+        "release/exercises/revocation-exercise-plan.json",
+        "release/exercises/revocation-exercise-result.json",
+        "release/controls/expected-controls.json",
+        "release/controls/observations/baseline-2026-07-13.json",
+        "release/controls/remediation-plan-github-protections.json",
+        "release/identities/custody.json",
         "docs/book/src/release/stewardship.md",
         "docs/book/src/release/stewardship-continuity.md",
         "docs/book/src/release/retired-bot-responsibilities.md",
