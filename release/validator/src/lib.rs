@@ -1140,6 +1140,8 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
         "registry",
         "provider-approval",
         "private-build-artifact",
+        "private-review-note",
+        "non-public-workspace-input",
     ] {
         if !rejected.contains(&evidence) {
             return Err(format!("non-authority evidence is missing: {evidence}"));
@@ -2035,9 +2037,9 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
             {
                 return Err(format!("responsibility {id} has incomplete evidence"));
             }
-            if source.contains("non-public-workspace") {
+            if source.contains("restricted-workspace-reference") {
                 return Err(
-                    "non-public workspace sources cannot be public responsibility evidence".to_owned(),
+                    "restricted workspace sources cannot be public responsibility evidence".to_owned(),
                 );
             }
             ensure_no_private_leakage(source)?;
@@ -3470,12 +3472,12 @@ pub fn ensure_no_private_leakage(content: &str) -> Result<(), String> {
     if lower.contains("c:\\users\\")
         || lower.contains("/users/")
         || lower.contains("/home/")
-        || lower.contains("non-public workspace")
+        || lower.contains("restricted-workspace-reference")
         || lower.contains("\\\\")
         || has_windows_drive_path
     {
         return Err(
-            "public/private boundary failure: private absolute path or non-public workspace reference found"
+            "public/private boundary failure: private absolute path or restricted workspace reference found"
                 .to_owned(),
         );
     }

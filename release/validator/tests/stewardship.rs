@@ -144,7 +144,7 @@ fn assignment_review_evidence_is_decision_bound_and_public() {
 
     let mut private_evidence = canonical;
     private_evidence["assignments"][0]["reviewEvidence"]["source"] =
-        Value::String("non-public-workspace/private.md".into());
+        Value::String("restricted-workspace-reference/private.md".into());
     vexil_release_governance_validator::validate_assignments(&private_evidence)
         .expect_err("assignment evidence must reject private planning sources");
 }
@@ -575,7 +575,7 @@ fn apply_responsibility_mutation(record: &mut Value, mutation: &str) {
                 .unwrap()
                 .as_array_mut()
                 .unwrap()[0]["historicalEvidence"][0]["source"] =
-                Value::String("non-public-workspace/private-note.md".into());
+                Value::String("restricted-workspace-reference/private-note.md".into());
         }
         "duplicate-id" => {
             let responsibilities = root
