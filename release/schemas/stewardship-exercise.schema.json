@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/stewardship-exercise.schema.json",
+  "title": "Vexil Tabletop Stewardship Exercise Record",
+  "description": "A public, non-Run record of a non-mutating stewardship tabletop exercise.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "exerciseSchema", "version", "recordId", "kind", "mode", "exercisedAtUtc", "participants", "scenarios", "evidence"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"type": "string"},
+    "exerciseSchema": {"const": "https://vexil.dev/release/schemas/stewardship-exercise.schema.json"},
+    "version": {"const": "1.0"},
+    "recordId": {"type": "string"},
+    "kind": {"const": "tabletop-stewardship-continuity"},
+    "mode": {"const": "tabletop-only-non-mutating"},
+    "exercisedAtUtc": {"type": "string", "format": "date-time"},
+    "participants": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/participant"}},
+    "scenarios": {"type": "array", "minItems": 4, "items": {"$ref": "#/$defs/scenario"}},
+    "evidence": {"$ref": "#/$defs/evidence"}
+  },
+  "$defs": {
+    "participant": {"type": "object", "additionalProperties": false, "required": ["actorId", "assertedRole", "assignmentId"], "properties": {"actorId": {"type": "string"}, "assertedRole": {"type": "string"}, "assignmentId": {"type": "string"}}},
+    "owner": {"type": "object", "additionalProperties": false, "required": ["actorId", "assertedRole", "assignmentId"], "properties": {"actorId": {"type": "string"}, "assertedRole": {"type": "string"}, "assignmentId": {"type": "string"}}},
+    "providerBlocker": {"type": "object", "additionalProperties": false, "required": ["control", "status", "requiredEvidence"], "properties": {"control": {"type": "string"}, "status": {"const": "unverified-epic-2-blocker"}, "requiredEvidence": {"type": "string"}}},
+    "scenario": {"type": "object", "additionalProperties": false, "required": ["id", "scenario", "affectedAuthority", "procedureId", "allowedActions", "prohibitedActions", "providerBlockers", "observedGaps", "followUpOwner", "disposition"], "properties": {"id": {"type": "string"}, "scenario": {"enum": ["unavailable-owner", "suspected-credential-or-automation-compromise", "advisory-failure", "missing-provider-control"]}, "affectedAuthority": {"type": "string"}, "procedureId": {"type": "string"}, "allowedActions": {"type": "array", "items": {"enum": ["stop", "revoke", "contain", "activate-succession", "perform-manually", "defer"]}}, "prohibitedActions": {"type": "array", "items": {"type": "string"}}, "providerBlockers": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/providerBlocker"}}, "observedGaps": {"type": "array", "items": {"type": "string"}}, "followUpOwner": {"$ref": "#/$defs/owner"}, "disposition": {"const": "blocked-pending-epic-2-controls"}}},
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["destination", "persistence", "secretsIncluded"], "properties": {"destination": {"type": "string"}, "persistence": {"const": "version-controlled-public-record"}, "secretsIncluded": {"const": false}}}
+  }
+}

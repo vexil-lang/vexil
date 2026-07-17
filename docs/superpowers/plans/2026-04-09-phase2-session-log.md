@@ -84,7 +84,7 @@ All 6 issues from Review 1 verified fixed. No new issues introduced.
 | API calls | ~50 across all agents |
 | Model tokens | ~1.5M input, ~20K output (unlimited, $0) |
 | Review cycles | 2 (1 fix round) |
-| Escalations to Codex | 0 |
+| Escalations to automated assistance | 0 |
 | Plan iterations | 1121 lines (from 985 initial) |
 
 ---

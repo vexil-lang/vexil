@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/owner-authorized-github-audit-2026-07-17.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-17-OWNER-AUTHORIZED-GITHUB",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-17T12:29:40Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Repository Administrator direction recorded on 2026-07-17",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:05b1516ff9878fcb956d8a94ee9603fb50e0d9c0ed5148c4e5491288eb2308e3",
+    "responseDigest": "sha256:78f03ec5a64df0ec0b9258dab369554bd34acf196acbc16bcdd8f714f7669e5e",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {"assertionId": "EC-001", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/branches/main/protection"}, "status": "noncompliant", "observedValue": "GitHub returned 404 Branch not protected.", "diagnostic": "main lacks observed branch protection.", "evidenceReference": "github-cli-get-2026-07-17:branch-protection"},
+    {"assertionId": "EC-002", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/rulesets"}, "status": "noncompliant", "observedValue": "No repository rulesets were returned.", "diagnostic": "No observed ruleset protects Canonical Tag namespaces.", "evidenceReference": "github-cli-get-2026-07-17:rulesets"},
+    {"assertionId": "EC-003", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/immutable-releases"}, "status": "noncompliant", "observedValue": "GitHub immutable releases reports enabled false.", "diagnostic": "Prospective release immutability is not enabled; historical releases remain untouched.", "evidenceReference": "github-cli-get-2026-07-17:immutable-releases"},
+    {"assertionId": "EC-004", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments"}, "status": "noncompliant", "observedValue": "Only github-pages exists; can_admins_bypass is true and protected deployment branches are false.", "diagnostic": "No target-isolated protected release environments were observed.", "evidenceReference": "github-cli-get-2026-07-17:environments"},
+    {"assertionId": "EC-005", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions/workflow"}, "status": "compliant", "observedValue": "Default workflow permissions are read and pull-request-review approval is false.", "diagnostic": "Observed default token settings meet this assertion; this does not prove job-level isolation.", "evidenceReference": "github-cli-get-2026-07-17:actions-workflow-permissions"},
+    {"assertionId": "EC-006", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions"}, "status": "noncompliant", "observedValue": "Actions allow all and SHA pinning is false.", "diagnostic": "Repository-level Actions policy does not require immutable third-party Action references.", "evidenceReference": "github-cli-get-2026-07-17:actions-permissions"},
+    {"assertionId": "EC-007", "query": {"method": "GET", "path": "/api/v1/crates/{exact-approved-package}/owners"}, "status": "unknown", "observedValue": "No exact crates.io package identity was selected or observed.", "diagnostic": "Registry identity remains outside the GitHub audit scope.", "evidenceReference": "github-cli-get-2026-07-17:out-of-scope-crates"},
+    {"assertionId": "EC-008", "query": {"method": "GET", "path": "/-/npm/v1/security/trusted-publisher/{exact-approved-package}"}, "status": "unknown", "observedValue": "No exact npm package identity was selected or observed.", "diagnostic": "Registry identity remains outside the GitHub audit scope.", "evidenceReference": "github-cli-get-2026-07-17:out-of-scope-npm"},
+    {"assertionId": "EC-009", "query": {"method": "GET", "path": "/pypi/{exact-approved-project}/json"}, "status": "unknown", "observedValue": "PyPI project identity remains unresolved.", "diagnostic": "Python publication remains blocked until authoritative ownership evidence exists.", "evidenceReference": "github-cli-get-2026-07-17:unresolved-pypi"},
+    {"assertionId": "EC-010", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments"}, "status": "unknown", "observedValue": "No approved non-production or reversible revocation authority was observed.", "diagnostic": "A provider-backed revocation exercise remains blocked.", "evidenceReference": "github-cli-get-2026-07-17:missing-revocation-path"}
+  ],
+  "publicationReadiness": "blocked"
+}

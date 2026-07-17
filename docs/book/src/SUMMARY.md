@@ -49,3 +49,13 @@
 
 - [Development Setup](./contributing/setup.md)
 - [Architecture](./contributing/architecture.md)
+
+# Release Governance
+
+- [Stewardship Authority Model](./release/stewardship.md)
+- [Named Stewardship Continuity](./release/stewardship-continuity.md)
+- [Retired-Bot Responsibility Inventory](./release/retired-bot-responsibilities.md)
+- [Advisory Automation and Manual Fallbacks](./release/advisory-automation.md)
+- [Privileged and Policy Operations](./release/privileged-operations.md)
+- [External Control Boundaries](./release/external-control-boundaries.md)
+- [Stewardship Continuity Tabletop Exercises](./release/stewardship-exercises.md)

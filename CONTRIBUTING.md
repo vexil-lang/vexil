@@ -6,12 +6,12 @@ This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By partic
 
 ## Ways to Contribute
 
-- **Bug reports** — open an issue. Include the schema that triggers the bug and the error output.
-- **Feature requests** — open an issue and explain the problem you're solving. "Add X" without context is hard to evaluate.
-- **Spec corrections** — typos, ambiguities, or things that don't match the implementation. The spec is in `spec/vexil-spec.md`.
-- **Corpus additions** — new test cases for `corpus/valid/` or `corpus/invalid/`. Add the `.vexil` file and a line in `corpus/MANIFEST.md`.
-- **Documentation** — typos, better examples, things that are wrong. If something confused you, it'll confuse someone else.
-- **Code** — see below.
+- **Bug reports** -- open an issue. Include the schema that triggers the bug and the error output.
+- **Feature requests** -- open an issue and explain the problem you're solving. "Add X" without context is hard to evaluate.
+- **Spec corrections** -- typos, ambiguities, or things that don't match the implementation. The spec is in `spec/vexil-spec.md`.
+- **Corpus additions** -- new test cases for `corpus/valid/` or `corpus/invalid/`. Add the `.vexil` file and a line in `corpus/MANIFEST.md`.
+- **Documentation** -- typos, better examples, things that are wrong. If something confused you, it'll confuse someone else.
+- **Code** -- see below.
 
 ## Development Setup
 
@@ -39,7 +39,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 ```
 
-Both are enforced in CI. Run them before you push — CI failures for formatting are annoying for everyone.
+Both are enforced in CI. Run them before you push. CI failures for formatting are annoying for everyone.
 
 ## Making Changes
 
@@ -48,16 +48,16 @@ Both are enforced in CI. Run them before you push — CI failures for formatting
    - Bug fixes: `fix/description`
    - Spec/corpus: `spec/description` or `corpus/description`
 2. Make your changes
-3. `cargo test --workspace` — all pass
-4. `cargo fmt --all` + `cargo clippy --workspace -- -D warnings` — clean
+3. `cargo test --workspace` -- all pass
+4. `cargo fmt --all` + `cargo clippy --workspace -- -D warnings` -- clean
 5. Push and open a PR
 
 ## Submitting a Pull Request
 
-- One concern per PR. A PR that changes the parser AND adds a new type AND updates the spec is too much.
-- Add tests. For compiler changes, add corpus files where possible — they're the easiest tests to maintain.
-- Update `corpus/MANIFEST.md` if you add entries.
-- For language features, wire format changes, or anything architectural: go through the RFC process in [GOVERNANCE.md](./GOVERNANCE.md). Don't just show up with a 2000-line PR changing the wire format.
+- **One concern per PR.** A PR that changes the parser AND adds a new type AND updates the spec is too much. Reviewers can't evaluate three things at once and end up approving nothing.
+- **Add tests.** For compiler changes, add corpus files where possible -- they're self-documenting and the easiest tests to maintain long-term.
+- **Update `corpus/MANIFEST.md`** if you add corpus entries -- the manifest is what the test runner reads.
+- For language features, wire format changes, or anything architectural: go through the RFC process in [GOVERNANCE.md](./GOVERNANCE.md). Don't show up with a 2000-line PR changing the wire format -- we will close it and point you to the RFC process.
 
 ## Commit Messages
 
@@ -77,9 +77,9 @@ Scope is optional but useful: `vexil-lang`, `vexilc`, `spec`, `corpus`.
 
 ## Code Style
 
-- Formatted with `cargo fmt` (enforced in CI)
-- Clippy lints are errors in CI (`-D warnings`)
-- No `unwrap()` or `expect()` in non-test code — use `?` or explicit error handling
-- All `unsafe` blocks need a `// SAFETY:` comment explaining the invariant
-- Public API items in `vexil-lang` need doc comments
-- `#[derive(Debug, Clone, PartialEq)]` on all data types unless there's a specific reason not to
+- Formatted with `cargo fmt`. Enforced in CI, so don't bother arguing about it.
+- Clippy lints are errors in CI (`-D warnings`). Warnings become tech debt. We don't take tech debt.
+- No `unwrap()` or `expect()` in non-test code. Use `?` or explicit error handling. If you reach for `expect`, you're probably not thinking about the error case hard enough.
+- All `unsafe` blocks need a `// SAFETY:` comment explaining the invariant. `unsafe` is not an excuse to skip the explanation.
+- Public API items in `vexil-lang` need doc comments. If someone can't understand your API from `cargo doc`, the docs need work.
+- `#[derive(Debug, Clone, PartialEq)]` on all data types unless there's a specific reason not to. These derives enable generic patterns that would otherwise require boilerplate.

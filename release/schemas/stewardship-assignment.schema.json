@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/stewardship-assignment.schema.json",
+  "title": "Vexil Stewardship Assignment Record",
+  "description": "The canonical public record of reviewed stewardship assignments and continuity status.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "assignmentSchema", "version", "decision", "identities", "assignments", "continuity", "publicationReadiness", "futureRunbooks"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"const": "https://vexil.dev/release/stewardship/assignments.json"},
+    "assignmentSchema": {"const": "https://vexil.dev/release/schemas/stewardship-assignment.schema.json"},
+    "version": {"const": "1.0"},
+    "decision": {"$ref": "#/$defs/decision"},
+    "identities": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/identity"}},
+    "assignments": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/assignment"}},
+    "continuity": {"$ref": "#/$defs/continuity"},
+    "publicationReadiness": {"$ref": "#/$defs/publicationReadiness"},
+    "futureRunbooks": {"type": "array", "items": {"$ref": "#/$defs/runbook"}}
+  },
+  "$defs": {
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["decisionId", "source", "reviewedBy", "reviewedAt"], "properties": {"decisionId": {"type": "string", "minLength": 1}, "source": {"type": "string", "pattern": "^https://github[.]com/vexil-lang/vexil/issues/[0-9]+$"}, "reviewedBy": {"type": "string", "minLength": 1}, "reviewedAt": {"type": "string", "format": "date"}}},
+    "decision": {"type": "object", "additionalProperties": false, "required": ["id", "status", "effectiveFrom", "reviewEvidence"], "properties": {"id": {"type": "string"}, "status": {"enum": ["unresolved-continuity", "single-steward-custodian", "multi-steward-detached-approval"]}, "effectiveFrom": {"type": "string", "format": "date"}, "reviewEvidence": {"$ref": "#/$defs/evidence"}}},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["id", "name", "email", "github"], "properties": {"id": {"type": "string", "pattern": "^github:"}, "name": {"type": "string"}, "email": {"type": "string", "format": "email"}, "github": {"type": "string"}}},
+    "scope": {"type": "object", "additionalProperties": false, "required": ["kind", "root"], "properties": {"kind": {"enum": ["repository", "release-manifest-lifecycle", "security-governance", "release-run-execution", "maintained-root"]}, "root": {"type": "string"}}},
+    "assignment": {"type": "object", "additionalProperties": false, "required": ["assignmentId", "roleId", "primaryActorId", "scope", "effectiveFrom", "reviewEvidence", "continuityProcedure", "status"], "properties": {"assignmentId": {"type": "string", "minLength": 1}, "roleId": {"enum": ["release-steward", "repository-administrator", "security-steward", "package-steward", "release-run-coordinator"]}, "primaryActorId": {"type": "string", "pattern": "^github:"}, "scope": {"$ref": "#/$defs/scope"}, "effectiveFrom": {"type": "string", "format": "date"}, "reviewEvidence": {"$ref": "#/$defs/evidence"}, "continuityProcedure": {"type": "string", "minLength": 1}, "status": {"const": "active"}}},
+    "custodian": {"type": ["object", "null"], "additionalProperties": false, "required": ["actorId", "nonPublishingCapabilities", "hasNormalPublicationCredential"], "properties": {"actorId": {"type": "string"}, "nonPublishingCapabilities": {"type": "array", "items": {"enum": ["recover-administration", "stop-automation", "revoke-trust", "initiate-succession"]}}, "hasNormalPublicationCredential": {"const": false}}},
+    "unavailableOwnerRoute": {"type": "object", "additionalProperties": false, "required": ["allowedActions", "prohibitedActions", "outcome"], "properties": {"allowedActions": {"type": "array", "items": {"enum": ["stop", "revoke", "contain", "activate-succession"]}}, "prohibitedActions": {"type": "array", "items": {"type": "string"}}, "outcome": {"type": "string"}}},
+    "detachedApproval": {"type": "object", "additionalProperties": false, "required": ["status", "manifestApproverActorId", "detachedApproverActorId", "rule"], "properties": {"status": {"enum": ["not-applicable-without-second-qualified-release-steward", "mandatory"]}, "manifestApproverActorId": {"type": ["string", "null"]}, "detachedApproverActorId": {"type": ["string", "null"]}, "rule": {"type": "string"}}},
+    "recoveryContact": {"type": "object", "additionalProperties": false, "required": ["status", "publicRoute", "outcome"], "properties": {"status": {"const": "unresolved-no-distinct-custodian"}, "publicRoute": {"const": "https://github.com/vexil-lang/vexil/issues/new/choose"}, "outcome": {"type": "string", "minLength": 1}}},
+    "continuity": {"type": "object", "additionalProperties": false, "required": ["qualifiedReleaseStewardActorIds", "custodian", "recoveryContact", "unavailableOwnerRoute", "detachedApproval"], "properties": {"qualifiedReleaseStewardActorIds": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "custodian": {"$ref": "#/$defs/custodian"}, "recoveryContact": {"$ref": "#/$defs/recoveryContact"}, "unavailableOwnerRoute": {"$ref": "#/$defs/unavailableOwnerRoute"}, "detachedApproval": {"$ref": "#/$defs/detachedApproval"}}},
+    "publicationReadiness": {"type": "object", "additionalProperties": false, "required": ["manifestApproval", "privilegedPublication", "reason"], "properties": {"manifestApproval": {"const": "blocked"}, "privilegedPublication": {"const": "blocked"}, "reason": {"type": "string"}}},
+    "runbook": {"type": "object", "additionalProperties": false, "required": ["id", "status"], "properties": {"id": {"type": "string"}, "status": {"type": "string"}}}
+  }
+}

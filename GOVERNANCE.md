@@ -4,6 +4,21 @@
 
 Vexil is maintained by a single lead developer (BDFL model).
 
+## Release stewardship authority
+
+The canonical, machine-checkable definition of release role types and authority
+boundaries is [`release/stewardship.json`](./release/stewardship.json). Its
+checked, non-authoritative public view is available in the
+[Stewardship Authority Model](./docs/book/src/release/stewardship.md).
+
+This contract does not replace this BDFL decision model, the 14-day
+breaking-change comment period, or the RFC process below. It also does not
+prove live workflow or provider enforcement. Publication remains blocked until
+the named [stewardship continuity decision](./release/stewardship/assignments.json)
+resolves its explicit recovery gate and Epic 2 corrects and verifies external
+controls. The current public decision intentionally blocks Manifest approval
+and privileged publication because no distinct recovery custodian is approved.
+
 ## Decision Making
 
 ### Architectural decisions

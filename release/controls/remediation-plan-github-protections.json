@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/remediation-plan-github-protections.json",
+  "remediationSchema": "https://vexil.dev/release/schemas/external-remediation.schema.json",
+  "version": "1.0",
+  "recordId": "ECR-2026-07-17-GITHUB-PROTECTIONS",
+  "status": "reviewed-not-executed",
+  "baselineObservation": {"recordId": "ECO-2026-07-13-BASELINE", "path": "release/controls/observations/baseline-2026-07-13.json", "normalizedStateDigest": "sha256:8e001e5d996dac92a1fb5462a0c5af1cc095c55914260c33339e5d53cc62d8eb"},
+  "owner": {"actorId": "github:furkanmamuk", "roleId": "repository-administrator", "assignmentId": "assignment-repository-administrator-2026-07-14"},
+  "review": {"status": "reviewed-plan-only", "auditReference": "https://github.com/vexil-lang/vexil/issues/64", "approvedProviderWrite": false},
+  "changes": [
+    {"id": "ECR-CHANGE-001", "target": "GitHub main branch protection", "expectedControlIds": ["EC-001"], "manualAction": "A Repository Administrator must separately review and apply an exact provider configuration requiring reviewed pull requests and designated checks while denying force-push and deletion.", "stopCondition": "Stop before any provider change if the exact rule scope, bypass inventory, designated checks, or audit reference is incomplete or ambiguous.", "rollback": "Restore only the immediately prior reviewed provider configuration and retain a fresh read-only observation; do not use a local file as proof.", "historicalInvariant": "Do not create, move, delete, rename, replace, or rewrite Historical Tags or historical release assets."},
+    {"id": "ECR-CHANGE-002", "target": "GitHub canonical tag namespace rules", "expectedControlIds": ["EC-002"], "manualAction": "A Repository Administrator must separately review and apply exact namespace rules that deny unauthorized creation and all update/deletion attempts for future Canonical Tags.", "stopCondition": "Stop if the selected namespace overlaps Historical Tags, a bypass lacks principal, scope, custodian, justification, expiry, or audit surface, or provider behavior cannot be observed.", "rollback": "Remove only the newly reviewed prospective rule after containment; never alter a Historical Tag as a test or rollback step.", "historicalInvariant": "Do not create, move, delete, rename, replace, or rewrite Historical Tags or historical release assets."},
+    {"id": "ECR-CHANGE-003", "target": "GitHub future-release immutability and privileged environments", "expectedControlIds": ["EC-003", "EC-004"], "manualAction": "A Repository Administrator must separately review prospective release immutability and target-isolated protected-environment settings; older mutable releases are historical exceptions, not remediation targets.", "stopCondition": "Stop if required reviewer, self-review, bypass, wait, or target-isolation evidence is unavailable, broad, or mismatched.", "rollback": "Contain by disabling the new prospective release path and retain fresh read-only evidence; do not replace historical release tags or assets.", "historicalInvariant": "Do not create, move, delete, rename, replace, or rewrite Historical Tags or historical release assets."}
+  ],
+  "nonEffects": ["This plan performs no provider write.", "This plan does not authorize a release, Manifest approval, publication, deployment, tag operation, or credential change.", "This plan does not make a baseline observation compliant."],
+  "postChangeObservation": "required-fresh-independent-read-only-observation",
+  "publicationReadiness": "blocked"
+}

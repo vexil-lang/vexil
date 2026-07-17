@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "advisory-automation-contract-2026-07-14",
+  "status": "not-deployed",
+  "purpose": "Repository-owned declarations for advisory triage and labeling replacements. They are not GitHub Actions workflows and cannot produce provider effects.",
+  "contracts": [
+    {
+      "id": "triage-routing",
+      "allowedPermissionIntents": ["issues:write", "pull-requests:write"],
+      "effects": ["advisory-route", "maintainer-review-note"],
+      "prohibitedEffects": ["select-scope", "select-version", "accept-risk", "approve-manifest", "satisfy-privileged-gate", "trigger-publication"]
+    },
+    {
+      "id": "label-routing",
+      "allowedPermissionIntents": ["issues:write", "pull-requests:write"],
+      "effects": ["advisory-label"],
+      "prohibitedEffects": ["select-scope", "select-version", "accept-risk", "approve-manifest", "satisfy-privileged-gate", "trigger-publication"]
+    }
+  ]
+}

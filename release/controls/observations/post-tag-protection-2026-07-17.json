@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/post-tag-protection-2026-07-17.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-17-TAG-PROTECTION",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-17T14:33:25Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Repository Administrator direction recorded on 2026-07-17",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:2333f3252cb6817a22fc1c5847dfc3ce54469b9485b4417cec04fe0299c12b6a",
+    "responseDigest": "sha256:2333f3252cb6817a22fc1c5847dfc3ce54469b9485b4417cec04fe0299c12b6a",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {
+      "assertionId": "EC-002",
+      "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/rulesets/19106890"},
+      "status": "compliant",
+      "observedValue": "Active tag ruleset 19106890 protects refs/tags/release/* with creation, update, and deletion rules; the only bypass is github:furkanmamuk.",
+      "diagnostic": "The prospective namespace is protected without selecting or changing any Historical Tag.",
+      "evidenceReference": "github-cli-get-2026-07-17:ruleset-19106890"
+    }
+  ],
+  "publicationReadiness": "blocked"
+}

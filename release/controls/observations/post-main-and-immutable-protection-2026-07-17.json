@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/post-main-and-immutable-protection-2026-07-17.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-17-MAIN-AND-IMMUTABLE",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-17T14:44:00Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Repository Administrator direction recorded on 2026-07-17",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:3f515f25a336e6f356d9cf3cd5e0b5c6e272a6cf2536c12a0112065605b797f7",
+    "responseDigest": "sha256:3f515f25a336e6f356d9cf3cd5e0b5c6e272a6cf2536c12a0112065605b797f7",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {
+      "assertionId": "EC-001",
+      "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/branches/main/protection"},
+      "status": "compliant",
+      "observedValue": "main requires one approving pull-request review, strict completion of seven named CI checks, resolved conversations, administrator enforcement, and denies force-push and deletion.",
+      "diagnostic": "The observed rule has no push restrictions or pull-request bypass actors.",
+      "evidenceReference": "github-cli-get-2026-07-17:main-branch-protection"
+    },
+    {
+      "assertionId": "EC-003",
+      "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/immutable-releases"},
+      "status": "compliant",
+      "observedValue": "GitHub reports immutable releases enabled true and enforced_by_owner false.",
+      "diagnostic": "Future releases are immutable; no historical release or tag was changed.",
+      "evidenceReference": "github-cli-get-2026-07-17:immutable-releases"
+    }
+  ],
+  "publicationReadiness": "blocked"
+}

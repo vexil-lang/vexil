@@ -1,0 +1,12 @@
+[package]
+name = "vexil-release-governance-validator"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.94"
+publish = false
+
+[workspace]
+
+[dependencies]
+jsonschema = { version = "=0.40.0", default-features = false }
+serde_json = "1.0.149"

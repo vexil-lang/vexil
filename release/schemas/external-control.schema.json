@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/external-control.schema.json",
+  "title": "Vexil Expected External Control Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "version", "recordKind", "scope", "publicationPolicy", "assertions"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"type": "string"},
+    "version": {"const": "1.0"},
+    "recordKind": {"const": "expected-external-controls"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "publicationPolicy": {"const": "Every critical assertion requires fresh authoritative provider evidence. Local repository declarations, green CI, and this expected-state record are not compliance evidence."},
+    "assertions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/assertion"}}
+  },
+  "$defs": {
+    "scope": {"type": "object", "additionalProperties": false, "required": ["provider", "repository"], "properties": {"provider": {"const": "github"}, "repository": {"const": "vexil-lang/vexil"}}},
+    "owner": {"type": "object", "additionalProperties": false, "required": ["actorId", "roleId", "assignmentId"], "properties": {"actorId": {"const": "github:furkanmamuk"}, "roleId": {"const": "repository-administrator"}, "assignmentId": {"const": "assignment-repository-administrator-2026-07-14"}}},
+    "query": {"type": "object", "additionalProperties": false, "required": ["method", "path", "mode"], "properties": {"method": {"const": "GET"}, "path": {"type": "string", "pattern": "^/"}, "mode": {"const": "read-only"}}},
+    "assertion": {"type": "object", "additionalProperties": false, "required": ["id", "authorityClass", "provider", "scope", "expectedState", "query", "severity", "owner", "freshness", "publicationEffect"], "properties": {"id": {"type": "string", "pattern": "^EC-"}, "authorityClass": {"enum": ["branch-protection", "tag-protection", "release-protection", "workflow-permission", "environment", "identity-custody", "revocation"]}, "provider": {"enum": ["github", "crates-io", "npm", "pypi", "go-proxy"]}, "scope": {"type": "string", "minLength": 1}, "expectedState": {"type": "string", "minLength": 1}, "query": {"$ref": "#/$defs/query"}, "severity": {"enum": ["critical", "high"]}, "owner": {"$ref": "#/$defs/owner"}, "freshness": {"const": "fresh-authoritative-observation-required"}, "publicationEffect": {"const": "unknown-or-noncompliant-blocks-manifest-approval-and-privileged-publication"}}}
+  }
+}

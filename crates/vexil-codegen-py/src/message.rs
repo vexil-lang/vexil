@@ -239,7 +239,7 @@ fn emit_write_type(
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            w.open_block("for item in {access}");
+            w.open_block(&format!("for item in {access}"));
             emit_write_type(w, "item", inner, registry, writer);
             w.close_block();
         }

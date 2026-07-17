@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/baseline-2026-07-13.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-13-BASELINE",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-13T00:00:00Z",
+  "collection": {"mode": "read-only", "providerInterface": "recorded recovery baseline; fresh provider collection remains required", "credentialMode": "no-write-capable-credential", "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection"},
+  "stableIdentity": {"normalizedStateDigest": "sha256:8e001e5d996dac92a1fb5462a0c5af1cc095c55914260c33339e5d53cc62d8eb", "responseDigest": "sha256:064b9d790c565fff8ee883b5011313587d73a40f370956fbddbd416c8781e429", "collectionTimestampExcluded": true},
+  "results": [
+    {"assertionId": "EC-001", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/branches/main/protection"}, "status": "noncompliant", "observedValue": "main was unprotected in the 2026-07-13 recovery baseline.", "diagnostic": "Publication-blocking known baseline gap; this record does not claim remediation.", "evidenceReference": "recovery-baseline-2026-07-13:main-protection"},
+    {"assertionId": "EC-002", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/rulesets"}, "status": "noncompliant", "observedValue": "No GitHub rulesets were present in the 2026-07-13 recovery baseline.", "diagnostic": "Canonical Tag protection was absent; Historical Tags must not be changed to test remediation.", "evidenceReference": "recovery-baseline-2026-07-13:rulesets"},
+    {"assertionId": "EC-003", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/releases"}, "status": "noncompliant", "observedValue": "Existing releases were mutable in the 2026-07-13 recovery baseline.", "diagnostic": "Prospective immutability is required; historical releases remain evidence and are not rewritten.", "evidenceReference": "recovery-baseline-2026-07-13:releases"},
+    {"assertionId": "EC-004", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments"}, "status": "noncompliant", "observedValue": "No release environment was present in the 2026-07-13 recovery baseline.", "diagnostic": "No target-isolated privileged environment was observed.", "evidenceReference": "recovery-baseline-2026-07-13:environments"},
+    {"assertionId": "EC-005", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions/workflow"}, "status": "unknown", "observedValue": "No retained authoritative baseline response is available for Actions default workflow permissions.", "diagnostic": "Unknown is fail-closed and requires a fresh scoped GET observation.", "evidenceReference": "recovery-baseline-2026-07-13:missing-actions-defaults"},
+    {"assertionId": "EC-006", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions"}, "status": "unknown", "observedValue": "No retained authoritative baseline response is available for privileged workflow permission isolation.", "diagnostic": "Repository workflow files alone cannot satisfy this provider control.", "evidenceReference": "recovery-baseline-2026-07-13:missing-actions-permissions"},
+    {"assertionId": "EC-007", "query": {"method": "GET", "path": "/api/v1/crates/{exact-approved-package}/owners"}, "status": "unknown", "observedValue": "No exact package identity or trusted-publisher binding is retained.", "diagnostic": "No registry target is authorized by this unknown baseline state.", "evidenceReference": "recovery-baseline-2026-07-13:missing-crates-custody"},
+    {"assertionId": "EC-008", "query": {"method": "GET", "path": "/-/npm/v1/security/trusted-publisher/{exact-approved-package}"}, "status": "unknown", "observedValue": "No exact npm trusted-publisher binding is retained.", "diagnostic": "Unknown identity binding blocks normal publication.", "evidenceReference": "recovery-baseline-2026-07-13:missing-npm-custody"},
+    {"assertionId": "EC-009", "query": {"method": "GET", "path": "/pypi/{exact-approved-project}/json"}, "status": "unknown", "observedValue": "PyPI project identity and ownership are unresolved.", "diagnostic": "Python remains blocked and must not be created or improvised to satisfy this record.", "evidenceReference": "recovery-baseline-2026-07-13:unresolved-pypi"},
+    {"assertionId": "EC-010", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments"}, "status": "unknown", "observedValue": "No approved safe test identity or reversible provider path is retained.", "diagnostic": "A revocation exercise cannot execute against active production custody.", "evidenceReference": "recovery-baseline-2026-07-13:missing-revocation-path"}
+  ],
+  "publicationReadiness": "blocked"
+}
