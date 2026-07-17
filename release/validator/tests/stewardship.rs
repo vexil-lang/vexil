@@ -15,15 +15,29 @@ fn external_control_records_and_workflows_fail_closed() {
     vexil_release_governance_validator::validate_external_controls_repository(&root)
         .expect("canonical Epic 2 offline records must validate");
 
-    let mut baseline: Value = serde_json::from_str(
-        &fs::read_to_string(root.join("release/controls/observations/baseline-2026-07-13.json"))
-            .unwrap(),
+    let current_path =
+        root.join("release/controls/observations/current-github-controls-2026-07-17.json");
+    let current: Value = serde_json::from_str(&fs::read_to_string(current_path).unwrap()).unwrap();
+    vexil_release_governance_validator::validate_current_observation_record(&root, &current)
+        .expect("current observations must bind to exact expected controls");
+
+    let mut mismatched_query = current.clone();
+    mismatched_query["results"][0]["query"]["path"] = Value::String(
+        "/repos/vexil-lang/vexil/branches/main/protection/required_pull_request_reviews".into(),
+    );
+    vexil_release_governance_validator::validate_current_observation_record(
+        &root,
+        &mismatched_query,
     )
-    .unwrap();
-    baseline["observationStatus"] = Value::String("compliant".into());
-    let rendered = baseline.to_string().to_ascii_lowercase();
-    assert!(rendered.contains("compliant"));
-    assert!(rendered.contains("2026-07-13"));
+    .expect_err("a current observation must not substitute a partial endpoint");
+
+    let (provider, path) =
+        vexil_release_governance_validator::expected_observation_query(&root, "EC-001")
+            .expect("direct GitHub observation must resolve");
+    assert_eq!(provider, "github");
+    assert_eq!(path, "/repos/vexil-lang/vexil/branches/main/protection");
+    vexil_release_governance_validator::expected_observation_query(&root, "EC-004")
+        .expect_err("templated observation must require explicit target expansion");
 
     let authorized_path =
         root.join("release/controls/observations/owner-authorized-github-audit-2026-07-17.json");
@@ -50,6 +64,19 @@ fn external_control_records_and_workflows_fail_closed() {
         &write_operation,
     )
     .expect_err("an owner authorization cannot permit a provider write");
+
+    let fixture_root =
+        std::env::temp_dir().join(format!("vexil-workflow-isolation-{}", std::process::id()));
+    let workflow_dir = fixture_root.join(".github/workflows");
+    fs::create_dir_all(&workflow_dir).unwrap();
+    fs::write(
+        workflow_dir.join("privileged.yaml"),
+        "name: privileged\npermissions:\n  issues: write\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n",
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_workflow_static_isolation(&fixture_root)
+        .expect_err("write-capable .yaml workflows must require immutable Action pins");
+    fs::remove_dir_all(fixture_root).unwrap();
 }
 
 #[test]

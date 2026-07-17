@@ -1,5 +1,5 @@
 use serde_json::{Map, Value};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -34,6 +34,14 @@ const ROOT_FIELDS: [&str; 10] = [
     "governanceRoute",
     "publicationBlock",
 ];
+
+#[derive(Clone)]
+struct ExpectedControl {
+    provider: String,
+    scope: String,
+    method: String,
+    path: String,
+}
 const ACTIONS: [&str; 28] = [
     "approve-release-manifest",
     "authorize-privileged-release",
@@ -234,40 +242,21 @@ pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> 
     }
 
     validate_external_control_schema(root, &expected)?;
+    let expected_controls = expected_control_index(&expected)?;
     validate_external_observation_schema(root, &baseline)?;
-    validate_observation_inventory(root)?;
+    validate_observation_inventory(root, &expected_controls)?;
     validate_external_remediation_schema(root, &remediation)?;
     validate_identity_custody_schema(root, &custody)?;
     validate_revocation_exercise_schema(root, &exercise_plan)?;
     validate_revocation_exercise_schema(root, &exercise_result)?;
 
-    let expected_rows = array(
-        object(&expected, "expected external controls")?.get("assertions"),
-        "expected external-control assertions",
-    )?;
-    let mut expected_ids = BTreeSet::new();
-    for row in expected_rows {
-        let row = object(row, "expected external-control assertion")?;
-        let id = text(row.get("id"), "expected control id")?;
-        if !expected_ids.insert(id) {
-            return Err(
-                "expected external-control identifiers must be stable and unique".to_owned(),
-            );
-        }
-        if text(
-            object(required_value(row, "query")?, "expected control query")?.get("method"),
-            "expected control query method",
-        )? != "GET"
-        {
-            return Err("expected external-control queries must remain GET-only".to_owned());
-        }
-    }
+    let expected_ids: BTreeSet<_> = expected_controls.keys().cloned().collect();
     let baseline_root = object(&baseline, "external-control baseline")?;
     let baseline_rows = array(baseline_root.get("results"), "baseline observation results")?;
     let mut baseline_ids = BTreeSet::new();
     for row in baseline_rows {
         let row = object(row, "baseline observation result")?;
-        let id = text(row.get("assertionId"), "baseline assertion id")?;
+        let id = text(row.get("assertionId"), "baseline assertion id")?.to_owned();
         if !baseline_ids.insert(id) {
             return Err(
                 "baseline observation cannot contain conflicting assertion identities".to_owned(),
@@ -354,6 +343,101 @@ pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> 
     Ok(())
 }
 
+fn expected_control_index(record: &Value) -> Result<BTreeMap<String, ExpectedControl>, String> {
+    let rows = array(
+        object(record, "expected external controls")?.get("assertions"),
+        "expected external-control assertions",
+    )?;
+    let mut controls = BTreeMap::new();
+    for row in rows {
+        let row = object(row, "expected external-control assertion")?;
+        let id = text(row.get("id"), "expected control id")?.to_owned();
+        let query = object(required_value(row, "query")?, "expected control query")?;
+        let method = text(query.get("method"), "expected control query method")?.to_owned();
+        if method != "GET" {
+            return Err("expected external-control queries must remain GET-only".to_owned());
+        }
+        let control = ExpectedControl {
+            provider: text(row.get("provider"), "expected control provider")?.to_owned(),
+            scope: text(row.get("scope"), "expected control scope")?.to_owned(),
+            method,
+            path: text(query.get("path"), "expected control query path")?.to_owned(),
+        };
+        if controls.insert(id, control).is_some() {
+            return Err(
+                "expected external-control identifiers must be stable and unique".to_owned(),
+            );
+        }
+    }
+    Ok(controls)
+}
+
+pub fn expected_observation_query(
+    root: &Path,
+    assertion_id: &str,
+) -> Result<(String, String), String> {
+    let expected = read_json(&root.join("release/controls/expected-controls.json"))?;
+    let controls = expected_control_index(&expected)?;
+    let control = controls
+        .get(assertion_id)
+        .ok_or_else(|| format!("unknown external-control assertion: {assertion_id}"))?;
+    if control.method != "GET" || control.path.contains('{') {
+        return Err(format!(
+            "assertion {assertion_id} is not a directly observable GET endpoint"
+        ));
+    }
+    Ok((control.provider.clone(), control.path.clone()))
+}
+
+pub fn validate_current_observation_record(root: &Path, record: &Value) -> Result<(), String> {
+    validate_external_observation_schema(root, record)?;
+    let expected = read_json(&root.join("release/controls/expected-controls.json"))?;
+    let controls = expected_control_index(&expected)?;
+    let observation = object(record, "external-control observation")?;
+    if text(
+        observation.get("evidenceState"),
+        "observation evidence state",
+    )? != "current"
+    {
+        return Err("semantic observation validation requires current evidence".to_owned());
+    }
+    let provider = text(observation.get("provider"), "observation provider")?;
+    let scope = text(observation.get("scope"), "observation scope")?;
+    let mut assertions = BTreeSet::new();
+    for result in array(observation.get("results"), "observation results")? {
+        let result = object(result, "observation result")?;
+        let assertion_id = text(result.get("assertionId"), "observation assertion id")?;
+        let expected = controls
+            .get(assertion_id)
+            .ok_or_else(|| format!("observation references unknown assertion: {assertion_id}"))?;
+        if !assertions.insert(assertion_id) {
+            return Err(format!("observation repeats assertion: {assertion_id}"));
+        }
+        if provider != expected.provider {
+            return Err(format!(
+                "current observation provider mismatches {assertion_id}"
+            ));
+        }
+        if provider == "github" && scope != "vexil-lang/vexil" {
+            return Err("current GitHub observation has an unexpected repository scope".to_owned());
+        }
+        if provider != "github" && scope != expected.scope {
+            return Err(format!(
+                "current observation scope mismatches {assertion_id}"
+            ));
+        }
+        let query = object(required_value(result, "query")?, "observation query")?;
+        if text(query.get("method"), "observation query method")? != expected.method
+            || text(query.get("path"), "observation query path")? != expected.path
+        {
+            return Err(format!(
+                "current observation query mismatches {assertion_id}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_workflow_static_isolation(root: &Path) -> Result<(), String> {
     let workflows = root.join(".github/workflows");
     for entry in fs::read_dir(&workflows)
@@ -362,7 +446,10 @@ pub fn validate_workflow_static_isolation(root: &Path) -> Result<(), String> {
         let path = entry
             .map_err(|error| format!("read {} entry: {error}", workflows.display()))?
             .path();
-        if path.extension().and_then(|extension| extension.to_str()) != Some("yml") {
+        if !matches!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some("yml" | "yaml")
+        ) {
             continue;
         }
         let source = fs::read_to_string(&path)
@@ -382,9 +469,10 @@ pub fn validate_workflow_static_isolation(root: &Path) -> Result<(), String> {
             ));
         }
         let privileged = lower.contains("environment:")
-            || lower.contains("id-token: write")
-            || lower.contains("contents: write")
-            || lower.contains("packages: write");
+            || lower.lines().any(|line| {
+                let permission = line.trim();
+                permission.contains(": write") || permission == "permissions: write-all"
+            });
         if privileged {
             for line in source.lines().filter(|line| line.contains("uses:")) {
                 let reference = line.split("uses:").nth(1).unwrap_or_default().trim();
@@ -2039,7 +2127,8 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
             }
             if source.contains("restricted-workspace-reference") {
                 return Err(
-                    "restricted workspace sources cannot be public responsibility evidence".to_owned(),
+                    "restricted workspace sources cannot be public responsibility evidence"
+                        .to_owned(),
                 );
             }
             ensure_no_private_leakage(source)?;
@@ -3562,7 +3651,10 @@ pub fn validate_external_observation_schema(root: &Path, record: &Value) -> Resu
     )
 }
 
-fn validate_observation_inventory(root: &Path) -> Result<(), String> {
+fn validate_observation_inventory(
+    root: &Path,
+    expected_controls: &BTreeMap<String, ExpectedControl>,
+) -> Result<(), String> {
     let directory = root.join("release/controls/observations");
     let mut paths = fs::read_dir(&directory)
         .map_err(|error| format!("cannot read observation inventory: {error}"))?
@@ -3571,6 +3663,9 @@ fn validate_observation_inventory(root: &Path) -> Result<(), String> {
         .map_err(|error| format!("cannot enumerate observation inventory: {error}"))?;
     paths.sort();
 
+    let mut baseline_seen = false;
+    let mut current_assertions = BTreeSet::new();
+    let mut baseline_observed_at = None;
     for path in paths
         .into_iter()
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
@@ -3579,11 +3674,9 @@ fn validate_observation_inventory(root: &Path) -> Result<(), String> {
         validate_external_observation_schema(root, &record)?;
         ensure_no_private_leakage(&record.to_string())?;
 
+        let observation = object(&record, "external-control observation")?;
         let collection = object(
-            required_value(
-                object(&record, "external-control observation")?,
-                "collection",
-            )?,
+            required_value(observation, "collection")?,
             "external-control observation collection",
         )?;
         match text(
@@ -3612,6 +3705,83 @@ fn validate_observation_inventory(root: &Path) -> Result<(), String> {
             }
             other => return Err(format!("unsupported observation credential mode: {other}")),
         }
+
+        let evidence_state = text(
+            observation.get("evidenceState"),
+            "observation evidence state",
+        )?;
+        let observed_at = text(observation.get("observedAtUtc"), "observation time")?;
+        let provider = text(observation.get("provider"), "observation provider")?;
+        let scope = text(observation.get("scope"), "observation scope")?;
+        let mut record_assertions = BTreeSet::new();
+        for result in array(observation.get("results"), "observation results")? {
+            let result = object(result, "observation result")?;
+            let assertion_id = text(result.get("assertionId"), "observation assertion id")?;
+            let expected = expected_controls.get(assertion_id).ok_or_else(|| {
+                format!("observation references unknown assertion: {assertion_id}")
+            })?;
+            if !record_assertions.insert(assertion_id) {
+                return Err(format!("observation repeats assertion: {assertion_id}"));
+            }
+            if evidence_state == "current" {
+                if provider != expected.provider {
+                    return Err(format!(
+                        "current observation provider mismatches {assertion_id}"
+                    ));
+                }
+                if provider == "github" && scope != "vexil-lang/vexil" {
+                    return Err(
+                        "current GitHub observation has an unexpected repository scope".to_owned(),
+                    );
+                }
+                if provider != "github" && scope != expected.scope {
+                    return Err(format!(
+                        "current observation scope mismatches {assertion_id}"
+                    ));
+                }
+                let query = object(required_value(result, "query")?, "observation query")?;
+                if text(query.get("method"), "observation query method")? != expected.method
+                    || text(query.get("path"), "observation query path")? != expected.path
+                {
+                    return Err(format!(
+                        "current observation query mismatches {assertion_id}"
+                    ));
+                }
+                if !current_assertions.insert(assertion_id.to_owned()) {
+                    return Err(format!("current observations conflict for {assertion_id}"));
+                }
+            }
+        }
+        match evidence_state {
+            "baseline" => {
+                if baseline_seen {
+                    return Err(
+                        "external-control inventory must retain exactly one baseline".to_owned(),
+                    );
+                }
+                baseline_seen = true;
+                baseline_observed_at = Some(observed_at.to_owned());
+            }
+            "superseded" => {}
+            "current" => {
+                if let Some(baseline) = &baseline_observed_at {
+                    if observed_at <= baseline.as_str() {
+                        return Err(
+                            "current observation must be newer than the baseline".to_owned()
+                        );
+                    }
+                }
+            }
+            _ => {
+                return Err(
+                    "observation evidence state must be baseline, superseded, or current"
+                        .to_owned(),
+                )
+            }
+        }
+    }
+    if !baseline_seen {
+        return Err("external-control inventory must retain a baseline observation".to_owned());
     }
     Ok(())
 }
