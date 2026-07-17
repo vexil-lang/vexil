@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/sole-maintainer-control-correction-2026-07-17.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-17-SOLE-MAINTAINER-CORRECTION",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-17T15:07:03Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Sole-maintainer correction directed in Codex task on 2026-07-17",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:afdcb211940dab0a42bfecf4c2eb69ae6caec3dc66870854ddf21906450dd345",
+    "responseDigest": "sha256:afdcb211940dab0a42bfecf4c2eb69ae6caec3dc66870854ddf21906450dd345",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {
+      "assertionId": "EC-001",
+      "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/branches/main/protection/required_pull_request_reviews"},
+      "status": "compliant",
+      "observedValue": "main retains pull-request protection with zero required approving reviews, no bypass allowances, and the existing strict seven-check rule.",
+      "diagnostic": "The sole-maintainer exception makes the protected branch usable without allowing a direct push, force push, or deletion.",
+      "evidenceReference": "github-cli-get-2026-07-17:sole-maintainer-main-protection"
+    },
+    {
+      "assertionId": "EC-004",
+      "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments/{release-target}"},
+      "status": "compliant",
+      "observedValue": "Each isolated release environment requires github:furkanmamuk, allows that reviewer to approve the reviewer-created job, and denies administrator bypass.",
+      "diagnostic": "The observed self-review setting is a deliberate sole-maintainer exception; target isolation and protected-branch restriction remain in force.",
+      "evidenceReference": "github-cli-get-2026-07-17:sole-maintainer-target-environments"
+    }
+  ],
+  "publicationReadiness": "blocked"
+}
