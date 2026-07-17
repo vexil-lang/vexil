@@ -95,7 +95,7 @@ const decoded = decodeSensorReading(r);
 - **Invariants**: `invariant { value >= 0 }` -- cross-field conditions in messages
 - **Type param bounds**: `type Sorted<T: Ord> = array<T>` -- constrain generic types
 - BLAKE3 hash of the canonical schema form embedded as a compile-time constant in generated code
-- Rust, TypeScript, Go, and Python backends from the same schema -- byte-identical output, verified by compliance vectors
+- Rust and TypeScript backends from the same schema -- byte-identical output, verified by compliance vectors; Go and Python lack that verification
 - Same data always produces the same bytes -- no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
 - 108-file conformance corpus (43 valid, 65 invalid) that any conformant implementation must pass

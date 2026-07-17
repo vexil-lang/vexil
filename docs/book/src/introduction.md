@@ -8,7 +8,7 @@ Vexil (Validated Exchange Language) is a typed schema language where the wire en
 
 **Deterministic encoding.** Same data always produces identical bytes. This enables BLAKE3 content addressing, deduplication, and replay detection. These are things Protobuf, Cap'n Proto, and FlatBuffers don't guarantee.
 
-**Multi-language.** Generate Rust, TypeScript, Go, and Python from the same `.vexil` schema. All backends produce byte-identical output, verified by compliance vectors.
+**Multi-language.** Generate Rust, TypeScript, Go, and Python from the same `.vexil` schema. Rust and TypeScript have byte-identical output verified by compliance vectors; Go and Python lack that verification.
 
 ## Quick example
 
