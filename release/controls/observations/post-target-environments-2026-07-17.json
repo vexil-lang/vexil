@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/post-target-environments-2026-07-17.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-17-TARGET-ENVIRONMENTS",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-17T14:55:50Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Repository Administrator direction in Codex task on 2026-07-17",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:fc3ff5917571d1a1c60bfa61eb57679542a95fed0be91225e70776852db86dd2",
+    "responseDigest": "sha256:fc3ff5917571d1a1c60bfa61eb57679542a95fed0be91225e70776852db86dd2",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {
+      "assertionId": "EC-004",
+      "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments/{release-target}"},
+      "status": "compliant",
+      "observedValue": "release-github, release-crates-io, release-npm, release-pypi, and release-docs each require github:furkanmamuk, prevent self-review, deny administrator bypass, and restrict deployments to protected branches.",
+      "diagnostic": "The environments are target-isolated. With only one named reviewer, they intentionally cannot yet authorize a self-created deployment.",
+      "evidenceReference": "github-cli-get-2026-07-17:target-environments"
+    }
+  ],
+  "publicationReadiness": "blocked"
+}
