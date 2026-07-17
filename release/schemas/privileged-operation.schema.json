@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/privileged-operation.schema.json",
+  "title": "Vexil Privileged and Policy Fail-Closed Operation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "version", "inventorySource", "nonAuthorityStatement", "operations"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"const": "https://vexil.dev/release/privileged/operations-contract.json"},
+    "version": {"const": "1.0"},
+    "inventorySource": {"const": "release/stewardship/responsibilities.json"},
+    "nonAuthorityStatement": {"type": "string", "minLength": 1},
+    "operations": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/operation"}}
+  },
+  "$defs": {
+    "assignmentReference": {"type": "object", "additionalProperties": false, "required": ["actorId", "roleId", "assignmentId"], "properties": {"actorId": {"pattern": "^github:"}, "roleId": {"enum": ["release-steward", "repository-administrator", "security-steward", "package-steward", "release-run-coordinator"]}, "assignmentId": {"type": "string", "minLength": 1}}},
+    "pendingEvidence": {"type": "object", "additionalProperties": false, "required": ["kind", "status"], "properties": {"kind": {"type": "string", "minLength": 1}, "status": {"const": "required-not-yet-available"}}},
+    "futureControl": {"type": "object", "additionalProperties": false, "required": ["id", "status"], "properties": {"id": {"type": "string", "minLength": 1}, "status": {"const": "required-not-yet-verified"}}},
+    "operation": {"type": "object", "additionalProperties": false, "required": ["id", "responsibilityId", "kind", "owner", "authorityClass", "target", "minimumPermissions", "auditSurface", "requiredInputs", "authentication", "hybridBoundary", "currentReadiness", "blockingPrerequisites", "preEffectStopCondition", "failureBehavior", "fallback", "effectPolicy"], "properties": {"id": {"type": "string", "minLength": 1}, "responsibilityId": {"pattern": "^RBR-"}, "kind": {"const": "owned-fail-closed-procedure"}, "owner": {"$ref": "#/$defs/assignmentReference"}, "authorityClass": {"enum": ["privileged", "policy"]}, "target": {"type": "object", "additionalProperties": false, "required": ["identity", "protectedAuthority"], "properties": {"identity": {"type": "string", "minLength": 1}, "protectedAuthority": {"type": "string", "minLength": 1}}}, "minimumPermissions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}, "auditSurface": {"type": "string", "minLength": 1}, "requiredInputs": {"type": "object", "additionalProperties": false, "required": ["manifestDigest", "releaseStewardApproval", "targetIdentity", "currentManifest", "releaseUnitCatalogEdges", "futureControls", "immutableCandidateInputs"], "properties": {"manifestDigest": {"type": "string", "minLength": 1}, "releaseStewardApproval": {"type": "string", "minLength": 1}, "targetIdentity": {"type": "string", "minLength": 1}, "currentManifest": {"$ref": "#/$defs/pendingEvidence"}, "releaseUnitCatalogEdges": {"$ref": "#/$defs/pendingEvidence"}, "futureControls": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/futureControl"}}, "immutableCandidateInputs": {"type": "array", "minItems": 1, "items": {"type": "string"}}}}, "authentication": {"type": "object", "additionalProperties": false, "required": ["acceptedMechanisms", "personalAccessTokens", "bootstrapException"], "properties": {"acceptedMechanisms": {"type": "array", "minItems": 1, "items": {"enum": ["OIDC", "provider trusted publishing"]}}, "personalAccessTokens": {"const": "rejected"}, "bootstrapException": {"type": "object"}}}, "hybridBoundary": {"type": "string", "minLength": 1}, "currentReadiness": {"const": "blocked"}, "blockingPrerequisites": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "preEffectStopCondition": {"type": "string", "minLength": 1}, "failureBehavior": {"type": "string", "minLength": 1}, "fallback": {"type": "string", "minLength": 1}, "effectPolicy": {"const": "No effect is authorized while currentReadiness is blocked."}}}
+  }
+}

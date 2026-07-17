@@ -1,5 +1,5 @@
 # Rust build output
-/target/
+target/
 
 # Example build artifacts
 examples/*/target/

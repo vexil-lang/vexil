@@ -1,0 +1,1 @@
+{"valid": false, "mutation": "effect-after-failed-readiness", "expectedReason": "retain the blocker with no effect"}

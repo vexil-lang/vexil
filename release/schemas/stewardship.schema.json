@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/stewardship.schema.json",
+  "title": "Vexil Stewardship Authority Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "contractSchema", "version", "roles", "privilegedAuthorization", "nonAuthorityClasses", "advisoryAutomation", "governanceRoute", "publicationBlock"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"const": "https://vexil.dev/release/stewardship.json"},
+    "contractSchema": {"const": "https://vexil.dev/release/schemas/stewardship.schema.json"},
+    "version": {"const": "1.0"},
+    "roles": {"type": "array", "minItems": 5, "items": {"$ref": "#/$defs/role"}},
+    "privilegedAuthorization": {"$ref": "#/$defs/privilegedAuthorization"},
+    "nonAuthorityClasses": {"type": "array", "minItems": 6, "items": {"type": "string", "minLength": 1}},
+    "advisoryAutomation": {"$ref": "#/$defs/advisoryAutomation"},
+    "governanceRoute": {"$ref": "#/$defs/governanceRoute"},
+    "publicationBlock": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "action": {"enum": ["approve-release-manifest", "authorize-privileged-release", "close-release-manifest", "stop", "revoke", "contain", "activate-succession", "move-tag", "overwrite-artifact", "rewrite-evidence", "accept-security-risk", "approve-publication", "declare-completion", "disposition-vulnerability", "set-disclosure-remediation-policy", "grant-time-bounded-security-exception", "verify-assigned-release-unit", "verify-namespace-health", "verify-packaging-health", "sequence-release-run", "execute-authorized-release-action", "select-semantic-version", "select-release-set-scope", "change-protected-branch", "publish-package", "deploy", "access-environment", "use-credential"]},
+    "actions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/action"}},
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "decisionScope", "permittedActions", "prohibitedActions", "approvalDuties", "auditSurface", "continuityRequirement", "roleCombinationConstraints"],
+      "properties": {
+        "id": {"enum": ["release-steward", "repository-administrator", "security-steward", "package-steward", "release-run-coordinator"]},
+        "label": {"type": "string", "minLength": 1},
+        "decisionScope": {"type": "string", "minLength": 1},
+        "permittedActions": {"$ref": "#/$defs/actions"},
+        "prohibitedActions": {"$ref": "#/$defs/actions"},
+        "approvalDuties": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "auditSurface": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "continuityRequirement": {"type": "string", "minLength": 1},
+        "roleCombinationConstraints": {"type": "string", "minLength": 1}
+      }
+    },
+    "privilegedAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredRole", "requiredRoleAssertion", "approvedReleaseManifest", "rejectedEvidence"],
+      "properties": {
+        "requiredRole": {"const": "release-steward"},
+        "requiredRoleAssertion": {"const": "explicit asserted role"},
+        "approvedReleaseManifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "identity", "digest"],
+          "properties": {"status": {"const": "approved"}, "identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "minLength": 1}}
+        },
+        "rejectedEvidence": {"type": "array", "minItems": 9, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "advisoryAutomation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowedActions", "prohibitedActions"],
+      "properties": {
+        "allowedActions": {"type": "array", "minItems": 5, "items": {"enum": ["validate", "triage", "label", "dependency-advice", "rehearse"]}},
+        "prohibitedActions": {"$ref": "#/$defs/actions"}
+      }
+    },
+    "governanceRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formalSourceOrder", "rfcRequiredFor", "publicReviewRequirement", "nonBypassStatement"],
+      "properties": {
+        "formalSourceOrder": {"type": "array", "minItems": 5, "items": {"type": "string", "minLength": 1}},
+        "rfcRequiredFor": {"type": "array", "minItems": 7, "items": {"type": "string", "minLength": 1}},
+        "publicReviewRequirement": {"type": "string", "minLength": 1},
+        "nonBypassStatement": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
