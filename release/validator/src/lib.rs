@@ -203,7 +203,7 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Validates the public, offline Epic 2 evidence package.  It deliberately
+/// Validates the public, offline external-control evidence package. It deliberately
 /// validates records and committed workflow source only: neither source is
 /// evidence that a provider-side setting has been remediated.
 pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> {
@@ -717,7 +717,7 @@ pub fn validate_stewardship_exercise(exercise: &Value, assignments: &Value) -> R
         }
         let blockers = array(scenario.get("providerBlockers"), "provider blockers")?;
         if blockers.is_empty() {
-            return Err("exercise scenario must retain an Epic 2 provider blocker".to_owned());
+            return Err("exercise scenario must retain an external-control blocker".to_owned());
         }
         for blocker in blockers {
             let blocker = object(blocker, "provider blocker")?;
@@ -726,11 +726,11 @@ pub fn validate_stewardship_exercise(exercise: &Value, assignments: &Value) -> R
                 &["control", "status", "requiredEvidence"],
                 "provider blocker",
             )?;
-            require_string(blocker, "status", "unverified-epic-2-blocker")?;
+            require_string(blocker, "status", "unverified-external-control-blocker")?;
             if !text(blocker.get("requiredEvidence"), "provider blocker evidence")?
-                .contains("Epic 2")
+                .contains("Verified")
             {
-                return Err("provider blocker must name required Epic 2 evidence".to_owned());
+                return Err("provider blocker must name required control evidence".to_owned());
             }
         }
         if array(scenario.get("observedGaps"), "observed gaps")?.is_empty() {
@@ -741,7 +741,7 @@ pub fn validate_stewardship_exercise(exercise: &Value, assignments: &Value) -> R
             &known_assignments,
             "exercise follow-up owner",
         )?;
-        require_string(scenario, "disposition", "blocked-pending-epic-2-controls")?;
+        require_string(scenario, "disposition", "blocked-pending-external-controls")?;
     }
     if seen != required_scenarios {
         return Err("exercise scenarios are incomplete".to_owned());
@@ -778,7 +778,7 @@ fn validate_exercise_actor(
     );
     if !known.contains(&triple) {
         return Err(format!(
-            "{context} must reference a current Story 1.2 assignment"
+            "{context} must reference a current stewardship assignment"
         ));
     }
     Ok(())
@@ -974,10 +974,10 @@ pub fn validate_exercise_runbook_content(
     }
     if !content
         .to_ascii_lowercase()
-        .contains("unverified epic 2 blocker")
+        .contains("unverified external-control blocker")
     {
         return Err(format!(
-            "runbook must retain an explicit unverified Epic 2 blocker: {label}"
+            "runbook must retain an explicit unverified external-control blocker: {label}"
         ));
     }
     if ["```sh", "```bash", "```zsh", "```powershell", "```ps1"]
@@ -1037,7 +1037,7 @@ pub fn render_stewardship_exercises_markdown(exercise: &Value) -> Result<String,
             text(scenario.get("disposition"), "disposition")?
         ));
     }
-    markdown.push_str("\n## Public runbooks\n\n- [Stewardship succession](../../../../release/runbooks/stewardship-succession.md)\n- [Unavailable owner](../../../../release/runbooks/unavailable-owner.md)\n- [Emergency stop](../../../../release/runbooks/emergency-stop.md)\n- [Trust revocation](../../../../release/runbooks/trust-revocation.md)\n- [Advisory manual fallback](../../../../release/runbooks/advisory-manual-fallback.md)\n\nEvery provider-specific action is an **unverified Epic 2 blocker**. This evidence identifies future control categories; it does not test, configure, revoke, stop, publish, deploy, approve, or mutate any provider state.\n\n## Offline validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks canonical assignment linkage, action boundaries, explicit Epic 2 blockers, public persistence, no secrets, required decision fields, and runbook safety. It does not invoke provider controls.\n");
+    markdown.push_str("\n## Public runbooks\n\n- [Stewardship succession](../../../../release/runbooks/stewardship-succession.md)\n- [Unavailable owner](../../../../release/runbooks/unavailable-owner.md)\n- [Emergency stop](../../../../release/runbooks/emergency-stop.md)\n- [Trust revocation](../../../../release/runbooks/trust-revocation.md)\n- [Advisory manual fallback](../../../../release/runbooks/advisory-manual-fallback.md)\n\nEvery provider-specific action is an **unverified external-control blocker**. This evidence identifies future control categories; it does not test, configure, revoke, stop, publish, deploy, approve, or mutate any provider state.\n\n## Offline validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks canonical assignment linkage, action boundaries, explicit external-control blockers, public persistence, no secrets, required decision fields, and runbook safety. It does not invoke provider controls.\n");
     Ok(markdown)
 }
 
@@ -1053,7 +1053,7 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
     let root = object(record, "contract must be a JSON object")?;
     if root.contains_key("assignments") {
         return Err(
-            "role assignments belong to Story 1.2 and cannot appear in the authority record"
+            "role assignments belong to the stewardship assignment record and cannot appear in the authority record"
                 .to_owned(),
         );
     }
@@ -1361,8 +1361,12 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
         return Err("governance bypass protection is absent".to_owned());
     }
     let publication_block = text(root.get("publicationBlock"), "publicationBlock")?;
-    if !publication_block.contains("Story 1.2") || !publication_block.contains("Epic 2") {
-        return Err("publication block must name Story 1.2 and Epic 2".to_owned());
+    if !publication_block.contains("stewardship assignments")
+        || !publication_block.contains("external controls")
+    {
+        return Err(
+            "publication block must name stewardship and external-control gates".to_owned(),
+        );
     }
     ensure_no_private_leakage(&record.to_string())
 }
@@ -1598,7 +1602,7 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
             })
             .unwrap_or(true)
     }) {
-        return Err("future Story 1.6 continuity runbook identifier is missing".to_owned());
+        return Err("future continuity runbook identifier is missing".to_owned());
     }
     ensure_no_private_leakage(&record.to_string())
 }
@@ -2478,7 +2482,7 @@ fn validate_assignment_reference(value: &Value, context: &str) -> Result<(), Str
     if !text(reference.get("actorId"), "assignment actor")?.starts_with("github:")
         || !REQUIRED_ROLE_IDS.contains(&text(reference.get("roleId"), "assignment role")?)
     {
-        return Err(format!("{context} must name a Story 1.2 role assertion"));
+        return Err(format!("{context} must name a stewardship role assertion"));
     }
     Ok(())
 }
@@ -2526,7 +2530,7 @@ fn validate_advisory_owners(record: &Value, assignments: &Value) -> Result<(), S
             );
             if !known.contains(&triple) {
                 return Err(format!(
-                    "advisory {label} does not resolve to a Story 1.2 assignment"
+                    "advisory {label} does not resolve to a stewardship assignment"
                 ));
             }
         }
@@ -3060,12 +3064,12 @@ fn validate_operation_inputs(value: Option<&Value>, target_identity: &str) -> Re
         object(control, "future control")
             .ok()
             .is_some_and(|control| {
-                control.get("id").and_then(Value::as_str) == Some("epic-2-external-controls")
+                control.get("id").and_then(Value::as_str) == Some("external-controls")
                     && control.get("status").and_then(Value::as_str)
                         == Some("required-not-yet-verified")
             })
     }) {
-        return Err("potential effects require typed pending Epic 2 control evidence".to_owned());
+        return Err("potential effects require typed pending external-control evidence".to_owned());
     }
     if strings(
         inputs.get("immutableCandidateInputs"),
@@ -3352,7 +3356,7 @@ pub fn render_privileged_runbook_markdown(
 ) -> Result<String, String> {
     let root = object(operations, "privileged operations contract")?;
     let rows = array(root.get("operations"), "privileged operations")?;
-    let mut markdown = String::from("# Privileged Readiness and Fail-Closed Procedures\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n## Non-authority rule\n\nHistorical bot configuration, historical behavior, green CI, tags, provider approval settings, CODEOWNERS, and private planning artifacts are not release authority. Dependency ordering and release preparation must use a current Manifest and typed Release Unit Catalog edges when those later controls exist; until then this runbook remains a visible blocking procedure.\n\n## Universal pre-effect gate\n\nNo tag, GitHub release, package, deployment, environment, protected-branch, or credential effect is permitted unless an exact approved Manifest digest, verified Release Steward approval bound to that digest, target-specific protected identity, verified future Epic 2 controls, and immutable later candidate inputs all exist and match. Absence, uncertainty, staleness, or mismatch stops before the first effect and produces no effect event or external effect.\n\nAdvisory stages receive no privileged environment or credential. A separately scoped privileged stage may consume only approved immutable inputs after every required gate is verified. Broad or long-lived personal access tokens are rejected. Supported targets require OIDC or provider trusted publishing; a different route would require a separately approved, target-scoped, expiring, revocable, and auditable bootstrap exception.\n\n## Current owned blocking procedures\n\n| ID | Responsibility | Owner assertion | Target | Minimum permissions | Visible blockers | Fallback |\n|---|---|---|---|---|---|---|\n");
+    let mut markdown = String::from("# Privileged Readiness and Fail-Closed Procedures\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n## Non-authority rule\n\nHistorical bot configuration, historical behavior, green CI, tags, provider approval settings, CODEOWNERS, and private process artifacts are not release authority. Dependency ordering and release preparation must use a current Manifest and typed Release Unit Catalog edges when those later controls exist; until then this runbook remains a visible blocking procedure.\n\n## Universal pre-effect gate\n\nNo tag, GitHub release, package, deployment, environment, protected-branch, or credential effect is permitted unless an exact approved Manifest digest, verified Release Steward approval bound to that digest, target-specific protected identity, verified external controls, and immutable candidate inputs all exist and match. Absence, uncertainty, staleness, or mismatch stops before the first effect and produces no effect event or external effect.\n\nAdvisory stages receive no privileged environment or credential. A separately scoped privileged stage may consume only approved immutable inputs after every required gate is verified. Broad or long-lived personal access tokens are rejected. Supported targets require OIDC or provider trusted publishing; a different route would require a separately approved, target-scoped, expiring, revocable, and auditable bootstrap exception.\n\n## Current owned blocking procedures\n\n| ID | Responsibility | Owner assertion | Target | Minimum permissions | Visible blockers | Fallback |\n|---|---|---|---|---|---|---|\n");
     for operation in rows {
         let operation = object(operation, "privileged operation")?;
         markdown.push_str(&format!(
@@ -3385,7 +3389,7 @@ pub fn render_privileged_runbook_markdown(
             text(operation.get("fallback"), "fallback")?,
         ));
     }
-    markdown.push_str("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: later Epic 2 external controls, later authorization/candidate evidence, and the unresolved continuity gate remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow [GOVERNANCE.md](../../GOVERNANCE.md); this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n");
+    markdown.push_str("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization and candidate evidence, and the unresolved continuity gate remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow [GOVERNANCE.md](../../GOVERNANCE.md); this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n");
     Ok(markdown)
 }
 
@@ -3436,7 +3440,7 @@ pub fn render_markdown(record: &Value) -> Result<String, String> {
             strings(role.get("permittedActions"), "permittedActions")?.join(", ")
         ));
     }
-    markdown.push_str("\n## Boundaries and continuity\n\nAdvisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.\n\nRoles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent here and belong to Story 1.2. Contract validation does not prove live workflow or provider enforcement. Publication remains blocked until Story 1.2 resolves assignments and continuity and Epic 2 corrects and verifies external controls.\n\n## Offline validation\n\nFrom the repository root, run the repository-local validator without network access:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nIt validates schema syntax, the canonical record, semantic authority invariants, documentation parity, and the public/private boundary.\n\n## Compatibility governance\n\nThis contract does not replace the BDFL, RFC, public-review, or breaking-change rules in [the governance policy](../../../../GOVERNANCE.md). Language, wire-format, compiler, generator, runtime, corpus/conformance, and public API changes continue through that existing route.\n");
+    markdown.push_str("\n## Boundaries and continuity\n\nAdvisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.\n\nRoles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. Publication remains blocked until stewardship assignments and continuity are resolved and external controls are corrected and verified.\n\n## Offline validation\n\nFrom the repository root, run the repository-local validator without network access:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nIt validates schema syntax, the canonical record, semantic authority invariants, documentation parity, and the public/private boundary.\n\n## Compatibility governance\n\nThis contract does not replace the BDFL, RFC, public-review, or breaking-change rules in [the governance policy](../../../../GOVERNANCE.md). Language, wire-format, compiler, generator, runtime, corpus/conformance, and public API changes continue through that existing route.\n");
     Ok(markdown)
 }
 
@@ -3516,7 +3520,7 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
         )?,
         text(readiness.get("reason"), "publication reason")?
     ));
-    markdown.push_str("If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for Story 1.6.\n\n## Future runbook\n\nThe stable identifier `release-continuity-runbook` is reserved for the public Story 1.6 unavailable-owner and succession runbook. It does not create a custodian or authorize a release.\n\n## Validation\n\nFrom a clean public checkout, run:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the unresolved fail-closed publication gate. It does not change provider settings or create a release.\n\nThis decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).\n");
+    markdown.push_str("If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.\n\n## Future runbook\n\nThe stable identifier `release-continuity-runbook` is reserved for the public unavailable-owner and succession runbook. It does not create a custodian or authorize a release.\n\n## Validation\n\nFrom a clean public checkout, run:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the unresolved fail-closed publication gate. It does not change provider settings or create a release.\n\nThis decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).\n");
     Ok(markdown)
 }
 

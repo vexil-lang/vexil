@@ -38,11 +38,11 @@ No distinct custodian is currently approved. Record containment and request a re
 
 **Manifest approval: blocked. Privileged publication: blocked.** No distinct recovery custodian has been approved. This unresolved continuity gate blocks Manifest approval and privileged publication.
 
-If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for Story 1.6.
+If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.
 
 ## Future runbook
 
-The stable identifier `release-continuity-runbook` is reserved for the public Story 1.6 unavailable-owner and succession runbook. It does not create a custodian or authorize a release.
+The stable identifier `release-continuity-runbook` is reserved for the public unavailable-owner and succession runbook. It does not create a custodian or authorize a release.
 
 ## Validation
 

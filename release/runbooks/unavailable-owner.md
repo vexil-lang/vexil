@@ -11,4 +11,4 @@
 | Record an administrative freeze of new privileged work | `repository-administrator` | stop, contain | workflow mutation, credential use, package or release effect | same public exercise record | Affected authority is identified | A real provider control would be needed | `repository-administrator` | yes |
 | Request reviewed succession | `repository-administrator` | activate-succession | infer a successor's publication authority | same public exercise record | Existing `GOVERNANCE.md` review route | No reviewed successor and no non-publishing custodian | `repository-administrator` | yes |
 
-The only emergency actions are **stop, revoke, contain, and activate succession**. Actual repository ownership, protection, or credential recovery remains an **unverified Epic 2 blocker**.
+The only emergency actions are **stop, revoke, contain, and activate succession**. Actual repository ownership, protection, or credential recovery remains an **unverified external-control blocker**.

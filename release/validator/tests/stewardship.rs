@@ -13,7 +13,7 @@ fn canonical_contract_and_all_fixtures_have_the_expected_result() {
 fn external_control_records_and_workflows_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_external_controls_repository(&root)
-        .expect("canonical Epic 2 offline records must validate");
+        .expect("canonical external-control records must validate");
 
     let current_path =
         root.join("release/controls/observations/current-github-controls-2026-07-17.json");
@@ -499,7 +499,7 @@ fn apply_privileged_mutation(record: &mut Value, mutation: &str) {
                 .unwrap()
                 .remove("protectedAuthority");
         }
-        "missing-epic-2-control" => {
+        "missing-external-control" => {
             operations[0]["requiredInputs"]["futureControls"] =
                 serde_json::json!(["later evidence"]);
         }
