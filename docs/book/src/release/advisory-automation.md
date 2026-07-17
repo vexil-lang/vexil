@@ -35,4 +35,4 @@ Advice may identify, triage, label, comment, or report. It cannot select scope o
 cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
 ```
 
-This validation is deterministic and sidecar-free. It does not inspect or mutate providers.
+This validation is deterministic and self-contained. It does not inspect or mutate providers.

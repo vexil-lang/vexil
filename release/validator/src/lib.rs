@@ -1139,9 +1139,7 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
         "green-ci",
         "registry",
         "provider-approval",
-        "_bmad/",
-        ".agents/",
-        "_bmad-output/",
+        "private-build-artifact",
     ] {
         if !rejected.contains(&evidence) {
             return Err(format!("non-authority evidence is missing: {evidence}"));
@@ -1155,7 +1153,7 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
         "green-ci",
         "registries",
         "provider-approvals",
-        "private-bmad-artifacts",
+        "private-build-artifacts",
     ] {
         if !non_authorities.contains(&class) {
             return Err(format!("missing non-authority class: {class}"));
@@ -2037,9 +2035,9 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
             {
                 return Err(format!("responsibility {id} has incomplete evidence"));
             }
-            if source.contains("_bmad") || source.contains(".agents") {
+            if source.contains("non-public-workspace") {
                 return Err(
-                    "private BMAD sources cannot be public responsibility evidence".to_owned(),
+                    "non-public workspace sources cannot be public responsibility evidence".to_owned(),
                 );
             }
             ensure_no_private_leakage(source)?;
@@ -3143,7 +3141,7 @@ pub fn render_responsibility_markdown(record: &Value) -> Result<String, String> 
             text(mismatch.get("observedBehavior"), "mismatch observation")?,
         ));
     }
-    markdown.push_str("\n## Evidence and use\n\nEach canonical item carries source-attributed observed behavior and affected public surfaces. The inventory is offline, deterministic, and does not inspect or change provider state. Validation rejects private BMAD evidence, missing known responsibility classes, duplicate stable IDs, missing evidence or decision owner, unapproved advisory dispositions, forbidden permissions, configuration-as-authority claims, and advisory authority claims.\n\nFor the advisory-only operations view, see [Advisory Automation and Manual Fallbacks](./advisory-automation.md). For privileged and policy blockers, see [Privileged and Policy Operations](./privileged-operations.md).\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates the canonical inventory and its generated mdBook view without network access or provider effects.\n");
+    markdown.push_str("\n## Evidence and use\n\nEach canonical item carries source-attributed observed behavior and affected public surfaces. The inventory is offline, deterministic, and does not inspect or change provider state. Validation rejects non-public workspace evidence, missing known responsibility classes, duplicate stable IDs, missing evidence or decision owner, unapproved advisory dispositions, forbidden permissions, configuration-as-authority claims, and advisory authority claims.\n\nFor the advisory-only operations view, see [Advisory Automation and Manual Fallbacks](./advisory-automation.md). For privileged and policy blockers, see [Privileged and Policy Operations](./privileged-operations.md).\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates the canonical inventory and its generated mdBook view without network access or provider effects.\n");
     Ok(markdown)
 }
 
@@ -3226,7 +3224,7 @@ pub fn render_advisory_runbook_markdown(record: &Value) -> Result<String, String
             text(retirement.get("residualRisk"), "residual risk")?,
         ));
     }
-    markdown.push_str("\n## Verification\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThis validation is deterministic and sidecar-free. It does not inspect or mutate providers.\n");
+    markdown.push_str("\n## Verification\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThis validation is deterministic and self-contained. It does not inspect or mutate providers.\n");
     Ok(markdown)
 }
 
@@ -3337,7 +3335,7 @@ pub fn validate_privileged_runbook_parity(
 pub fn render_markdown(record: &Value) -> Result<String, String> {
     let root = object(record, "contract")?;
     let roles = array(root.get("roles"), "roles")?;
-    let mut markdown = String::from("# Stewardship Authority Model\n\n> Generated view of [`release/stewardship.json`](../../../../release/stewardship.json). The JSON record is canonical; this Markdown is non-authoritative and parity-checked.\n\n## Authority boundary\n\nOnly an explicit **Release Steward** role assertion bound to an approved Release Manifest identity and digest can authorize privileged effects. Tags, bots, workflows, green CI, registries, provider approvals, `_bmad/`, `.agents/`, and `_bmad-output/` are non-authoritative evidence or tooling.\n\n| Role | Decision scope | Permitted actions |\n|---|---|---|\n");
+    let mut markdown = String::from("# Stewardship Authority Model\n\n> Generated view of [`release/stewardship.json`](../../../../release/stewardship.json). The JSON record is canonical; this Markdown is non-authoritative and parity-checked.\n\n## Authority boundary\n\nOnly an explicit **Release Steward** role assertion bound to an approved Release Manifest identity and digest can authorize privileged effects. Tags, bots, workflows, green CI, registries, provider approvals, and private build artifacts are non-authoritative evidence or tooling.\n\n| Role | Decision scope | Permitted actions |\n|---|---|---|\n");
     for role in roles {
         let role = object(role, "role")?;
         markdown.push_str(&format!(
@@ -3472,12 +3470,12 @@ pub fn ensure_no_private_leakage(content: &str) -> Result<(), String> {
     if lower.contains("c:\\users\\")
         || lower.contains("/users/")
         || lower.contains("/home/")
-        || lower.contains("private sidecar")
+        || lower.contains("non-public workspace")
         || lower.contains("\\\\")
         || has_windows_drive_path
     {
         return Err(
-            "public/private boundary failure: private absolute path or sidecar reference found"
+            "public/private boundary failure: private absolute path or non-public workspace reference found"
                 .to_owned(),
         );
     }

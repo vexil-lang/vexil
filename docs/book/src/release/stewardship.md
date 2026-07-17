@@ -4,7 +4,7 @@
 
 ## Authority boundary
 
-Only an explicit **Release Steward** role assertion bound to an approved Release Manifest identity and digest can authorize privileged effects. Tags, bots, workflows, green CI, registries, provider approvals, `_bmad/`, `.agents/`, and `_bmad-output/` are non-authoritative evidence or tooling.
+Only an explicit **Release Steward** role assertion bound to an approved Release Manifest identity and digest can authorize privileged effects. Tags, bots, workflows, green CI, registries, provider approvals, and private build artifacts are non-authoritative evidence or tooling.
 
 | Role | Decision scope | Permitted actions |
 |---|---|---|

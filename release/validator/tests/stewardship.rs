@@ -144,7 +144,7 @@ fn assignment_review_evidence_is_decision_bound_and_public() {
 
     let mut private_evidence = canonical;
     private_evidence["assignments"][0]["reviewEvidence"]["source"] =
-        Value::String("_bmad-output/planning-artifacts/private.md".into());
+        Value::String("non-public-workspace/private.md".into());
     vexil_release_governance_validator::validate_assignments(&private_evidence)
         .expect_err("assignment evidence must reject private planning sources");
 }
@@ -267,7 +267,7 @@ fn negative_fixtures_fail_for_their_intended_boundary() {
                 "stale documentation",
             ),
             "private-absolute-path" => {
-                let leaked_path = ["C:", "Users", "example", "private-sidecar"].join("\\");
+                let leaked_path = ["C:", "Users", "example", "workspace-temp"].join("\\");
                 vexil_release_governance_validator::ensure_no_private_leakage(&leaked_path)
             }
             _ => {
@@ -389,7 +389,7 @@ fn privileged_operations_fail_closed_for_all_required_gates() {
 }
 
 #[test]
-fn isolated_public_copy_needs_no_private_bmad_directory() {
+fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let isolated = std::env::temp_dir().join(format!("vexil-stewardship-{}", std::process::id()));
     let _ = fs::remove_dir_all(&isolated);
@@ -575,7 +575,7 @@ fn apply_responsibility_mutation(record: &mut Value, mutation: &str) {
                 .unwrap()
                 .as_array_mut()
                 .unwrap()[0]["historicalEvidence"][0]["source"] =
-                Value::String("_bmad-output/private-note.md".into());
+                Value::String("non-public-workspace/private-note.md".into());
         }
         "duplicate-id" => {
             let responsibilities = root
@@ -736,7 +736,7 @@ fn apply_assignment_mutation(record: &mut Value, mutation: &str) {
         }
         "private-evidence" => {
             root.get_mut("decision").unwrap()["reviewEvidence"]["source"] =
-                Value::String("C:\\Users\\example\\private-sidecar".into());
+                Value::String("C:\\Users\\example\\workspace-temp".into());
         }
         "qualified-non-steward" => {
             root.get_mut("identities")

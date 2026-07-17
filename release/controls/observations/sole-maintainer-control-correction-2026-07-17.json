@@ -15,7 +15,7 @@
     "credentialAuthorization": {
       "status": "explicit-owner-authorized-procedural-audit-exception",
       "authorizedBy": "github:furkanmamuk",
-      "authorizationReference": "Sole-maintainer correction directed in Codex task on 2026-07-17",
+      "authorizationReference": "Sole-maintainer correction recorded on 2026-07-17",
       "leastPrivilegeEnforced": false,
       "allowedOperations": "GET only"
     }
