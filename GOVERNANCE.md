@@ -15,8 +15,9 @@ This contract does not replace this BDFL decision model, the 14-day
 breaking-change comment period, or the RFC process below. It also does not
 prove live workflow or provider enforcement. Publication remains blocked until
 the named [stewardship continuity decision](./release/stewardship/assignments.json)
-resolves its explicit recovery gate and Epic 2 corrects and verifies external
-controls. The current public decision intentionally blocks Manifest approval
+resolves its explicit recovery gate and external controls are corrected and
+verified.
+The current public decision intentionally blocks Manifest approval
 and privileged publication because no distinct recovery custodian is approved.
 
 ## Decision Making

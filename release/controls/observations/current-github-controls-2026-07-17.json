@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/current-github-controls-2026-07-17.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-17-CURRENT-GITHUB-CONTROLS",
+  "evidenceState": "current",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-17T16:12:00Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Repository Administrator direction recorded on 2026-07-17",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:d5ed2f5c288b5e3bc00b20ea1d970792d9ea35a97b73c59600382eeb6a4bc2f2",
+    "responseDigest": "sha256:d5ed2f5c288b5e3bc00b20ea1d970792d9ea35a97b73c59600382eeb6a4bc2f2",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {"assertionId": "EC-001", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/branches/main/protection"}, "status": "compliant", "observedValue": "main requires pull requests, zero approving reviews for the sole-maintainer exception, seven strict checks, resolved conversations, administrator enforcement, and denies force-push and deletion.", "diagnostic": "The protected branch remains usable without a self-approval bypass.", "evidenceReference": "github-cli-get-2026-07-17:main-branch-protection-current"},
+    {"assertionId": "EC-002", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/rulesets/19106890"}, "status": "compliant", "observedValue": "The active prospective release-tag ruleset denies unauthorized creation, update, and deletion while leaving historical tags untouched.", "diagnostic": "The sole maintainer is the explicitly recorded ruleset bypass actor.", "evidenceReference": "github-cli-get-2026-07-17:release-tag-ruleset-current"},
+    {"assertionId": "EC-003", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/immutable-releases"}, "status": "compliant", "observedValue": "GitHub reports immutable releases enabled true.", "diagnostic": "The control is prospective and does not rewrite historical releases or tags.", "evidenceReference": "github-cli-get-2026-07-17:immutable-releases-current"},
+    {"assertionId": "EC-004", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments/{release-target}"}, "status": "compliant", "observedValue": "Each named release environment has the sole named reviewer, prevents self-review, denies administrator bypass, and restricts deployment to protected branches.", "diagnostic": "Environment protection remains target-isolated and does not authorize publication.", "evidenceReference": "github-cli-get-2026-07-17:release-environments-current"},
+    {"assertionId": "EC-005", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions/workflow"}, "status": "compliant", "observedValue": "Default workflow token permissions are read and workflows cannot approve pull-request reviews.", "diagnostic": "Repository defaults do not grant implicit write authority.", "evidenceReference": "github-cli-get-2026-07-17:actions-workflow-permissions-current"},
+    {"assertionId": "EC-006", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions"}, "status": "noncompliant", "observedValue": "GitHub Actions permits all actions and does not require SHA pinning at the repository setting.", "diagnostic": "The repository source scanner separately enforces immutable Action pins, but this provider setting remains a blocking noncompliance.", "evidenceReference": "github-cli-get-2026-07-17:actions-permissions-current"},
+    {"assertionId": "EC-010", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments"}, "status": "unknown", "observedValue": "No approved safe non-production or reversible revocation authority is recorded.", "diagnostic": "A provider-backed revocation exercise remains blocked.", "evidenceReference": "github-cli-get-2026-07-17:revocation-path-current"}
+  ],
+  "publicationReadiness": "blocked"
+}

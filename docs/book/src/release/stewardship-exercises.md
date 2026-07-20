@@ -12,10 +12,10 @@ Record `STE-2026-07-14-01` was exercised at `2026-07-14T18:00:00Z`. Evidence is 
 
 | Scenario | Procedure | Allowed boundary | Disposition |
 |---|---|---|---|
-| `unavailable-owner` | `release-continuity-runbook` | stop, contain, activate-succession | `blocked-pending-epic-2-controls` |
-| `suspected-credential-or-automation-compromise` | `emergency-stop-runbook` | stop, revoke, contain | `blocked-pending-epic-2-controls` |
-| `advisory-failure` | `advisory-manual-fallback-runbook` | perform-manually, defer | `blocked-pending-epic-2-controls` |
-| `missing-provider-control` | `trust-revocation-runbook` | stop, revoke, contain, activate-succession | `blocked-pending-epic-2-controls` |
+| `unavailable-owner` | `release-continuity-runbook` | stop, contain, activate-succession | `blocked-pending-external-controls` |
+| `suspected-credential-or-automation-compromise` | `emergency-stop-runbook` | stop, revoke, contain | `blocked-pending-external-controls` |
+| `advisory-failure` | `advisory-manual-fallback-runbook` | perform-manually, defer | `blocked-pending-external-controls` |
+| `missing-provider-control` | `trust-revocation-runbook` | stop, revoke, contain, activate-succession | `blocked-pending-external-controls` |
 
 ## Public runbooks
 
@@ -25,7 +25,7 @@ Record `STE-2026-07-14-01` was exercised at `2026-07-14T18:00:00Z`. Evidence is 
 - [Trust revocation](../../../../release/runbooks/trust-revocation.md)
 - [Advisory manual fallback](../../../../release/runbooks/advisory-manual-fallback.md)
 
-Every provider-specific action is an **unverified Epic 2 blocker**. This evidence identifies future control categories; it does not test, configure, revoke, stop, publish, deploy, approve, or mutate any provider state.
+Every provider-specific action is an **unverified external-control blocker**. This evidence identifies future control categories; it does not test, configure, revoke, stop, publish, deploy, approve, or mutate any provider state.
 
 ## Offline validation
 
@@ -33,4 +33,4 @@ Every provider-specific action is an **unverified Epic 2 blocker**. This evidenc
 cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
 ```
 
-The validator checks canonical assignment linkage, action boundaries, explicit Epic 2 blockers, public persistence, no secrets, required decision fields, and runbook safety. It does not invoke provider controls.
+The validator checks canonical assignment linkage, action boundaries, explicit external-control blockers, public persistence, no secrets, required decision fields, and runbook safety. It does not invoke provider controls.
