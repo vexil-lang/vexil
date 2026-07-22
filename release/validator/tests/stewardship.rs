@@ -15,8 +15,8 @@ fn external_control_records_and_workflows_fail_closed() {
     vexil_release_governance_validator::validate_external_controls_repository(&root)
         .expect("canonical external-control records must validate");
 
-    let current_path =
-        root.join("release/controls/observations/current-github-controls-2026-07-17.json");
+    let current_path = root
+        .join("release/controls/observations/current-github-controls-2026-07-22-sha-pinning.json");
     let current: Value = serde_json::from_str(&fs::read_to_string(current_path).unwrap()).unwrap();
     vexil_release_governance_validator::validate_current_observation_record(&root, &current)
         .expect("current observations must bind to exact expected controls");
@@ -88,14 +88,23 @@ fn external_control_records_and_workflows_fail_closed() {
     )
     .unwrap();
     vexil_release_governance_validator::validate_revocation_exercise_pair(&plan, &result)
-        .expect("the retained unexecuted exercise must remain valid");
+        .expect("the retained executed exercise must remain valid");
 
-    let mut false_success = result.clone();
-    false_success["status"] = Value::String("executed-success".into());
-    vexil_release_governance_validator::validate_revocation_exercise_schema(&root, &false_success)
-        .expect_err("an executed result must retain complete event evidence and a digest");
-    vexil_release_governance_validator::validate_revocation_exercise_pair(&plan, &false_success)
-        .expect_err("a blocked plan cannot be relabeled as an executed result");
+    let mut incomplete_success = result.clone();
+    incomplete_success["evidence"]
+        .as_object_mut()
+        .unwrap()
+        .remove("stableEvidenceDigest");
+    vexil_release_governance_validator::validate_revocation_exercise_schema(
+        &root,
+        &incomplete_success,
+    )
+    .expect_err("an executed result must retain complete event evidence and a digest");
+    vexil_release_governance_validator::validate_revocation_exercise_pair(
+        &plan,
+        &incomplete_success,
+    )
+    .expect_err("an executed result without a digest must fail pair validation");
 }
 
 #[test]
