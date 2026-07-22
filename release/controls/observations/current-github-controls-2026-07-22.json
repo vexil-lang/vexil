@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/controls/observations/current-github-controls-2026-07-22.json",
+  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "version": "1.0",
+  "recordId": "ECO-2026-07-22-CURRENT-GITHUB-CONTROLS",
+  "evidenceState": "current",
+  "provider": "github",
+  "scope": "vexil-lang/vexil",
+  "observedAtUtc": "2026-07-22T16:27:15Z",
+  "collection": {
+    "mode": "read-only",
+    "providerInterface": "GitHub REST API through explicit GitHub CLI GET requests",
+    "credentialMode": "owner-authorized-write-capable-read-only",
+    "mutationGuard": "GET-only; auto-remediation and provider writes are rejected before collection",
+    "credentialAuthorization": {
+      "status": "explicit-owner-authorized-procedural-audit-exception",
+      "authorizedBy": "github:furkanmamuk",
+      "authorizationReference": "Repository Administrator direction recorded on 2026-07-22",
+      "leastPrivilegeEnforced": false,
+      "allowedOperations": "GET only"
+    }
+  },
+  "stableIdentity": {
+    "normalizedStateDigest": "sha256:512249f75bdee70cd7e6ba6c26b878215aa75b4643dd2af22341084163e4c1d3",
+    "responseDigest": "sha256:512249f75bdee70cd7e6ba6c26b878215aa75b4643dd2af22341084163e4c1d3",
+    "collectionTimestampExcluded": true
+  },
+  "results": [
+    {"assertionId": "EC-001", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/branches/main/protection"}, "status": "compliant", "observedValue": "main requires pull requests, zero approving reviews under the explicit sole-maintainer exception, seven strict checks, resolved conversations, administrator enforcement, and denies force-push and deletion.", "diagnostic": "The exception avoids a reviewer deadlock without enabling direct push, force push, deletion, or bypass.", "evidenceReference": "github-cli-get-2026-07-22:main-branch-protection"},
+    {"assertionId": "EC-002", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/rulesets/19106890"}, "status": "compliant", "observedValue": "The active tag ruleset retains creation, update, and deletion controls for the prospective release-tag namespace.", "diagnostic": "The ruleset remains prospective and leaves historical tags untouched.", "evidenceReference": "github-cli-get-2026-07-22:release-tag-ruleset"},
+    {"assertionId": "EC-003", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/immutable-releases"}, "status": "compliant", "observedValue": "GitHub reports immutable releases enabled true.", "diagnostic": "The control is prospective and does not rewrite historical releases or tags.", "evidenceReference": "github-cli-get-2026-07-22:immutable-releases"},
+    {"assertionId": "EC-004", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments/{release-target}"}, "status": "compliant", "observedValue": "Each named release environment requires github:furkanmamuk, permits self-review under the explicit sole-maintainer exception, denies administrator bypass, and restricts deployments to protected branches.", "diagnostic": "The repository-wide sole-maintainer exception prevents a deployment deadlock but does not create independent review, release authority, or publication readiness.", "evidenceReference": "github-cli-get-2026-07-22:sole-maintainer-target-environments"},
+    {"assertionId": "EC-005", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions/workflow"}, "status": "compliant", "observedValue": "Default workflow token permissions are read and workflows cannot approve pull-request reviews.", "diagnostic": "Repository defaults do not grant implicit write authority.", "evidenceReference": "github-cli-get-2026-07-22:actions-workflow-permissions"},
+    {"assertionId": "EC-006", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/actions/permissions"}, "status": "noncompliant", "observedValue": "GitHub Actions permits all actions and does not require SHA pinning at the repository setting.", "diagnostic": "Repository-owned workflows pin their third-party Actions, but the provider policy remains a blocking noncompliance.", "evidenceReference": "github-cli-get-2026-07-22:actions-permissions"},
+    {"assertionId": "EC-010", "query": {"method": "GET", "path": "/repos/vexil-lang/vexil/environments"}, "status": "compliant", "observedValue": "The approved reversible deploy-key exercise recorded two distinct disposable read-only keys that each authenticated before exact-ID deletion and then produced SSH denial plus a 404 metadata result.", "diagnostic": "The exercise proved a target-scoped provider revocation path without a release, tag, package, deployment, or repository-content effect.", "evidenceReference": "release/exercises/revocation-exercise-result.json:REV-2026-07-22-RESULT-SUCCESS"}
+  ],
+  "publicationReadiness": "blocked"
+}
