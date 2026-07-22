@@ -9,6 +9,7 @@
   "scope": "No provider-backed safe test identity or reviewed reversible path was available for execution.",
   "safetyBoundary": {"target": "approved-non-production-test-identity-or-individually-reviewed-reversible-path", "requiredPrecondition": "The plan at release/exercises/revocation-exercise-plan.json remains blocked because no approved safe path exists.", "prohibitedEffects": ["active production identity disruption", "tag creation or mutation", "GitHub release changes", "package publication", "deployment", "Manifest approval", "publication approval", "risk acceptance", "evidence rewrite", "completion declaration"], "stopCondition": "No execution occurred; a future exercise must stop before a provider call if its safe preconditions are not separately reviewed and current."},
   "participants": [{"actorId": "github:furkanmamuk", "assertedRole": "repository-administrator", "assignmentId": "assignment-repository-administrator-2026-07-14"}],
+  "events": [],
   "evidence": {"secretsIncluded": false, "providerAuditReference": "none-no-provider-call-was-authorized-or-made", "outcome": "Unexecuted. No denial, revocation, restoration, or provider compliance claim is recorded."},
   "publicationReadiness": "blocked"
 }
