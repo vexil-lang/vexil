@@ -77,6 +77,25 @@ fn external_control_records_and_workflows_fail_closed() {
     vexil_release_governance_validator::validate_workflow_static_isolation(&fixture_root)
         .expect_err("write-capable .yaml workflows must require immutable Action pins");
     fs::remove_dir_all(fixture_root).unwrap();
+
+    let plan: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/exercises/revocation-exercise-plan.json")).unwrap(),
+    )
+    .unwrap();
+    let result: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/exercises/revocation-exercise-result.json"))
+            .unwrap(),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_revocation_exercise_pair(&plan, &result)
+        .expect("the retained unexecuted exercise must remain valid");
+
+    let mut false_success = result.clone();
+    false_success["status"] = Value::String("executed-success".into());
+    vexil_release_governance_validator::validate_revocation_exercise_schema(&root, &false_success)
+        .expect_err("an executed result must retain complete event evidence and a digest");
+    vexil_release_governance_validator::validate_revocation_exercise_pair(&plan, &false_success)
+        .expect_err("a blocked plan cannot be relabeled as an executed result");
 }
 
 #[test]

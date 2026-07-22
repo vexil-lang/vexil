@@ -249,6 +249,7 @@ pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> 
     validate_identity_custody_schema(root, &custody)?;
     validate_revocation_exercise_schema(root, &exercise_plan)?;
     validate_revocation_exercise_schema(root, &exercise_result)?;
+    validate_revocation_exercise_pair(&exercise_plan, &exercise_result)?;
 
     let expected_ids: BTreeSet<_> = expected_controls.keys().cloned().collect();
     let baseline_root = object(&baseline, "external-control baseline")?;
@@ -330,16 +331,133 @@ pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> 
             ));
         }
     }
-    let exercise_plan_text = exercise_plan.to_string().to_ascii_lowercase();
-    let exercise_result_text = exercise_result.to_string().to_ascii_lowercase();
-    if !exercise_plan_text.contains("non-production")
-        || !exercise_plan_text.contains("blocked")
-        || !(exercise_result_text.contains("not-executed")
-            || exercise_result_text.contains("unexecuted"))
-    {
-        return Err("revocation exercise records must retain safe non-production preconditions and an unexecuted blocker".to_owned());
-    }
     validate_workflow_static_isolation(root)?;
+    Ok(())
+}
+
+pub fn validate_revocation_exercise_pair(plan: &Value, result: &Value) -> Result<(), String> {
+    let plan = object(plan, "revocation exercise plan")?;
+    let result = object(result, "revocation exercise result")?;
+    if text(plan.get("recordKind"), "revocation plan kind")? != "revocation-exercise-plan"
+        || text(result.get("recordKind"), "revocation result kind")? != "revocation-exercise-result"
+    {
+        return Err(
+            "revocation exercise records must retain distinct plan and result kinds".to_owned(),
+        );
+    }
+    let plan_status = text(plan.get("status"), "revocation plan status")?;
+    let result_status = text(result.get("status"), "revocation result status")?;
+    if plan_status == "blocked-unexecuted" && result_status != "unexecuted" {
+        return Err("a blocked revocation plan cannot claim an executed result".to_owned());
+    }
+    if result_status != "executed-success" {
+        return Ok(());
+    }
+    if plan_status != "approved" {
+        return Err("an executed revocation result requires an approved plan".to_owned());
+    }
+    if !text(result.get("scope"), "revocation result scope")?
+        .to_ascii_lowercase()
+        .contains("deploy key")
+    {
+        return Err("an executed result must name the disposable deploy-key scope".to_owned());
+    }
+
+    let mut event_ids = BTreeSet::new();
+    let mut actions_by_slot: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut key_ids_by_slot: BTreeMap<String, BTreeSet<i64>> = BTreeMap::new();
+    for event in array(result.get("events"), "revocation exercise events")? {
+        let event = object(event, "revocation exercise event")?;
+        let event_id = text(event.get("eventId"), "revocation event id")?.to_owned();
+        if !event_ids.insert(event_id) {
+            return Err("revocation exercise event identifiers must be unique".to_owned());
+        }
+        let action = text(event.get("action"), "revocation event action")?;
+        let method = text(
+            event.get("providerMethod"),
+            "revocation event provider method",
+        )?;
+        let expected_method = match action {
+            "preflight-absence" | "metadata-absent" => "GET",
+            "created" => "POST",
+            "authenticated" | "denied" => "SSH",
+            "revoked" => "DELETE",
+            _ => return Err("revocation exercise event action is not recognized".to_owned()),
+        };
+        if method != expected_method {
+            return Err(format!(
+                "revocation event {action} must retain {expected_method} evidence"
+            ));
+        }
+        let reference = text(event.get("providerReference"), "revocation event reference")?;
+        let lower_reference = reference.to_ascii_lowercase();
+        if lower_reference.contains("private key")
+            || lower_reference.contains("token")
+            || lower_reference.contains("-----begin")
+        {
+            return Err("revocation evidence must not contain credential material".to_owned());
+        }
+        ensure_no_private_leakage(reference)?;
+        let slot = text(event.get("targetSlot"), "revocation event target slot")?.to_owned();
+        actions_by_slot
+            .entry(slot.clone())
+            .or_default()
+            .insert(action.to_owned());
+        if matches!(action, "created" | "revoked" | "metadata-absent") {
+            let key_id = event
+                .get("keyId")
+                .and_then(Value::as_i64)
+                .filter(|key_id| *key_id > 0)
+                .ok_or_else(|| {
+                    format!("revocation event {action} must retain an immutable key id")
+                })?;
+            key_ids_by_slot.entry(slot).or_default().insert(key_id);
+        }
+        if matches!(action, "created" | "authenticated") && event.get("keyFingerprint").is_none() {
+            return Err(format!(
+                "revocation event {action} must retain only the public key fingerprint"
+            ));
+        }
+    }
+    let required_actions: BTreeSet<String> = [
+        "preflight-absence",
+        "created",
+        "authenticated",
+        "revoked",
+        "denied",
+        "metadata-absent",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    for slot in ["key-a", "key-b"] {
+        if actions_by_slot.get(slot) != Some(&required_actions) {
+            return Err(format!(
+                "executed revocation evidence must prove every lifecycle step for {slot}"
+            ));
+        }
+        if key_ids_by_slot.get(slot).map(BTreeSet::len) != Some(1) {
+            return Err(format!(
+                "executed revocation evidence must retain one immutable key id for {slot}"
+            ));
+        }
+    }
+    if key_ids_by_slot.get("key-a") == key_ids_by_slot.get("key-b") {
+        return Err(
+            "the replacement deploy key must not reuse the revoked key identity".to_owned(),
+        );
+    }
+    let evidence = object(
+        required_value(result, "evidence")?,
+        "revocation result evidence",
+    )?;
+    let digest = text(
+        evidence.get("stableEvidenceDigest"),
+        "revocation result evidence digest",
+    )?;
+    if !digest.starts_with("sha256:") {
+        return Err("executed revocation evidence must retain a stable digest".to_owned());
+    }
     Ok(())
 }
 
