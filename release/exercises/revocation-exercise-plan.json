@@ -3,13 +3,13 @@
   "$id": "https://vexil.dev/release/exercises/revocation-exercise-plan.json",
   "exerciseSchema": "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
   "version": "1.0",
-  "recordId": "REV-2026-07-17-PLAN",
+  "recordId": "REV-2026-07-22-PLAN",
   "recordKind": "revocation-exercise-plan",
-  "status": "blocked-unexecuted",
-  "scope": "No provider-backed exercise target is currently approved; active production custody is explicitly out of scope.",
-  "safetyBoundary": {"target": "approved-non-production-test-identity-or-individually-reviewed-reversible-path", "requiredPrecondition": "A separate reviewed safe identity/path, exact target scope, expected denial query, restoration owner, provider audit reference, and fresh control evidence must exist before execution.", "prohibitedEffects": ["active production identity disruption", "tag creation or mutation", "GitHub release changes", "package publication", "deployment", "Manifest approval", "publication approval", "risk acceptance", "evidence rewrite", "completion declaration"], "stopCondition": "Stop before a provider call when any safe precondition is absent, ambiguous, stale, or would touch active production custody."},
+  "status": "approved",
+  "scope": "Create and immediately revoke two distinct, disposable, read-only repository deploy keys for vexil-lang/vexil. The exercise is limited to deploy-key lifecycle evidence and excludes all active production identities.",
+  "safetyBoundary": {"target": "approved-non-production-test-identity-or-individually-reviewed-reversible-path", "requiredPrecondition": "The repository administrator has approved exactly two disposable read-only deploy keys, ephemeral local key generation and deletion, and their lifecycle verification. Before each provider write, confirm the target is vexil-lang/vexil, the key is newly generated and read-only, the plan remains approved, and the expected post-revocation checks are repository deploy-key metadata absence by GET and SSH authentication denial.", "prohibitedEffects": ["active production identity disruption", "tag creation or mutation", "GitHub release changes", "package publication", "deployment", "repository content mutation", "Manifest approval", "publication approval", "risk acceptance", "evidence rewrite", "completion declaration"], "stopCondition": "Stop before or immediately after a provider call if a target is not vexil-lang/vexil, a key is not disposable and read-only, the API response does not confirm the expected identity, any active credential would be touched, an expected denial cannot be verified, or a prohibited effect is possible."},
   "participants": [{"actorId": "github:furkanmamuk", "assertedRole": "repository-administrator", "assignmentId": "assignment-repository-administrator-2026-07-14"}],
   "events": [],
-  "evidence": {"secretsIncluded": false, "providerAuditReference": "not-available-until-an-approved-safe-exercise-is-scheduled", "outcome": "No exercise has been executed; this plan neither proves revocation nor grants a provider write."},
+  "evidence": {"secretsIncluded": false, "providerAuditReference": "planned GitHub repository deploy-key lifecycle: POST create, SSH authentication, DELETE revoke, GET metadata absence, and SSH denial for each disposable key", "outcome": "Approved plan only. It authorizes no release effect and proves neither creation nor revocation until the resulting provider observations are recorded."},
   "publicationReadiness": "blocked"
 }
