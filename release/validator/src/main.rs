@@ -6,19 +6,29 @@ fn main() {
     let mut root = None;
     let mut observe = None;
     let mut collect_history_tags = None;
+    let mut render_catalog = false;
     while let Some(argument) = args.next() {
         match argument.as_str() {
-            "--root" => root = args.next().map(PathBuf::from),
-            "--observe" => observe = args.next(),
-            "--collect-history-tags" => collect_history_tags = args.next(),
+            "--root" => match args.next() {
+                Some(value) if !value.starts_with("--") => root = Some(PathBuf::from(value)),
+                _ => usage_and_exit(),
+            },
+            "--observe" => match args.next() {
+                Some(value) if !value.starts_with("--") => observe = Some(value),
+                _ => usage_and_exit(),
+            },
+            "--collect-history-tags" => match args.next() {
+                Some(value) if !value.starts_with("--") => collect_history_tags = Some(value),
+                _ => usage_and_exit(),
+            },
+            "--render-catalog" => render_catalog = true,
             _ => {
-                eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote>");
-                std::process::exit(2);
+                usage_and_exit();
             }
         }
     }
     if let Some(remote) = collect_history_tags {
-        if root.is_some() || observe.is_some() {
+        if root.is_some() || observe.is_some() || render_catalog {
             eprintln!("--collect-history-tags is a standalone read-only collector");
             std::process::exit(2);
         }
@@ -52,9 +62,39 @@ fn main() {
         return;
     }
     let Some(root) = root else {
-        eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote>");
-        std::process::exit(2);
+        usage_and_exit();
     };
+    if render_catalog {
+        if observe.is_some() {
+            eprintln!("--render-catalog cannot be combined with --observe");
+            std::process::exit(2);
+        }
+        let catalog_path = root.join("release/catalog.json");
+        let catalog = std::fs::read_to_string(&catalog_path).unwrap_or_else(|error| {
+            eprintln!("unable to read {}: {error}", catalog_path.display());
+            std::process::exit(1);
+        });
+        let catalog = serde_json::from_str(&catalog).unwrap_or_else(|error| {
+            eprintln!("unable to parse {}: {error}", catalog_path.display());
+            std::process::exit(1);
+        });
+        let validation = vexil_release_governance_validator::validate_catalog_schema(
+            &root, &catalog,
+        )
+        .and_then(|()| vexil_release_governance_validator::validate_catalog(&root, &catalog));
+        if let Err(error) = validation {
+            eprintln!("catalog render rejected: {error}");
+            std::process::exit(1);
+        }
+        match vexil_release_governance_validator::render_catalog_markdown(&root, &catalog) {
+            Ok(markdown) => print!("{markdown}"),
+            Err(error) => {
+                eprintln!("catalog render rejected: {error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if let Some(assertion_id) = observe {
         let (provider, path) = match vexil_release_governance_validator::expected_observation_query(
             &root,
@@ -91,6 +131,11 @@ fn main() {
             std::process::exit(1);
         }
     }
+}
+
+fn usage_and_exit() -> ! {
+    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root>");
+    std::process::exit(2);
 }
 
 fn current_utc_timestamp() -> String {

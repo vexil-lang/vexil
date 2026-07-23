@@ -27,6 +27,8 @@ The following are controlled by GitHub or a registry provider and cannot be prov
 
 Provider environment approval is only an execution gate. It never substitutes for the required detached, Manifest-bound Release Steward approval, and the unresolved continuity gate remains a blocker.
 
+The [Release Unit Catalog](./catalog.md) is a source inventory, not provider evidence. A catalog target name or category does not prove registry identity, authorization, publication eligibility, release ordering, or that any unit has been published.
+
 ## No live writes
 
 This repository state intentionally performs no live release, registry, Pages, deployment, protected-branch, tag, credential, or provider-configuration write. Missing, inaccessible, stale, broader-than-expected, or ambiguous provider evidence is `unknown` or `noncompliant` and keeps every release path blocked.

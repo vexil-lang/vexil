@@ -4,9 +4,9 @@ The Go runtime provides BitWriter and BitReader for Vexil-generated Go code.
 
 ## Installation
 
-```sh
-go get github.com/vexil-lang/vexil/packages/runtime-go
-```
+The Go runtime is available for source and development use in this repository. It does not currently have a canonical versioned Go release identity: its required checked-in `packages/runtime-go/VERSION` source is absent. Do not treat the module path as an instruction to fetch a released version.
+
+For the source declaration, blocker, and current release-unit status, see the [Release Unit Catalog](../release/catalog.md).
 
 ## Core types
 

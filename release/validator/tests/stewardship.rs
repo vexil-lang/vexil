@@ -110,6 +110,48 @@ fn read_only_history_collector_preserves_lightweight_and_annotated_identities() 
 }
 
 #[test]
+fn catalog_rejects_detached_owners_stale_source_declarations_and_invalid_publication_states() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let catalog: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog.json")).expect("read canonical catalog"),
+    )
+    .expect("parse canonical catalog");
+    vexil_release_governance_validator::validate_catalog(&root, &catalog)
+        .expect("canonical catalog must be source-grounded");
+
+    let mut detached_owner = catalog.clone();
+    detached_owner["units"][0]["owner"]["assignmentId"] =
+        Value::String("assignment-package-steward-vexil-lang-2026-07-14".into());
+    vexil_release_governance_validator::validate_catalog(&root, &detached_owner)
+        .expect_err("an owner assignment must bind the declared role and source root");
+
+    let mut escaped_version_path = catalog.clone();
+    escaped_version_path["units"][0]["versionSource"]["path"] = Value::String("Cargo.toml".into());
+    vexil_release_governance_validator::validate_catalog(&root, &escaped_version_path)
+        .expect_err("a version path must remain under the unit source root");
+
+    let mut stale_target = catalog.clone();
+    stale_target["units"][6]["targets"][0]["name"] = Value::String("forged-package-name".into());
+    vexil_release_governance_validator::validate_catalog(&root, &stale_target)
+        .expect_err("a catalog target must match its source manifest");
+
+    let mut invalid_publication = catalog.clone();
+    invalid_publication["units"][6]["publication"]["status"] =
+        Value::String("candidate-unreleased".into());
+    vexil_release_governance_validator::validate_catalog(&root, &invalid_publication)
+        .expect_err("classification, target category, and status must be a valid combination");
+
+    let mut escaped_changelog = catalog.clone();
+    escaped_changelog["units"][6]["changelog"]["path"] =
+        Value::String("crates/vexil-runtime/CHANGELOG.md".into());
+    vexil_release_governance_validator::validate_catalog(&root, &escaped_changelog)
+        .expect_err("a changelog path must remain under the unit source root");
+
+    vexil_release_governance_validator::render_catalog_markdown(&root, &stale_target)
+        .expect_err("catalog rendering must reject a semantically invalid catalog");
+}
+
+#[test]
 fn external_control_records_and_workflows_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_external_controls_repository(&root)
@@ -562,6 +604,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     fs::create_dir_all(isolated.join("release/history/repair-proposals")).unwrap();
     fs::create_dir_all(isolated.join("docs/book/src/release")).unwrap();
     fs::create_dir_all(isolated.join(".github/workflows")).unwrap();
+    fs::create_dir_all(isolated.join("packages/runtime-go")).unwrap();
     for relative in [
         "release/stewardship.json",
         "release/schemas/stewardship.schema.json",
@@ -581,6 +624,8 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/history-ledger-entry.schema.json",
         "release/schemas/additive-repair-proposal.schema.json",
         "release/schemas/history-reconciliation-decision.schema.json",
+        "release/schemas/catalog.schema.json",
+        "release/catalog.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
         "release/advisory/automation-contract.json",
@@ -615,6 +660,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "docs/book/src/release/advisory-automation.md",
         "docs/book/src/release/privileged-operations.md",
         "docs/book/src/release/stewardship-exercises.md",
+        "docs/book/src/release/catalog.md",
         "docs/book/src/SUMMARY.md",
         "release/runbooks/advisory-automation.md",
         "release/runbooks/privileged-readiness-and-fail-closed.md",
@@ -625,8 +671,34 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/runbooks/advisory-manual-fallback.md",
         "GOVERNANCE.md",
         ".github/workflows/release.yml",
+        "crates/vexil-lang/Cargo.toml",
+        "crates/vexilc/Cargo.toml",
+        "crates/vexil-runtime/Cargo.toml",
+        "crates/vexil-codegen-rust/Cargo.toml",
+        "crates/vexil-codegen-ts/Cargo.toml",
+        "crates/vexil-codegen-go/Cargo.toml",
+        "crates/vexil-codegen-py/Cargo.toml",
+        "crates/vexil-store/Cargo.toml",
+        "crates/vexil-bench/Cargo.toml",
+        "packages/runtime-ts/package.json",
+        "packages/runtime-py/pyproject.toml",
+        "packages/runtime-go/go.mod",
+        "examples/command-protocol/Cargo.toml",
+        "examples/cross-language/rust-device/Cargo.toml",
+        "examples/multi-file-project/Cargo.toml",
+        "examples/sensor-packet/Cargo.toml",
+        "examples/system-monitor/Cargo.toml",
+        "release/validator/Cargo.toml",
+        "crates/vexil-codegen-go/CHANGELOG.md",
+        "crates/vexil-codegen-rust/CHANGELOG.md",
+        "crates/vexil-codegen-ts/CHANGELOG.md",
+        "crates/vexil-lang/CHANGELOG.md",
+        "crates/vexil-runtime/CHANGELOG.md",
+        "crates/vexil-store/CHANGELOG.md",
+        "crates/vexilc/CHANGELOG.md",
     ] {
         let destination = isolated.join(relative);
+        fs::create_dir_all(destination.parent().unwrap()).unwrap();
         fs::copy(root.join(relative), destination).unwrap();
     }
     vexil_release_governance_validator::validate_repository(&isolated)

@@ -18,15 +18,15 @@ The retired [`.vexilbot.toml`](../../../../.vexilbot.toml) is historical evidenc
 | `RBR-008` | Warn when proposed changes touch RFC-required or wire-format-sensitive paths. | policy | A compatibility-sensitive change can bypass the public RFC and review route. | github:furkanmamuk | owned-fail-closed-procedure |
 | `RBR-009` | Preserve the human-operable knowledge needed when retired automation, CI, or provider state cannot be trusted as authority. | policy | A maintainer may confuse historical automation or green CI with authority and lack a documented manual fallback. | github:furkanmamuk | owned-fail-closed-procedure |
 
-## Manifest comparison
+## Source-unit comparison
 
-Current publishable manifest units are compared with the retired configuration without treating that configuration as authority.
+The source-led [Release Unit Catalog](./catalog.md) determines the maintained-unit inventory, direct version-source observations, and current status. This comparison only records gaps in the retired configuration; it does not make a manifest-bearing component publishable, eligible, ordered, or released.
 
 | Mismatch ID | Unit | Observed historical gap |
 |---|---|---|
-| `RBR-MISMATCH-001` | `crates/vexil-codegen-py` | The workspace manifest declares the publishable vexil-codegen-py crate, but .vexilbot.toml has no release.crates.vexil-codegen-py entry. |
-| `RBR-MISMATCH-002` | `packages/runtime-go` | packages/runtime-go has a Go module manifest, but .vexilbot.toml has no package or dependency-order entry for it. |
-| `RBR-MISMATCH-003` | `packages/runtime-py` | packages/runtime-py has a Python project manifest, but .vexilbot.toml has no package or dependency-order entry for it. |
+| `RBR-MISMATCH-001` | `crates/vexil-codegen-py` | The workspace manifest declares the vexil-codegen-py crate, but .vexilbot.toml has no release.crates.vexil-codegen-py entry. |
+| `RBR-MISMATCH-002` | `packages/runtime-go` | packages/runtime-go has a Go module manifest, but .vexilbot.toml has no package or dependency-order entry; the catalog records its missing checked-in VERSION source as a blocker. |
+| `RBR-MISMATCH-003` | `packages/runtime-py` | packages/runtime-py has a Python project manifest, but .vexilbot.toml has no package or dependency-order entry; the catalog records it as candidate-unreleased rather than published. |
 
 ## Evidence and use
 

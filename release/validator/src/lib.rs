@@ -2,7 +2,7 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const REQUIRED_ROLE_IDS: [&str; 5] = [
@@ -201,7 +201,488 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_stewardship_exercises_repository(root)?;
     validate_external_controls_repository(root)?;
     validate_history_repository(root)?;
+    validate_catalog_repository(root)?;
     validate_public_boundary(root)?;
+    Ok(())
+}
+
+/// Validates the source-led release-unit catalog without consulting providers or
+/// inferring publication from source presence.
+pub fn validate_catalog_repository(root: &Path) -> Result<(), String> {
+    validate_schema_syntax(root)?;
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    validate_catalog_schema(root, &catalog)?;
+    validate_catalog(root, &catalog)?;
+    let documentation = fs::read_to_string(root.join("docs/book/src/release/catalog.md"))
+        .map_err(|error| format!("read release catalog documentation: {error}"))?;
+    validate_catalog_documentation_parity(root, &catalog, &documentation)
+}
+
+pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
+    let catalog = object(catalog, "release catalog")?;
+    let expected_ids = BTreeSet::from([
+        "command-protocol-example",
+        "cross-language-rust-device-example",
+        "multi-file-project-example",
+        "sensor-packet-example",
+        "system-monitor-example",
+        "vexil-bench",
+        "vexil-codegen-go",
+        "vexil-codegen-py",
+        "vexil-codegen-rust",
+        "vexil-codegen-ts",
+        "vexil-lang",
+        "vexil-release-governance-validator",
+        "vexil-runtime",
+        "vexil-runtime-go",
+        "vexil-runtime-py",
+        "vexil-runtime-ts",
+        "vexil-store",
+        "vexilc",
+    ]);
+    let units = array(catalog.get("units"), "release catalog units")?;
+    let mut ids = BTreeSet::new();
+    let mut roots = BTreeSet::new();
+    let mut targets = BTreeSet::new();
+    let mut tag_namespaces = BTreeSet::new();
+    for unit in units {
+        let unit = object(unit, "release catalog unit")?;
+        let id = text(unit.get("id"), "release catalog unit id")?;
+        if !ids.insert(id) {
+            return Err("release catalog unit IDs must be unique".to_owned());
+        }
+        let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+        if !roots.insert(source_root) {
+            return Err("release catalog source roots must be unique".to_owned());
+        }
+        if !root.join(source_root).is_dir() {
+            return Err(format!(
+                "release catalog source root is missing: {source_root}"
+            ));
+        }
+        validate_catalog_owner(root, source_root, unit)?;
+        for target in array(unit.get("targets"), "release catalog targets")? {
+            let target = object(target, "release catalog target")?;
+            let identity = format!(
+                "{}:{}",
+                text(target.get("kind"), "target kind")?,
+                text(target.get("name"), "target name")?
+            );
+            if !targets.insert(identity) {
+                return Err("release catalog targets must be unique by kind and name".to_owned());
+            }
+        }
+        validate_catalog_publication(unit)?;
+        validate_catalog_version_source(root, id, unit)?;
+        validate_catalog_targets(root, unit)?;
+        validate_catalog_changelog(root, unit)?;
+        let namespace = text(unit.get("canonicalTagNamespace"), "catalog tag namespace")?;
+        let status = text(
+            object(required_value(unit, "publication")?, "catalog publication")?.get("status"),
+            "catalog publication status",
+        )?;
+        if status == "non-publishable" {
+            if namespace != "not-applicable" {
+                return Err(
+                    "non-publishable catalog units must declare no canonical tag namespace"
+                        .to_owned(),
+                );
+            }
+        } else {
+            if !tag_namespaces.insert(namespace) {
+                return Err("release catalog canonical tag namespaces must be unique".to_owned());
+            }
+            let expected_namespace = if id.starts_with("vexil-codegen-")
+                || matches!(id, "vexil-lang" | "vexil-runtime" | "vexil-store")
+            {
+                format!("{id}-v<semver>")
+            } else {
+                match id {
+                    "vexil-runtime-go" => "packages/runtime-go/v<semver>".to_owned(),
+                    "vexil-runtime-ts" => "vexil-runtime-ts-v<semver>".to_owned(),
+                    "vexil-runtime-py" => "vexil-runtime-py-v<semver>".to_owned(),
+                    "vexilc" => "vexilc-v<semver>".to_owned(),
+                    _ => {
+                        return Err(format!(
+                            "catalog unit {id} has an unexpected publishable tag namespace"
+                        ))
+                    }
+                }
+            };
+            if namespace != expected_namespace {
+                return Err(format!("catalog unit {id} must use {expected_namespace}"));
+            }
+        }
+    }
+    if ids != expected_ids {
+        return Err("release catalog must enumerate each maintained and non-publishable source unit exactly once".to_owned());
+    }
+    let go = units
+        .iter()
+        .find(|unit| unit["id"] == "vexil-runtime-go")
+        .ok_or("release catalog is missing the Go runtime")?;
+    let go = object(go, "Go runtime catalog unit")?;
+    if text(
+        object(required_value(go, "publication")?, "Go publication")?.get("status"),
+        "Go status",
+    )? != "blocked-missing-version-source"
+        || text(
+            object(required_value(go, "versionSource")?, "Go version source")?.get("path"),
+            "Go version source path",
+        )? != "packages/runtime-go/VERSION"
+        || required_value(
+            object(required_value(go, "versionSource")?, "Go version source")?,
+            "observedDeclaration",
+        )? != &Value::Null
+    {
+        return Err("Go runtime must retain the explicit missing VERSION blocker without an invented version".to_owned());
+    }
+    let python = units
+        .iter()
+        .find(|unit| unit["id"] == "vexil-runtime-py")
+        .ok_or("release catalog is missing the Python runtime")?;
+    if text(
+        object(
+            required_value(
+                object(python, "Python runtime catalog unit")?,
+                "publication",
+            )?,
+            "Python publication",
+        )?
+        .get("status"),
+        "Python status",
+    )? != "candidate-unreleased"
+    {
+        return Err("Python runtime must be cataloged as candidate-unreleased".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_catalog_version_source(
+    root: &Path,
+    id: &str,
+    unit: &Map<String, Value>,
+) -> Result<(), String> {
+    let version = object(
+        required_value(unit, "versionSource")?,
+        "release catalog version source",
+    )?;
+    let path = text(version.get("path"), "release catalog version source path")?;
+    let observed = version.get("observedDeclaration").unwrap_or(&Value::Null);
+    let format = text(
+        version.get("format"),
+        "release catalog version source format",
+    )?;
+    let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+    require_catalog_path_within_source_root(source_root, path, "version source")?;
+    if id == "vexil-runtime-go" {
+        if root.join(path).exists() || format != "required-file-absent" || !observed.is_null() {
+            return Err(
+                "Go runtime version source must remain the absent required VERSION file".to_owned(),
+            );
+        }
+        return Ok(());
+    }
+    let observed = observed
+        .as_str()
+        .ok_or("catalog version declaration must be a string outside the Go blocker")?;
+    let content = fs::read_to_string(root.join(path))
+        .map_err(|error| format!("read catalog version source {path}: {error}"))?;
+    let declaration = version_declaration_from_source(&content, format)?;
+    if declaration != observed {
+        return Err(format!(
+            "catalog observed declaration is stale or absent: {path}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_catalog_changelog(root: &Path, unit: &Map<String, Value>) -> Result<(), String> {
+    let changelog = object(
+        required_value(unit, "changelog")?,
+        "release catalog changelog",
+    )?;
+    match text(changelog.get("status"), "release catalog changelog status")? {
+        "present" => {
+            let path = changelog
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or("present catalog changelog requires a path")?;
+            require_catalog_path_within_source_root(
+                text(unit.get("sourceRoot"), "release catalog source root")?,
+                path,
+                "changelog",
+            )?;
+            if !root.join(path).is_file() {
+                return Err(format!("catalog changelog is missing: {path}"));
+            }
+        }
+        "absent" | "not-applicable" if changelog.get("path") == Some(&Value::Null) => {}
+        _ => return Err("catalog changelog status and path must agree".to_owned()),
+    }
+    Ok(())
+}
+
+fn validate_catalog_owner(
+    root: &Path,
+    source_root: &str,
+    unit: &Map<String, Value>,
+) -> Result<(), String> {
+    let owner = object(required_value(unit, "owner")?, "catalog owner")?;
+    let role_id = text(owner.get("roleId"), "catalog owner role")?;
+    let assignment_id = text(owner.get("assignmentId"), "catalog owner assignment")?;
+    let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
+    let assignments = array(assignments.get("assignments"), "stewardship assignments")?;
+    let assignment = assignments
+        .iter()
+        .find(|assignment| {
+            assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id)
+        })
+        .ok_or_else(|| format!("catalog owner assignment is unknown: {assignment_id}"))?;
+    let assignment = object(assignment, "catalog owner assignment")?;
+    if text(assignment.get("roleId"), "assignment role")? != role_id
+        || text(assignment.get("status"), "assignment status")? != "active"
+    {
+        return Err(format!(
+            "catalog owner assignment does not bind active role {role_id}"
+        ));
+    }
+    let scope = object(required_value(assignment, "scope")?, "catalog owner scope")?;
+    let scope_root = text(scope.get("root"), "catalog owner scope root")?;
+    match role_id {
+        "package-steward"
+            if scope.get("kind").and_then(Value::as_str) == Some("maintained-root")
+                && scope_root == source_root =>
+        {
+            Ok(())
+        }
+        "repository-administrator"
+            if scope.get("kind").and_then(Value::as_str) == Some("repository")
+                && scope_root == "." =>
+        {
+            Ok(())
+        }
+        _ => Err(format!(
+            "catalog owner assignment {assignment_id} does not cover source root {source_root}"
+        )),
+    }
+}
+
+fn validate_catalog_publication(unit: &Map<String, Value>) -> Result<(), String> {
+    let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+    let classification = text(publication.get("classification"), "catalog classification")?;
+    let category = text(publication.get("targetCategory"), "catalog target category")?;
+    let status = text(publication.get("status"), "catalog publication status")?;
+    let expected = match classification {
+        "publishable-source-unit" => ("future-registry-target", "source-inventory-only"),
+        "candidate-unreleased" => ("future-registry-target", "candidate-unreleased"),
+        "blocked-version-source" => ("source-only-module", "blocked-missing-version-source"),
+        "non-publishable" => ("non-release", "non-publishable"),
+        _ => return Err("catalog publication classification is invalid".to_owned()),
+    };
+    if (category, status) != expected {
+        return Err(format!(
+            "catalog publication classification {classification} requires {} / {}",
+            expected.0, expected.1
+        ));
+    }
+    Ok(())
+}
+
+fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<(), String> {
+    let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+    let version = object(
+        required_value(unit, "versionSource")?,
+        "catalog version source",
+    )?;
+    let version_path = text(version.get("path"), "catalog version source path")?;
+    let format = text(version.get("format"), "catalog version source format")?;
+    let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+    let classification = text(publication.get("classification"), "catalog classification")?;
+    let content = if format == "required-file-absent" {
+        None
+    } else {
+        Some(
+            fs::read_to_string(root.join(version_path))
+                .map_err(|error| format!("read catalog target manifest {version_path}: {error}"))?,
+        )
+    };
+    for target in array(unit.get("targets"), "release catalog targets")? {
+        let target = object(target, "release catalog target")?;
+        let kind = text(target.get("kind"), "catalog target kind")?;
+        let name = text(target.get("name"), "catalog target name")?;
+        let expected_name = match kind {
+            "cargo-package" | "cargo-binary" | "internal-tool" | "example" => {
+                if format != "cargo-package-version" {
+                    return Err(format!(
+                        "catalog target {kind} must use a Cargo package manifest"
+                    ));
+                }
+                cargo_package_name(content.as_deref().unwrap())?
+            }
+            "npm-package" => {
+                if format != "package-json-version" {
+                    return Err("catalog npm target must use package.json".to_owned());
+                }
+                json_manifest_field(content.as_deref().unwrap(), "name")?
+            }
+            "python-project" => {
+                if format != "pyproject-project-version" {
+                    return Err("catalog Python target must use pyproject.toml".to_owned());
+                }
+                toml_string_in_section(content.as_deref().unwrap(), "project", "name")?
+            }
+            "go-module" => {
+                if format != "required-file-absent" || classification != "blocked-version-source" {
+                    return Err(
+                        "catalog Go target must retain the explicit missing-version blocker"
+                            .to_owned(),
+                    );
+                }
+                let go_mod = root.join(source_root).join("go.mod");
+                let go_mod = fs::read_to_string(&go_mod).map_err(|error| {
+                    format!("read Go module manifest {}: {error}", go_mod.display())
+                })?;
+                go_mod
+                    .lines()
+                    .find_map(|line| line.strip_prefix("module "))
+                    .map(str::trim)
+                    .filter(|module| !module.is_empty())
+                    .ok_or("Go module manifest has no module declaration")?
+                    .to_owned()
+            }
+            _ => return Err(format!("catalog target kind is unsupported: {kind}")),
+        };
+        if name != expected_name {
+            return Err(format!(
+                "catalog target name {name} does not match its source declaration {expected_name}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn require_catalog_path_within_source_root(
+    source_root: &str,
+    path: &str,
+    label: &str,
+) -> Result<(), String> {
+    let path = Path::new(path);
+    if path.is_absolute()
+        || path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+        || !path.starts_with(Path::new(source_root))
+        || path == Path::new(source_root)
+    {
+        return Err(format!(
+            "catalog {label} path must remain within source root {source_root}"
+        ));
+    }
+    Ok(())
+}
+
+fn version_declaration_from_source(content: &str, format: &str) -> Result<String, String> {
+    match format {
+        "cargo-package-version" => toml_string_in_section(content, "package", "version"),
+        "pyproject-project-version" => toml_string_in_section(content, "project", "version"),
+        "package-json-version" => json_manifest_field(content, "version"),
+        _ => Err("catalog version source format is invalid for a present source".to_owned()),
+    }
+}
+
+fn cargo_package_name(content: &str) -> Result<String, String> {
+    toml_string_in_section(content, "package", "name")
+}
+
+fn toml_string_in_section(content: &str, section: &str, field: &str) -> Result<String, String> {
+    let mut current_section = None;
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            current_section = Some(&line[1..line.len() - 1]);
+            continue;
+        }
+        if current_section == Some(section) {
+            if let Some((key, value)) = line.split_once('=') {
+                if key.trim() == field {
+                    return serde_json::from_str::<String>(value.trim())
+                        .map_err(|_| format!("source {section}.{field} must be a quoted string"));
+                }
+            }
+        }
+    }
+    Err(format!("source manifest is missing {section}.{field}"))
+}
+
+fn json_manifest_field(content: &str, field: &str) -> Result<String, String> {
+    serde_json::from_str::<Value>(content)
+        .map_err(|error| format!("parse package.json: {error}"))?
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("package.json is missing string {field}"))
+}
+
+pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, String> {
+    validate_catalog_schema(root, catalog)?;
+    validate_catalog(root, catalog)?;
+    let catalog = object(catalog, "release catalog")?;
+    let mut markdown = String::from("# Release Unit Catalog\n\n> Generated view of [`release/catalog.json`](../../../../release/catalog.json). The JSON catalog is canonical; this Markdown is non-authoritative and parity-checked.\n\nThis is a source-led inventory, not a Release Manifest, publication assertion, provider-identity claim, release-order decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md).\n\n## Units\n\n| Unit | Source root | Targets | Status | Source version observation | Canonical tag policy |\n|---|---|---|---|---|---|\n");
+    for unit in array(catalog.get("units"), "release catalog units")? {
+        let unit = object(unit, "release catalog unit")?;
+        let version = object(
+            required_value(unit, "versionSource")?,
+            "catalog version source",
+        )?;
+        let targets = array(unit.get("targets"), "catalog targets")?
+            .iter()
+            .map(|target| {
+                let target = object(target, "catalog target")?;
+                Ok(format!(
+                    "{} `{}`",
+                    text(target.get("kind"), "target kind")?,
+                    text(target.get("name"), "target name")?
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?
+            .join("; ");
+        let observed = version
+            .get("observedDeclaration")
+            .and_then(Value::as_str)
+            .unwrap_or("none (required file absent)");
+        let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+        markdown.push_str(&format!(
+            "| `{}` | `{}` | {} | `{}` | `{}` in `{}` | `{}` |\n",
+            text(unit.get("id"), "unit id")?,
+            text(unit.get("sourceRoot"), "source root")?,
+            targets,
+            text(publication.get("status"), "publication status")?,
+            observed,
+            text(version.get("path"), "version path")?,
+            match text(unit.get("canonicalTagNamespace"), "tag namespace")? {
+                "not-applicable" => "not applicable (non-publishable)",
+                namespace => namespace,
+            }
+        ));
+    }
+    markdown.push_str("\n## Boundary and validation\n\n`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. `blocked-missing-version-source` means the Go module has no checked-in `VERSION` source; its `go.mod` module path is not a version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.\n\nDependency-edge entries are provisional until the typed graph is established. A catalog entry or target category never establishes authorization, registry identity, publication eligibility, release ordering, or Release Set membership. Root project-wide `v<semver>` tags remain prohibited during recovery.\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe offline command validates source paths, direct declaration observations, unique unit identities, the Go blocker, and byte-exact generated-view parity. It performs no provider query or release effect.\n");
+    Ok(markdown)
+}
+
+pub fn validate_catalog_documentation_parity(
+    root: &Path,
+    catalog: &Value,
+    documentation: &str,
+) -> Result<(), String> {
+    if documentation != render_catalog_markdown(root, catalog)? {
+        return Err(
+            "documentation parity failure: docs/book/src/release/catalog.md is stale".to_owned(),
+        );
+    }
     Ok(())
 }
 
@@ -2698,7 +3179,7 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
             "retiredConfigurationSource",
             "nonAuthorityStatement",
             "retiredConfiguredUnits",
-            "publishableManifestUnits",
+            "catalogedSourceUnits",
             "mismatches",
         ],
         "manifest comparison",
@@ -2715,11 +3196,11 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
         );
     }
     let manifests = strings(
-        comparison.get("publishableManifestUnits"),
-        "publishable manifests",
+        comparison.get("catalogedSourceUnits"),
+        "cataloged source units",
     )?;
     if !manifests.contains(&"crates/vexil-codegen-py") {
-        return Err("publishable manifest coverage is missing crates/vexil-codegen-py".to_owned());
+        return Err("cataloged source-unit coverage is missing crates/vexil-codegen-py".to_owned());
     }
     let mismatches = array(comparison.get("mismatches"), "manifest mismatches")?;
     if !mismatches.iter().any(|mismatch| {
@@ -3942,7 +4423,7 @@ pub fn render_responsibility_markdown(record: &Value) -> Result<String, String> 
             )?,
         ));
     }
-    markdown.push_str("\n## Manifest comparison\n\nCurrent publishable manifest units are compared with the retired configuration without treating that configuration as authority.\n\n| Mismatch ID | Unit | Observed historical gap |\n|---|---|---|\n");
+    markdown.push_str("\n## Source-unit comparison\n\nThe source-led [Release Unit Catalog](./catalog.md) determines the maintained-unit inventory, direct version-source observations, and current status. This comparison only records gaps in the retired configuration; it does not make a manifest-bearing component publishable, eligible, ordered, or released.\n\n| Mismatch ID | Unit | Observed historical gap |\n|---|---|---|\n");
     for mismatch in array(comparison.get("mismatches"), "manifest mismatches")? {
         let mismatch = object(mismatch, "manifest mismatch")?;
         markdown.push_str(&format!(
@@ -4068,11 +4549,27 @@ pub fn validate_advisory_runbook_parity(
 
 pub fn render_privileged_runbook_markdown(
     operations: &Value,
+    responsibilities: &Value,
+) -> Result<String, String> {
+    let mut markdown = String::from("# Privileged Readiness and Fail-Closed Procedures\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n");
+    markdown.push_str(&render_privileged_operations_body(
+        operations,
+        responsibilities,
+        "Release Unit Catalog",
+        "[GOVERNANCE.md](../../GOVERNANCE.md)",
+    )?);
+    Ok(markdown)
+}
+
+fn render_privileged_operations_body(
+    operations: &Value,
     _responsibilities: &Value,
+    catalog_reference: &str,
+    governance_reference: &str,
 ) -> Result<String, String> {
     let root = object(operations, "privileged operations contract")?;
     let rows = array(root.get("operations"), "privileged operations")?;
-    let mut markdown = String::from("# Privileged Readiness and Fail-Closed Procedures\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n## Non-authority rule\n\nHistorical bot configuration, historical behavior, green CI, tags, provider approval settings, CODEOWNERS, and private process artifacts are not release authority. Dependency ordering and release preparation must use a current Manifest and typed Release Unit Catalog edges when those later controls exist; until then this runbook remains a visible blocking procedure.\n\n## Universal pre-effect gate\n\nNo tag, GitHub release, package, deployment, environment, protected-branch, or credential effect is permitted unless an exact approved Manifest digest, verified Release Steward approval bound to that digest, target-specific protected identity, verified external controls, and immutable candidate inputs all exist and match. Absence, uncertainty, staleness, or mismatch stops before the first effect and produces no effect event or external effect.\n\nAdvisory stages receive no privileged environment or credential. A separately scoped privileged stage may consume only approved immutable inputs after every required gate is verified. Broad or long-lived personal access tokens are rejected. Supported targets require OIDC or provider trusted publishing; a different route would require a separately approved, target-scoped, expiring, revocable, and auditable bootstrap exception.\n\n## Current owned blocking procedures\n\n| ID | Responsibility | Owner assertion | Target | Minimum permissions | Visible blockers | Fallback |\n|---|---|---|---|---|---|---|\n");
+    let mut markdown = format!("## Non-authority rule\n\nHistorical bot configuration, historical behavior, green CI, tags, provider approval settings, CODEOWNERS, and private process artifacts are not release authority. The {catalog_reference} inventories source units and provisional typed edges, but its target categories and entries do not establish authorization, publication eligibility, release ordering, or Manifest membership. Dependency ordering and release preparation must use a current Manifest and typed Release Unit Catalog edges when those later controls exist; until then this runbook remains a visible blocking procedure.\n\n## Universal pre-effect gate\n\nNo tag, GitHub release, package, deployment, environment, protected-branch, or credential effect is permitted unless an exact approved Manifest digest, verified Release Steward approval bound to that digest, target-specific protected identity, verified external controls, and immutable candidate inputs all exist and match. Absence, uncertainty, staleness, or mismatch stops before the first effect and produces no effect event or external effect.\n\nAdvisory stages receive no privileged environment or credential. A separately scoped privileged stage may consume only approved immutable inputs after every required gate is verified. Broad or long-lived personal access tokens are rejected. Supported targets require OIDC or provider trusted publishing; a different route would require a separately approved, target-scoped, expiring, revocable, and auditable bootstrap exception.\n\n## Current owned blocking procedures\n\n| ID | Responsibility | Owner assertion | Target | Minimum permissions | Visible blockers | Fallback |\n|---|---|---|---|---|---|---|\n");
     for operation in rows {
         let operation = object(operation, "privileged operation")?;
         markdown.push_str(&format!(
@@ -4105,7 +4602,7 @@ pub fn render_privileged_runbook_markdown(
             text(operation.get("fallback"), "fallback")?,
         ));
     }
-    markdown.push_str("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization and candidate evidence, and the unresolved continuity gate remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow [GOVERNANCE.md](../../GOVERNANCE.md); this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n");
+    markdown.push_str(&format!("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization and candidate evidence, and the unresolved continuity gate remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow {governance_reference}; this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n"));
     Ok(markdown)
 }
 
@@ -4113,15 +4610,13 @@ pub fn render_privileged_mdbook_markdown(
     operations: &Value,
     responsibilities: &Value,
 ) -> Result<String, String> {
-    let mut markdown = String::from("# Privileged and Policy Operations\n\n> Generated public view of the fail-closed privileged operations contract. The canonical record is [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json); this Markdown is parity-checked and non-authoritative.\n\n");
-    let runbook = render_privileged_runbook_markdown(operations, responsibilities)?
-        .replace("# Privileged Readiness and Fail-Closed Procedures\n\n", "")
-        .replace(
-            "](../privileged/operations-contract.json)",
-            "](../../../../release/privileged/operations-contract.json)",
-        )
-        .replace("](../../GOVERNANCE.md)", "](../../../../GOVERNANCE.md)");
-    markdown.push_str(&runbook);
+    let mut markdown = String::from("# Privileged and Policy Operations\n\n> Generated public view of the fail-closed privileged operations contract. The canonical record is [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json); this Markdown is parity-checked and non-authoritative.\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n");
+    markdown.push_str(&render_privileged_operations_body(
+        operations,
+        responsibilities,
+        "[Release Unit Catalog](./catalog.md)",
+        "[GOVERNANCE.md](../../../../GOVERNANCE.md)",
+    )?);
     Ok(markdown)
 }
 
@@ -4602,6 +5097,15 @@ pub fn validate_history_reconciliation_decision_schema(
     )
 }
 
+pub fn validate_catalog_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/catalog.schema.json",
+        record,
+        "release catalog",
+    )
+}
+
 fn validate_schema_instance(
     root: &Path,
     schema_relative: &str,
@@ -4686,6 +5190,10 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
         (
             "release/schemas/history-reconciliation-decision.schema.json",
             "https://vexil.dev/release/schemas/history-reconciliation-decision.schema.json",
+        ),
+        (
+            "release/schemas/catalog.schema.json",
+            "https://vexil.dev/release/schemas/catalog.schema.json",
         ),
     ] {
         let schema_value = read_json(&root.join(relative))?;
