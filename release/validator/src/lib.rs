@@ -344,9 +344,14 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
 }
 
 fn expected_catalog_source_roots(root: &Path) -> Result<BTreeSet<String>, String> {
-    let workspace = parse_toml(&fs::read_to_string(root.join("Cargo.toml")).map_err(|error| {
-        format!("read workspace manifest {}: {error}", root.join("Cargo.toml").display())
-    })?)?;
+    let workspace = parse_toml(
+        &fs::read_to_string(root.join("Cargo.toml")).map_err(|error| {
+            format!(
+                "read workspace manifest {}: {error}",
+                root.join("Cargo.toml").display()
+            )
+        })?,
+    )?;
     let workspace = workspace
         .get("workspace")
         .and_then(TomlValue::as_table)
@@ -362,7 +367,9 @@ fn expected_catalog_source_roots(root: &Path) -> Result<BTreeSet<String>, String
                 .as_str()
                 .ok_or_else(|| format!("workspace.{field} must contain strings"))?;
             if !root.join(entry).join("Cargo.toml").is_file() {
-                return Err(format!("workspace.{field} source root is missing Cargo.toml: {entry}"));
+                return Err(format!(
+                    "workspace.{field} source root is missing Cargo.toml: {entry}"
+                ));
             }
             roots.insert(entry.to_owned());
         }
@@ -411,9 +418,14 @@ fn expected_catalog_kind(root: &Path, source_root: &str) -> Result<&'static str,
     if source_root == "release/validator" {
         return Ok("non-publishable-package");
     }
-    let workspace = parse_toml(&fs::read_to_string(root.join("Cargo.toml")).map_err(|error| {
-        format!("read workspace manifest {}: {error}", root.join("Cargo.toml").display())
-    })?)?;
+    let workspace = parse_toml(
+        &fs::read_to_string(root.join("Cargo.toml")).map_err(|error| {
+            format!(
+                "read workspace manifest {}: {error}",
+                root.join("Cargo.toml").display()
+            )
+        })?,
+    )?;
     let workspace = workspace
         .get("workspace")
         .and_then(TomlValue::as_table)
@@ -432,7 +444,9 @@ fn expected_catalog_kind(root: &Path, source_root: &str) -> Result<&'static str,
     } else if package_root.join("go.mod").is_file() {
         Ok("go-module")
     } else {
-        Err(format!("catalog source root has no recognized source declaration: {source_root}"))
+        Err(format!(
+            "catalog source root has no recognized source declaration: {source_root}"
+        ))
     }
 }
 
@@ -494,17 +508,15 @@ fn validate_catalog_changelog(root: &Path, unit: &Map<String, Value>) -> Result<
     match text(changelog.get("status"), "release catalog changelog status")? {
         "present" => {
             if unit_kind == "non-publishable-package" {
-                return Err("non-publishable catalog units must mark changelog not-applicable".to_owned());
+                return Err(
+                    "non-publishable catalog units must mark changelog not-applicable".to_owned(),
+                );
             }
             let path = changelog
                 .get("path")
                 .and_then(Value::as_str)
                 .ok_or("present catalog changelog requires a path")?;
-            require_catalog_path_within_source_root(
-                source_root,
-                path,
-                "changelog",
-            )?;
+            require_catalog_path_within_source_root(source_root, path, "changelog")?;
             if !root.join(path).is_file() {
                 return Err(format!("catalog changelog is missing: {path}"));
             }
@@ -514,7 +526,9 @@ fn validate_catalog_changelog(root: &Path, unit: &Map<String, Value>) -> Result<
         }
         "absent" if changelog.get("path") == Some(&Value::Null) => {
             if unit_kind == "non-publishable-package" {
-                return Err("non-publishable catalog units must mark changelog not-applicable".to_owned());
+                return Err(
+                    "non-publishable catalog units must mark changelog not-applicable".to_owned(),
+                );
             }
             if conventional_changelog.is_file() {
                 return Err(format!(
@@ -525,7 +539,9 @@ fn validate_catalog_changelog(root: &Path, unit: &Map<String, Value>) -> Result<
         }
         "not-applicable" if changelog.get("path") == Some(&Value::Null) => {
             if unit_kind != "non-publishable-package" {
-                return Err("publishable catalog units must state changelog present or absent".to_owned());
+                return Err(
+                    "publishable catalog units must state changelog present or absent".to_owned(),
+                );
             }
         }
         _ => return Err("catalog changelog status and path must agree".to_owned()),
@@ -632,9 +648,12 @@ fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<()
             }
             "cargo-binary" => {
                 if format != "cargo-package-version" {
-                    return Err("catalog cargo-binary target must use a Cargo package manifest".to_owned());
+                    return Err(
+                        "catalog cargo-binary target must use a Cargo package manifest".to_owned(),
+                    );
                 }
-                cargo_binary_names(content.as_deref().unwrap(), &root.join(source_root))?.contains(name)
+                cargo_binary_names(content.as_deref().unwrap(), &root.join(source_root))?
+                    .contains(name)
             }
             "npm-package" => {
                 if format != "package-json-version" {
@@ -664,7 +683,9 @@ fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<()
             _ => return Err(format!("catalog target kind is unsupported: {kind}")),
         };
         if !matches_source {
-            return Err(format!("catalog target name {name} does not match its source declaration"));
+            return Err(format!(
+                "catalog target name {name} does not match its source declaration"
+            ));
         }
     }
     Ok(())
@@ -2935,7 +2956,9 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
                 || !reason_lower.contains("external controls")
                 || !reason_lower.contains("registry")))
     {
-        return Err("publication readiness must state the actual remaining fail-closed gates".to_owned());
+        return Err(
+            "publication readiness must state the actual remaining fail-closed gates".to_owned(),
+        );
     }
 
     let runbooks = array(root.get("futureRunbooks"), "future runbooks")?;
@@ -3513,7 +3536,10 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
 
 fn validate_catalog_comparison(root: &Path, record: &Value) -> Result<(), String> {
     let comparison = object(
-        required_value(object(record, "responsibility inventory")?, "manifestComparison")?,
+        required_value(
+            object(record, "responsibility inventory")?,
+            "manifestComparison",
+        )?,
         "manifest comparison",
     )?;
     let actual: BTreeSet<_> = strings(
@@ -3522,7 +3548,10 @@ fn validate_catalog_comparison(root: &Path, record: &Value) -> Result<(), String
     )?
     .into_iter()
     .collect();
-    let declared = array(comparison.get("catalogedSourceUnits"), "cataloged source units")?;
+    let declared = array(
+        comparison.get("catalogedSourceUnits"),
+        "cataloged source units",
+    )?;
     if actual.len() != declared.len() {
         return Err("cataloged source units must not contain duplicates".to_owned());
     }
@@ -4906,7 +4935,8 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
         ));
     }
     markdown.push_str("\nEach row is an independently auditable role assertion. Combining these assignments does not union permissions: every action remains constrained by the explicit role assertion in the [Stewardship Authority Model](./stewardship.md).\n\n");
-    let sole_maintainer = text(decision.get("status"), "decision status")? == "sole-maintainer-governance";
+    let sole_maintainer =
+        text(decision.get("status"), "decision status")? == "sole-maintainer-governance";
     markdown.push_str(if sole_maintainer {
         "## Sole-maintainer policy\n\n"
     } else {
