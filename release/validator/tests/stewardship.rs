@@ -10,6 +10,106 @@ fn canonical_contract_and_all_fixtures_have_the_expected_result() {
 }
 
 #[test]
+fn historical_tag_baseline_and_additive_repair_guards_fail_closed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut baseline = serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://vexil.dev/release/history/baseline-tags.json",
+        "version": "1.0",
+        "recordKind": "historical-tag-baseline",
+        "status": "ratified",
+        "remote": {"name": "origin", "url": "https://github.com/vexil-lang/vexil.git", "query": "git ls-remote --tags"},
+        "observedAt": "2026-07-23T00:00:00Z",
+        "baselineDigest": null,
+        "tags": [{"name": "v0.2.0", "kind": "annotated", "refTarget": "1111111111111111111111111111111111111111", "annotatedTag": "2222222222222222222222222222222222222222", "peeledCommit": "3333333333333333333333333333333333333333"}],
+        "ratificationIds": ["history-ratification-steward", "history-ratification-admin"]
+    });
+    let digest = vexil_release_governance_validator::history_baseline_digest(
+        baseline.as_object().expect("fixture baseline object"),
+    )
+    .expect("fixture baseline digest");
+    baseline["baselineDigest"] = Value::String(digest);
+    vexil_release_governance_validator::validate_history_baseline_schema(&root, &baseline)
+        .expect("ratified fixture baseline schema must validate");
+    vexil_release_governance_validator::validate_history_baseline(&baseline)
+        .expect("ratified fixture baseline must retain complete identities");
+    let snapshot = serde_json::json!({"tags": baseline["tags"].clone()});
+    vexil_release_governance_validator::validate_history_tag_snapshot(&baseline, &snapshot)
+        .expect("matching snapshot must preserve every baseline identity");
+    baseline["tags"][0]["peeledCommit"] =
+        Value::String("4444444444444444444444444444444444444444".into());
+    vexil_release_governance_validator::validate_history_tag_snapshot(&baseline, &snapshot)
+        .expect_err("moved tag identity must fail closed before a repair");
+
+    let policy: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/history/additive-repair-policy.json")).unwrap(),
+    )
+    .unwrap();
+    let proposal = serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://vexil.dev/release/history/repair-proposals/forbidden-tag-move.json",
+        "version": "1.0", "recordKind": "additive-repair-proposal", "proposalId": "forbidden-tag-move", "status": "proposed",
+        "anomaly": "fixture", "affectedConsumers": ["fixture consumer"], "correctionSurface": "documentation", "newIdentifier": null,
+        "approval": null, "evidenceReferences": ["fixture"], "proposedActions": ["move-tag"]
+    });
+    vexil_release_governance_validator::validate_additive_repair_proposal_schema(&root, &proposal)
+        .expect("destructive proposal remains schema-visible for preflight rejection");
+    vexil_release_governance_validator::validate_additive_repair_preflight(
+        &snapshot, &policy, &proposal,
+    )
+    .expect_err("tag move must be rejected before any remote operation");
+}
+
+#[test]
+fn history_schemas_preserve_unknown_evidence_and_root_tag_prohibition() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let unknown = serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://vexil.dev/release/history/observations/registry-unavailable.json",
+        "version": "1.0", "recordKind": "release-history-observation", "observationId": "registry-unavailable",
+        "contentId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sourceId": "pypi", "query": "GET PyPI project metadata", "state": "unavailable",
+        "observedAt": "2026-07-23T00:00:00Z", "collectorVersion": "fixture", "claim": {}, "failureEvidence": "network unavailable"
+    });
+    vexil_release_governance_validator::validate_history_observation_schema(&root, &unknown)
+        .expect("unavailable evidence must remain a valid, distinct observation");
+    let mut decision: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/history/reconciliation-decision.json")).unwrap(),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_history_reconciliation_decision_schema(
+        &root, &decision,
+    )
+    .expect("pending reconciliation decision schema must validate");
+    decision["rootTagPolicy"] = Value::String("allowed".into());
+    vexil_release_governance_validator::validate_history_reconciliation_decision_schema(
+        &root, &decision,
+    )
+    .expect_err("a project-wide root tag policy must be rejected");
+}
+
+#[test]
+fn read_only_history_collector_preserves_lightweight_and_annotated_identities() {
+    let output = concat!(
+        "1111111111111111111111111111111111111111\trefs/tags/lightweight\n",
+        "2222222222222222222222222222222222222222\trefs/tags/annotated\n",
+        "3333333333333333333333333333333333333333\trefs/tags/annotated^{}\n"
+    );
+    let collection = vexil_release_governance_validator::parse_history_tag_collection(
+        "https://example.invalid/vexil.git",
+        output,
+        "2026-07-23T00:00:00Z",
+    )
+    .expect("read-only collector fixture must parse");
+    assert_eq!(collection["tags"][0]["kind"], "annotated");
+    assert_eq!(
+        collection["tags"][0]["peeledCommit"],
+        "3333333333333333333333333333333333333333"
+    );
+    assert_eq!(collection["tags"][1]["kind"], "lightweight");
+}
+
+#[test]
 fn external_control_records_and_workflows_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_external_controls_repository(&root)
@@ -456,6 +556,10 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     fs::create_dir_all(isolated.join("release/exercises")).unwrap();
     fs::create_dir_all(isolated.join("release/controls/observations")).unwrap();
     fs::create_dir_all(isolated.join("release/identities")).unwrap();
+    fs::create_dir_all(isolated.join("release/history/ratifications")).unwrap();
+    fs::create_dir_all(isolated.join("release/history/observations")).unwrap();
+    fs::create_dir_all(isolated.join("release/history/entries")).unwrap();
+    fs::create_dir_all(isolated.join("release/history/repair-proposals")).unwrap();
     fs::create_dir_all(isolated.join("docs/book/src/release")).unwrap();
     fs::create_dir_all(isolated.join(".github/workflows")).unwrap();
     for relative in [
@@ -470,6 +574,13 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/external-remediation.schema.json",
         "release/schemas/identity-custody.schema.json",
         "release/schemas/revocation-exercise.schema.json",
+        "release/schemas/history-baseline.schema.json",
+        "release/schemas/history-ratification.schema.json",
+        "release/schemas/history-observation-sources.schema.json",
+        "release/schemas/history-observation.schema.json",
+        "release/schemas/history-ledger-entry.schema.json",
+        "release/schemas/additive-repair-proposal.schema.json",
+        "release/schemas/history-reconciliation-decision.schema.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
         "release/advisory/automation-contract.json",
@@ -481,6 +592,15 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/controls/observations/baseline-2026-07-13.json",
         "release/controls/remediation-plan-github-protections.json",
         "release/identities/custody.json",
+        "release/history/baseline-tags.json",
+        "release/history/ratifications/history-ratification-release-steward-2026-07-23.json",
+        "release/history/ratifications/history-ratification-repository-administrator-2026-07-23.json",
+        "release/history/observations/observation-root-changelog-v1-0-0-2026-07-23.json",
+        "release/history/entries/entry-root-v1-0-0-changelog-anomaly-2026-07-23.json",
+        "release/history/observation-sources.json",
+        "release/history/additive-repair-policy.json",
+        "release/history/reconciliation-decision.json",
+        "release/history/ledger.md",
         "docs/book/src/release/stewardship.md",
         "docs/book/src/release/stewardship-continuity.md",
         "docs/book/src/release/retired-bot-responsibilities.md",

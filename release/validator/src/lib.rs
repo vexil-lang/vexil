@@ -1,4 +1,5 @@
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
@@ -199,8 +200,605 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_privileged_operations_repository(root)?;
     validate_stewardship_exercises_repository(root)?;
     validate_external_controls_repository(root)?;
+    validate_history_repository(root)?;
     validate_public_boundary(root)?;
     Ok(())
+}
+
+/// Validates the append-only release-history surface offline.  It never contacts a
+/// provider: callers that obtain a remote snapshot must do so through their own
+/// explicit read-only collector and submit the resulting JSON for validation.
+pub fn validate_history_repository(root: &Path) -> Result<(), String> {
+    validate_schema_syntax(root)?;
+    let history = root.join("release/history");
+    let baseline = read_json(&history.join("baseline-tags.json"))?;
+    validate_history_baseline_schema(root, &baseline)?;
+    validate_history_baseline(&baseline)?;
+    let ratifications = read_history_records(root, "ratifications")?;
+    let baseline_object = object(&baseline, "history baseline")?;
+    let baseline_status = text(baseline_object.get("status"), "history baseline status")?;
+    if baseline_status == "ratified" {
+        let digest = text(
+            baseline_object.get("baselineDigest"),
+            "history baseline digest",
+        )?;
+        let expected_ids: BTreeSet<&str> = array(
+            baseline_object.get("ratificationIds"),
+            "history ratification ids",
+        )?
+        .iter()
+        .map(|value| text(Some(value), "history ratification id"))
+        .collect::<Result<_, _>>()?;
+        let mut roles = BTreeSet::new();
+        let mut found_ids = BTreeSet::new();
+        for ratification in &ratifications {
+            validate_history_ratification_schema(root, ratification)?;
+            let ratification = object(ratification, "history ratification")?;
+            let id = text(
+                ratification.get("ratificationId"),
+                "history ratification id",
+            )?;
+            found_ids.insert(id);
+            roles.insert(text(
+                ratification.get("roleId"),
+                "history ratification role",
+            )?);
+            if text(
+                ratification.get("baselineDigest"),
+                "ratification baseline digest",
+            )? != digest
+            {
+                return Err(
+                    "history ratification is not bound to the exact baseline digest".to_owned(),
+                );
+            }
+            if text(
+                ratification.get("observationScope"),
+                "ratification observation scope",
+            )? != history_baseline_observation_scope(baseline_object)?
+            {
+                return Err(
+                    "history ratification is not bound to the baseline observation scope"
+                        .to_owned(),
+                );
+            }
+        }
+        if roles != BTreeSet::from(["release-steward", "repository-administrator"])
+            || found_ids != expected_ids
+        {
+            return Err("a ratified history baseline requires exactly the Release Steward and Repository Administrator assertions".to_owned());
+        }
+    } else if !ratifications.is_empty() {
+        return Err(
+            "unratified history baseline must not retain ratification assertions".to_owned(),
+        );
+    }
+
+    let sources = read_json(&history.join("observation-sources.json"))?;
+    validate_history_observation_sources_schema(root, &sources)?;
+    let source_ids: BTreeSet<String> = array(
+        object(&sources, "history observation source inventory")?.get("sources"),
+        "history observation sources",
+    )?
+    .iter()
+    .map(|source| {
+        text(
+            object(source, "history observation source")?.get("id"),
+            "source id",
+        )
+        .map(str::to_owned)
+    })
+    .collect::<Result<_, _>>()?;
+
+    let observations = read_history_records(root, "observations")?;
+    let mut observation_ids = BTreeSet::new();
+    let mut content_by_id = BTreeMap::new();
+    for observation in &observations {
+        validate_history_observation_schema(root, observation)?;
+        let value = object(observation, "history observation")?;
+        let observation_id = text(value.get("observationId"), "history observation id")?;
+        if !observation_ids.insert(observation_id.to_owned()) {
+            return Err("history observation identifiers must be unique".to_owned());
+        }
+        if !source_ids.contains(text(
+            value.get("sourceId"),
+            "history observation source id",
+        )?) {
+            return Err("history observation references an unknown source".to_owned());
+        }
+        let content_id = text(value.get("contentId"), "history observation content id")?;
+        let identity = format!(
+            "{}|{}|{}|{}",
+            text(value.get("sourceId"), "history observation source id")?,
+            text(value.get("query"), "history observation query")?,
+            text(value.get("state"), "history observation state")?,
+            value.get("claim").unwrap_or(&Value::Null)
+        );
+        if let Some(previous) = content_by_id.insert(content_id.to_owned(), identity.clone()) {
+            if previous != identity {
+                return Err(
+                    "conflicting history observation content uses one immutable content id"
+                        .to_owned(),
+                );
+            }
+        }
+    }
+
+    let entries = read_history_records(root, "entries")?;
+    let mut entry_ids = BTreeSet::new();
+    for entry in &entries {
+        validate_history_ledger_entry_schema(root, entry)?;
+        let entry = object(entry, "history ledger entry")?;
+        let entry_id = text(entry.get("entryId"), "history ledger entry id")?;
+        if !entry_ids.insert(entry_id.to_owned()) {
+            return Err("history ledger entry identifiers must be unique".to_owned());
+        }
+        for observation_id in array(entry.get("observationIds"), "ledger observation ids")? {
+            if !observation_ids.contains(text(Some(observation_id), "ledger observation id")?) {
+                return Err("history ledger entry references an unknown observation".to_owned());
+            }
+        }
+        if entry.get("correctionOf").is_some()
+            && text(entry.get("classification"), "ledger classification")? != "correction"
+        {
+            return Err("only a correction entry may reference a prior entry".to_owned());
+        }
+    }
+    for entry in &entries {
+        let entry = object(entry, "history ledger entry")?;
+        if let Some(previous) = entry.get("correctionOf") {
+            let previous = text(Some(previous), "corrected entry id")?;
+            if !entry_ids.contains(previous) {
+                return Err("history correction references an unknown prior entry".to_owned());
+            }
+        }
+    }
+    let rendered = render_history_ledger(&entries, &observations)?;
+    let ledger = fs::read_to_string(history.join("ledger.md"))
+        .map_err(|error| format!("read history ledger: {error}"))?;
+    if ledger != rendered {
+        return Err(
+            "release/history/ledger.md differs from deterministic canonical history rendering"
+                .to_owned(),
+        );
+    }
+
+    let policy = read_json(&history.join("additive-repair-policy.json"))?;
+    validate_additive_repair_policy(&policy)?;
+    for proposal in read_history_records(root, "repair-proposals")? {
+        validate_additive_repair_proposal_schema(root, &proposal)?;
+        validate_additive_repair_preflight(&baseline, &policy, &proposal)?;
+    }
+    let reconciliation = read_json(&history.join("reconciliation-decision.json"))?;
+    validate_history_reconciliation_decision_schema(root, &reconciliation)?;
+    validate_reconciliation_decision(&reconciliation, &entries)?;
+    Ok(())
+}
+
+pub fn validate_history_baseline(baseline: &Value) -> Result<(), String> {
+    let baseline = object(baseline, "history baseline")?;
+    let status = text(baseline.get("status"), "history baseline status")?;
+    let tags = array(baseline.get("tags"), "history baseline tags")?;
+    let mut names = BTreeSet::new();
+    for tag in tags {
+        let tag = object(tag, "history tag")?;
+        let name = text(tag.get("name"), "history tag name")?;
+        if !names.insert(name.to_owned()) {
+            return Err("history baseline has duplicate tag names".to_owned());
+        }
+        for key in ["refTarget", "peeledCommit"] {
+            if !is_full_object_id(text(tag.get(key), "history tag object id")?) {
+                return Err(format!(
+                    "history tag {name} has an abbreviated or invalid {key}"
+                ));
+            }
+        }
+        let kind = text(tag.get("kind"), "history tag kind")?;
+        match (kind, tag.get("annotatedTag")) {
+            ("annotated", Some(Value::String(value))) if is_full_object_id(value) => {}
+            ("annotated", _) => {
+                return Err(format!(
+                    "annotated history tag {name} lacks its full tag object id"
+                ))
+            }
+            ("lightweight", None) => {}
+            ("lightweight", _) => {
+                return Err(format!(
+                    "lightweight history tag {name} must not invent an annotated tag object"
+                ))
+            }
+            _ => return Err("history tag kind is not recognized".to_owned()),
+        }
+    }
+    let ratifications = array(baseline.get("ratificationIds"), "history ratifications")?;
+    let actual_digest = history_baseline_digest(baseline)?;
+    match status {
+        "awaiting-read-only-collection" => {
+            if !tags.is_empty()
+                || baseline.get("baselineDigest") != Some(&Value::Null)
+                || !ratifications.is_empty()
+            {
+                return Err("an uncollected history baseline must not claim tags, a digest, or ratification".to_owned());
+            }
+        }
+        "awaiting-ratification" => {
+            if tags.is_empty()
+                || !is_sha256(
+                    baseline
+                        .get("baselineDigest")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                )
+                || !ratifications.is_empty()
+            {
+                return Err("a collected history baseline requires tags and a digest but no implied ratification".to_owned());
+            }
+            if baseline.get("baselineDigest").and_then(Value::as_str) != Some(&actual_digest) {
+                return Err(
+                    "history baseline digest does not bind the collected remote tag identities"
+                        .to_owned(),
+                );
+            }
+        }
+        "ratified" => {
+            if tags.is_empty()
+                || !is_sha256(
+                    baseline
+                        .get("baselineDigest")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default(),
+                )
+                || ratifications.len() != 2
+            {
+                return Err(
+                    "a ratified history baseline requires tags, digest, and two role assertions"
+                        .to_owned(),
+                );
+            }
+            if baseline.get("baselineDigest").and_then(Value::as_str) != Some(&actual_digest) {
+                return Err(
+                    "history baseline digest does not bind the collected remote tag identities"
+                        .to_owned(),
+                );
+            }
+        }
+        _ => return Err("history baseline status is not recognized".to_owned()),
+    }
+    Ok(())
+}
+
+/// Returns the SHA-256 identity bound by historical-tag ratifications.
+/// Approval fields and state are excluded so changing an assertion cannot change
+/// the immutable remote observation it approves.
+pub fn history_baseline_digest(baseline: &Map<String, Value>) -> Result<String, String> {
+    let canonical = serde_json::json!({
+        "$id": text(baseline.get("$id"), "history baseline id")?,
+        "version": text(baseline.get("version"), "history baseline version")?,
+        "recordKind": text(baseline.get("recordKind"), "history baseline record kind")?,
+        "remote": baseline.get("remote").cloned().ok_or_else(|| "history baseline lacks remote".to_owned())?,
+        "observedAt": baseline.get("observedAt").cloned().ok_or_else(|| "history baseline lacks observation time".to_owned())?,
+        "tags": baseline.get("tags").cloned().ok_or_else(|| "history baseline lacks tags".to_owned())?,
+    });
+    let bytes = serde_json::to_vec(&canonical)
+        .map_err(|error| format!("serialize canonical history baseline: {error}"))?;
+    Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
+}
+
+/// Returns the complete read-only observation scope approved by a ratification.
+pub fn history_baseline_observation_scope(baseline: &Map<String, Value>) -> Result<String, String> {
+    let remote = object(
+        baseline
+            .get("remote")
+            .ok_or_else(|| "history baseline lacks remote".to_owned())?,
+        "history baseline remote",
+    )?;
+    Ok(format!(
+        "{} | {} | {}",
+        text(remote.get("url"), "history remote URL")?,
+        text(remote.get("query"), "history remote query")?,
+        text(
+            baseline.get("observedAt"),
+            "history baseline observation time"
+        )?
+    ))
+}
+
+pub fn validate_history_tag_snapshot(baseline: &Value, observed: &Value) -> Result<(), String> {
+    validate_history_baseline(baseline)?;
+    let baseline = object(baseline, "history baseline")?;
+    if text(baseline.get("status"), "history baseline status")? != "ratified" {
+        return Err(
+            "Historical Tag invariant is blocked until the baseline is ratified".to_owned(),
+        );
+    }
+    let observed = object(observed, "observed history baseline")?;
+    let mut observed_tags = BTreeMap::new();
+    for tag in array(observed.get("tags"), "observed history tags")? {
+        let tag = object(tag, "observed history tag")?;
+        observed_tags.insert(text(tag.get("name"), "observed history tag name")?, tag);
+    }
+    for expected in array(baseline.get("tags"), "baseline history tags")? {
+        let expected = object(expected, "baseline history tag")?;
+        let name = text(expected.get("name"), "baseline history tag name")?;
+        let Some(actual) = observed_tags.get(name) else {
+            return Err(format!(
+                "Historical Tag drift: {name} is absent; no repair is permitted"
+            ));
+        };
+        for field in ["kind", "refTarget", "annotatedTag", "peeledCommit"] {
+            if expected.get(field) != actual.get(field) {
+                return Err(format!(
+                    "Historical Tag drift: {name} {field} differs; no repair is permitted"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_additive_repair_preflight(
+    baseline: &Value,
+    policy: &Value,
+    proposal: &Value,
+) -> Result<(), String> {
+    let policy = object(policy, "additive repair policy")?;
+    let allowed: BTreeSet<&str> = array(policy.get("allowedActions"), "allowed repair actions")?
+        .iter()
+        .map(|value| text(Some(value), "allowed repair action"))
+        .collect::<Result<_, _>>()?;
+    let prohibited: BTreeSet<&str> =
+        array(policy.get("prohibitedActions"), "prohibited repair actions")?
+            .iter()
+            .map(|value| text(Some(value), "prohibited repair action"))
+            .collect::<Result<_, _>>()?;
+    let proposal = object(proposal, "additive repair proposal")?;
+    for action in array(proposal.get("proposedActions"), "proposed repair actions")? {
+        let action = text(Some(action), "proposed repair action")?;
+        if prohibited.contains(action) || !allowed.contains(action) {
+            return Err(format!(
+                "additive repair preflight rejects {action} before any remote operation"
+            ));
+        }
+    }
+    if text(proposal.get("status"), "repair proposal status")? == "approved"
+        && proposal.get("approval") == Some(&Value::Null)
+    {
+        return Err("an approved additive repair proposal requires recorded approval".to_owned());
+    }
+    validate_history_baseline(baseline)
+}
+
+/// Parses only the output of `git ls-remote --tags <remote>` into an unratified
+/// collector result. The result is deliberately not a baseline record: a reviewer
+/// must bind a digest and the two required role assertions before it can become
+/// canonical history.
+pub fn parse_history_tag_collection(
+    remote: &str,
+    stdout: &str,
+    observed_at: &str,
+) -> Result<Value, String> {
+    let mut refs: BTreeMap<String, String> = BTreeMap::new();
+    let mut peeled: BTreeMap<String, String> = BTreeMap::new();
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let (object_id, reference) = line.split_once('\t').ok_or_else(|| {
+            "read-only tag collector received malformed ls-remote output".to_owned()
+        })?;
+        if !is_full_object_id(object_id) || !reference.starts_with("refs/tags/") {
+            return Err("read-only tag collector requires full tag object ids".to_owned());
+        }
+        let name = &reference["refs/tags/".len()..];
+        if let Some(name) = name.strip_suffix("^{}") {
+            if peeled
+                .insert(name.to_owned(), object_id.to_owned())
+                .is_some()
+            {
+                return Err(
+                    "read-only tag collector received duplicate peeled identities".to_owned(),
+                );
+            }
+        } else if refs.insert(name.to_owned(), object_id.to_owned()).is_some() {
+            return Err("read-only tag collector received duplicate tag names".to_owned());
+        }
+    }
+    let mut tags = Vec::new();
+    for (name, ref_target) in refs {
+        if let Some(peeled_commit) = peeled.remove(&name) {
+            tags.push(serde_json::json!({"name": name, "kind": "annotated", "refTarget": ref_target, "annotatedTag": ref_target, "peeledCommit": peeled_commit}));
+        } else {
+            tags.push(serde_json::json!({"name": name, "kind": "lightweight", "refTarget": ref_target, "peeledCommit": ref_target}));
+        }
+    }
+    if !peeled.is_empty() {
+        return Err(
+            "read-only tag collector received a peeled identity without its tag ref".to_owned(),
+        );
+    }
+    Ok(serde_json::json!({
+        "recordKind": "historical-tag-collection",
+        "remote": remote,
+        "query": "git ls-remote --tags",
+        "observedAt": observed_at,
+        "collectorVersion": env!("CARGO_PKG_VERSION"),
+        "tags": tags,
+        "nextStep": "Bind a SHA-256 digest and both required public role ratifications before creating a canonical baseline."
+    }))
+}
+
+fn validate_additive_repair_policy(policy: &Value) -> Result<(), String> {
+    let policy = object(policy, "additive repair policy")?;
+    require_exact_keys(
+        policy,
+        &[
+            "$schema",
+            "$id",
+            "version",
+            "recordKind",
+            "allowedActions",
+            "prohibitedActions",
+            "preflight",
+        ],
+        "additive repair policy",
+    )?;
+    require_string(
+        policy,
+        "$schema",
+        "https://json-schema.org/draft/2020-12/schema",
+    )?;
+    require_string(
+        policy,
+        "$id",
+        "https://vexil.dev/release/history/additive-repair-policy.json",
+    )?;
+    require_string(policy, "recordKind", "additive-repair-policy")?;
+    for action in [
+        "move-tag",
+        "delete-tag",
+        "force-update-tag",
+        "recreate-tag",
+        "reuse-tag",
+        "overwrite-artifact",
+        "replace-artifact",
+    ] {
+        if !array(policy.get("prohibitedActions"), "prohibited repair actions")?
+            .iter()
+            .any(|value| value.as_str() == Some(action))
+        {
+            return Err(format!("additive repair policy must prohibit {action}"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_reconciliation_decision(decision: &Value, entries: &[Value]) -> Result<(), String> {
+    let decision = object(decision, "history reconciliation decision")?;
+    if text(decision.get("rootTagPolicy"), "root tag policy")? != "prohibited-during-recovery" {
+        return Err(
+            "history reconciliation must prohibit project-wide root v<semver> tags during recovery"
+                .to_owned(),
+        );
+    }
+    let status = text(decision.get("status"), "reconciliation status")?;
+    let approval = decision.get("approval").unwrap_or(&Value::Null);
+    if status == "approved" && approval.is_null() {
+        return Err(
+            "an approved reconciliation decision requires public approval evidence".to_owned(),
+        );
+    }
+    if status != "approved" && !approval.is_null() {
+        return Err(
+            "an unapproved reconciliation decision must not carry approval evidence".to_owned(),
+        );
+    }
+    let ledger_entries = array(
+        decision.get("ledgerEntryIds"),
+        "reconciliation ledger entries",
+    )?;
+    if status == "approved" && ledger_entries.is_empty() {
+        return Err(
+            "an approved reconciliation decision requires an accepted ledger entry".to_owned(),
+        );
+    }
+    for entry_id in ledger_entries {
+        let entry_id = text(Some(entry_id), "reconciliation ledger entry id")?;
+        let entry = entries
+            .iter()
+            .find(|entry| {
+                object(entry, "history ledger entry")
+                    .and_then(|entry| text(entry.get("entryId"), "history ledger entry id"))
+                    .is_ok_and(|id| id == entry_id)
+            })
+            .ok_or_else(|| {
+                "reconciliation decision references an unknown ledger entry".to_owned()
+            })?;
+        if status == "approved"
+            && text(
+                object(entry, "history ledger entry")?.get("reviewState"),
+                "history ledger review state",
+            )? != "accepted"
+        {
+            return Err("reconciliation decision references an unknown ledger entry".to_owned());
+        }
+    }
+    Ok(())
+}
+
+fn render_history_ledger(entries: &[Value], observations: &[Value]) -> Result<String, String> {
+    let mut rendered = String::from("# Release History Ledger\n\n> Generated from canonical JSON under `release/history/`. This Markdown is non-authoritative and must match the validator's deterministic rendering.\n\n## Review state\n\n");
+    if entries.is_empty() {
+        rendered
+            .push_str("No accepted, rejected, or unresolved ledger entries have been recorded.\n");
+    } else {
+        let mut rows: Vec<_> = entries
+            .iter()
+            .map(|entry| object(entry, "history ledger entry"))
+            .collect::<Result<_, _>>()?;
+        rows.sort_by_key(|entry| {
+            text(entry.get("entryId"), "history ledger entry id")
+                .unwrap_or_default()
+                .to_owned()
+        });
+        for entry in rows {
+            rendered.push_str(&format!(
+                "- `{}` — {} (`{}`)\n",
+                text(entry.get("entryId"), "history ledger entry id")?,
+                text(entry.get("classification"), "history ledger classification")?,
+                text(entry.get("reviewState"), "history ledger review state")?
+            ));
+        }
+    }
+    rendered.push_str("\n## Observations\n\n");
+    if observations.is_empty() {
+        rendered.push_str("No immutable source observations have been collected. The baseline remains awaiting read-only remote collection and digest-bound dual-role ratification.\n");
+    } else {
+        let mut rows: Vec<_> = observations
+            .iter()
+            .map(|observation| object(observation, "history observation"))
+            .collect::<Result<_, _>>()?;
+        rows.sort_by_key(|row| {
+            text(row.get("observationId"), "history observation id")
+                .unwrap_or_default()
+                .to_owned()
+        });
+        for row in rows {
+            rendered.push_str(&format!(
+                "- `{}` — {} from `{}` (`{}`)\n",
+                text(row.get("observationId"), "history observation id")?,
+                text(row.get("state"), "history observation state")?,
+                text(row.get("sourceId"), "history observation source")?,
+                text(row.get("contentId"), "history observation content id")?
+            ));
+        }
+    }
+    Ok(rendered)
+}
+
+fn read_history_records(root: &Path, directory: &str) -> Result<Vec<Value>, String> {
+    let path = root.join("release/history").join(directory);
+    let mut records = Vec::new();
+    for entry in fs::read_dir(&path).map_err(|error| format!("read {}: {error}", path.display()))? {
+        let path = entry
+            .map_err(|error| format!("read {} entry: {error}", path.display()))?
+            .path();
+        if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+            records.push(read_json(&path)?);
+        }
+    }
+    Ok(records)
+}
+
+fn is_full_object_id(value: &str) -> bool {
+    matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 /// Validates the public, offline external-control evidence package. It deliberately
@@ -3935,6 +4533,75 @@ pub fn validate_revocation_exercise_schema(root: &Path, record: &Value) -> Resul
     )
 }
 
+pub fn validate_history_baseline_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/history-baseline.schema.json",
+        record,
+        "history baseline",
+    )
+}
+
+pub fn validate_history_ratification_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/history-ratification.schema.json",
+        record,
+        "history ratification",
+    )
+}
+
+pub fn validate_history_observation_sources_schema(
+    root: &Path,
+    record: &Value,
+) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/history-observation-sources.schema.json",
+        record,
+        "history observation source inventory",
+    )
+}
+
+pub fn validate_history_observation_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/history-observation.schema.json",
+        record,
+        "history observation",
+    )
+}
+
+pub fn validate_history_ledger_entry_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/history-ledger-entry.schema.json",
+        record,
+        "history ledger entry",
+    )
+}
+
+pub fn validate_additive_repair_proposal_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/additive-repair-proposal.schema.json",
+        record,
+        "additive repair proposal",
+    )
+}
+
+pub fn validate_history_reconciliation_decision_schema(
+    root: &Path,
+    record: &Value,
+) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/history-reconciliation-decision.schema.json",
+        record,
+        "history reconciliation decision",
+    )
+}
+
 fn validate_schema_instance(
     root: &Path,
     schema_relative: &str,
@@ -3991,6 +4658,34 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
         (
             "release/schemas/revocation-exercise.schema.json",
             "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
+        ),
+        (
+            "release/schemas/history-baseline.schema.json",
+            "https://vexil.dev/release/schemas/history-baseline.schema.json",
+        ),
+        (
+            "release/schemas/history-ratification.schema.json",
+            "https://vexil.dev/release/schemas/history-ratification.schema.json",
+        ),
+        (
+            "release/schemas/history-observation-sources.schema.json",
+            "https://vexil.dev/release/schemas/history-observation-sources.schema.json",
+        ),
+        (
+            "release/schemas/history-observation.schema.json",
+            "https://vexil.dev/release/schemas/history-observation.schema.json",
+        ),
+        (
+            "release/schemas/history-ledger-entry.schema.json",
+            "https://vexil.dev/release/schemas/history-ledger-entry.schema.json",
+        ),
+        (
+            "release/schemas/additive-repair-proposal.schema.json",
+            "https://vexil.dev/release/schemas/additive-repair-proposal.schema.json",
+        ),
+        (
+            "release/schemas/history-reconciliation-decision.schema.json",
+            "https://vexil.dev/release/schemas/history-reconciliation-decision.schema.json",
         ),
     ] {
         let schema_value = read_json(&root.join(relative))?;

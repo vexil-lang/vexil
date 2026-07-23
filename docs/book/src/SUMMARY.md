@@ -59,3 +59,4 @@
 - [Privileged and Policy Operations](./release/privileged-operations.md)
 - [External Control Boundaries](./release/external-control-boundaries.md)
 - [Stewardship Continuity Tabletop Exercises](./release/stewardship-exercises.md)
+- [Release History and Additive Repair](./release/history.md)

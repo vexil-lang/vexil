@@ -1,0 +1,4 @@
+{
+  "case": "proposal requests move-tag",
+  "expectedReason": "additive repair preflight rejects move-tag"
+}

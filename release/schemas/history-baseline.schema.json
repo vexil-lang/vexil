@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/history-baseline.schema.json",
+  "title": "Vexil Historical Tag Baseline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "version", "recordKind", "status", "remote", "observedAt", "tags", "ratificationIds"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"const": "https://vexil.dev/release/history/baseline-tags.json"},
+    "version": {"const": "1.0"},
+    "recordKind": {"const": "historical-tag-baseline"},
+    "status": {"enum": ["awaiting-read-only-collection", "awaiting-ratification", "ratified"]},
+    "remote": {"type": "object", "additionalProperties": false, "required": ["name", "url", "query"], "properties": {"name": {"type": "string", "minLength": 1}, "url": {"type": "string", "minLength": 1}, "query": {"const": "git ls-remote --tags"}}},
+    "observedAt": {"type": ["string", "null"]},
+    "baselineDigest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "tags": {"type": "array", "items": {"$ref": "#/$defs/tag"}},
+    "ratificationIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "blocker": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "objectId": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"},
+    "tag": {"type": "object", "additionalProperties": false, "required": ["name", "kind", "refTarget", "peeledCommit"], "properties": {"name": {"type": "string", "minLength": 1}, "kind": {"enum": ["lightweight", "annotated"]}, "refTarget": {"$ref": "#/$defs/objectId"}, "annotatedTag": {"$ref": "#/$defs/objectId"}, "peeledCommit": {"$ref": "#/$defs/objectId"}}}
+  }
+}
