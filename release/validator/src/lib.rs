@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Component, Path};
 use std::time::{SystemTime, UNIX_EPOCH};
+use toml::{Table as TomlTable, Value as TomlValue};
 
 const REQUIRED_ROLE_IDS: [&str; 5] = [
     "release-steward",
@@ -220,39 +221,22 @@ pub fn validate_catalog_repository(root: &Path) -> Result<(), String> {
 
 pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
     let catalog = object(catalog, "release catalog")?;
-    let expected_ids = BTreeSet::from([
-        "command-protocol-example",
-        "cross-language-rust-device-example",
-        "multi-file-project-example",
-        "sensor-packet-example",
-        "system-monitor-example",
-        "vexil-bench",
-        "vexil-codegen-go",
-        "vexil-codegen-py",
-        "vexil-codegen-rust",
-        "vexil-codegen-ts",
-        "vexil-lang",
-        "vexil-release-governance-validator",
-        "vexil-runtime",
-        "vexil-runtime-go",
-        "vexil-runtime-py",
-        "vexil-runtime-ts",
-        "vexil-store",
-        "vexilc",
-    ]);
+    let expected_roots = expected_catalog_source_roots(root)?;
     let units = array(catalog.get("units"), "release catalog units")?;
     let mut ids = BTreeSet::new();
     let mut roots = BTreeSet::new();
     let mut targets = BTreeSet::new();
     let mut tag_namespaces = BTreeSet::new();
+    let mut previous_id = "";
     for unit in units {
         let unit = object(unit, "release catalog unit")?;
         let id = text(unit.get("id"), "release catalog unit id")?;
-        if !ids.insert(id) {
+        if id <= previous_id || !ids.insert(id) {
             return Err("release catalog unit IDs must be unique".to_owned());
         }
+        previous_id = id;
         let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
-        if !roots.insert(source_root) {
+        if !roots.insert(source_root.to_owned()) {
             return Err("release catalog source roots must be unique".to_owned());
         }
         if !root.join(source_root).is_dir() {
@@ -260,6 +244,7 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
                 "release catalog source root is missing: {source_root}"
             ));
         }
+        validate_catalog_kind(root, unit)?;
         validate_catalog_owner(root, source_root, unit)?;
         for target in array(unit.get("targets"), "release catalog targets")? {
             let target = object(target, "release catalog target")?;
@@ -314,7 +299,7 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
             }
         }
     }
-    if ids != expected_ids {
+    if roots != expected_roots {
         return Err("release catalog must enumerate each maintained and non-publishable source unit exactly once".to_owned());
     }
     let go = units
@@ -356,6 +341,107 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
         return Err("Python runtime must be cataloged as candidate-unreleased".to_owned());
     }
     Ok(())
+}
+
+fn expected_catalog_source_roots(root: &Path) -> Result<BTreeSet<String>, String> {
+    let workspace = parse_toml(&fs::read_to_string(root.join("Cargo.toml")).map_err(|error| {
+        format!("read workspace manifest {}: {error}", root.join("Cargo.toml").display())
+    })?)?;
+    let workspace = workspace
+        .get("workspace")
+        .and_then(TomlValue::as_table)
+        .ok_or("workspace manifest is missing [workspace]")?;
+    let mut roots = BTreeSet::new();
+    for field in ["members", "exclude"] {
+        let entries = workspace
+            .get(field)
+            .and_then(TomlValue::as_array)
+            .ok_or_else(|| format!("workspace manifest is missing workspace.{field}"))?;
+        for entry in entries {
+            let entry = entry
+                .as_str()
+                .ok_or_else(|| format!("workspace.{field} must contain strings"))?;
+            if !root.join(entry).join("Cargo.toml").is_file() {
+                return Err(format!("workspace.{field} source root is missing Cargo.toml: {entry}"));
+            }
+            roots.insert(entry.to_owned());
+        }
+    }
+    for entry in fs::read_dir(root.join("packages"))
+        .map_err(|error| format!("read packages directory: {error}"))?
+    {
+        let entry = entry.map_err(|error| format!("read packages directory entry: {error}"))?;
+        if !entry
+            .file_type()
+            .map_err(|error| format!("read package entry type: {error}"))?
+            .is_dir()
+        {
+            continue;
+        }
+        let path = entry.path();
+        if ["package.json", "pyproject.toml", "go.mod"]
+            .iter()
+            .any(|manifest| path.join(manifest).is_file())
+        {
+            roots.insert(format!("packages/{}", entry.file_name().to_string_lossy()));
+        }
+    }
+    let validator = root.join("release/validator/Cargo.toml");
+    if !validator.is_file() {
+        return Err("release validator Cargo manifest is missing".to_owned());
+    }
+    roots.insert("release/validator".to_owned());
+    Ok(roots)
+}
+
+fn validate_catalog_kind(root: &Path, unit: &Map<String, Value>) -> Result<(), String> {
+    let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+    let expected = expected_catalog_kind(root, source_root)?;
+    let actual = text(unit.get("kind"), "release catalog unit kind")?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "catalog unit kind {actual} does not match source root {source_root} ({expected})"
+        ))
+    }
+}
+
+fn expected_catalog_kind(root: &Path, source_root: &str) -> Result<&'static str, String> {
+    if source_root == "release/validator" {
+        return Ok("non-publishable-package");
+    }
+    let workspace = parse_toml(&fs::read_to_string(root.join("Cargo.toml")).map_err(|error| {
+        format!("read workspace manifest {}: {error}", root.join("Cargo.toml").display())
+    })?)?;
+    let workspace = workspace
+        .get("workspace")
+        .and_then(TomlValue::as_table)
+        .ok_or("workspace manifest is missing [workspace]")?;
+    if toml_array_contains(workspace, "members", source_root)? {
+        return Ok("rust-package");
+    }
+    if toml_array_contains(workspace, "exclude", source_root)? {
+        return Ok("non-publishable-package");
+    }
+    let package_root = root.join(source_root);
+    if package_root.join("package.json").is_file() {
+        Ok("typescript-runtime")
+    } else if package_root.join("pyproject.toml").is_file() {
+        Ok("python-runtime")
+    } else if package_root.join("go.mod").is_file() {
+        Ok("go-module")
+    } else {
+        Err(format!("catalog source root has no recognized source declaration: {source_root}"))
+    }
+}
+
+fn toml_array_contains(table: &TomlTable, field: &str, expected: &str) -> Result<bool, String> {
+    let values = table
+        .get(field)
+        .and_then(TomlValue::as_array)
+        .ok_or_else(|| format!("workspace manifest is missing workspace.{field}"))?;
+    Ok(values.iter().any(|value| value.as_str() == Some(expected)))
 }
 
 fn validate_catalog_version_source(
@@ -402,22 +488,46 @@ fn validate_catalog_changelog(root: &Path, unit: &Map<String, Value>) -> Result<
         required_value(unit, "changelog")?,
         "release catalog changelog",
     )?;
+    let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+    let unit_kind = text(unit.get("kind"), "release catalog unit kind")?;
+    let conventional_changelog = root.join(source_root).join("CHANGELOG.md");
     match text(changelog.get("status"), "release catalog changelog status")? {
         "present" => {
+            if unit_kind == "non-publishable-package" {
+                return Err("non-publishable catalog units must mark changelog not-applicable".to_owned());
+            }
             let path = changelog
                 .get("path")
                 .and_then(Value::as_str)
                 .ok_or("present catalog changelog requires a path")?;
             require_catalog_path_within_source_root(
-                text(unit.get("sourceRoot"), "release catalog source root")?,
+                source_root,
                 path,
                 "changelog",
             )?;
             if !root.join(path).is_file() {
                 return Err(format!("catalog changelog is missing: {path}"));
             }
+            if Path::new(path).file_name().and_then(|name| name.to_str()) != Some("CHANGELOG.md") {
+                return Err("catalog changelog must name the unit CHANGELOG.md file".to_owned());
+            }
         }
-        "absent" | "not-applicable" if changelog.get("path") == Some(&Value::Null) => {}
+        "absent" if changelog.get("path") == Some(&Value::Null) => {
+            if unit_kind == "non-publishable-package" {
+                return Err("non-publishable catalog units must mark changelog not-applicable".to_owned());
+            }
+            if conventional_changelog.is_file() {
+                return Err(format!(
+                    "catalog changelog is stale: {} exists",
+                    conventional_changelog.display()
+                ));
+            }
+        }
+        "not-applicable" if changelog.get("path") == Some(&Value::Null) => {
+            if unit_kind != "non-publishable-package" {
+                return Err("publishable catalog units must state changelog present or absent".to_owned());
+            }
+        }
         _ => return Err("catalog changelog status and path must agree".to_owned()),
     }
     Ok(())
@@ -511,26 +621,32 @@ fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<()
         let target = object(target, "release catalog target")?;
         let kind = text(target.get("kind"), "catalog target kind")?;
         let name = text(target.get("name"), "catalog target name")?;
-        let expected_name = match kind {
-            "cargo-package" | "cargo-binary" | "internal-tool" | "example" => {
+        let matches_source = match kind {
+            "cargo-package" | "internal-tool" | "example" => {
                 if format != "cargo-package-version" {
                     return Err(format!(
                         "catalog target {kind} must use a Cargo package manifest"
                     ));
                 }
-                cargo_package_name(content.as_deref().unwrap())?
+                name == cargo_package_name(content.as_deref().unwrap())?
+            }
+            "cargo-binary" => {
+                if format != "cargo-package-version" {
+                    return Err("catalog cargo-binary target must use a Cargo package manifest".to_owned());
+                }
+                cargo_binary_names(content.as_deref().unwrap(), &root.join(source_root))?.contains(name)
             }
             "npm-package" => {
                 if format != "package-json-version" {
                     return Err("catalog npm target must use package.json".to_owned());
                 }
-                json_manifest_field(content.as_deref().unwrap(), "name")?
+                name == json_manifest_field(content.as_deref().unwrap(), "name")?
             }
             "python-project" => {
                 if format != "pyproject-project-version" {
                     return Err("catalog Python target must use pyproject.toml".to_owned());
                 }
-                toml_string_in_section(content.as_deref().unwrap(), "project", "name")?
+                name == toml_string_in_section(content.as_deref().unwrap(), "project", "name")?
             }
             "go-module" => {
                 if format != "required-file-absent" || classification != "blocked-version-source" {
@@ -543,20 +659,12 @@ fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<()
                 let go_mod = fs::read_to_string(&go_mod).map_err(|error| {
                     format!("read Go module manifest {}: {error}", go_mod.display())
                 })?;
-                go_mod
-                    .lines()
-                    .find_map(|line| line.strip_prefix("module "))
-                    .map(str::trim)
-                    .filter(|module| !module.is_empty())
-                    .ok_or("Go module manifest has no module declaration")?
-                    .to_owned()
+                name == go_module_name(&go_mod)?
             }
             _ => return Err(format!("catalog target kind is unsupported: {kind}")),
         };
-        if name != expected_name {
-            return Err(format!(
-                "catalog target name {name} does not match its source declaration {expected_name}"
-            ));
+        if !matches_source {
+            return Err(format!("catalog target name {name} does not match its source declaration"));
         }
     }
     Ok(())
@@ -599,23 +707,51 @@ fn cargo_package_name(content: &str) -> Result<String, String> {
 }
 
 fn toml_string_in_section(content: &str, section: &str, field: &str) -> Result<String, String> {
-    let mut current_section = None;
-    for raw_line in content.lines() {
-        let line = raw_line.trim();
-        if line.starts_with('[') && line.ends_with(']') {
-            current_section = Some(&line[1..line.len() - 1]);
-            continue;
-        }
-        if current_section == Some(section) {
-            if let Some((key, value)) = line.split_once('=') {
-                if key.trim() == field {
-                    return serde_json::from_str::<String>(value.trim())
-                        .map_err(|_| format!("source {section}.{field} must be a quoted string"));
-                }
-            }
+    parse_toml(content)?
+        .get(section)
+        .and_then(TomlValue::as_table)
+        .and_then(|table| table.get(field))
+        .and_then(TomlValue::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("source manifest is missing string {section}.{field}"))
+}
+
+fn parse_toml(content: &str) -> Result<TomlTable, String> {
+    content
+        .parse::<TomlTable>()
+        .map_err(|error| format!("parse TOML source declaration: {error}"))
+}
+
+fn cargo_binary_names(content: &str, source_root: &Path) -> Result<BTreeSet<String>, String> {
+    let manifest = parse_toml(content)?;
+    let mut names = BTreeSet::new();
+    if source_root.join("src/main.rs").is_file() {
+        names.insert(cargo_package_name(content)?);
+    }
+    if let Some(binaries) = manifest.get("bin").and_then(TomlValue::as_array) {
+        for binary in binaries {
+            let name = binary
+                .as_table()
+                .and_then(|binary| binary.get("name"))
+                .and_then(TomlValue::as_str)
+                .ok_or("Cargo [[bin]] target must declare a string name")?;
+            names.insert(name.to_owned());
         }
     }
-    Err(format!("source manifest is missing {section}.{field}"))
+    Ok(names)
+}
+
+fn go_module_name(content: &str) -> Result<String, String> {
+    for line in content.lines() {
+        let mut fields = line.split_whitespace();
+        if fields.next() == Some("module") {
+            if let Some(module) = fields.next().filter(|module| !module.starts_with("//")) {
+                return Ok(module.to_owned());
+            }
+            return Err("Go module declaration has no module path".to_owned());
+        }
+    }
+    Err("Go module manifest has no module declaration".to_owned())
 }
 
 fn json_manifest_field(content: &str, field: &str) -> Result<String, String> {
@@ -1706,6 +1842,7 @@ pub fn validate_responsibilities_repository(root: &Path) -> Result<(), String> {
     let record = read_json(&root.join("release/stewardship/responsibilities.json"))?;
     validate_responsibility_schema(root, &record)?;
     validate_responsibilities(&record)?;
+    validate_catalog_comparison(root, &record)?;
     let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
     validate_advisory_owners(&record, &assignments)?;
     validate_advisory_contract(root, &record)?;
@@ -3195,13 +3332,6 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
             "retired configuration cannot be used as membership or order authority".to_owned(),
         );
     }
-    let manifests = strings(
-        comparison.get("catalogedSourceUnits"),
-        "cataloged source units",
-    )?;
-    if !manifests.contains(&"crates/vexil-codegen-py") {
-        return Err("cataloged source-unit coverage is missing crates/vexil-codegen-py".to_owned());
-    }
     let mismatches = array(comparison.get("mismatches"), "manifest mismatches")?;
     if !mismatches.iter().any(|mismatch| {
         object(mismatch, "manifest mismatch")
@@ -3353,6 +3483,46 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
         "reject-conflicting-duplicates",
     )?;
     ensure_no_private_leakage(&record.to_string())
+}
+
+fn validate_catalog_comparison(root: &Path, record: &Value) -> Result<(), String> {
+    let comparison = object(
+        required_value(object(record, "responsibility inventory")?, "manifestComparison")?,
+        "manifest comparison",
+    )?;
+    let actual: BTreeSet<_> = strings(
+        comparison.get("catalogedSourceUnits"),
+        "cataloged source units",
+    )?
+    .into_iter()
+    .collect();
+    let declared = array(comparison.get("catalogedSourceUnits"), "cataloged source units")?;
+    if actual.len() != declared.len() {
+        return Err("cataloged source units must not contain duplicates".to_owned());
+    }
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    let units = array(catalog.get("units"), "release catalog units")?;
+    let mut expected = BTreeSet::new();
+    for unit in units {
+        let unit = object(unit, "release catalog unit")?;
+        let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+        let status = text(
+            object(required_value(unit, "publication")?, "catalog publication")?.get("status"),
+            "catalog publication status",
+        )?;
+        if status != "non-publishable"
+            && (source_root.starts_with("crates/") || source_root.starts_with("packages/"))
+        {
+            expected.insert(source_root);
+        }
+    }
+    if actual != expected {
+        return Err(
+            "cataloged source-unit comparison must exactly match maintained catalog source roots"
+                .to_owned(),
+        );
+    }
+    Ok(())
 }
 
 fn validate_advisory_disposition(
@@ -5308,5 +5478,28 @@ fn require_actions(role: &Map<String, Value>, expected: &[&str], id: &str) -> Re
         Ok(())
     } else {
         Err(format!("role {id} has an invalid permitted action set"))
+    }
+}
+
+#[cfg(test)]
+mod catalog_manifest_tests {
+    use super::{go_module_name, toml_string_in_section};
+
+    #[test]
+    fn parses_valid_toml_strings_with_comments_and_single_quotes() {
+        let content = "[project]\nname = 'vexil_runtime' # direct source declaration\n";
+        assert_eq!(
+            toml_string_in_section(content, "project", "name").unwrap(),
+            "vexil_runtime"
+        );
+    }
+
+    #[test]
+    fn parses_go_module_declarations_with_permitted_whitespace() {
+        let content = "// generated fixture\n\tmodule\tgithub.com/vexil-lang/vexil/packages/runtime-go // source identity\n";
+        assert_eq!(
+            go_module_name(content).unwrap(),
+            "github.com/vexil-lang/vexil/packages/runtime-go"
+        );
     }
 }

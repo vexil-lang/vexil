@@ -135,6 +135,32 @@ fn catalog_rejects_detached_owners_stale_source_declarations_and_invalid_publica
     vexil_release_governance_validator::validate_catalog(&root, &stale_target)
         .expect_err("a catalog target must match its source manifest");
 
+    let mut stale_binary = catalog.clone();
+    stale_binary["units"][17]["targets"][1]["name"] = Value::String("forged-binary-name".into());
+    vexil_release_governance_validator::validate_catalog(&root, &stale_binary)
+        .expect_err("a catalog binary target must match a declared or default Cargo binary");
+
+    let mut mismatched_kind = catalog.clone();
+    mismatched_kind["units"][6]["kind"] = Value::String("typescript-runtime".into());
+    vexil_release_governance_validator::validate_catalog(&root, &mismatched_kind)
+        .expect_err("a catalog kind must match its source declaration");
+
+    let mut stale_changelog = catalog.clone();
+    stale_changelog["units"][6]["changelog"]["status"] = Value::String("absent".into());
+    stale_changelog["units"][6]["changelog"]["path"] = Value::Null;
+    vexil_release_governance_validator::validate_catalog(&root, &stale_changelog)
+        .expect_err("an existing unit changelog must not be cataloged as absent");
+
+    let mut unordered = catalog.clone();
+    unordered["units"].as_array_mut().unwrap().swap(0, 1);
+    vexil_release_governance_validator::validate_catalog(&root, &unordered)
+        .expect_err("catalog units must remain stable-ID ascending");
+
+    let mut no_edges = catalog.clone();
+    no_edges["units"][6]["dependencyEdges"] = Value::Array(vec![]);
+    vexil_release_governance_validator::validate_catalog_schema(&root, &no_edges)
+        .expect_err("each catalog unit must retain a provisional dependency edge");
+
     let mut invalid_publication = catalog.clone();
     invalid_publication["units"][6]["publication"]["status"] =
         Value::String("candidate-unreleased".into());
@@ -606,6 +632,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     fs::create_dir_all(isolated.join(".github/workflows")).unwrap();
     fs::create_dir_all(isolated.join("packages/runtime-go")).unwrap();
     for relative in [
+        "Cargo.toml",
         "release/stewardship.json",
         "release/schemas/stewardship.schema.json",
         "release/schemas/stewardship-assignment.schema.json",
@@ -673,6 +700,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         ".github/workflows/release.yml",
         "crates/vexil-lang/Cargo.toml",
         "crates/vexilc/Cargo.toml",
+        "crates/vexilc/src/main.rs",
         "crates/vexil-runtime/Cargo.toml",
         "crates/vexil-codegen-rust/Cargo.toml",
         "crates/vexil-codegen-ts/Cargo.toml",
