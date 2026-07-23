@@ -3,7 +3,7 @@ name: npm Release Readiness (publication disabled)
 on:
   push:
     tags:
-      - "vexil-runtime-v*"
+      - "vexil-runtime-ts-v*"
   workflow_dispatch:
 
 permissions:

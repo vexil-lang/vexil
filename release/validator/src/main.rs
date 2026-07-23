@@ -7,6 +7,7 @@ fn main() {
     let mut observe = None;
     let mut collect_history_tags = None;
     let mut render_catalog = false;
+    let mut candidate_tag = None;
     while let Some(argument) = args.next() {
         match argument.as_str() {
             "--root" => match args.next() {
@@ -22,13 +23,17 @@ fn main() {
                 _ => usage_and_exit(),
             },
             "--render-catalog" => render_catalog = true,
+            "--candidate-tag" => match args.next() {
+                Some(value) if !value.starts_with("--") => candidate_tag = Some(value),
+                _ => usage_and_exit(),
+            },
             _ => {
                 usage_and_exit();
             }
         }
     }
     if let Some(remote) = collect_history_tags {
-        if root.is_some() || observe.is_some() || render_catalog {
+        if root.is_some() || observe.is_some() || render_catalog || candidate_tag.is_some() {
             eprintln!("--collect-history-tags is a standalone read-only collector");
             std::process::exit(2);
         }
@@ -64,9 +69,9 @@ fn main() {
     let Some(root) = root else {
         usage_and_exit();
     };
-    if render_catalog {
-        if observe.is_some() {
-            eprintln!("--render-catalog cannot be combined with --observe");
+    if render_catalog || candidate_tag.is_some() {
+        if observe.is_some() || (render_catalog && candidate_tag.is_some()) {
+            eprintln!("--render-catalog, --candidate-tag, and --observe cannot be combined");
             std::process::exit(2);
         }
         let catalog_path = root.join("release/catalog.json");
@@ -83,8 +88,22 @@ fn main() {
         )
         .and_then(|()| vexil_release_governance_validator::validate_catalog(&root, &catalog));
         if let Err(error) = validation {
-            eprintln!("catalog render rejected: {error}");
+            eprintln!("catalog validation rejected: {error}");
             std::process::exit(1);
+        }
+        if let Some(candidate_tag) = candidate_tag {
+            match vexil_release_governance_validator::validate_candidate_tag(
+                &root,
+                &catalog,
+                &candidate_tag,
+            ) {
+                Ok(()) => println!("candidate tag is structurally valid and has no Historical Tag collision; this performs no tag, release, registry, or publication effect"),
+                Err(error) => {
+                    eprintln!("candidate tag rejected: {error}");
+                    std::process::exit(1);
+                }
+            }
+            return;
         }
         match vexil_release_governance_validator::render_catalog_markdown(&root, &catalog) {
             Ok(markdown) => print!("{markdown}"),
@@ -134,7 +153,7 @@ fn main() {
 }
 
 fn usage_and_exit() -> ! {
-    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root>");
+    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root> | --candidate-tag <tag> --root <repository-root>");
     std::process::exit(2);
 }
 

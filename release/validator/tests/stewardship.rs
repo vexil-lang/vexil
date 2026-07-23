@@ -178,6 +178,172 @@ fn catalog_rejects_detached_owners_stale_source_declarations_and_invalid_publica
 }
 
 #[test]
+fn go_runtime_version_decision_establishes_one_checked_in_source() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let decision: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/decisions/runtime-go-version-2026-07-23.json"))
+            .expect("the approved Go version decision must be public and checked in"),
+    )
+    .expect("the approved Go version decision must be JSON");
+    assert_eq!(decision["status"], "approved");
+    assert_eq!(decision["selectedVersion"], "0.1.0");
+    assert_eq!(
+        fs::read_to_string(root.join("packages/runtime-go/VERSION"))
+            .expect("the approved Go version must have one checked-in source"),
+        "0.1.0\n"
+    );
+
+    let catalog: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog.json")).expect("read canonical catalog"),
+    )
+    .expect("parse canonical catalog");
+    let go = catalog["units"]
+        .as_array()
+        .expect("catalog units")
+        .iter()
+        .find(|unit| unit["id"] == "vexil-runtime-go")
+        .expect("Go runtime catalog unit");
+    assert_eq!(go["publication"]["status"], "source-inventory-only");
+    assert_eq!(go["versionSource"]["format"], "go-version-file");
+    assert_eq!(go["versionSource"]["observedDeclaration"], "0.1.0");
+
+    vexil_release_governance_validator::validate_candidate_tag(
+        &root,
+        &catalog,
+        "packages/runtime-go/v0.1.0",
+    )
+    .expect("a canonical, new Go candidate tag must remain a pure structural check");
+    vexil_release_governance_validator::validate_candidate_tag(
+        &root,
+        &catalog,
+        "vexil-runtime-ts-v0.4.1",
+    )
+    .expect("a TypeScript candidate must match its checked-in source version");
+    for candidate in ["v0.1.0", "vexil-codegen-go-v0.4.3", "vexil-runtime-ts-v0.4.2"] {
+        vexil_release_governance_validator::validate_candidate_tag(&root, &catalog, candidate)
+            .expect_err("root, legacy, and historical candidate tags must fail closed");
+    }
+    let rust_runtime_collision = vexil_release_governance_validator::validate_candidate_tag(
+        &root,
+        &catalog,
+        "vexil-runtime-v0.5.1",
+    )
+    .expect_err("the Rust runtime's canonical namespace must still reject Historical Tag reuse");
+    assert!(
+        rust_runtime_collision.contains("collides"),
+        "the Rust runtime namespace must reach Historical Tag collision validation: {rust_runtime_collision}"
+    );
+
+    let mut duplicate_namespace = catalog.clone();
+    let units = duplicate_namespace["units"].as_array_mut().expect("catalog units");
+    let ts_namespace = units
+        .iter()
+        .find(|unit| unit["id"] == "vexil-runtime-ts")
+        .expect("TypeScript runtime")
+        ["canonicalTagNamespace"]
+        .clone();
+    units.iter_mut()
+        .find(|unit| unit["id"] == "vexil-runtime-go")
+        .expect("Go runtime")["canonicalTagNamespace"] = ts_namespace;
+    vexil_release_governance_validator::validate_catalog(&root, &duplicate_namespace)
+        .expect_err("future canonical tag namespaces must remain unique");
+
+    for invalid_version in ["", "\n", "0.1.0\n\n", " 0.1.0\n", "0.1.0 \n", "0.1\n", "01.1.0\n", "0.1.0\r\n"] {
+        vexil_release_governance_validator::strict_go_version_declaration(invalid_version)
+            .expect_err("Go VERSION must be exactly one strict SemVer token followed by LF");
+    }
+
+    let mut stale_go_version = catalog.clone();
+    let go_version_source = stale_go_version["units"]
+        .as_array_mut()
+        .expect("catalog units")
+        .iter_mut()
+        .find(|unit| unit["id"] == "vexil-runtime-go")
+        .expect("Go runtime")
+        .get_mut("versionSource")
+        .expect("Go version source");
+    go_version_source["observedDeclaration"] = Value::String("0.1.1".into());
+    vexil_release_governance_validator::validate_catalog(&root, &stale_go_version)
+        .expect_err("a stale Go VERSION observation must fail closed");
+
+    for forbidden_authority in [
+        "packages/runtime-go/go.mod",
+        "packages/runtime-ts/package-lock.json",
+        ".github/workflows/npm-publish.yml",
+        "release/history/baseline-tags.json",
+        "CHANGELOG.md",
+        "C:/Users/private/VERSION",
+    ] {
+        let mut forged_authority = catalog.clone();
+        let version_source = forged_authority["units"]
+            .as_array_mut()
+            .expect("catalog units")
+            .iter_mut()
+            .find(|unit| unit["id"] == "vexil-runtime-go")
+            .expect("Go runtime")
+            .get_mut("versionSource")
+            .expect("Go version source");
+        version_source["path"] = Value::String(forbidden_authority.into());
+        vexil_release_governance_validator::validate_catalog(&root, &forged_authority)
+            .expect_err("Go version authority must remain its checked-in VERSION file");
+    }
+
+    let lockfile = fs::read_to_string(root.join("packages/runtime-ts/package-lock.json"))
+        .expect("read TypeScript lockfile");
+    vexil_release_governance_validator::validate_typescript_lockfile_agreement(&lockfile, "0.4.1")
+        .expect("TypeScript lockfile root declaration must agree with package.json");
+    vexil_release_governance_validator::validate_typescript_lockfile_agreement(
+        &lockfile.replacen("\"version\": \"0.4.1\"", "\"version\": \"0.4.2\"", 2),
+        "0.4.1",
+    )
+    .expect_err("TypeScript lockfile disagreement must not become version authority");
+    let mut rootless_lockfile: Value = serde_json::from_str(&lockfile).expect("parse TypeScript lockfile");
+    rootless_lockfile["packages"]
+        .as_object_mut()
+        .expect("lockfile packages")
+        .remove("");
+    vexil_release_governance_validator::validate_typescript_lockfile_agreement(
+        &serde_json::to_string(&rootless_lockfile).expect("serialize rootless lockfile"),
+        "0.4.1",
+    )
+    .expect_err("TypeScript lockfiles without a root package declaration must fail closed");
+
+    let vexilc_main = fs::read_to_string(root.join("crates/vexilc/src/main.rs"))
+        .expect("read vexilc main source");
+    vexil_release_governance_validator::validate_vexilc_version_display(&vexilc_main, "0.5.1")
+        .expect("vexilc display must derive from its package version");
+    vexil_release_governance_validator::validate_vexilc_version_display(
+        &vexilc_main.replace("env!(\"CARGO_PKG_VERSION\")", "\"0.0.0\""),
+        "0.5.1",
+    )
+    .expect_err("vexilc must not hard-code a displayed version");
+    vexil_release_governance_validator::validate_vexilc_version_display(
+        &vexilc_main.replace(
+            "println!(\"vexilc {}\", env!(\"CARGO_PKG_VERSION\"));",
+            "println!(\"vexilc 0.0.0\"); // println!(\"vexilc {}\", env!(\"CARGO_PKG_VERSION\"));",
+        ),
+        "0.5.1",
+    )
+    .expect_err("a comment must not satisfy the vexilc version display control");
+
+    let npm_workflow = fs::read_to_string(root.join(".github/workflows/npm-publish.yml"))
+        .expect("read publication-disabled npm workflow");
+    vexil_release_governance_validator::validate_npm_publish_workflow_source(&npm_workflow)
+        .expect("the canonical npm workflow must preserve its advisory boundary");
+    vexil_release_governance_validator::validate_npm_publish_workflow_source(
+        &npm_workflow.replace(
+            "- \"vexil-runtime-ts-v*\"",
+            "- \"vexil-runtime-v*\"\n      # - \"vexil-runtime-ts-v*\"",
+        ),
+    )
+    .expect_err("a comment must not satisfy the canonical npm tag trigger control");
+    vexil_release_governance_validator::validate_npm_publish_workflow_source(
+        &npm_workflow.replace("- run: npm test", "- run: npm publish"),
+    )
+    .expect_err("the publication-disabled npm workflow must reject active publication commands");
+}
+
+#[test]
 fn external_control_records_and_workflows_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_external_controls_repository(&root)
@@ -628,6 +794,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     fs::create_dir_all(isolated.join("release/history/observations")).unwrap();
     fs::create_dir_all(isolated.join("release/history/entries")).unwrap();
     fs::create_dir_all(isolated.join("release/history/repair-proposals")).unwrap();
+    fs::create_dir_all(isolated.join("release/decisions")).unwrap();
     fs::create_dir_all(isolated.join("docs/book/src/release")).unwrap();
     fs::create_dir_all(isolated.join(".github/workflows")).unwrap();
     fs::create_dir_all(isolated.join("packages/runtime-go")).unwrap();
@@ -653,6 +820,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/history-reconciliation-decision.schema.json",
         "release/schemas/catalog.schema.json",
         "release/catalog.json",
+        "release/decisions/runtime-go-version-2026-07-23.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
         "release/advisory/automation-contract.json",
@@ -698,6 +866,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/runbooks/advisory-manual-fallback.md",
         "GOVERNANCE.md",
         ".github/workflows/release.yml",
+        ".github/workflows/npm-publish.yml",
         "crates/vexil-lang/Cargo.toml",
         "crates/vexilc/Cargo.toml",
         "crates/vexilc/src/main.rs",
@@ -709,8 +878,10 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "crates/vexil-store/Cargo.toml",
         "crates/vexil-bench/Cargo.toml",
         "packages/runtime-ts/package.json",
+        "packages/runtime-ts/package-lock.json",
         "packages/runtime-py/pyproject.toml",
         "packages/runtime-go/go.mod",
+        "packages/runtime-go/VERSION",
         "examples/command-protocol/Cargo.toml",
         "examples/cross-language/rust-device/Cargo.toml",
         "examples/multi-file-project/Cargo.toml",
@@ -731,6 +902,28 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     }
     vexil_release_governance_validator::validate_repository(&isolated)
         .expect("isolated public copy must validate");
+    let isolated_catalog: Value = serde_json::from_str(
+        &fs::read_to_string(isolated.join("release/catalog.json"))
+            .expect("read isolated canonical catalog"),
+    )
+    .expect("parse isolated canonical catalog");
+    vexil_release_governance_validator::validate_candidate_tag(
+        &isolated,
+        &isolated_catalog,
+        "vexil-runtime-ts-v0.4.1",
+    )
+    .expect("candidate validation must accept a source-matching nonhistorical tag");
+    let baseline_path = isolated.join("release/history/baseline-tags.json");
+    let invalid_baseline = fs::read_to_string(&baseline_path)
+        .expect("read isolated Historical Tag baseline")
+        .replacen("\"status\": \"ratified\"", "\"status\": \"awaiting-ratification\"", 1);
+    fs::write(&baseline_path, invalid_baseline).expect("write invalid isolated Historical Tag baseline");
+    vexil_release_governance_validator::validate_candidate_tag(
+        &isolated,
+        &isolated_catalog,
+        "vexil-runtime-ts-v0.4.1",
+    )
+    .expect_err("candidate validation must reject an unratified Historical Tag baseline");
     fs::remove_dir_all(isolated).unwrap();
 }
 

@@ -21,7 +21,7 @@ This is a source-led inventory, not a Release Manifest, publication assertion, p
 | `vexil-lang` | `crates/vexil-lang` | cargo-package `vexil-lang` | `source-inventory-only` | `0.4.3` in `crates/vexil-lang/Cargo.toml` | `vexil-lang-v<semver>` |
 | `vexil-release-governance-validator` | `release/validator` | internal-tool `vexil-release-governance-validator` | `non-publishable` | `0.1.0` in `release/validator/Cargo.toml` | `not applicable (non-publishable)` |
 | `vexil-runtime` | `crates/vexil-runtime` | cargo-package `vexil-runtime` | `source-inventory-only` | `0.5.1` in `crates/vexil-runtime/Cargo.toml` | `vexil-runtime-v<semver>` |
-| `vexil-runtime-go` | `packages/runtime-go` | go-module `github.com/vexil-lang/vexil/packages/runtime-go` | `blocked-missing-version-source` | `none (required file absent)` in `packages/runtime-go/VERSION` | `packages/runtime-go/v<semver>` |
+| `vexil-runtime-go` | `packages/runtime-go` | go-module `github.com/vexil-lang/vexil/packages/runtime-go` | `source-inventory-only` | `0.1.0` in `packages/runtime-go/VERSION` | `packages/runtime-go/v<semver>` |
 | `vexil-runtime-py` | `packages/runtime-py` | python-project `vexil_runtime` | `candidate-unreleased` | `0.1.0` in `packages/runtime-py/pyproject.toml` | `vexil-runtime-py-v<semver>` |
 | `vexil-runtime-ts` | `packages/runtime-ts` | npm-package `@vexil-lang/runtime` | `source-inventory-only` | `0.4.1` in `packages/runtime-ts/package.json` | `vexil-runtime-ts-v<semver>` |
 | `vexil-store` | `crates/vexil-store` | cargo-package `vexil-store` | `source-inventory-only` | `0.4.2` in `crates/vexil-store/Cargo.toml` | `vexil-store-v<semver>` |
@@ -29,7 +29,7 @@ This is a source-led inventory, not a Release Manifest, publication assertion, p
 
 ## Boundary and validation
 
-`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. `blocked-missing-version-source` means the Go module has no checked-in `VERSION` source; its `go.mod` module path is not a version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.
+`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. The Go module's checked-in `VERSION` source identifies only its source state; `go.mod` supplies the module target identity, not its version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.
 
 Dependency-edge entries are provisional until the typed graph is established. A catalog entry or target category never establishes authorization, registry identity, publication eligibility, release ordering, or Release Set membership. Root project-wide `v<semver>` tags remain prohibited during recovery.
 
@@ -37,4 +37,4 @@ Dependency-edge entries are provisional until the typed graph is established. A 
 cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
 ```
 
-The offline command validates source paths, direct declaration observations, unique unit identities, the Go blocker, and byte-exact generated-view parity. It performs no provider query or release effect.
+The offline command validates source paths, direct declaration observations, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.

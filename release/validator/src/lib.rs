@@ -216,7 +216,8 @@ pub fn validate_catalog_repository(root: &Path) -> Result<(), String> {
     validate_catalog(root, &catalog)?;
     let documentation = fs::read_to_string(root.join("docs/book/src/release/catalog.md"))
         .map_err(|error| format!("read release catalog documentation: {error}"))?;
-    validate_catalog_documentation_parity(root, &catalog, &documentation)
+    validate_catalog_documentation_parity(root, &catalog, &documentation)?;
+    validate_npm_publish_workflow(root)
 }
 
 pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
@@ -307,21 +308,21 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
         .find(|unit| unit["id"] == "vexil-runtime-go")
         .ok_or("release catalog is missing the Go runtime")?;
     let go = object(go, "Go runtime catalog unit")?;
+    let go_version = object(required_value(go, "versionSource")?, "Go version source")?;
+    let observed_go_version = text(
+        go_version.get("observedDeclaration"),
+        "Go version source observed declaration",
+    )?;
     if text(
         object(required_value(go, "publication")?, "Go publication")?.get("status"),
         "Go status",
-    )? != "blocked-missing-version-source"
-        || text(
-            object(required_value(go, "versionSource")?, "Go version source")?.get("path"),
-            "Go version source path",
-        )? != "packages/runtime-go/VERSION"
-        || required_value(
-            object(required_value(go, "versionSource")?, "Go version source")?,
-            "observedDeclaration",
-        )? != &Value::Null
+    )? != "source-inventory-only"
+        || text(go_version.get("path"), "Go version source path")? != "packages/runtime-go/VERSION"
+        || text(go_version.get("format"), "Go version source format")? != "go-version-file"
     {
-        return Err("Go runtime must retain the explicit missing VERSION blocker without an invented version".to_owned());
+        return Err("Go runtime must use its checked-in VERSION source without asserting release readiness".to_owned());
     }
+    validate_go_version_decision(root, observed_go_version)?;
     let python = units
         .iter()
         .find(|unit| unit["id"] == "vexil-runtime-py")
@@ -339,6 +340,59 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
     )? != "candidate-unreleased"
     {
         return Err("Python runtime must be cataloged as candidate-unreleased".to_owned());
+    }
+    Ok(())
+}
+
+/// Validates an explicitly proposed, future component tag without treating a
+/// catalog observation as an implicit release proposal or contacting a provider.
+pub fn validate_candidate_tag(root: &Path, catalog: &Value, candidate: &str) -> Result<(), String> {
+    validate_catalog_schema(root, catalog)?;
+    validate_catalog(root, catalog)?;
+    if candidate.trim() != candidate || candidate.is_empty() {
+        return Err("candidate tag must be a non-empty, whitespace-free string".to_owned());
+    }
+    if let Some(version) = candidate.strip_prefix('v') {
+        if validate_strict_semver(version).is_ok() {
+            return Err("project-wide root v<semver> tags are prohibited during recovery".to_owned());
+        }
+    }
+    let mut matched_unit = None;
+    for unit in array(catalog.get("units"), "release catalog units")? {
+        let unit = object(unit, "release catalog unit")?;
+        let namespace = text(unit.get("canonicalTagNamespace"), "catalog tag namespace")?;
+        if namespace == "not-applicable" {
+            continue;
+        }
+        let prefix = namespace
+            .strip_suffix("<semver>")
+            .ok_or("catalog canonical tag namespace must end in <semver>")?;
+        if let Some(version) = candidate.strip_prefix(prefix) {
+            validate_strict_semver(version)?;
+            let id = text(unit.get("id"), "catalog unit id")?;
+            let observed = text(
+                object(required_value(unit, "versionSource")?, "catalog version source")?
+                    .get("observedDeclaration"),
+                "catalog version source observed declaration",
+            )?;
+            if version != observed {
+                return Err(format!(
+                    "candidate tag version must match the checked-in {id} version source"
+                ));
+            }
+            if matched_unit.replace(id).is_some() {
+                return Err("candidate tag matches more than one canonical future tag namespace".to_owned());
+            }
+        }
+    }
+    if matched_unit.is_none() {
+        return Err("candidate tag does not match a canonical future tag namespace".to_owned());
+    }
+    validate_history_repository(root)?;
+    let history = read_json(&root.join("release/history/baseline-tags.json"))?;
+    let historical_tags = array(history.get("tags"), "historical tag baseline tags")?;
+    if historical_tags.iter().any(|tag| tag.get("name").and_then(Value::as_str) == Some(candidate)) {
+        return Err("candidate tag collides with the ratified Historical Tag baseline".to_owned());
     }
     Ok(())
 }
@@ -476,11 +530,21 @@ fn validate_catalog_version_source(
     let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
     require_catalog_path_within_source_root(source_root, path, "version source")?;
     if id == "vexil-runtime-go" {
-        if root.join(path).exists() || format != "required-file-absent" || !observed.is_null() {
+        let observed = observed
+            .as_str()
+            .ok_or("Go catalog version declaration must be a string")?;
+        if format != "go-version-file" {
             return Err(
-                "Go runtime version source must remain the absent required VERSION file".to_owned(),
+                "Go runtime version source must use the checked-in VERSION file".to_owned(),
             );
         }
+        let content = fs::read_to_string(root.join(path))
+            .map_err(|error| format!("read catalog version source {path}: {error}"))?;
+        let declaration = strict_go_version_declaration(&content)?;
+        if declaration != observed {
+            return Err(format!("catalog observed declaration is stale or absent: {path}"));
+        }
+        validate_go_version_decision(root, observed)?;
         return Ok(());
     }
     let observed = observed
@@ -493,6 +557,16 @@ fn validate_catalog_version_source(
         return Err(format!(
             "catalog observed declaration is stale or absent: {path}"
         ));
+    }
+    if id == "vexil-runtime-ts" {
+        let lockfile = fs::read_to_string(root.join("packages/runtime-ts/package-lock.json"))
+            .map_err(|error| format!("read TypeScript package lockfile: {error}"))?;
+        validate_typescript_lockfile_agreement(&lockfile, observed)?;
+    }
+    if id == "vexilc" {
+        let main = fs::read_to_string(root.join("crates/vexilc/src/main.rs"))
+            .map_err(|error| format!("read vexilc version display source: {error}"))?;
+        validate_vexilc_version_display(&main, observed)?;
     }
     Ok(())
 }
@@ -668,9 +742,9 @@ fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<()
                 name == toml_string_in_section(content.as_deref().unwrap(), "project", "name")?
             }
             "go-module" => {
-                if format != "required-file-absent" || classification != "blocked-version-source" {
+                if format != "go-version-file" || classification != "publishable-source-unit" {
                     return Err(
-                        "catalog Go target must retain the explicit missing-version blocker"
+                        "catalog Go target must use the checked-in VERSION source"
                             .to_owned(),
                     );
                 }
@@ -719,8 +793,79 @@ fn version_declaration_from_source(content: &str, format: &str) -> Result<String
         "cargo-package-version" => toml_string_in_section(content, "package", "version"),
         "pyproject-project-version" => toml_string_in_section(content, "project", "version"),
         "package-json-version" => json_manifest_field(content, "version"),
+        "go-version-file" => strict_go_version_declaration(content),
         _ => Err("catalog version source format is invalid for a present source".to_owned()),
     }
+}
+
+fn validate_go_version_decision(root: &Path, selected_version: &str) -> Result<(), String> {
+    let decision = read_json(&root.join("release/decisions/runtime-go-version-2026-07-23.json"))?;
+    let decision = object(&decision, "Go runtime version decision")?;
+    require_string(decision, "$id", "https://vexil.dev/release/decisions/runtime-go-version-2026-07-23.json")?;
+    require_string(decision, "recordKind", "package-maintenance-decision")?;
+    require_string(decision, "decisionId", "runtime-go-version-2026-07-23")?;
+    require_string(decision, "status", "approved")?;
+    require_string(decision, "unitId", "vexil-runtime-go")?;
+    require_string(decision, "versionSource", "packages/runtime-go/VERSION")?;
+    require_string(decision, "canonicalTagNamespace", "packages/runtime-go/v<semver>")?;
+    if text(decision.get("selectedVersion"), "Go decision selected version")? != selected_version {
+        return Err("Go VERSION must agree with the approved public maintenance decision".to_owned());
+    }
+    validate_strict_semver(selected_version)?;
+    let approval = object(required_value(decision, "approval")?, "Go version decision approval")?;
+    require_string(approval, "actorId", "github:furkanmamuk")?;
+    if text(approval.get("approvedAt"), "Go decision approval timestamp")?.is_empty()
+        || text(approval.get("decision"), "Go decision approval text")?.is_empty()
+    {
+        return Err("Go version decision approval must retain timestamp and decision text".to_owned());
+    }
+    Ok(())
+}
+
+pub fn strict_go_version_declaration(content: &str) -> Result<String, String> {
+    if content.contains('\r') || !content.ends_with('\n') || content[..content.len() - 1].contains('\n') {
+        return Err("Go VERSION must contain exactly one SemVer token followed by LF".to_owned());
+    }
+    let version = &content[..content.len() - 1];
+    validate_strict_semver(version)?;
+    Ok(version.to_owned())
+}
+
+fn validate_strict_semver(value: &str) -> Result<(), String> {
+    let (core_and_pre, build) = match value.split_once('+') {
+        Some((left, right)) if !right.contains('+') => (left, Some(right)),
+        Some(_) => return Err("version must be strict SemVer".to_owned()),
+        None => (value, None),
+    };
+    let (core, pre) = match core_and_pre.split_once('-') {
+        Some((left, right)) if !right.contains('-') || !right.is_empty() => (left, Some(right)),
+        Some(_) => return Err("version must be strict SemVer".to_owned()),
+        None => (core_and_pre, None),
+    };
+    let numeric = |component: &str| {
+        !component.is_empty()
+            && component.bytes().all(|byte| byte.is_ascii_digit())
+            && (component == "0" || !component.starts_with('0'))
+    };
+    if core.split('.').count() != 3 || !core.split('.').all(numeric) {
+        return Err("version must be strict SemVer".to_owned());
+    }
+    let identifier = |component: &str, forbid_numeric_leading_zero: bool| {
+        !component.is_empty()
+            && component
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+            && (!forbid_numeric_leading_zero
+                || !component.bytes().all(|byte| byte.is_ascii_digit())
+                || component == "0"
+                || !component.starts_with('0'))
+    };
+    if pre.is_some_and(|suffix| !suffix.split('.').all(|part| identifier(part, true)))
+        || build.is_some_and(|suffix| !suffix.split('.').all(|part| identifier(part, false)))
+    {
+        return Err("version must be strict SemVer".to_owned());
+    }
+    Ok(())
 }
 
 fn cargo_package_name(content: &str) -> Result<String, String> {
@@ -784,6 +929,60 @@ fn json_manifest_field(content: &str, field: &str) -> Result<String, String> {
         .ok_or_else(|| format!("package.json is missing string {field}"))
 }
 
+pub fn validate_typescript_lockfile_agreement(
+    lockfile_content: &str,
+    package_version: &str,
+) -> Result<(), String> {
+    let lockfile: Value = serde_json::from_str(lockfile_content)
+        .map_err(|error| format!("parse TypeScript package lockfile: {error}"))?;
+    let root_package = lockfile
+        .get("packages")
+        .and_then(Value::as_object)
+        .and_then(|packages| packages.get(""))
+        .ok_or("TypeScript package-lock must include packages[\"\"] root package")?;
+    if root_package.get("version").and_then(Value::as_str) != Some(package_version) {
+        return Err("TypeScript package-lock root version must agree with package.json".to_owned());
+    }
+    Ok(())
+}
+
+pub fn validate_vexilc_version_display(source: &str, package_version: &str) -> Result<(), String> {
+    let marker = "\"--version\" | \"-V\" =>";
+    let (_, version_arm) = source
+        .split_once(marker)
+        .ok_or("vexilc must retain a --version command branch")?;
+    let opening = version_arm
+        .find('{')
+        .ok_or("vexilc --version command branch must have a body")?;
+    let mut depth = 0usize;
+    let mut closing = None;
+    for (offset, character) in version_arm[opening..].char_indices() {
+        match character {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    closing = Some(opening + offset);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let closing = closing.ok_or("vexilc --version command branch is not closed")?;
+    let body = &version_arm[opening + 1..closing];
+    let normalized: String = body.chars().filter(|character| !character.is_whitespace()).collect();
+    if body.contains("//")
+        || body.contains("/*")
+        || normalized != "println!(\"vexilc{}\",env!(\"CARGO_PKG_VERSION\"));return;"
+        || package_version.is_empty()
+    {
+        Err("vexilc --version must display CARGO_PKG_VERSION from its Cargo package source".to_owned())
+    } else {
+        Ok(())
+    }
+}
+
 pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, String> {
     validate_catalog_schema(root, catalog)?;
     validate_catalog(root, catalog)?;
@@ -826,8 +1025,78 @@ pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, S
             }
         ));
     }
-    markdown.push_str("\n## Boundary and validation\n\n`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. `blocked-missing-version-source` means the Go module has no checked-in `VERSION` source; its `go.mod` module path is not a version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.\n\nDependency-edge entries are provisional until the typed graph is established. A catalog entry or target category never establishes authorization, registry identity, publication eligibility, release ordering, or Release Set membership. Root project-wide `v<semver>` tags remain prohibited during recovery.\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe offline command validates source paths, direct declaration observations, unique unit identities, the Go blocker, and byte-exact generated-view parity. It performs no provider query or release effect.\n");
+    markdown.push_str("\n## Boundary and validation\n\n`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. The Go module's checked-in `VERSION` source identifies only its source state; `go.mod` supplies the module target identity, not its version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.\n\nDependency-edge entries are provisional until the typed graph is established. A catalog entry or target category never establishes authorization, registry identity, publication eligibility, release ordering, or Release Set membership. Root project-wide `v<semver>` tags remain prohibited during recovery.\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe offline command validates source paths, direct declaration observations, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.\n");
     Ok(markdown)
+}
+
+fn validate_npm_publish_workflow(root: &Path) -> Result<(), String> {
+    let workflow_path = root.join(".github/workflows/npm-publish.yml");
+    let workflow = fs::read_to_string(&workflow_path)
+        .map_err(|error| format!("read {}: {error}", workflow_path.display()))?;
+    validate_npm_publish_workflow_source(&workflow)
+}
+
+pub fn validate_npm_publish_workflow_source(workflow: &str) -> Result<(), String> {
+    let lines: Vec<(usize, String)> = workflow
+        .lines()
+        .filter_map(|line| {
+            let uncommented = line.split_once('#').map_or(line, |(before, _)| before);
+            let trimmed = uncommented.trim_end();
+            (!trimmed.trim().is_empty()).then(|| (trimmed.len() - trimmed.trim_start().len(), trimmed.trim().to_owned()))
+        })
+        .collect();
+
+    let mut tag_patterns = Vec::new();
+    let mut in_on = false;
+    let mut in_push = false;
+    let mut in_tags = false;
+    for (indent, value) in &lines {
+        if *indent == 0 {
+            in_on = value == "on:";
+            in_push = false;
+            in_tags = false;
+            continue;
+        }
+        if !in_on {
+            continue;
+        }
+        if *indent == 2 {
+            in_push = value == "push:";
+            in_tags = false;
+            continue;
+        }
+        if in_push && *indent == 4 {
+            in_tags = value == "tags:";
+            continue;
+        }
+        if in_tags && *indent >= 6 {
+            let pattern = value
+                .strip_prefix("- ")
+                .ok_or("npm workflow tags must be a YAML list")?
+                .trim_matches('"')
+                .to_owned();
+            tag_patterns.push(pattern);
+        }
+    }
+    if tag_patterns != ["vexil-runtime-ts-v*"] {
+        return Err("npm publication-disabled workflow must use only the canonical TypeScript tag namespace".to_owned());
+    }
+    let material = lines
+        .iter()
+        .map(|(_, value)| value.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let lower_material = material.to_ascii_lowercase();
+    if lower_material.contains("id-token: write")
+        || lower_material.contains(": write")
+        || material.contains("NPM_TOKEN")
+        || material.contains("NODE_AUTH_TOKEN")
+        || lower_material.contains("publish")
+        || lower_material.contains("unpublish")
+    {
+        return Err("npm publication-disabled workflow must retain its no-credential, no-publication boundary".to_owned());
+    }
+    Ok(())
 }
 
 pub fn validate_catalog_documentation_parity(

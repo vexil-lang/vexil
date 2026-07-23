@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/decisions/runtime-go-version-2026-07-23.json",
+  "version": "1.0",
+  "recordKind": "package-maintenance-decision",
+  "decisionId": "runtime-go-version-2026-07-23",
+  "status": "approved",
+  "unitId": "vexil-runtime-go",
+  "selectedVersion": "0.1.0",
+  "versionSource": "packages/runtime-go/VERSION",
+  "canonicalTagNamespace": "packages/runtime-go/v<semver>",
+  "rationale": "The current Go runtime is assigned 0.1.0 as its first independently governed source version. This is a fresh maintainer decision for the checked-in source surface, not an inference from go.mod, other package versions, historical tags, registry observations, or a Release Set.",
+  "authorityBoundary": "This decision establishes only the checked-in source declaration. It does not create a tag, select a Release Set, establish registry identity, approve a Manifest, authorize publication, or alter Historical Tag evidence.",
+  "approval": {
+    "actorId": "github:furkanmamuk",
+    "approvedAt": "2026-07-23T16:55:00Z",
+    "decision": "Approve 0.1.0 as the initial independently governed source version for packages/runtime-go."
+  }
+}

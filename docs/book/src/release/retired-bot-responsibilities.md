@@ -25,7 +25,7 @@ The source-led [Release Unit Catalog](./catalog.md) determines the maintained-un
 | Mismatch ID | Unit | Observed historical gap |
 |---|---|---|
 | `RBR-MISMATCH-001` | `crates/vexil-codegen-py` | The workspace manifest declares the vexil-codegen-py crate, but .vexilbot.toml has no release.crates.vexil-codegen-py entry. |
-| `RBR-MISMATCH-002` | `packages/runtime-go` | packages/runtime-go has a Go module manifest, but .vexilbot.toml has no package or dependency-order entry; the catalog records its missing checked-in VERSION source as a blocker. |
+| `RBR-MISMATCH-002` | `packages/runtime-go` | packages/runtime-go has a Go module manifest and a checked-in VERSION source, but .vexilbot.toml has no package or dependency-order entry. |
 | `RBR-MISMATCH-003` | `packages/runtime-py` | packages/runtime-py has a Python project manifest, but .vexilbot.toml has no package or dependency-order entry; the catalog records it as candidate-unreleased rather than published. |
 
 ## Evidence and use
