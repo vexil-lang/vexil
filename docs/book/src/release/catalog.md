@@ -2,7 +2,7 @@
 
 > Generated view of [`release/catalog.json`](../../../../release/catalog.json). The JSON catalog is canonical; this Markdown is non-authoritative and parity-checked.
 
-This is a source-led inventory, not a Release Manifest, publication assertion, provider-identity claim, release-order decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md).
+This is a source-led inventory and typed structural dependency graph, not a Release Manifest, publication assertion, provider-identity claim, Release Set decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md).
 
 ## Units
 
@@ -27,14 +27,41 @@ This is a source-led inventory, not a Release Manifest, publication assertion, p
 | `vexil-store` | `crates/vexil-store` | cargo-package `vexil-store` | `source-inventory-only` | `0.4.2` in `crates/vexil-store/Cargo.toml` | `vexil-store-v<semver>` |
 | `vexilc` | `crates/vexilc` | cargo-package `vexilc`; cargo-binary `vexilc` | `source-inventory-only` | `0.5.1` in `crates/vexilc/Cargo.toml` | `vexilc-v<semver>` |
 
+## Typed dependency graph
+
+Each edge is recorded on its dependent unit. `related-before-unit` means the related unit's version must be publicly resolvable before the declaring unit is published. `publish_before` edges cite their checked-in runtime manifest declaration; `compatibility` and `bundle` edges cite an approved public release-dependency-edge decision. The catalog stores edges in stable `edgeType`, related-unit, evidence-kind, path, and location order.
+
+| Dependency | Dependent | Type | Public source evidence |
+|---|---|---|---|
+| `vexil-lang` | `vexil-codegen-go` | `publish_before` | `crates/vexil-codegen-go/Cargo.toml` `dependencies.vexil-lang` |
+| `vexil-lang` | `vexil-codegen-py` | `publish_before` | `crates/vexil-codegen-py/Cargo.toml` `dependencies.vexil-lang` |
+| `vexil-lang` | `vexil-codegen-rust` | `publish_before` | `crates/vexil-codegen-rust/Cargo.toml` `dependencies.vexil-lang` |
+| `vexil-lang` | `vexil-codegen-ts` | `publish_before` | `crates/vexil-codegen-ts/Cargo.toml` `dependencies.vexil-lang` |
+| `vexil-lang` | `vexil-store` | `publish_before` | `crates/vexil-store/Cargo.toml` `dependencies.vexil-lang` |
+| `vexil-runtime` | `vexil-store` | `publish_before` | `crates/vexil-store/Cargo.toml` `dependencies.vexil-runtime` |
+| `vexil-codegen-go` | `vexilc` | `publish_before` | `crates/vexilc/Cargo.toml` `dependencies.vexil-codegen-go` |
+| `vexil-codegen-py` | `vexilc` | `publish_before` | `crates/vexilc/Cargo.toml` `dependencies.vexil-codegen-py` |
+| `vexil-codegen-rust` | `vexilc` | `publish_before` | `crates/vexilc/Cargo.toml` `dependencies.vexil-codegen-rust` |
+| `vexil-codegen-ts` | `vexilc` | `publish_before` | `crates/vexilc/Cargo.toml` `dependencies.vexil-codegen-ts` |
+| `vexil-lang` | `vexilc` | `publish_before` | `crates/vexilc/Cargo.toml` `dependencies.vexil-lang` |
+| `vexil-store` | `vexilc` | `publish_before` | `crates/vexilc/Cargo.toml` `dependencies.vexil-store` |
+
+Only `publish_before` participates in structural ordering. `compatibility` requires an approved shared-evidence decision without imposing registry order; `bundle` requires an approved identity decision and never creates a second Release Unit.
+
+## Structural source order
+
+The current all-unit structural order is derived from checked-in manifests and catalog edges only:
+
+`vexil-lang` → `vexil-codegen-go` → `vexil-codegen-py` → `vexil-codegen-rust` → `vexil-codegen-ts` → `vexil-runtime` → `vexil-runtime-go` → `vexil-runtime-ts` → `vexil-store` → `vexilc`
+
 ## Boundary and validation
 
 `candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. The Go module's checked-in `VERSION` source identifies only its source state; `go.mod` supplies the module target identity, not its version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.
 
-Dependency-edge entries are provisional until the typed graph is established. A catalog entry or target category never establishes authorization, registry identity, publication eligibility, release ordering, or Release Set membership. Root project-wide `v<semver>` tags remain prohibited during recovery.
+A valid graph does not establish packageability, authorization, registry identity, publication eligibility, Release Set membership, Manifest approval, tags, or publication. Root project-wide `v<semver>` tags remain prohibited during recovery.
 
 ```sh
 cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
 ```
 
-The offline command validates source paths, direct declaration observations, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.
+The offline command validates source paths, runtime manifest declarations, typed graph agreement, deterministic structural order, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.

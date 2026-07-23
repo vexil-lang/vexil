@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vexil.dev/release/schemas/catalog.schema.json",
   "title": "Vexil Release Unit Catalog",
-  "description": "Canonical source-led inventory of Vexil release units. It records source declarations and blockers; it is not a release Manifest, publication assertion, or version-selection decision.",
+  "description": "Canonical source-led inventory and typed dependency graph of Vexil release units. It is not a Release Manifest, publication assertion, or version-selection decision.",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "catalogSchema", "version", "authorityBoundary", "units", "normalization"],
@@ -30,7 +30,7 @@
         "versionSource": {"$ref": "#/$defs/versionSource"},
         "changelog": {"$ref": "#/$defs/changelog"},
         "compatibilitySurface": {"type": "string", "minLength": 1},
-        "dependencyEdges": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/dependencyEdge"}},
+        "dependencyEdges": {"type": "array", "items": {"$ref": "#/$defs/dependencyEdge"}},
         "canonicalTagNamespace": {"type": "string", "oneOf": [{"const": "not-applicable"}, {"pattern": "^[a-z][a-z0-9-]*-v<semver>$"}, {"const": "packages/runtime-go/v<semver>"}]}
       }
     },
@@ -39,7 +39,8 @@
     "publication": {"type": "object", "additionalProperties": false, "required": ["classification", "targetCategory", "status"], "properties": {"classification": {"enum": ["publishable-source-unit", "candidate-unreleased", "blocked-version-source", "non-publishable"]}, "targetCategory": {"enum": ["future-registry-target", "source-only-module", "non-release"]}, "status": {"enum": ["source-inventory-only", "candidate-unreleased", "blocked-missing-version-source", "non-publishable"]}}},
     "versionSource": {"type": "object", "additionalProperties": false, "required": ["path", "format", "observedDeclaration"], "properties": {"path": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+$"}, "format": {"enum": ["cargo-package-version", "package-json-version", "pyproject-project-version", "go-version-file", "required-file-absent"]}, "observedDeclaration": {"type": ["string", "null"]}}},
     "changelog": {"type": "object", "additionalProperties": false, "required": ["status", "path"], "properties": {"status": {"enum": ["present", "absent", "not-applicable"]}, "path": {"type": ["string", "null"]}}},
-    "dependencyEdge": {"type": "object", "additionalProperties": false, "required": ["kind", "status", "rationale"], "properties": {"kind": {"enum": ["language-wire", "generated-code", "runtime", "none"]}, "status": {"const": "provisional"}, "rationale": {"type": "string", "minLength": 1}}},
-    "normalization": {"type": "object", "additionalProperties": false, "required": ["ordering", "duplicatePolicy", "historyBoundary"], "properties": {"ordering": {"const": "stable-id-ascending"}, "duplicatePolicy": {"const": "reject-duplicate-source-root-or-target"}, "historyBoundary": {"const": "historical-tags-changelog-and-registry-observations-are-evidence-not-version-authority"}}}
+    "dependencyEdge": {"type": "object", "additionalProperties": false, "required": ["edgeType", "relatedUnitId", "direction", "sourceEvidence"], "properties": {"edgeType": {"enum": ["publish_before", "compatibility", "bundle"]}, "relatedUnitId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"}, "direction": {"const": "related-before-unit"}, "sourceEvidence": {"$ref": "#/$defs/sourceEvidence"}}},
+    "sourceEvidence": {"type": "object", "additionalProperties": false, "required": ["sourceKind", "path", "location"], "properties": {"sourceKind": {"enum": ["cargo-runtime-dependency", "npm-runtime-dependency", "python-runtime-dependency", "go-runtime-require", "release-dependency-edge-decision"]}, "path": {"type": "string", "pattern": "^(crates|packages|examples|release)/[A-Za-z0-9._/-]+$"}, "location": {"type": "string", "minLength": 1}}},
+    "normalization": {"type": "object", "additionalProperties": false, "required": ["ordering", "duplicatePolicy", "historyBoundary"], "properties": {"ordering": {"const": "stable-id-ascending; dependencyEdges=edgeType,relatedUnitId,sourceEvidence.sourceKind,path,location ascending; related-before-unit means the related unit must be publicly resolvable before the declaring unit"}, "duplicatePolicy": {"const": "reject-duplicate-source-root-or-target"}, "historyBoundary": {"const": "historical-tags-changelog-and-registry-observations-are-evidence-not-version-authority"}}}
   }
 }

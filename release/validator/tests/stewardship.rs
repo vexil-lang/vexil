@@ -157,9 +157,9 @@ fn catalog_rejects_detached_owners_stale_source_declarations_and_invalid_publica
         .expect_err("catalog units must remain stable-ID ascending");
 
     let mut no_edges = catalog.clone();
-    no_edges["units"][6]["dependencyEdges"] = Value::Array(vec![]);
+    no_edges["units"][6]["dependencyEdges"] = Value::Null;
     vexil_release_governance_validator::validate_catalog_schema(&root, &no_edges)
-        .expect_err("each catalog unit must retain a provisional dependency edge");
+        .expect_err("each catalog unit must retain a typed dependency edge array");
 
     let mut invalid_publication = catalog.clone();
     invalid_publication["units"][6]["publication"]["status"] =
@@ -175,6 +175,300 @@ fn catalog_rejects_detached_owners_stale_source_declarations_and_invalid_publica
 
     vexil_release_governance_validator::render_catalog_markdown(&root, &stale_target)
         .expect_err("catalog rendering must reject a semantically invalid catalog");
+}
+
+#[test]
+fn version_rationales_are_per_unit_and_fail_closed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    vexil_release_governance_validator::validate_version_rationale_repository(&root)
+        .expect("canonical version rationales must bind checked-in catalog versions only");
+
+    let catalog: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog.json")).expect("read canonical catalog"),
+    )
+    .expect("parse canonical catalog");
+    let rationale: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/rationales/vexil-runtime-ts-0-4-1.json"))
+            .expect("read canonical TypeScript runtime rationale"),
+    )
+    .expect("parse canonical TypeScript runtime rationale");
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &rationale)
+        .expect("the canonical rationale must bind one current publishable catalog unit");
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &rationale)
+        .expect("rationale validation must be repeatable");
+
+    let mut shared_evidence = rationale.clone();
+    shared_evidence["$id"] = Value::String(
+        "https://vexil.dev/release/rationales/vexil-runtime-py-0-1-0.json".into(),
+    );
+    shared_evidence["rationaleId"] = Value::String("vexil-runtime-py-0-1-0".into());
+    shared_evidence["unitId"] = Value::String("vexil-runtime-py".into());
+    shared_evidence["proposedPackageVersion"] = Value::String("0.1.0".into());
+    shared_evidence["affectedSurfaces"][1]["surface"] =
+        Value::String("vexil-runtime Python package API".into());
+    shared_evidence["affectedSurfaces"][1]["authorityPath"] =
+        Value::String("packages/runtime-py/pyproject.toml".into());
+    shared_evidence["packageStewardReview"]["assignmentId"] =
+        Value::String("assignment-package-steward-runtime-py-2026-07-14".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &shared_evidence)
+        .expect("multiple units may reference one opaque evidence identity without selecting a release set");
+
+    let mut malformed_evidence = rationale.clone();
+    malformed_evidence["compatibilityEvidenceIdentity"] = Value::String("sha256:ABC".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &malformed_evidence)
+        .expect_err("malformed compatibility evidence identities must fail closed");
+
+    let mut unknown_unit = rationale.clone();
+    unknown_unit["unitId"] = Value::String("missing-release-unit".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &unknown_unit)
+        .expect_err("unknown catalog units must fail closed");
+
+    let mut non_publishable_unit = rationale.clone();
+    non_publishable_unit["unitId"] = Value::String("command-protocol-example".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &non_publishable_unit)
+        .expect_err("non-publishable catalog units cannot receive a release rationale");
+
+    let mut mismatched_version = rationale.clone();
+    mismatched_version["proposedPackageVersion"] = Value::String("99.99.99".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &mismatched_version)
+        .expect_err("rationales must not override checked-in version authority");
+
+    let mut prior_published = rationale.clone();
+    prior_published["previousPackageVersion"]["kind"] =
+        Value::String("prior-published-package-version".into());
+    prior_published["previousPackageVersion"]["version"] = Value::String("0.4.0".into());
+    prior_published["changeClass"] = Value::String("patch-compatible".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &prior_published)
+        .expect_err("prior published versions remain blocked until an explicit public provenance contract exists");
+
+    let mut unordered_assessments = rationale.clone();
+    unordered_assessments["affectedSurfaces"].as_array_mut().unwrap().swap(0, 1);
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &unordered_assessments)
+        .expect_err("affected-surface assessments must remain stable and independent");
+
+    let mut duplicate_namespace = rationale.clone();
+    duplicate_namespace["affectedSurfaces"][1]["namespace"] = Value::String("language-spec".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &duplicate_namespace)
+        .expect_err("each applicable namespace must have an independent assessment");
+
+    let mut missing_namespace = rationale.clone();
+    missing_namespace["affectedSurfaces"].as_array_mut().unwrap().pop();
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &missing_namespace)
+        .expect_err("all three compatibility namespaces require independent assessment");
+
+    let mut missing_review = rationale.clone();
+    missing_review["packageStewardReview"] = Value::Null;
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &missing_review)
+        .expect_err("a Package Steward review is mandatory");
+
+    let mut misattributed_review = rationale.clone();
+    misattributed_review["packageStewardReview"]["actorId"] =
+        Value::String("github:not-the-package-steward".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &misattributed_review)
+        .expect_err("a rationale review must be attributed to the unit Package Steward");
+
+    let mut private_path = rationale.clone();
+    private_path["affectedSurfaces"][0]["authorityPath"] =
+        Value::String("C:\\Users\\private\\evidence.md".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &private_path)
+        .expect_err("private or local authority paths must fail closed");
+
+    let mut traversing_path = rationale.clone();
+    traversing_path["affectedSurfaces"][0]["authorityPath"] =
+        Value::String("spec/../spec/vexil-spec.md".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &traversing_path)
+        .expect_err("authority paths cannot traverse within or beyond a public authority root");
+
+    let mut unsupported_matrix = rationale.clone();
+    unsupported_matrix["supportMatrix"]["claims"][0]["evidenceIdentity"] = Value::Null;
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &unsupported_matrix)
+        .expect_err("support claims without evidence must fail closed");
+
+    let mut contradictory_support = rationale.clone();
+    let duplicate_claim = contradictory_support["supportMatrix"]["claims"][0].clone();
+    contradictory_support["supportMatrix"]["claims"].as_array_mut().unwrap().push(duplicate_claim);
+    contradictory_support["supportMatrix"]["claims"][1]["compatibility"] =
+        Value::String("unsupported".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &contradictory_support)
+        .expect_err("support matrices cannot contain conflicting duplicate platform claims");
+
+    let mut draft_conformance = rationale.clone();
+    draft_conformance["affectedSurfaces"][0]["assertion"] =
+        Value::String("formal-conformance".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &draft_conformance)
+        .expect_err("draft language status cannot be elevated to formal conformance");
+
+    let mut missing_decision = rationale.clone();
+    missing_decision["affectedSurfaces"][0]["compatibility"] = Value::String("behavior-changed".into());
+    missing_decision["publicCompatibilityDecision"] = Value::Null;
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &missing_decision)
+        .expect_err("behavior and public API changes require an approved public decision");
+
+    let mut declared_change_without_surface_change = rationale.clone();
+    declared_change_without_surface_change["changeClass"] = Value::String("behavior-change".into());
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &declared_change_without_surface_change)
+        .expect_err("declared behavior changes cannot bypass the public decision requirement");
+
+    let mut mismatched_public_id = rationale;
+    mismatched_public_id["$id"] = Value::String(
+        "https://vexil.dev/release/rationales/some-other-rationale.json".into(),
+    );
+    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &mismatched_public_id)
+        .expect_err("public rationale IDs must match their rationale IDs");
+}
+
+#[test]
+fn typed_release_dependency_graph_is_manifest_led_and_deterministic() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let catalog: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog.json")).expect("read canonical catalog"),
+    )
+    .expect("parse canonical catalog");
+
+    let order = vexil_release_governance_validator::derive_release_order(&root, &catalog)
+        .expect("the current manifest-backed graph must be valid");
+    assert_eq!(
+        order,
+        vec![
+            "vexil-lang",
+            "vexil-codegen-go",
+            "vexil-codegen-py",
+            "vexil-codegen-rust",
+            "vexil-codegen-ts",
+            "vexil-runtime",
+            "vexil-runtime-go",
+            "vexil-runtime-ts",
+            "vexil-store",
+            "vexilc",
+        ]
+    );
+
+    let unit = |id: &str| {
+        catalog["units"]
+            .as_array()
+            .expect("catalog units")
+            .iter()
+            .find(|unit| unit["id"] == id)
+            .expect("catalog unit")
+    };
+    let publish_before = catalog["units"]
+        .as_array()
+        .expect("catalog units")
+        .iter()
+        .flat_map(|unit| {
+            unit["dependencyEdges"]
+                .as_array()
+                .expect("typed dependency edge array")
+                .iter()
+                .filter(move |edge| edge["edgeType"] == "publish_before")
+                .map(move |edge| {
+                    format!(
+                        "{} -> {} @ {}#{}",
+                        edge["relatedUnitId"].as_str().expect("related unit"),
+                        unit["id"].as_str().expect("dependent unit"),
+                        edge["sourceEvidence"]["path"].as_str().expect("evidence path"),
+                        edge["sourceEvidence"]["location"].as_str().expect("evidence location"),
+                    )
+                })
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        publish_before,
+        vec![
+            "vexil-lang -> vexil-codegen-go @ crates/vexil-codegen-go/Cargo.toml#dependencies.vexil-lang",
+            "vexil-lang -> vexil-codegen-py @ crates/vexil-codegen-py/Cargo.toml#dependencies.vexil-lang",
+            "vexil-lang -> vexil-codegen-rust @ crates/vexil-codegen-rust/Cargo.toml#dependencies.vexil-lang",
+            "vexil-lang -> vexil-codegen-ts @ crates/vexil-codegen-ts/Cargo.toml#dependencies.vexil-lang",
+            "vexil-lang -> vexil-store @ crates/vexil-store/Cargo.toml#dependencies.vexil-lang",
+            "vexil-runtime -> vexil-store @ crates/vexil-store/Cargo.toml#dependencies.vexil-runtime",
+            "vexil-codegen-go -> vexilc @ crates/vexilc/Cargo.toml#dependencies.vexil-codegen-go",
+            "vexil-codegen-py -> vexilc @ crates/vexilc/Cargo.toml#dependencies.vexil-codegen-py",
+            "vexil-codegen-rust -> vexilc @ crates/vexilc/Cargo.toml#dependencies.vexil-codegen-rust",
+            "vexil-codegen-ts -> vexilc @ crates/vexilc/Cargo.toml#dependencies.vexil-codegen-ts",
+            "vexil-lang -> vexilc @ crates/vexilc/Cargo.toml#dependencies.vexil-lang",
+            "vexil-store -> vexilc @ crates/vexilc/Cargo.toml#dependencies.vexil-store",
+        ]
+    );
+    assert!(unit("vexil-bench")["dependencyEdges"]
+        .as_array()
+        .expect("bench edges")
+        .is_empty());
+    assert!(unit("vexil-runtime-go")["dependencyEdges"]
+        .as_array()
+        .expect("Go edges")
+        .is_empty());
+    assert!(unit("vexil-runtime-py")["dependencyEdges"]
+        .as_array()
+        .expect("Python edges")
+        .is_empty());
+    assert!(unit("vexil-runtime-ts")["dependencyEdges"]
+        .as_array()
+        .expect("TypeScript edges")
+        .is_empty());
+    assert_eq!(
+        unit("vexilc")["targets"].as_array().expect("vexilc targets").len(),
+        2,
+        "the compiler remains one release unit with package and binary targets"
+    );
+    let retired_bot = fs::read_to_string(root.join(".vexilbot.toml"))
+        .expect("read retained retired-bot evidence");
+    assert!(
+        !retired_bot.contains("vexil-codegen-py"),
+        "the retained bot configuration deliberately omits the Python generator"
+    );
+    assert!(order.contains(&"vexil-codegen-py".to_owned()));
+    assert_eq!(
+        vexil_release_governance_validator::derive_release_order(&root, &catalog)
+            .expect("the graph must be repeatable"),
+        order
+    );
+
+    let mut missing_related_unit = catalog.clone();
+    missing_related_unit["units"][6]["dependencyEdges"][0]["relatedUnitId"] =
+        Value::String("missing-release-unit".into());
+    assert!(vexil_release_governance_validator::validate_catalog(&root, &missing_related_unit)
+        .expect_err("missing related units must block graph validation")
+        .contains("missing related unit"));
+
+    let mut unknown_type = catalog.clone();
+    unknown_type["units"][6]["dependencyEdges"][0]["edgeType"] =
+        Value::String("unknown".into());
+    vexil_release_governance_validator::validate_catalog_schema(&root, &unknown_type)
+        .expect_err("the typed-edge contract must reject unknown edge types");
+
+    let mut duplicate = catalog.clone();
+    let duplicated_edge = duplicate["units"][6]["dependencyEdges"][0].clone();
+    duplicate["units"][6]["dependencyEdges"]
+        .as_array_mut()
+        .expect("typed edge array")
+        .push(duplicated_edge);
+    assert!(vexil_release_governance_validator::validate_catalog(&root, &duplicate)
+        .expect_err("duplicate typed edges must be rejected")
+        .contains("duplicate dependency edge"));
+
+    let mut unordered = catalog.clone();
+    unordered["units"][16]["dependencyEdges"]
+        .as_array_mut()
+        .expect("store typed edge array")
+        .swap(0, 1);
+    assert!(vexil_release_governance_validator::validate_catalog(&root, &unordered)
+        .expect_err("typed edges must have stable order")
+        .contains("stable sort order"));
+
+    let mut stale_evidence = catalog.clone();
+    stale_evidence["units"][6]["dependencyEdges"][0]["sourceEvidence"]["location"] =
+        Value::String("dependencies.forged".into());
+    assert!(vexil_release_governance_validator::validate_catalog(&root, &stale_evidence)
+        .expect_err("catalog and manifest edge evidence must agree")
+        .contains("missing manifest-derived"));
+
+    let mut non_ordering_edges = catalog.clone();
+    non_ordering_edges["units"][10]["dependencyEdges"] = serde_json::json!([
+        {"edgeType":"bundle","relatedUnitId":"vexil-runtime","direction":"related-before-unit","sourceEvidence":{"sourceKind":"release-dependency-edge-decision","path":"release/decisions/missing.json","location":"bundle-1"}},
+        {"edgeType":"compatibility","relatedUnitId":"vexil-runtime","direction":"related-before-unit","sourceEvidence":{"sourceKind":"release-dependency-edge-decision","path":"release/decisions/missing.json","location":"compatibility-1"}}
+    ]);
+    vexil_release_governance_validator::derive_release_order(&root, &non_ordering_edges)
+        .expect_err("non-ordering edges must cite an approved public decision record");
 }
 
 #[test]
@@ -795,9 +1089,12 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     fs::create_dir_all(isolated.join("release/history/entries")).unwrap();
     fs::create_dir_all(isolated.join("release/history/repair-proposals")).unwrap();
     fs::create_dir_all(isolated.join("release/decisions")).unwrap();
+    fs::create_dir_all(isolated.join("release/rationales")).unwrap();
     fs::create_dir_all(isolated.join("docs/book/src/release")).unwrap();
     fs::create_dir_all(isolated.join(".github/workflows")).unwrap();
     fs::create_dir_all(isolated.join("packages/runtime-go")).unwrap();
+    fs::create_dir_all(isolated.join("schemas/vexil")).unwrap();
+    fs::create_dir_all(isolated.join("spec")).unwrap();
     for relative in [
         "Cargo.toml",
         "release/stewardship.json",
@@ -819,7 +1116,9 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/additive-repair-proposal.schema.json",
         "release/schemas/history-reconciliation-decision.schema.json",
         "release/schemas/catalog.schema.json",
+        "release/schemas/version-rationale.schema.json",
         "release/catalog.json",
+        "release/rationales/vexil-runtime-ts-0-4-1.json",
         "release/decisions/runtime-go-version-2026-07-23.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
@@ -882,6 +1181,8 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "packages/runtime-py/pyproject.toml",
         "packages/runtime-go/go.mod",
         "packages/runtime-go/VERSION",
+        "schemas/vexil/schema.vexil",
+        "spec/vexil-spec.md",
         "examples/command-protocol/Cargo.toml",
         "examples/cross-language/rust-device/Cargo.toml",
         "examples/multi-file-project/Cargo.toml",

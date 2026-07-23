@@ -203,6 +203,7 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_external_controls_repository(root)?;
     validate_history_repository(root)?;
     validate_catalog_repository(root)?;
+    validate_version_rationale_repository(root)?;
     validate_public_boundary(root)?;
     Ok(())
 }
@@ -218,6 +219,272 @@ pub fn validate_catalog_repository(root: &Path) -> Result<(), String> {
         .map_err(|error| format!("read release catalog documentation: {error}"))?;
     validate_catalog_documentation_parity(root, &catalog, &documentation)?;
     validate_npm_publish_workflow(root)
+}
+
+/// Validates public, per-unit version rationale records without selecting a
+/// Release Set, resolving evidence, or authorizing any release operation.
+pub fn validate_version_rationale_repository(root: &Path) -> Result<(), String> {
+    validate_schema_syntax(root)?;
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    validate_catalog_schema(root, &catalog)?;
+    validate_catalog(root, &catalog)?;
+
+    let directory = root.join("release/rationales");
+    let mut entries = fs::read_dir(&directory)
+        .map_err(|error| format!("read {}: {error}", directory.display()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("read {} entry: {error}", directory.display()))?;
+    entries.sort_by_key(|entry| entry.file_name());
+
+    let mut rationale_ids = BTreeSet::new();
+    let mut unit_ids = BTreeSet::new();
+    for entry in entries {
+        let path = entry.path();
+        if !entry
+            .file_type()
+            .map_err(|error| format!("inspect {}: {error}", path.display()))?
+            .is_file()
+            || path.extension().and_then(|extension| extension.to_str()) != Some("json")
+        {
+            return Err(format!(
+                "version rationale directory may contain only JSON files: {}",
+                path.display()
+            ));
+        }
+        let record = read_json(&path)?;
+        validate_version_rationale(root, &catalog, &record)?;
+        let record = object(&record, "version rationale")?;
+        let rationale_id = text(record.get("rationaleId"), "version rationale ID")?;
+        let unit_id = text(record.get("unitId"), "version rationale unit ID")?;
+        let expected_name = format!("{rationale_id}.json");
+        if path.file_name().and_then(|name| name.to_str()) != Some(expected_name.as_str()) {
+            return Err(format!(
+                "version rationale file name must match rationale ID: {}",
+                path.display()
+            ));
+        }
+        if !rationale_ids.insert(rationale_id.to_owned()) || !unit_ids.insert(unit_id.to_owned()) {
+            return Err("version rationale IDs and catalog unit IDs must be unique".to_owned());
+        }
+    }
+    Ok(())
+}
+
+pub fn validate_version_rationale(
+    root: &Path,
+    catalog: &Value,
+    record: &Value,
+) -> Result<(), String> {
+    validate_version_rationale_schema(root, record)?;
+    validate_catalog(root, catalog)?;
+    ensure_no_private_leakage(
+        &serde_json::to_string(record)
+            .map_err(|error| format!("serialize version rationale for boundary validation: {error}"))?,
+    )?;
+
+    let rationale = object(record, "version rationale")?;
+    let rationale_id = text(rationale.get("rationaleId"), "version rationale ID")?;
+    let expected_record_id = format!("https://vexil.dev/release/rationales/{rationale_id}.json");
+    if text(rationale.get("$id"), "version rationale public ID")? != expected_record_id {
+        return Err("version rationale public ID must match its rationale ID".to_owned());
+    }
+    let unit_id = text(rationale.get("unitId"), "version rationale unit ID")?;
+    let catalog_units = array(catalog.get("units"), "release catalog units")?;
+    let unit = catalog_units
+        .iter()
+        .find(|unit| unit.get("id").and_then(Value::as_str) == Some(unit_id))
+        .ok_or_else(|| format!("version rationale references unknown catalog unit: {unit_id}"))?;
+    let unit = object(unit, "version rationale catalog unit")?;
+    let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+    if text(publication.get("classification"), "catalog publication classification")?
+        == "non-publishable"
+    {
+        return Err("version rationale must bind a publishable catalog unit".to_owned());
+    }
+    let proposed = text(
+        rationale.get("proposedPackageVersion"),
+        "version rationale proposed package version",
+    )?;
+    validate_strict_semver(proposed)?;
+    let version_source = object(required_value(unit, "versionSource")?, "catalog version source")?;
+    if text(
+        version_source.get("observedDeclaration"),
+        "catalog version declaration",
+    )? != proposed
+    {
+        return Err(
+            "version rationale proposed package version must equal the checked-in catalog declaration"
+                .to_owned(),
+        );
+    }
+
+    let change_class = text(rationale.get("changeClass"), "version rationale change class")?;
+    let previous = object(
+        required_value(rationale, "previousPackageVersion")?,
+        "version rationale previous package version",
+    )?;
+    let previous_kind = text(previous.get("kind"), "previous package version kind")?;
+    if previous_kind != "initial-non-release-baseline"
+        || !previous.get("version").unwrap_or(&Value::Null).is_null()
+        || change_class != "initial-source-version"
+    {
+        return Err(
+            "until a dedicated public provenance contract exists, rationales must use an explicit initial non-release baseline and initial-source-version change class"
+                .to_owned(),
+        );
+    }
+
+    let surfaces = array(rationale.get("affectedSurfaces"), "affected surfaces")?;
+    let mut previous_surface: Option<(&str, &str)> = None;
+    let mut namespaces = BTreeSet::new();
+    let mut behavior_changed = false;
+    for surface in surfaces {
+        let surface = object(surface, "affected surface")?;
+        let namespace = text(surface.get("namespace"), "affected surface namespace")?;
+        let name = text(surface.get("surface"), "affected surface name")?;
+        if previous_surface.is_some_and(|previous| (namespace, name) <= previous)
+            || !namespaces.insert(namespace)
+        {
+            return Err(
+                "affected-surface assessments must be unique and sorted by namespace and surface"
+                    .to_owned(),
+            );
+        }
+        previous_surface = Some((namespace, name));
+        let authority_path = text(surface.get("authorityPath"), "affected surface authority path")?;
+        let authority_path_value = Path::new(authority_path);
+        if authority_path_value.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::CurDir | Component::RootDir | Component::Prefix(_)
+            )
+        }) {
+            return Err("affected surface authority path must stay within its public authority root".to_owned());
+        }
+        let authority_root = authority_path
+            .split('/')
+            .next()
+            .ok_or("affected surface authority path is empty")?;
+        let authority_root = fs::canonicalize(root.join(authority_root))
+            .map_err(|error| format!("canonicalize authority root {authority_root}: {error}"))?;
+        let resolved_authority_path = fs::canonicalize(root.join(authority_path));
+        if !resolved_authority_path.as_ref().is_ok_and(|path| path.is_file() && path.starts_with(&authority_root)) {
+            return Err(format!("affected surface authority path is missing: {authority_path}"));
+        }
+        if namespace == "language-spec"
+            && text(surface.get("languageStatus"), "language status")? == "draft"
+            && text(surface.get("assertion"), "language assessment assertion")?
+                == "formal-conformance"
+        {
+            return Err("draft language status cannot be claimed as formal conformance".to_owned());
+        }
+        behavior_changed |= matches!(
+            text(surface.get("compatibility"), "affected surface compatibility")?,
+            "behavior-changed" | "public-api-changed"
+        );
+    }
+    if namespaces.len() != 3
+        || !namespaces.contains("language-spec")
+        || !namespaces.contains("wire-format")
+        || !namespaces.contains("package-api")
+    {
+        return Err("version rationales must assess language-spec, wire-format, and package-api independently".to_owned());
+    }
+    behavior_changed |= matches!(change_class, "behavior-change" | "public-api-change");
+
+    let evidence_identity = text(
+        rationale.get("compatibilityEvidenceIdentity"),
+        "compatibility evidence identity",
+    )?;
+    let support_matrix = object(
+        required_value(rationale, "supportMatrix")?,
+        "version rationale support matrix",
+    )?;
+    let mut support_claims = BTreeSet::new();
+    for claim in array(support_matrix.get("claims"), "support matrix claims")? {
+        let claim = object(claim, "support matrix claim")?;
+        let platform = text(claim.get("platform"), "support claim platform")?;
+        let language_version = text(claim.get("languageVersion"), "support claim language version")?;
+        if !support_claims.insert((platform, language_version)) {
+            return Err("support matrix claims must be unique per platform and language version".to_owned());
+        }
+        if text(claim.get("evidenceIdentity"), "support claim evidence identity")?
+            != evidence_identity
+        {
+            return Err(
+                "support claims must link exactly to the rationale compatibility evidence identity"
+                    .to_owned(),
+            );
+        }
+    }
+
+    let impact = object(
+        required_value(rationale, "dependencyImpact")?,
+        "version rationale dependency impact",
+    )?;
+    let mut prior_affected_unit = "";
+    for affected_unit in array(impact.get("affectedUnitIds"), "dependency impact unit IDs")? {
+        let affected_unit = text(Some(affected_unit), "dependency impact unit ID")?;
+        if affected_unit <= prior_affected_unit
+            || !catalog_units.iter().any(|unit| {
+                unit.get("id").and_then(Value::as_str) == Some(affected_unit)
+            })
+        {
+            return Err(
+                "dependency-impact unit IDs must be known catalog units in stable order"
+                    .to_owned(),
+            );
+        }
+        prior_affected_unit = affected_unit;
+    }
+
+    let review = object(
+        required_value(rationale, "packageStewardReview")?,
+        "version rationale Package Steward review",
+    )?;
+    require_utc_timestamp(review.get("reviewedAt"), "Package Steward review timestamp")?;
+    let owner = object(required_value(unit, "owner")?, "catalog unit owner")?;
+    if text(review.get("roleId"), "Package Steward review role")? != "package-steward"
+        || review.get("assignmentId") != owner.get("assignmentId")
+    {
+        return Err("version rationale review must be attributed to the unit Package Steward".to_owned());
+    }
+    let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
+    let assignments = array(assignments.get("assignments"), "stewardship assignments")?;
+    let assignment_id = text(review.get("assignmentId"), "Package Steward assignment ID")?;
+    let assignment = assignments
+        .iter()
+        .find(|assignment| assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id))
+        .ok_or("version rationale review references an unknown Package Steward assignment")?;
+    let assignment = object(assignment, "Package Steward assignment")?;
+    if text(assignment.get("roleId"), "Package Steward assignment role")? != "package-steward"
+        || text(assignment.get("status"), "Package Steward assignment status")? != "active"
+        || review.get("actorId") != assignment.get("primaryActorId")
+    {
+        return Err("version rationale review actor is not the active unit Package Steward".to_owned());
+    }
+
+    let decision = rationale
+        .get("publicCompatibilityDecision")
+        .ok_or("missing public compatibility decision field")?;
+    if behavior_changed && decision.is_null() {
+        return Err(
+            "behavior or public API compatibility changes require an approved public decision"
+                .to_owned(),
+        );
+    }
+    if !decision.is_null() {
+        let decision = object(decision, "public compatibility decision")?;
+        ensure_public_decision_source(text(
+            decision.get("source"),
+            "public compatibility decision source",
+        )?)?;
+        require_utc_timestamp(
+            decision.get("approvedAt"),
+            "public compatibility decision timestamp",
+        )?;
+    }
+    Ok(())
 }
 
 pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
@@ -341,7 +608,700 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
     {
         return Err("Python runtime must be cataloged as candidate-unreleased".to_owned());
     }
+    validate_and_derive_release_order(root, catalog)?;
     Ok(())
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct PublishBeforeEdge {
+    dependency_id: String,
+    dependent_id: String,
+    source_kind: String,
+    manifest_path: String,
+    location: String,
+}
+
+#[derive(Clone, Debug)]
+struct CatalogTarget {
+    id: String,
+    status: String,
+    source_root: String,
+}
+
+impl PublishBeforeEdge {
+    fn description(&self) -> String {
+        format!(
+            "{} -> {} ({}#{})",
+            self.dependency_id, self.dependent_id, self.manifest_path, self.location
+        )
+    }
+}
+
+/// Returns the deterministic structural order implied by the canonical typed
+/// graph. This does not select a Release Set or authorize publication.
+pub fn derive_release_order(root: &Path, catalog: &Value) -> Result<Vec<String>, String> {
+    validate_catalog_schema(root, catalog)?;
+    validate_catalog(root, catalog)?;
+    validate_and_derive_release_order(root, object(catalog, "release catalog")?)
+}
+
+fn validate_and_derive_release_order(
+    root: &Path,
+    catalog: &Map<String, Value>,
+) -> Result<Vec<String>, String> {
+    let units = array(catalog.get("units"), "release catalog units")?;
+    let targets = catalog_target_index(units)?;
+    let manifest_edges = manifest_publish_before_edges(root, units, &targets)?;
+    let catalog_edges = catalog_publish_before_edges(root, units)?;
+
+    if let Some(edge) = manifest_edges.difference(&catalog_edges).next() {
+        return Err(format!(
+            "catalog is missing manifest-derived publish_before edge {}",
+            edge.description()
+        ));
+    }
+    if let Some(edge) = catalog_edges.difference(&manifest_edges).next() {
+        return Err(format!(
+            "catalog publish_before edge conflicts with current manifests: {}",
+            edge.description()
+        ));
+    }
+    release_order_from_edges(units, &manifest_edges)
+}
+
+fn catalog_target_index(
+    units: &[Value],
+) -> Result<BTreeMap<(String, String), CatalogTarget>, String> {
+    let mut targets = BTreeMap::new();
+    for unit in units {
+        let unit = object(unit, "release catalog unit")?;
+        let id = text(unit.get("id"), "release catalog unit id")?.to_owned();
+        let source_root = text(unit.get("sourceRoot"), "release catalog source root")?.to_owned();
+        let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+        let status = text(publication.get("status"), "catalog publication status")?.to_owned();
+        for target in array(unit.get("targets"), "release catalog targets")? {
+            let target = object(target, "release catalog target")?;
+            let key = (
+                text(target.get("kind"), "catalog target kind")?.to_owned(),
+                text(target.get("name"), "catalog target name")?.to_owned(),
+            );
+            if targets
+                .insert(
+                    key,
+                    CatalogTarget {
+                        id: id.clone(),
+                        status: status.clone(),
+                        source_root: source_root.clone(),
+                    },
+                )
+                .is_some()
+            {
+                return Err("release catalog targets must be unique by kind and name".to_owned());
+            }
+        }
+    }
+    Ok(targets)
+}
+
+fn manifest_publish_before_edges(
+    root: &Path,
+    units: &[Value],
+    targets: &BTreeMap<(String, String), CatalogTarget>,
+) -> Result<BTreeSet<PublishBeforeEdge>, String> {
+    let mut edges = BTreeSet::new();
+    for unit in units {
+        let unit = object(unit, "release catalog unit")?;
+        let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+        if text(publication.get("status"), "catalog publication status")? != "source-inventory-only" {
+            continue;
+        }
+        let dependent_id = text(unit.get("id"), "release catalog unit id")?;
+        let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+        match text(unit.get("kind"), "release catalog unit kind")? {
+            "rust-package" => {
+                let manifest_path = format!("{source_root}/Cargo.toml");
+                let manifest = parse_toml(
+                    &fs::read_to_string(root.join(&manifest_path))
+                        .map_err(|error| format!("read {manifest_path}: {error}"))?,
+                )?;
+                if let Some(dependencies) = manifest.get("dependencies") {
+                    let dependencies = dependencies
+                        .as_table()
+                        .ok_or_else(|| format!("{manifest_path} [dependencies] must be a table"))?;
+                    edges.extend(cargo_runtime_path_edges(
+                        root,
+                        source_root,
+                        dependent_id,
+                        &manifest_path,
+                        "dependencies",
+                        dependencies,
+                        targets,
+                    )?);
+                }
+                if let Some(target_tables) = manifest.get("target") {
+                    let target_tables = target_tables
+                        .as_table()
+                        .ok_or_else(|| format!("{manifest_path} target must be a table"))?;
+                    for (target_name, target_table) in target_tables {
+                        let target_table = target_table.as_table().ok_or_else(|| {
+                            format!("{manifest_path} target.{target_name} must be a table")
+                        })?;
+                        if let Some(dependencies) = target_table.get("dependencies") {
+                            let dependencies = dependencies.as_table().ok_or_else(|| {
+                                format!(
+                                    "{manifest_path} target.{target_name}.dependencies must be a table"
+                                )
+                            })?;
+                            edges.extend(cargo_runtime_path_edges(
+                                root,
+                                source_root,
+                                dependent_id,
+                                &manifest_path,
+                                &format!("target.{target_name}.dependencies"),
+                                dependencies,
+                                targets,
+                            )?);
+                        }
+                    }
+                }
+            }
+            "typescript-runtime" => {
+                let manifest_path = format!("{source_root}/package.json");
+                let manifest: Value = serde_json::from_str(
+                    &fs::read_to_string(root.join(&manifest_path))
+                        .map_err(|error| format!("read {manifest_path}: {error}"))?,
+                )
+                .map_err(|error| format!("parse {manifest_path}: {error}"))?;
+                if let Some(dependencies) = manifest.get("dependencies") {
+                    let dependencies = dependencies
+                        .as_object()
+                        .ok_or_else(|| format!("{manifest_path} dependencies must be an object"))?;
+                    for name in dependencies.keys() {
+                        let location = format!("dependencies.{name}");
+                        if let Some(dependency_id) = resolve_known_manifest_dependency(
+                            targets,
+                            "npm-package",
+                            name,
+                            dependent_id,
+                            &manifest_path,
+                            &location,
+                        )? {
+                            edges.insert(PublishBeforeEdge {
+                                dependency_id,
+                                dependent_id: dependent_id.to_owned(),
+                                source_kind: "npm-runtime-dependency".to_owned(),
+                                manifest_path: manifest_path.clone(),
+                                location,
+                            });
+                        }
+                    }
+                }
+            }
+            "python-runtime" => {
+                let manifest_path = format!("{source_root}/pyproject.toml");
+                let manifest = parse_toml(
+                    &fs::read_to_string(root.join(&manifest_path))
+                        .map_err(|error| format!("read {manifest_path}: {error}"))?,
+                )?;
+                let dependencies = manifest
+                    .get("project")
+                    .and_then(TomlValue::as_table)
+                    .and_then(|project| project.get("dependencies"));
+                if let Some(dependencies) = dependencies {
+                    let dependencies = dependencies
+                        .as_array()
+                        .ok_or_else(|| format!("{manifest_path} project.dependencies must be an array"))?;
+                    for requirement in dependencies {
+                        let requirement = requirement.as_str().ok_or_else(|| {
+                            format!("{manifest_path} project.dependencies must contain strings")
+                        })?;
+                        let name = python_requirement_name(requirement)?;
+                        let location = format!("project.dependencies.{name}");
+                        if let Some(dependency_id) = resolve_known_manifest_dependency(
+                            targets,
+                            "python-project",
+                            &name,
+                            dependent_id,
+                            &manifest_path,
+                            &location,
+                        )? {
+                            edges.insert(PublishBeforeEdge {
+                                dependency_id,
+                                dependent_id: dependent_id.to_owned(),
+                                source_kind: "python-runtime-dependency".to_owned(),
+                                manifest_path: manifest_path.clone(),
+                                location,
+                            });
+                        }
+                    }
+                }
+            }
+            "go-module" => {
+                let manifest_path = format!("{source_root}/go.mod");
+                let requirements = go_runtime_requirements(
+                    &fs::read_to_string(root.join(&manifest_path))
+                        .map_err(|error| format!("read {manifest_path}: {error}"))?,
+                )?;
+                for module in requirements {
+                    let location = format!("require {module}");
+                    if let Some(dependency_id) = resolve_known_manifest_dependency(
+                        targets,
+                        "go-module",
+                        &module,
+                        dependent_id,
+                        &manifest_path,
+                        &location,
+                    )? {
+                        edges.insert(PublishBeforeEdge {
+                            dependency_id,
+                            dependent_id: dependent_id.to_owned(),
+                            source_kind: "go-runtime-require".to_owned(),
+                            manifest_path: manifest_path.clone(),
+                            location,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(edges)
+}
+
+fn cargo_runtime_path_edges(
+    root: &Path,
+    source_root: &str,
+    dependent_id: &str,
+    manifest_path: &str,
+    location_prefix: &str,
+    dependencies: &TomlTable,
+    targets: &BTreeMap<(String, String), CatalogTarget>,
+) -> Result<Vec<PublishBeforeEdge>, String> {
+    let mut edges = Vec::new();
+    for (name, declaration) in dependencies {
+        let Some(declaration) = declaration.as_table() else {
+            continue;
+        };
+        if !declaration.contains_key("path") {
+            continue;
+        }
+        let location = format!("{location_prefix}.{name}");
+        let path = declaration.get("path").and_then(TomlValue::as_str).ok_or_else(|| {
+            format!(
+                "catalog unit {dependent_id} has a malformed Cargo path dependency at {manifest_path}#{location}"
+            )
+        })?;
+        if declaration
+            .get("version")
+            .and_then(TomlValue::as_str)
+            .filter(|version| !version.is_empty())
+            .is_none()
+        {
+            return Err(format!(
+                "catalog unit {dependent_id} has a publishable Cargo path dependency without a registry version at {manifest_path}#{location}"
+            ));
+        }
+        let package = declaration
+            .get("package")
+            .and_then(TomlValue::as_str)
+            .unwrap_or(name);
+        let dependency = resolve_manifest_dependency(
+            targets,
+            "cargo-package",
+            package,
+            dependent_id,
+            manifest_path,
+            &location,
+        )?;
+        validate_cargo_path_matches_catalog_unit(
+            root,
+            source_root,
+            path,
+            &dependency.source_root,
+            dependent_id,
+            manifest_path,
+            &location,
+        )?;
+        edges.push(PublishBeforeEdge {
+            dependency_id: dependency.id,
+            dependent_id: dependent_id.to_owned(),
+            source_kind: "cargo-runtime-dependency".to_owned(),
+            manifest_path: manifest_path.to_owned(),
+            location,
+        });
+    }
+    Ok(edges)
+}
+
+fn validate_cargo_path_matches_catalog_unit(
+    root: &Path,
+    dependent_source_root: &str,
+    declared_path: &str,
+    expected_source_root: &str,
+    dependent_id: &str,
+    manifest_path: &str,
+    location: &str,
+) -> Result<(), String> {
+    let resolved_path = fs::canonicalize(root.join(dependent_source_root).join(declared_path))
+        .map_err(|error| {
+            format!(
+                "catalog unit {dependent_id} has an unreadable Cargo path dependency at {manifest_path}#{location}: {error}"
+            )
+        })?;
+    let expected_path = fs::canonicalize(root.join(expected_source_root)).map_err(|error| {
+        format!("read catalog dependency source root {expected_source_root}: {error}")
+    })?;
+    if resolved_path != expected_path {
+        return Err(format!(
+            "catalog unit {dependent_id} Cargo path dependency does not resolve to catalog source root {expected_source_root} at {manifest_path}#{location}"
+        ));
+    }
+    Ok(())
+}
+
+fn resolve_manifest_dependency(
+    targets: &BTreeMap<(String, String), CatalogTarget>,
+    target_kind: &str,
+    target_name: &str,
+    dependent_id: &str,
+    manifest_path: &str,
+    location: &str,
+) -> Result<CatalogTarget, String> {
+    let Some(target) = targets.get(&(target_kind.to_owned(), target_name.to_owned())) else {
+        return Err(format!(
+            "catalog unit {dependent_id} references missing catalog unit {target_name} at {manifest_path}#{location}"
+        ));
+    };
+    if target.status != "source-inventory-only" {
+        return Err(format!(
+            "catalog unit {dependent_id} references non-publishable or out-of-scope catalog unit {} at {manifest_path}#{location}",
+            target.id
+        ));
+    }
+    Ok(target.clone())
+}
+
+fn resolve_known_manifest_dependency(
+    targets: &BTreeMap<(String, String), CatalogTarget>,
+    target_kind: &str,
+    target_name: &str,
+    dependent_id: &str,
+    manifest_path: &str,
+    location: &str,
+) -> Result<Option<String>, String> {
+    let target_name = if target_kind == "python-project" {
+        normalize_python_project_name(target_name)
+    } else {
+        target_name.to_owned()
+    };
+    let matches = targets.iter().filter(|((kind, name), _)| {
+        kind == target_kind
+            && if target_kind == "python-project" {
+                normalize_python_project_name(name) == target_name
+            } else {
+                name == &target_name
+            }
+    }).collect::<Vec<_>>();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [((kind, name), _)] => resolve_manifest_dependency(
+            targets,
+            kind,
+            name,
+            dependent_id,
+            manifest_path,
+            location,
+        )
+        .map(|target| Some(target.id)),
+        _ if target_kind == "python-project" => Err(format!(
+            "catalog contains ambiguous normalized Python target {target_name} referenced by catalog unit {dependent_id} at {manifest_path}#{location}"
+        )),
+        _ => Err(format!(
+            "catalog contains ambiguous target {target_name} referenced by catalog unit {dependent_id} at {manifest_path}#{location}"
+        )),
+    }
+}
+
+fn python_requirement_name(requirement: &str) -> Result<String, String> {
+    let name = requirement
+        .trim()
+        .split(|character: char| {
+            character.is_whitespace() || matches!(character, '[' | '<' | '>' | '=' | '!' | '~' | ';')
+        })
+        .next()
+        .unwrap_or_default();
+    if name.is_empty() {
+        return Err("Python runtime dependency must have a package name".to_owned());
+    }
+    Ok(name.to_owned())
+}
+
+fn normalize_python_project_name(name: &str) -> String {
+    name.to_ascii_lowercase().replace(['_', '.'], "-")
+}
+
+fn go_runtime_requirements(content: &str) -> Result<Vec<String>, String> {
+    let mut requirements = Vec::new();
+    let mut in_block = false;
+    for raw_line in content.lines() {
+        let line = raw_line.split_once("//").map_or(raw_line, |(before, _)| before).trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line == "require (" {
+            in_block = true;
+            continue;
+        }
+        if in_block && line == ")" {
+            in_block = false;
+            continue;
+        }
+        let requirement = if in_block {
+            Some(line)
+        } else {
+            line.strip_prefix("require ")
+        };
+        let Some(requirement) = requirement else {
+            continue;
+        };
+        let mut fields = requirement.split_whitespace();
+        let module = fields
+            .next()
+            .ok_or("Go require declaration has no module path")?;
+        if fields.next().is_none() {
+            return Err(format!("Go require declaration has no version for {module}"));
+        }
+        requirements.push(module.to_owned());
+    }
+    if in_block {
+        return Err("Go require block is not closed".to_owned());
+    }
+    Ok(requirements)
+}
+
+fn catalog_publish_before_edges(
+    root: &Path,
+    units: &[Value],
+) -> Result<BTreeSet<PublishBeforeEdge>, String> {
+    let mut publish_before = BTreeSet::new();
+    let known_ids: BTreeSet<&str> = units
+        .iter()
+        .filter_map(|unit| unit.get("id").and_then(Value::as_str))
+        .collect();
+    for unit in units {
+        let unit = object(unit, "release catalog unit")?;
+        let dependent_id = text(unit.get("id"), "release catalog unit id")?;
+        let source_root = text(unit.get("sourceRoot"), "release catalog source root")?;
+        let edges = array(unit.get("dependencyEdges"), "catalog dependency edges")?;
+        let mut keys = Vec::new();
+        let mut directed = BTreeSet::new();
+        for edge in edges {
+            let edge = object(edge, "catalog dependency edge")?;
+            let edge_type = text(edge.get("edgeType"), "catalog dependency edge type")?;
+            if !matches!(edge_type, "publish_before" | "compatibility" | "bundle") {
+                return Err(format!("catalog unit {dependent_id} has an unknown dependency edge type {edge_type}"));
+            }
+            let related_id = text(edge.get("relatedUnitId"), "catalog related unit id")?;
+            if !known_ids.contains(related_id) {
+                return Err(format!(
+                    "catalog unit {dependent_id} references missing related unit {related_id}"
+                ));
+            }
+            let direction = text(edge.get("direction"), "catalog dependency edge direction")?;
+            if direction != "related-before-unit" {
+                return Err(format!("catalog unit {dependent_id} must use related-before-unit dependency direction"));
+            }
+            let evidence = object(required_value(edge, "sourceEvidence")?, "catalog dependency evidence")?;
+            let source_kind = text(evidence.get("sourceKind"), "catalog dependency evidence kind")?;
+            let manifest_path = text(evidence.get("path"), "catalog dependency evidence path")?;
+            let location = text(evidence.get("location"), "catalog dependency evidence location")?;
+            if location.is_empty() {
+                return Err("catalog dependency evidence location must not be empty".to_owned());
+            }
+            if edge_type == "publish_before" {
+                if !matches!(
+                    source_kind,
+                    "cargo-runtime-dependency"
+                        | "npm-runtime-dependency"
+                        | "python-runtime-dependency"
+                        | "go-runtime-require"
+                ) {
+                    return Err(format!(
+                        "catalog unit {dependent_id} publish_before edges must use runtime manifest evidence"
+                    ));
+                }
+                require_catalog_path_within_source_root(
+                    source_root,
+                    manifest_path,
+                    "dependency evidence",
+                )?;
+            } else {
+                validate_non_ordering_edge_decision(
+                    root,
+                    dependent_id,
+                    related_id,
+                    edge_type,
+                    source_kind,
+                    manifest_path,
+                    location,
+                )?;
+            }
+            let key = format!("{edge_type}\u{0}{related_id}\u{0}{source_kind}\u{0}{manifest_path}\u{0}{location}");
+            keys.push(key);
+            if !directed.insert((edge_type, related_id)) {
+                return Err(format!("catalog unit {dependent_id} has duplicate dependency edge declarations"));
+            }
+            if edge_type == "publish_before" {
+                publish_before.insert(PublishBeforeEdge {
+                    dependency_id: related_id.to_owned(),
+                    dependent_id: dependent_id.to_owned(),
+                    source_kind: source_kind.to_owned(),
+                    manifest_path: manifest_path.to_owned(),
+                    location: location.to_owned(),
+                });
+            }
+        }
+        if keys.windows(2).any(|window| window[0] > window[1]) {
+            return Err(format!("catalog unit {dependent_id} dependency edges must use stable sort order"));
+        }
+    }
+    Ok(publish_before)
+}
+
+fn validate_non_ordering_edge_decision(
+    root: &Path,
+    dependent_id: &str,
+    related_id: &str,
+    edge_type: &str,
+    source_kind: &str,
+    path: &str,
+    decision_id: &str,
+) -> Result<(), String> {
+    if source_kind != "release-dependency-edge-decision" {
+        return Err(format!(
+            "catalog unit {dependent_id} {edge_type} edge must cite a release-dependency-edge-decision"
+        ));
+    }
+    let decision_path = Path::new(path);
+    if decision_path.is_absolute()
+        || decision_path.components().any(|component| {
+            matches!(
+                component,
+                Component::ParentDir | Component::RootDir | Component::Prefix(_)
+            )
+        })
+        || !decision_path.starts_with(Path::new("release/decisions"))
+        || decision_path.extension().and_then(|extension| extension.to_str()) != Some("json")
+    {
+        return Err(format!(
+            "catalog unit {dependent_id} {edge_type} edge must cite a public JSON record under release/decisions"
+        ));
+    }
+    let decision = read_json(&root.join(decision_path))?;
+    let decision = object(&decision, "release dependency edge decision")?;
+    require_string(
+        decision,
+        "recordKind",
+        "release-dependency-edge-decision",
+    )?;
+    require_string(decision, "status", "approved")?;
+    require_string(decision, "decisionId", decision_id)?;
+    require_string(decision, "edgeType", edge_type)?;
+    require_string(decision, "dependentUnitId", dependent_id)?;
+    require_string(decision, "relatedUnitId", related_id)?;
+    Ok(())
+}
+
+fn release_order_from_edges(
+    units: &[Value],
+    edges: &BTreeSet<PublishBeforeEdge>,
+) -> Result<Vec<String>, String> {
+    let mut indegree = BTreeMap::new();
+    let mut successors: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for unit in units {
+        let unit = object(unit, "release catalog unit")?;
+        let publication = object(required_value(unit, "publication")?, "catalog publication")?;
+        if text(publication.get("status"), "catalog publication status")? == "source-inventory-only" {
+            let id = text(unit.get("id"), "release catalog unit id")?.to_owned();
+            indegree.insert(id.clone(), 0usize);
+            successors.insert(id, BTreeSet::new());
+        }
+    }
+    for edge in edges {
+        let successor = successors
+            .get_mut(&edge.dependency_id)
+            .ok_or_else(|| format!("catalog publish_before edge has missing dependency unit {}", edge.dependency_id))?;
+        if !indegree.contains_key(&edge.dependent_id) {
+            return Err(format!("catalog publish_before edge has non-publishable dependent unit {}", edge.dependent_id));
+        }
+        if successor.insert(edge.dependent_id.clone()) {
+            *indegree
+                .get_mut(&edge.dependent_id)
+                .expect("validated dependent exists") += 1;
+        }
+    }
+    let mut ready: BTreeSet<String> = indegree
+        .iter()
+        .filter_map(|(id, degree)| (*degree == 0).then(|| id.clone()))
+        .collect();
+    let mut order = Vec::new();
+    while let Some(id) = ready.pop_first() {
+        order.push(id.clone());
+        for successor in successors[&id].clone() {
+            let degree = indegree.get_mut(&successor).expect("validated successor exists");
+            *degree -= 1;
+            if *degree == 0 {
+                ready.insert(successor);
+            }
+        }
+    }
+    if order.len() == indegree.len() {
+        return Ok(order);
+    }
+    let remaining: BTreeSet<String> = indegree
+        .iter()
+        .filter_map(|(id, degree)| (*degree > 0).then(|| id.clone()))
+        .collect();
+    let conflicts = edges
+        .iter()
+        .filter(|edge| {
+            remaining.contains(&edge.dependency_id)
+                && remaining.contains(&edge.dependent_id)
+                && graph_reaches(
+                    &successors,
+                    &edge.dependent_id,
+                    &edge.dependency_id,
+                    &remaining,
+                )
+        })
+        .map(PublishBeforeEdge::description)
+        .collect::<Vec<_>>();
+    Err(format!(
+        "publish_before cycle blocks release order: {}",
+        conflicts.join(", ")
+    ))
+}
+
+fn graph_reaches(
+    successors: &BTreeMap<String, BTreeSet<String>>,
+    start: &str,
+    target: &str,
+    allowed: &BTreeSet<String>,
+) -> bool {
+    let mut pending = vec![start.to_owned()];
+    let mut visited = BTreeSet::new();
+    while let Some(current) = pending.pop() {
+        if !visited.insert(current.clone()) {
+            continue;
+        }
+        if current == target {
+            return true;
+        }
+        if let Some(next) = successors.get(&current) {
+            pending.extend(next.iter().filter(|id| allowed.contains(*id)).cloned());
+        }
+    }
+    false
 }
 
 /// Validates an explicitly proposed, future component tag without treating a
@@ -987,7 +1947,7 @@ pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, S
     validate_catalog_schema(root, catalog)?;
     validate_catalog(root, catalog)?;
     let catalog = object(catalog, "release catalog")?;
-    let mut markdown = String::from("# Release Unit Catalog\n\n> Generated view of [`release/catalog.json`](../../../../release/catalog.json). The JSON catalog is canonical; this Markdown is non-authoritative and parity-checked.\n\nThis is a source-led inventory, not a Release Manifest, publication assertion, provider-identity claim, release-order decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md).\n\n## Units\n\n| Unit | Source root | Targets | Status | Source version observation | Canonical tag policy |\n|---|---|---|---|---|---|\n");
+    let mut markdown = String::from("# Release Unit Catalog\n\n> Generated view of [`release/catalog.json`](../../../../release/catalog.json). The JSON catalog is canonical; this Markdown is non-authoritative and parity-checked.\n\nThis is a source-led inventory and typed structural dependency graph, not a Release Manifest, publication assertion, provider-identity claim, Release Set decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md).\n\n## Units\n\n| Unit | Source root | Targets | Status | Source version observation | Canonical tag policy |\n|---|---|---|---|---|---|\n");
     for unit in array(catalog.get("units"), "release catalog units")? {
         let unit = object(unit, "release catalog unit")?;
         let version = object(
@@ -1025,7 +1985,26 @@ pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, S
             }
         ));
     }
-    markdown.push_str("\n## Boundary and validation\n\n`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. The Go module's checked-in `VERSION` source identifies only its source state; `go.mod` supplies the module target identity, not its version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.\n\nDependency-edge entries are provisional until the typed graph is established. A catalog entry or target category never establishes authorization, registry identity, publication eligibility, release ordering, or Release Set membership. Root project-wide `v<semver>` tags remain prohibited during recovery.\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe offline command validates source paths, direct declaration observations, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.\n");
+    let order = validate_and_derive_release_order(root, catalog)?;
+    markdown.push_str("\n## Typed dependency graph\n\nEach edge is recorded on its dependent unit. `related-before-unit` means the related unit's version must be publicly resolvable before the declaring unit is published. `publish_before` edges cite their checked-in runtime manifest declaration; `compatibility` and `bundle` edges cite an approved public release-dependency-edge decision. The catalog stores edges in stable `edgeType`, related-unit, evidence-kind, path, and location order.\n\n| Dependency | Dependent | Type | Public source evidence |\n|---|---|---|---|\n");
+    for unit in array(catalog.get("units"), "release catalog units")? {
+        let unit = object(unit, "release catalog unit")?;
+        let dependent = text(unit.get("id"), "release catalog unit id")?;
+        for edge in array(unit.get("dependencyEdges"), "catalog dependency edges")? {
+            let edge = object(edge, "catalog dependency edge")?;
+            let evidence = object(required_value(edge, "sourceEvidence")?, "catalog dependency evidence")?;
+            markdown.push_str(&format!(
+                "| `{}` | `{dependent}` | `{}` | `{}` `{}` |\n",
+                text(edge.get("relatedUnitId"), "catalog related unit id")?,
+                text(edge.get("edgeType"), "catalog dependency edge type")?,
+                text(evidence.get("path"), "catalog dependency evidence path")?,
+                text(evidence.get("location"), "catalog dependency evidence location")?,
+            ));
+        }
+    }
+    markdown.push_str("\nOnly `publish_before` participates in structural ordering. `compatibility` requires an approved shared-evidence decision without imposing registry order; `bundle` requires an approved identity decision and never creates a second Release Unit.\n\n## Structural source order\n\nThe current all-unit structural order is derived from checked-in manifests and catalog edges only:\n\n");
+    markdown.push_str(&order.iter().map(|id| format!("`{id}`")).collect::<Vec<_>>().join(" → "));
+    markdown.push_str("\n\n## Boundary and validation\n\n`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. The Go module's checked-in `VERSION` source identifies only its source state; `go.mod` supplies the module target identity, not its version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.\n\nA valid graph does not establish packageability, authorization, registry identity, publication eligibility, Release Set membership, Manifest approval, tags, or publication. Root project-wide `v<semver>` tags remain prohibited during recovery.\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe offline command validates source paths, runtime manifest declarations, typed graph agreement, deterministic structural order, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.\n");
     Ok(markdown)
 }
 
@@ -5610,6 +6589,15 @@ pub fn validate_catalog_schema(root: &Path, record: &Value) -> Result<(), String
     )
 }
 
+pub fn validate_version_rationale_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/version-rationale.schema.json",
+        record,
+        "release unit version rationale",
+    )
+}
+
 fn validate_schema_instance(
     root: &Path,
     schema_relative: &str,
@@ -5698,6 +6686,10 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
         (
             "release/schemas/catalog.schema.json",
             "https://vexil.dev/release/schemas/catalog.schema.json",
+        ),
+        (
+            "release/schemas/version-rationale.schema.json",
+            "https://vexil.dev/release/schemas/version-rationale.schema.json",
         ),
     ] {
         let schema_value = read_json(&root.join(relative))?;
@@ -5817,7 +6809,14 @@ fn require_actions(role: &Map<String, Value>, expected: &[&str], id: &str) -> Re
 
 #[cfg(test)]
 mod catalog_manifest_tests {
-    use super::{go_module_name, toml_string_in_section};
+    use super::{
+        catalog_publish_before_edges, go_module_name, manifest_publish_before_edges,
+        release_order_from_edges, resolve_known_manifest_dependency, toml_string_in_section,
+        CatalogTarget, PublishBeforeEdge,
+    };
+    use serde_json::json;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::fs;
 
     #[test]
     fn parses_valid_toml_strings_with_comments_and_single_quotes() {
@@ -5835,5 +6834,189 @@ mod catalog_manifest_tests {
             go_module_name(content).unwrap(),
             "github.com/vexil-lang/vexil/packages/runtime-go"
         );
+    }
+
+    #[test]
+    fn publishable_cargo_path_dependencies_require_registry_versions() {
+        let root = std::env::temp_dir().join(format!(
+            "vexil-graph-missing-version-{}",
+            std::process::id()
+        ));
+        let manifest_path = root.join("crates/dependent/Cargo.toml");
+        fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        fs::write(
+            &manifest_path,
+            "[package]\nname = \"dependent\"\nversion = \"0.1.0\"\n\n[dependencies]\nsource = { path = \"../source\" }\n",
+        )
+        .unwrap();
+        let units = vec![json!({
+            "id": "dependent", "kind": "rust-package", "sourceRoot": "crates/dependent",
+            "publication": {"status": "source-inventory-only"}, "targets": []
+        })];
+        let mut targets = BTreeMap::new();
+        targets.insert(
+            ("cargo-package".to_owned(), "source".to_owned()),
+            CatalogTarget {
+                id: "source".to_owned(),
+                status: "source-inventory-only".to_owned(),
+                source_root: "crates/source".to_owned(),
+            },
+        );
+        let error = manifest_publish_before_edges(&root, &units, &targets)
+            .expect_err("an unversioned publishable Cargo path dependency must fail");
+        fs::remove_dir_all(&root).unwrap();
+        assert!(error.contains("dependent"));
+        assert!(error.contains("crates/dependent/Cargo.toml#dependencies.source"));
+    }
+
+    #[test]
+    fn cargo_path_dependencies_must_resolve_to_the_catalog_source_root() {
+        let root = std::env::temp_dir().join(format!(
+            "vexil-graph-path-provenance-{}",
+            std::process::id()
+        ));
+        let manifest_path = root.join("crates/dependent/Cargo.toml");
+        fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        fs::create_dir_all(root.join("crates/source")).unwrap();
+        fs::create_dir_all(root.join("crates/wrong-source")).unwrap();
+        fs::write(
+            &manifest_path,
+            "[package]\nname = \"dependent\"\nversion = \"0.1.0\"\n\n[dependencies]\nsource = { path = \"../wrong-source\", version = \"0.1.0\" }\n",
+        )
+        .unwrap();
+        let units = vec![json!({
+            "id": "dependent", "kind": "rust-package", "sourceRoot": "crates/dependent",
+            "publication": {"status": "source-inventory-only"}, "targets": []
+        })];
+        let targets = BTreeMap::from([(
+            ("cargo-package".to_owned(), "source".to_owned()),
+            CatalogTarget {
+                id: "source".to_owned(),
+                status: "source-inventory-only".to_owned(),
+                source_root: "crates/source".to_owned(),
+            },
+        )]);
+        let error = manifest_publish_before_edges(&root, &units, &targets)
+            .expect_err("Cargo path provenance must match the catalog unit root");
+        fs::remove_dir_all(&root).unwrap();
+        assert!(error.contains("does not resolve to catalog source root crates/source"));
+    }
+
+    #[test]
+    fn target_specific_cargo_runtime_dependencies_become_publish_before_edges() {
+        let root = std::env::temp_dir().join(format!(
+            "vexil-graph-target-dependencies-{}",
+            std::process::id()
+        ));
+        let manifest_path = root.join("crates/dependent/Cargo.toml");
+        fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        fs::create_dir_all(root.join("crates/source")).unwrap();
+        fs::write(
+            &manifest_path,
+            "[package]\nname = \"dependent\"\nversion = \"0.1.0\"\n\n[target.'cfg(unix)'.dependencies]\nsource = { path = \"../source\", version = \"0.1.0\" }\n",
+        )
+        .unwrap();
+        let units = vec![json!({
+            "id": "dependent", "kind": "rust-package", "sourceRoot": "crates/dependent",
+            "publication": {"status": "source-inventory-only"}, "targets": []
+        })];
+        let targets = BTreeMap::from([(
+            ("cargo-package".to_owned(), "source".to_owned()),
+            CatalogTarget {
+                id: "source".to_owned(),
+                status: "source-inventory-only".to_owned(),
+                source_root: "crates/source".to_owned(),
+            },
+        )]);
+        let edges = manifest_publish_before_edges(&root, &units, &targets).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(edges.len(), 1);
+        assert!(edges
+            .iter()
+            .any(|edge| edge.location == "target.cfg(unix).dependencies.source"));
+    }
+
+    #[test]
+    fn normalized_python_target_names_must_not_be_ambiguous() {
+        let targets = BTreeMap::from([
+            (
+                ("python-project".to_owned(), "vexil-runtime".to_owned()),
+                CatalogTarget {
+                    id: "one".to_owned(),
+                    status: "source-inventory-only".to_owned(),
+                    source_root: "packages/one".to_owned(),
+                },
+            ),
+            (
+                ("python-project".to_owned(), "vexil_runtime".to_owned()),
+                CatalogTarget {
+                    id: "two".to_owned(),
+                    status: "source-inventory-only".to_owned(),
+                    source_root: "packages/two".to_owned(),
+                },
+            ),
+        ]);
+        let error = resolve_known_manifest_dependency(
+            &targets,
+            "python-project",
+            "vexil_runtime",
+            "dependent",
+            "packages/dependent/pyproject.toml",
+            "project.dependencies.vexil_runtime",
+        )
+        .expect_err("normalized Python package names must resolve uniquely");
+        assert!(error.contains("ambiguous normalized Python target"));
+    }
+
+    #[test]
+    fn non_ordering_edges_require_matching_public_decision_records() {
+        let root = std::env::temp_dir().join(format!(
+            "vexil-graph-decision-record-{}",
+            std::process::id()
+        ));
+        let decision_path = root.join("release/decisions/compatibility.json");
+        fs::create_dir_all(decision_path.parent().unwrap()).unwrap();
+        fs::write(
+            &decision_path,
+            r#"{"recordKind":"release-dependency-edge-decision","status":"approved","decisionId":"compatibility-1","edgeType":"compatibility","dependentUnitId":"dependent","relatedUnitId":"related"}"#,
+        )
+        .unwrap();
+        let units = vec![
+            json!({
+                "id": "dependent", "sourceRoot": "crates/dependent", "dependencyEdges": [{
+                    "edgeType": "compatibility", "relatedUnitId": "related", "direction": "related-before-unit",
+                    "sourceEvidence": {"sourceKind": "release-dependency-edge-decision", "path": "release/decisions/compatibility.json", "location": "compatibility-1"}
+                }]
+            }),
+            json!({"id": "related", "sourceRoot": "crates/related", "dependencyEdges": []}),
+        ];
+        catalog_publish_before_edges(&root, &units)
+            .expect("a matching approved public decision record must validate");
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn publish_before_cycle_reports_only_the_participating_directed_edges() {
+        let units = vec![
+            json!({"id": "a", "publication": {"status": "source-inventory-only"}}),
+            json!({"id": "b", "publication": {"status": "source-inventory-only"}}),
+            json!({"id": "tail", "publication": {"status": "source-inventory-only"}}),
+        ];
+        let edges = BTreeSet::from([
+            PublishBeforeEdge {
+                dependency_id: "a".into(), dependent_id: "b".into(), source_kind: "fixture".into(), manifest_path: "crates/a/Cargo.toml".into(), location: "dependencies.b".into(),
+            },
+            PublishBeforeEdge {
+                dependency_id: "b".into(), dependent_id: "a".into(), source_kind: "fixture".into(), manifest_path: "crates/b/Cargo.toml".into(), location: "dependencies.a".into(),
+            },
+            PublishBeforeEdge {
+                dependency_id: "b".into(), dependent_id: "tail".into(), source_kind: "fixture".into(), manifest_path: "crates/tail/Cargo.toml".into(), location: "dependencies.b".into(),
+            },
+        ]);
+        let error = release_order_from_edges(&units, &edges)
+            .expect_err("a publish_before cycle must block release order");
+        assert!(error.contains("a -> b"));
+        assert!(error.contains("b -> a"));
+        assert!(!error.contains("b -> tail"));
     }
 }
