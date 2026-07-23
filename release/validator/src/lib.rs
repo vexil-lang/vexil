@@ -2358,7 +2358,7 @@ pub fn validate_exercise_runbook_content(
 pub fn render_stewardship_exercises_markdown(exercise: &Value) -> Result<String, String> {
     validate_exercise_shape_for_render(exercise)?;
     let root = object(exercise, "exercise")?;
-    let mut markdown = String::from("# Stewardship Continuity Tabletop Exercises\n\n> Generated public view of [`release/exercises/tabletop-stewardship-continuity-2026-07-14.json`](../../../../release/exercises/tabletop-stewardship-continuity-2026-07-14.json). The JSON record is canonical; this page is parity-checked and non-authoritative.\n\nThese are tabletop-only, non-mutating exercises, not Release Runs. The unresolved continuity gate still blocks Manifest approval and privileged publication.\n\n## Record\n\n");
+    let mut markdown = String::from("# Stewardship Continuity Tabletop Exercises\n\n> Generated public view of [`release/exercises/tabletop-stewardship-continuity-2026-07-14.json`](../../../../release/exercises/tabletop-stewardship-continuity-2026-07-14.json). The JSON record is canonical; this page is parity-checked and non-authoritative.\n\nThese are tabletop-only, non-mutating exercises, not Release Runs. They retain the historical absence of a distinct custodian; the current sole-maintainer policy does not make that absence a release gate. Independent external-control and release-evidence gates remain blocked.\n\n## Record\n\n");
     markdown.push_str(&format!("Record `{}` was exercised at `{}`. Evidence is retained as a version-controlled public record with no secrets.\n\n", text(root.get("recordId"), "record id")?, text(root.get("exercisedAtUtc"), "exercise time")?));
     markdown.push_str("## Scenarios\n\n| Scenario | Procedure | Allowed boundary | Disposition |\n|---|---|---|---|\n");
     for scenario in array(root.get("scenarios"), "scenarios")? {
@@ -2695,8 +2695,10 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
         return Err("governance bypass protection is absent".to_owned());
     }
     let publication_block = text(root.get("publicationBlock"), "publicationBlock")?;
-    if !publication_block.contains("stewardship assignments")
-        || !publication_block.contains("external controls")
+    if !(publication_block.contains("stewardship assignments")
+        || publication_block.contains("sole-maintainer"))
+        || !(publication_block.contains("external controls")
+            || publication_block.contains("external-control"))
     {
         return Err(
             "publication block must name stewardship and external-control gates".to_owned(),
@@ -2750,6 +2752,7 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
     let decision_status = text(decision.get("status"), "decision status")?;
     if ![
         "unresolved-continuity",
+        "sole-maintainer-governance",
         "single-steward-custodian",
         "multi-steward-detached-approval",
     ]
@@ -2770,7 +2773,6 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
         "decision review evidence",
     )?;
     let decision_source = text(decision_evidence.get("source"), "decision review source")?;
-
     let assignments = array(root.get("assignments"), "assignments")?;
     let mut assignment_ids = BTreeSet::new();
     let mut assigned_roles = BTreeSet::new();
@@ -2899,7 +2901,10 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
     {
         return Err("qualified Release Stewards must be distinct assigned identities".to_owned());
     }
-    validate_recovery_contact(required_value(continuity, "recoveryContact")?)?;
+    validate_recovery_contact(
+        required_value(continuity, "recoveryContact")?,
+        decision_status,
+    )?;
     validate_unavailable_owner_route(required_value(continuity, "unavailableOwnerRoute")?)?;
     validate_continuity_state(
         decision_status,
@@ -2921,10 +2926,16 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
     require_string(readiness, "manifestApproval", "blocked")?;
     require_string(readiness, "privilegedPublication", "blocked")?;
     let reason = text(readiness.get("reason"), "publication readiness reason")?;
+    let reason_lower = reason.to_ascii_lowercase();
     if reason.is_empty()
-        || (decision_status == "unresolved-continuity" && !reason.contains("continuity"))
+        || (decision_status == "unresolved-continuity" && !reason_lower.contains("continuity"))
+        || (decision_status == "sole-maintainer-governance"
+            && (reason_lower.contains("continuity")
+                || reason_lower.contains("custodian")
+                || !reason_lower.contains("external controls")
+                || !reason_lower.contains("registry")))
     {
-        return Err("unresolved continuity must visibly block privileged readiness".to_owned());
+        return Err("publication readiness must state the actual remaining fail-closed gates".to_owned());
     }
 
     let runbooks = array(root.get("futureRunbooks"), "future runbooks")?;
@@ -3022,14 +3033,18 @@ fn validate_unavailable_owner_route(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_recovery_contact(value: &Value) -> Result<(), String> {
+fn validate_recovery_contact(value: &Value, decision_status: &str) -> Result<(), String> {
     let contact = object(value, "recovery contact")?;
     require_exact_keys(
         contact,
         &["status", "publicRoute", "outcome"],
         "recovery contact",
     )?;
-    require_string(contact, "status", "unresolved-no-distinct-custodian")?;
+    let expected_status = match decision_status {
+        "sole-maintainer-governance" => "sole-maintainer-no-designated-successor",
+        _ => "unresolved-no-distinct-custodian",
+    };
+    require_string(contact, "status", expected_status)?;
     require_string(
         contact,
         "publicRoute",
@@ -3085,6 +3100,17 @@ fn validate_continuity_state(
                     "single-steward unresolved continuity cannot claim detached approval"
                         .to_owned(),
                 );
+            }
+        }
+        "sole-maintainer-governance" => {
+            if qualified.len() != 1 || !custodian_value.is_some_and(Value::is_null) {
+                return Err("sole-maintainer governance requires exactly one steward and no invented custodian".to_owned());
+            }
+            if detached_status != "not-applicable-without-second-qualified-release-steward"
+                || manifest_approver.is_some()
+                || detached_approver.is_some()
+            {
+                return Err("sole-maintainer governance cannot claim detached approval".to_owned());
             }
         }
         "single-steward-custodian" => {
@@ -4772,7 +4798,7 @@ fn render_privileged_operations_body(
             text(operation.get("fallback"), "fallback")?,
         ));
     }
-    markdown.push_str(&format!("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization and candidate evidence, and the unresolved continuity gate remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow {governance_reference}; this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n"));
+    markdown.push_str(&format!("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization, registry identity, and candidate evidence remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow {governance_reference}; this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n"));
     Ok(markdown)
 }
 
@@ -4821,7 +4847,7 @@ pub fn render_markdown(record: &Value) -> Result<String, String> {
             strings(role.get("permittedActions"), "permittedActions")?.join(", ")
         ));
     }
-    markdown.push_str("\n## Boundaries and continuity\n\nAdvisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.\n\nRoles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. Publication remains blocked until stewardship assignments and continuity are resolved and external controls are corrected and verified.\n\n## Offline validation\n\nFrom the repository root, run the repository-local validator without network access:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nIt validates schema syntax, the canonical record, semantic authority invariants, documentation parity, and the public/private boundary.\n\n## Compatibility governance\n\nThis contract does not replace the BDFL, RFC, public-review, or breaking-change rules in [the governance policy](../../../../GOVERNANCE.md). Language, wire-format, compiler, generator, runtime, corpus/conformance, and public API changes continue through that existing route.\n");
+    markdown.push_str("\n## Boundaries and continuity\n\nAdvisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.\n\nRoles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. The reviewed sole-maintainer policy does not prove readiness; publication remains blocked until independent Manifest, registry identity, external-control, security, rehearsal, and closeout gates are verified.\n\n## Offline validation\n\nFrom the repository root, run the repository-local validator without network access:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nIt validates schema syntax, the canonical record, semantic authority invariants, documentation parity, and the public/private boundary.\n\n## Compatibility governance\n\nThis contract does not replace the BDFL, RFC, public-review, or breaking-change rules in [the governance policy](../../../../GOVERNANCE.md). Language, wire-format, compiler, generator, runtime, corpus/conformance, and public API changes continue through that existing route.\n");
     Ok(markdown)
 }
 
@@ -4879,9 +4905,17 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
             text(scope.get("root"), "assignment scope root")?
         ));
     }
-    markdown.push_str("\nEach row is an independently auditable role assertion. Combining these assignments does not union permissions: every action remains constrained by the explicit role assertion in the [Stewardship Authority Model](./stewardship.md).\n\n## Unresolved continuity gate\n\n");
+    markdown.push_str("\nEach row is an independently auditable role assertion. Combining these assignments does not union permissions: every action remains constrained by the explicit role assertion in the [Stewardship Authority Model](./stewardship.md).\n\n");
+    let sole_maintainer = text(decision.get("status"), "decision status")? == "sole-maintainer-governance";
+    markdown.push_str(if sole_maintainer {
+        "## Sole-maintainer policy\n\n"
+    } else {
+        "## Unresolved continuity gate\n\n"
+    });
     let custodian = continuity.get("custodian").unwrap_or(&Value::Null);
-    if custodian.is_null() {
+    if custodian.is_null() && sole_maintainer {
+        markdown.push_str("No distinct recovery custodian is designated by the reviewed sole-maintainer policy. The unavailable-owner route is containment or documented succession only: it may stop, revoke, contain, or activate succession, but cannot create release authority, move tags, overwrite artifacts, rewrite evidence, accept risk, or declare completion.\n\n");
+    } else if custodian.is_null() {
         markdown.push_str("No distinct non-publishing recovery custodian has been approved. The unavailable-owner route is containment or documented succession only: it may stop, revoke, contain, or activate succession, but cannot create release authority, move tags, overwrite artifacts, rewrite evidence, accept risk, or declare completion.\n\n");
     }
     let recovery = object(
@@ -4889,7 +4923,8 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
         "recovery contact",
     )?;
     markdown.push_str(&format!(
-        "## Recovery contact route\n\nNo distinct custodian is currently approved. Record containment and request a reviewed successor through [the public decision route]({}); this route grants no recovery, Manifest, or publication authority.\n\n",
+        "## Recovery contact route\n\n{} Record containment and request a reviewed successor through [the public decision route]({}); this route grants no recovery, Manifest, or publication authority.\n\n",
+        if sole_maintainer { "No successor is currently designated." } else { "No distinct custodian is currently approved." },
         text(recovery.get("publicRoute"), "recovery contact route")?
     ));
     markdown.push_str(&format!(
@@ -4901,7 +4936,7 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
         )?,
         text(readiness.get("reason"), "publication reason")?
     ));
-    markdown.push_str("If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.\n\n## Future runbook\n\nThe stable identifier `release-continuity-runbook` is reserved for the public unavailable-owner and succession runbook. It does not create a custodian or authorize a release.\n\n## Validation\n\nFrom a clean public checkout, run:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the unresolved fail-closed publication gate. It does not change provider settings or create a release.\n\nThis decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).\n");
+    markdown.push_str("If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.\n\n## Future runbook\n\nThe stable identifier `release-continuity-runbook` is reserved for the public unavailable-owner and succession runbook. It does not create a custodian or authorize a release.\n\n## Validation\n\nFrom a clean public checkout, run:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the remaining fail-closed publication gates. It does not change provider settings or create a release.\n\nThis decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).\n");
     Ok(markdown)
 }
 

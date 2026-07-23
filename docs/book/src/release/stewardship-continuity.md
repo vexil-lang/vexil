@@ -4,7 +4,7 @@
 
 ## Reviewed public decision
 
-Decision `stewardship-continuity-2026-07-14` is effective from 2026-07-14 and has status **unresolved-continuity**. Its authoritative review evidence is [GitHub issue #64](https://github.com/vexil-lang/vexil/issues/64).
+Decision `sole-maintainer-governance-2026-07-23` is effective from 2026-07-23 and has status **sole-maintainer-governance**. Its authoritative review evidence is [GitHub issue #75](https://github.com/vexil-lang/vexil/issues/75).
 
 ## Current primary assignments
 
@@ -28,15 +28,15 @@ Decision `stewardship-continuity-2026-07-14` is effective from 2026-07-14 and ha
 
 Each row is an independently auditable role assertion. Combining these assignments does not union permissions: every action remains constrained by the explicit role assertion in the [Stewardship Authority Model](./stewardship.md).
 
-## Unresolved continuity gate
+## Sole-maintainer policy
 
-No distinct non-publishing recovery custodian has been approved. The unavailable-owner route is containment or documented succession only: it may stop, revoke, contain, or activate succession, but cannot create release authority, move tags, overwrite artifacts, rewrite evidence, accept risk, or declare completion.
+No distinct recovery custodian is designated by the reviewed sole-maintainer policy. The unavailable-owner route is containment or documented succession only: it may stop, revoke, contain, or activate succession, but cannot create release authority, move tags, overwrite artifacts, rewrite evidence, accept risk, or declare completion.
 
 ## Recovery contact route
 
-No distinct custodian is currently approved. Record containment and request a reviewed successor through [the public decision route](https://github.com/vexil-lang/vexil/issues/new/choose); this route grants no recovery, Manifest, or publication authority.
+No successor is currently designated. Record containment and request a reviewed successor through [the public decision route](https://github.com/vexil-lang/vexil/issues/new/choose); this route grants no recovery, Manifest, or publication authority.
 
-**Manifest approval: blocked. Privileged publication: blocked.** No distinct recovery custodian has been approved. This unresolved continuity gate blocks Manifest approval and privileged publication.
+**Manifest approval: blocked. Privileged publication: blocked.** External controls, registry identity and custody, Release Set selection, security disposition, rehearsal, and closeout evidence remain unresolved; the sole-maintainer policy is not a release gate.
 
 If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.
 
@@ -52,6 +52,6 @@ From a clean public checkout, run:
 cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
 ```
 
-The validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the unresolved fail-closed publication gate. It does not change provider settings or create a release.
+The validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the remaining fail-closed publication gates. It does not change provider settings or create a release.
 
 This decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).

@@ -330,10 +330,10 @@ fn exercise_schema_and_runbook_boundaries_fail_closed() {
 }
 
 #[test]
-fn canonical_assignment_record_fails_closed_for_unresolved_continuity() {
+fn canonical_assignment_record_accepts_the_reviewed_sole_maintainer_policy() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_assignments_repository(&root)
-        .expect("the canonical unresolved-continuity decision must validate");
+        .expect("the canonical sole-maintainer decision must validate");
 }
 
 #[test]
@@ -979,9 +979,26 @@ fn apply_assignment_mutation(record: &mut Value, mutation: &str) {
             root.get_mut("assignments").unwrap().as_array_mut().unwrap()[0]["permittedActions"] =
                 Value::Array(vec![Value::String("approve-publication".into())]);
         }
+        "unresolved-continuity" => {
+            root.get_mut("decision").unwrap()["status"] =
+                Value::String("unresolved-continuity".into());
+            root.get_mut("continuity").unwrap()["recoveryContact"]["status"] =
+                Value::String("unresolved-no-distinct-custodian".into());
+            root.get_mut("publicationReadiness").unwrap()["reason"] =
+                Value::String("The unresolved continuity gate blocks Manifest approval and privileged publication.".into());
+        }
+        "invented-custodian-under-sole-maintainer" => {
+            root.get_mut("continuity").unwrap()["custodian"] = serde_json::json!({
+                "actorId":"github:furkanmamuk",
+                "nonPublishingCapabilities":["recover-administration","stop-automation","revoke-trust","initiate-succession"],
+                "hasNormalPublicationCredential":false
+            });
+        }
         "publishing-custodian" | "valid-single-steward-custodian" => {
             root.get_mut("decision").unwrap()["status"] =
                 Value::String("single-steward-custodian".into());
+            root.get_mut("continuity").unwrap()["recoveryContact"]["status"] =
+                Value::String("unresolved-no-distinct-custodian".into());
             root.get_mut("identities").unwrap().as_array_mut().unwrap().push(serde_json::json!({
                 "id":"github:recovery-custodian", "name":"Recovery Custodian", "email":"recovery@example.test", "github":"recovery-custodian"
             }));
@@ -994,6 +1011,8 @@ fn apply_assignment_mutation(record: &mut Value, mutation: &str) {
         "self-approved-detached-approval" => {
             root.get_mut("decision").unwrap()["status"] =
                 Value::String("multi-steward-detached-approval".into());
+            root.get_mut("continuity").unwrap()["recoveryContact"]["status"] =
+                Value::String("unresolved-no-distinct-custodian".into());
             root.get_mut("identities").unwrap().as_array_mut().unwrap().push(serde_json::json!({
                 "id":"github:second-steward", "name":"Second Steward", "email":"second@example.test", "github":"second-steward"
             }));
@@ -1009,7 +1028,7 @@ fn apply_assignment_mutation(record: &mut Value, mutation: &str) {
                     "primaryActorId":"github:second-steward",
                     "scope":{"kind":"release-manifest-lifecycle","root":"release-manifests"},
                     "effectiveFrom":"2026-07-14",
-                    "reviewEvidence":{"decisionId":"stewardship-continuity-2026-07-14","source":"https://github.com/vexil-lang/vexil/issues/64","reviewedBy":"github:furkanmamuk","reviewedAt":"2026-07-14"},
+                    "reviewEvidence":{"decisionId":"sole-maintainer-governance-2026-07-23","source":"https://github.com/vexil-lang/vexil/issues/75","reviewedBy":"github:furkanmamuk","reviewedAt":"2026-07-23"},
                     "continuityProcedure":"release-continuity-runbook",
                     "status":"active"
                 }));

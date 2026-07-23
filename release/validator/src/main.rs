@@ -125,7 +125,7 @@ fn main() {
         return;
     }
     match vexil_release_governance_validator::validate_repository(&root) {
-        Ok(()) => println!("stewardship records valid; contract validation does not prove live workflow or provider enforcement; the current unresolved continuity decision blocks Manifest approval and privileged publication, and unresolved external controls remain required"),
+        Ok(()) => println!("stewardship records valid; contract validation does not prove live workflow or provider enforcement; the sole-maintainer policy removes the distinct-custodian gate, while independent external-control, registry, Manifest, security, rehearsal, and closeout evidence remain required"),
         Err(error) => {
             eprintln!("stewardship validation failed: {error}");
             std::process::exit(1);

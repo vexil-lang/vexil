@@ -2,7 +2,7 @@
 
 > Generated public view of [`release/exercises/tabletop-stewardship-continuity-2026-07-14.json`](../../../../release/exercises/tabletop-stewardship-continuity-2026-07-14.json). The JSON record is canonical; this page is parity-checked and non-authoritative.
 
-These are tabletop-only, non-mutating exercises, not Release Runs. The unresolved continuity gate still blocks Manifest approval and privileged publication.
+These are tabletop-only, non-mutating exercises, not Release Runs. They retain the historical absence of a distinct custodian; the current sole-maintainer policy does not make that absence a release gate. Independent external-control and release-evidence gates remain blocked.
 
 ## Record
 
