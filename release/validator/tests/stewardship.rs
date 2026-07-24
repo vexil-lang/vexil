@@ -198,9 +198,8 @@ fn version_rationales_are_per_unit_and_fail_closed() {
         .expect("rationale validation must be repeatable");
 
     let mut shared_evidence = rationale.clone();
-    shared_evidence["$id"] = Value::String(
-        "https://vexil.dev/release/rationales/vexil-runtime-py-0-1-0.json".into(),
-    );
+    shared_evidence["$id"] =
+        Value::String("https://vexil.dev/release/rationales/vexil-runtime-py-0-1-0.json".into());
     shared_evidence["rationaleId"] = Value::String("vexil-runtime-py-0-1-0".into());
     shared_evidence["unitId"] = Value::String("vexil-runtime-py".into());
     shared_evidence["proposedPackageVersion"] = Value::String("0.1.0".into());
@@ -210,13 +209,23 @@ fn version_rationales_are_per_unit_and_fail_closed() {
         Value::String("packages/runtime-py/pyproject.toml".into());
     shared_evidence["packageStewardReview"]["assignmentId"] =
         Value::String("assignment-package-steward-runtime-py-2026-07-14".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &shared_evidence)
-        .expect("multiple units may reference one opaque evidence identity without selecting a release set");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &shared_evidence,
+    )
+    .expect(
+        "multiple units may reference one opaque evidence identity without selecting a release set",
+    );
 
     let mut malformed_evidence = rationale.clone();
     malformed_evidence["compatibilityEvidenceIdentity"] = Value::String("sha256:ABC".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &malformed_evidence)
-        .expect_err("malformed compatibility evidence identities must fail closed");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &malformed_evidence,
+    )
+    .expect_err("malformed compatibility evidence identities must fail closed");
 
     let mut unknown_unit = rationale.clone();
     unknown_unit["unitId"] = Value::String("missing-release-unit".into());
@@ -225,13 +234,21 @@ fn version_rationales_are_per_unit_and_fail_closed() {
 
     let mut non_publishable_unit = rationale.clone();
     non_publishable_unit["unitId"] = Value::String("command-protocol-example".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &non_publishable_unit)
-        .expect_err("non-publishable catalog units cannot receive a release rationale");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &non_publishable_unit,
+    )
+    .expect_err("non-publishable catalog units cannot receive a release rationale");
 
     let mut mismatched_version = rationale.clone();
     mismatched_version["proposedPackageVersion"] = Value::String("99.99.99".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &mismatched_version)
-        .expect_err("rationales must not override checked-in version authority");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &mismatched_version,
+    )
+    .expect_err("rationales must not override checked-in version authority");
 
     let mut prior_published = rationale.clone();
     prior_published["previousPackageVersion"]["kind"] =
@@ -242,30 +259,56 @@ fn version_rationales_are_per_unit_and_fail_closed() {
         .expect_err("prior published versions remain blocked until an explicit public provenance contract exists");
 
     let mut unordered_assessments = rationale.clone();
-    unordered_assessments["affectedSurfaces"].as_array_mut().unwrap().swap(0, 1);
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &unordered_assessments)
-        .expect_err("affected-surface assessments must remain stable and independent");
+    unordered_assessments["affectedSurfaces"]
+        .as_array_mut()
+        .unwrap()
+        .swap(0, 1);
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &unordered_assessments,
+    )
+    .expect_err("affected-surface assessments must remain stable and independent");
 
     let mut duplicate_namespace = rationale.clone();
     duplicate_namespace["affectedSurfaces"][1]["namespace"] = Value::String("language-spec".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &duplicate_namespace)
-        .expect_err("each applicable namespace must have an independent assessment");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &duplicate_namespace,
+    )
+    .expect_err("each applicable namespace must have an independent assessment");
 
     let mut missing_namespace = rationale.clone();
-    missing_namespace["affectedSurfaces"].as_array_mut().unwrap().pop();
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &missing_namespace)
-        .expect_err("all three compatibility namespaces require independent assessment");
+    missing_namespace["affectedSurfaces"]
+        .as_array_mut()
+        .unwrap()
+        .pop();
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &missing_namespace,
+    )
+    .expect_err("all three compatibility namespaces require independent assessment");
 
     let mut missing_review = rationale.clone();
     missing_review["packageStewardReview"] = Value::Null;
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &missing_review)
-        .expect_err("a Package Steward review is mandatory");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &missing_review,
+    )
+    .expect_err("a Package Steward review is mandatory");
 
     let mut misattributed_review = rationale.clone();
     misattributed_review["packageStewardReview"]["actorId"] =
         Value::String("github:not-the-package-steward".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &misattributed_review)
-        .expect_err("a rationale review must be attributed to the unit Package Steward");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &misattributed_review,
+    )
+    .expect_err("a rationale review must be attributed to the unit Package Steward");
 
     let mut private_path = rationale.clone();
     private_path["affectedSurfaces"][0]["authorityPath"] =
@@ -273,48 +316,272 @@ fn version_rationales_are_per_unit_and_fail_closed() {
     vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &private_path)
         .expect_err("private or local authority paths must fail closed");
 
+    let mut stale_authority_revision = rationale.clone();
+    stale_authority_revision["affectedSurfaces"][0]["authorityRevision"] =
+        Value::String("0000000000000000000000000000000000000000".into());
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &stale_authority_revision,
+    )
+    .expect_err(
+        "authority revisions must remain bound to the canonical catalog lifecycle revision",
+    );
+
     let mut traversing_path = rationale.clone();
     traversing_path["affectedSurfaces"][0]["authorityPath"] =
         Value::String("spec/../spec/vexil-spec.md".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &traversing_path)
-        .expect_err("authority paths cannot traverse within or beyond a public authority root");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &traversing_path,
+    )
+    .expect_err("authority paths cannot traverse within or beyond a public authority root");
 
     let mut unsupported_matrix = rationale.clone();
     unsupported_matrix["supportMatrix"]["claims"][0]["evidenceIdentity"] = Value::Null;
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &unsupported_matrix)
-        .expect_err("support claims without evidence must fail closed");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &unsupported_matrix,
+    )
+    .expect_err("support claims without evidence must fail closed");
 
     let mut contradictory_support = rationale.clone();
     let duplicate_claim = contradictory_support["supportMatrix"]["claims"][0].clone();
-    contradictory_support["supportMatrix"]["claims"].as_array_mut().unwrap().push(duplicate_claim);
+    contradictory_support["supportMatrix"]["claims"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_claim);
     contradictory_support["supportMatrix"]["claims"][1]["compatibility"] =
         Value::String("unsupported".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &contradictory_support)
-        .expect_err("support matrices cannot contain conflicting duplicate platform claims");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &contradictory_support,
+    )
+    .expect_err("support matrices cannot contain conflicting duplicate platform claims");
 
     let mut draft_conformance = rationale.clone();
     draft_conformance["affectedSurfaces"][0]["assertion"] =
         Value::String("formal-conformance".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &draft_conformance)
-        .expect_err("draft language status cannot be elevated to formal conformance");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &draft_conformance,
+    )
+    .expect_err("draft language status cannot be elevated to formal conformance");
 
     let mut missing_decision = rationale.clone();
-    missing_decision["affectedSurfaces"][0]["compatibility"] = Value::String("behavior-changed".into());
+    missing_decision["affectedSurfaces"][0]["compatibility"] =
+        Value::String("behavior-changed".into());
     missing_decision["publicCompatibilityDecision"] = Value::Null;
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &missing_decision)
-        .expect_err("behavior and public API changes require an approved public decision");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &missing_decision,
+    )
+    .expect_err("behavior and public API changes require an approved public decision");
 
     let mut declared_change_without_surface_change = rationale.clone();
     declared_change_without_surface_change["changeClass"] = Value::String("behavior-change".into());
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &declared_change_without_surface_change)
-        .expect_err("declared behavior changes cannot bypass the public decision requirement");
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &declared_change_without_surface_change,
+    )
+    .expect_err("declared behavior changes cannot bypass the public decision requirement");
 
     let mut mismatched_public_id = rationale;
-    mismatched_public_id["$id"] = Value::String(
-        "https://vexil.dev/release/rationales/some-other-rationale.json".into(),
-    );
-    vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &mismatched_public_id)
-        .expect_err("public rationale IDs must match their rationale IDs");
+    mismatched_public_id["$id"] =
+        Value::String("https://vexil.dev/release/rationales/some-other-rationale.json".into());
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &mismatched_public_id,
+    )
+    .expect_err("public rationale IDs must match their rationale IDs");
+}
+
+#[test]
+fn catalog_lifecycle_is_complete_and_fail_closed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    vexil_release_governance_validator::validate_catalog_lifecycle_repository(&root)
+        .expect("the seeded active lifecycle ledger must agree with the canonical catalog");
+
+    let catalog: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog.json")).expect("read canonical catalog"),
+    )
+    .expect("parse canonical catalog");
+    let lifecycle: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog-lifecycle.json"))
+            .expect("read canonical lifecycle ledger"),
+    )
+    .expect("parse canonical lifecycle ledger");
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &lifecycle)
+        .expect("lifecycle validation must be deterministic");
+
+    let mut rename = lifecycle.clone();
+    let mut legacy = rename["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|record| record["unitId"] == "vexil-runtime-ts")
+        .unwrap()
+        .clone();
+    legacy["lifecycleRecordId"] = Value::String("lifecycle-vexil-runtime-ts-legacy".into());
+    legacy["unitId"] = Value::String("vexil-runtime-ts-legacy".into());
+    legacy["state"] = Value::String("renamed".into());
+    legacy["sourceRoot"] = Value::String("packages/runtime-ts-legacy".into());
+    legacy["canonicalTagNamespace"] = Value::String("vexil-runtime-ts-legacy-v<semver>".into());
+    legacy["targetIdentities"][0]["name"] = Value::String("@vexil-lang/runtime-legacy".into());
+    legacy["lifecycleDecision"]["decisionId"] =
+        Value::String("catalog-lifecycle-vexil-runtime-ts-rename".into());
+    legacy["lifecycleDecision"]["state"] = Value::String("approved-rename".into());
+    legacy["successorUnitId"] = Value::String("vexil-runtime-ts".into());
+    legacy["compatibilityImpact"]["state"] = Value::String("requires-rationale".into());
+    legacy["compatibilityImpact"]["rationaleReference"] =
+        Value::String("vexil-runtime-ts-0-4-1".into());
+    legacy["compatibilityImpact"]["decisionState"] = Value::String("accepted".into());
+    rename["records"].as_array_mut().unwrap().push(legacy);
+    rename["records"]
+        .as_array_mut()
+        .unwrap()
+        .sort_by(|left, right| left["unitId"].as_str().cmp(&right["unitId"].as_str()));
+    for record in rename["records"].as_array_mut().unwrap() {
+        if record["unitId"] == "vexil-runtime-ts" {
+            record["predecessorUnitId"] = Value::String("vexil-runtime-ts-legacy".into());
+            record["lifecycleDecision"]["decisionId"] =
+                Value::String("catalog-lifecycle-vexil-runtime-ts-rename".into());
+            record["lifecycleDecision"]["state"] = Value::String("approved-rename".into());
+            record["compatibilityImpact"]["state"] = Value::String("requires-rationale".into());
+            record["compatibilityImpact"]["rationaleReference"] =
+                Value::String("vexil-runtime-ts-0-4-1".into());
+            record["compatibilityImpact"]["decisionState"] = Value::String("accepted".into());
+        }
+    }
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &rename)
+        .expect("a reviewed rename must retain the old identity and explicit chain");
+
+    let mut retirement = lifecycle.clone();
+    let mut retired = retirement["records"][0].clone();
+    retired["lifecycleRecordId"] = Value::String("lifecycle-zzz-retired".into());
+    retired["unitId"] = Value::String("zzz-retired".into());
+    retired["state"] = Value::String("retired".into());
+    retired["sourceRoot"] = Value::String("crates/zzz-retired".into());
+    retired["canonicalTagNamespace"] = Value::String("zzz-retired-v<semver>".into());
+    retired["targetIdentities"][0]["kind"] = Value::String("cargo-package".into());
+    retired["targetIdentities"][0]["name"] = Value::String("zzz-retired".into());
+    retired["owner"] = serde_json::json!({"roleId":"package-steward","assignmentId":"assignment-package-steward-vexil-runtime-2026-07-14"});
+    retired["publication"] = serde_json::json!({"classification":"non-publishable","targetCategory":"non-release","status":"non-publishable"});
+    retired["lifecycleDecision"] = serde_json::json!({"decisionId":"catalog-lifecycle-zzz-retirement","state":"approved-retirement","effectiveRevision":"24a4d906d36e75c86e7d556ff07a093aa807b96c"});
+    retired["stewardProposal"] = serde_json::json!({"actorId":"github:furkanmamuk","roleId":"package-steward","assignmentId":"assignment-package-steward-vexil-runtime-2026-07-14","proposedAt":"2026-07-24T00:00:00Z"});
+    retired["releaseStewardAcceptance"]["roleAssertions"] =
+        serde_json::json!(["package-steward", "release-steward"]);
+    retired["compatibilityImpact"] = serde_json::json!({"state":"not-applicable","rationaleReference":null,"decisionState":"not-applicable"});
+    retirement["records"].as_array_mut().unwrap().push(retired);
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &retirement)
+        .expect(
+            "a reviewed retirement must preserve its former identity outside the active catalog",
+        );
+
+    let mut mismatched_decision = lifecycle.clone();
+    mismatched_decision["records"][6]["lifecycleDecision"]["state"] =
+        Value::String("approved-retirement".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &mismatched_decision,
+    )
+    .expect_err("lifecycle decisions must match their lifecycle state");
+
+    let mut mismatched_decision_revision = lifecycle.clone();
+    mismatched_decision_revision["records"][6]["lifecycleDecision"]["effectiveRevision"] =
+        Value::String("0000000000000000000000000000000000000000".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &mismatched_decision_revision,
+    )
+    .expect_err("lifecycle decisions must retain their own effective revision");
+
+    let mut unrelated_rationale = rename.clone();
+    for record in unrelated_rationale["records"].as_array_mut().unwrap() {
+        if record["unitId"] == "vexil-runtime-ts-legacy" {
+            record["successorUnitId"] = Value::String("vexil-runtime".into());
+        }
+    }
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &unrelated_rationale,
+    )
+    .expect_err("lifecycle transitions cannot use another unit's rationale");
+
+    let mut missing_active = lifecycle.clone();
+    missing_active["records"].as_array_mut().unwrap().pop();
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &missing_active,
+    )
+    .expect_err("unrecorded active catalog units must require add/propose review");
+
+    let mut ownerless = lifecycle.clone();
+    ownerless["records"][0]["owner"]["assignmentId"] = Value::String("missing-owner".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &ownerless)
+        .expect_err("ownerless lifecycle units must fail closed");
+
+    let mut reused_target = lifecycle.clone();
+    reused_target["records"][1]["targetIdentities"] =
+        reused_target["records"][0]["targetIdentities"].clone();
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &reused_target)
+        .expect_err("target identities cannot be reused across lifecycle records");
+
+    let mut misattributed = lifecycle.clone();
+    misattributed["records"][6]["stewardProposal"]["actorId"] =
+        Value::String("github:not-the-owner".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &misattributed)
+        .expect_err("proposals and acceptance must be attributable to active role assertions");
+
+    let mut stale_revision = lifecycle.clone();
+    stale_revision["records"][6]["effectiveRevision"] =
+        Value::String("0000000000000000000000000000000000000000".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &stale_revision,
+    )
+    .expect_err("stale effective revisions must fail closed");
+
+    let mut publishability_change = lifecycle.clone();
+    publishability_change["records"][6]["publication"]["status"] =
+        Value::String("candidate-unreleased".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &publishability_change,
+    )
+    .expect_err("publishability changes require explicit reviewed lifecycle transitions");
+
+    let mut missing_rationale = rename;
+    for record in missing_rationale["records"].as_array_mut().unwrap() {
+        if record["unitId"] == "vexil-runtime-ts" {
+            record["compatibilityImpact"]["rationaleReference"] =
+                Value::String("missing-rationale".into());
+        }
+    }
+    vexil_release_governance_validator::validate_catalog_lifecycle(
+        &root,
+        &catalog,
+        &missing_rationale,
+    )
+    .expect_err("compatibility transitions must reference a current rationale contract");
+
+    let mut private_path = lifecycle;
+    private_path["authorityBoundary"] = Value::String("C:\\Users\\private\\catalog.md".into());
+    vexil_release_governance_validator::validate_catalog_lifecycle(&root, &catalog, &private_path)
+        .expect_err("private local paths must never enter public lifecycle governance");
 }
 
 #[test]
@@ -366,8 +633,12 @@ fn typed_release_dependency_graph_is_manifest_led_and_deterministic() {
                         "{} -> {} @ {}#{}",
                         edge["relatedUnitId"].as_str().expect("related unit"),
                         unit["id"].as_str().expect("dependent unit"),
-                        edge["sourceEvidence"]["path"].as_str().expect("evidence path"),
-                        edge["sourceEvidence"]["location"].as_str().expect("evidence location"),
+                        edge["sourceEvidence"]["path"]
+                            .as_str()
+                            .expect("evidence path"),
+                        edge["sourceEvidence"]["location"]
+                            .as_str()
+                            .expect("evidence location"),
                     )
                 })
         })
@@ -406,7 +677,10 @@ fn typed_release_dependency_graph_is_manifest_led_and_deterministic() {
         .expect("TypeScript edges")
         .is_empty());
     assert_eq!(
-        unit("vexilc")["targets"].as_array().expect("vexilc targets").len(),
+        unit("vexilc")["targets"]
+            .as_array()
+            .expect("vexilc targets")
+            .len(),
         2,
         "the compiler remains one release unit with package and binary targets"
     );
@@ -426,13 +700,14 @@ fn typed_release_dependency_graph_is_manifest_led_and_deterministic() {
     let mut missing_related_unit = catalog.clone();
     missing_related_unit["units"][6]["dependencyEdges"][0]["relatedUnitId"] =
         Value::String("missing-release-unit".into());
-    assert!(vexil_release_governance_validator::validate_catalog(&root, &missing_related_unit)
-        .expect_err("missing related units must block graph validation")
-        .contains("missing related unit"));
+    assert!(
+        vexil_release_governance_validator::validate_catalog(&root, &missing_related_unit)
+            .expect_err("missing related units must block graph validation")
+            .contains("missing related unit")
+    );
 
     let mut unknown_type = catalog.clone();
-    unknown_type["units"][6]["dependencyEdges"][0]["edgeType"] =
-        Value::String("unknown".into());
+    unknown_type["units"][6]["dependencyEdges"][0]["edgeType"] = Value::String("unknown".into());
     vexil_release_governance_validator::validate_catalog_schema(&root, &unknown_type)
         .expect_err("the typed-edge contract must reject unknown edge types");
 
@@ -442,25 +717,31 @@ fn typed_release_dependency_graph_is_manifest_led_and_deterministic() {
         .as_array_mut()
         .expect("typed edge array")
         .push(duplicated_edge);
-    assert!(vexil_release_governance_validator::validate_catalog(&root, &duplicate)
-        .expect_err("duplicate typed edges must be rejected")
-        .contains("duplicate dependency edge"));
+    assert!(
+        vexil_release_governance_validator::validate_catalog(&root, &duplicate)
+            .expect_err("duplicate typed edges must be rejected")
+            .contains("duplicate dependency edge")
+    );
 
     let mut unordered = catalog.clone();
     unordered["units"][16]["dependencyEdges"]
         .as_array_mut()
         .expect("store typed edge array")
         .swap(0, 1);
-    assert!(vexil_release_governance_validator::validate_catalog(&root, &unordered)
-        .expect_err("typed edges must have stable order")
-        .contains("stable sort order"));
+    assert!(
+        vexil_release_governance_validator::validate_catalog(&root, &unordered)
+            .expect_err("typed edges must have stable order")
+            .contains("stable sort order")
+    );
 
     let mut stale_evidence = catalog.clone();
     stale_evidence["units"][6]["dependencyEdges"][0]["sourceEvidence"]["location"] =
         Value::String("dependencies.forged".into());
-    assert!(vexil_release_governance_validator::validate_catalog(&root, &stale_evidence)
-        .expect_err("catalog and manifest edge evidence must agree")
-        .contains("missing manifest-derived"));
+    assert!(
+        vexil_release_governance_validator::validate_catalog(&root, &stale_evidence)
+            .expect_err("catalog and manifest edge evidence must agree")
+            .contains("missing manifest-derived")
+    );
 
     let mut non_ordering_edges = catalog.clone();
     non_ordering_edges["units"][10]["dependencyEdges"] = serde_json::json!([
@@ -513,7 +794,11 @@ fn go_runtime_version_decision_establishes_one_checked_in_source() {
         "vexil-runtime-ts-v0.4.1",
     )
     .expect("a TypeScript candidate must match its checked-in source version");
-    for candidate in ["v0.1.0", "vexil-codegen-go-v0.4.3", "vexil-runtime-ts-v0.4.2"] {
+    for candidate in [
+        "v0.1.0",
+        "vexil-codegen-go-v0.4.3",
+        "vexil-runtime-ts-v0.4.2",
+    ] {
         vexil_release_governance_validator::validate_candidate_tag(&root, &catalog, candidate)
             .expect_err("root, legacy, and historical candidate tags must fail closed");
     }
@@ -529,20 +814,31 @@ fn go_runtime_version_decision_establishes_one_checked_in_source() {
     );
 
     let mut duplicate_namespace = catalog.clone();
-    let units = duplicate_namespace["units"].as_array_mut().expect("catalog units");
+    let units = duplicate_namespace["units"]
+        .as_array_mut()
+        .expect("catalog units");
     let ts_namespace = units
         .iter()
         .find(|unit| unit["id"] == "vexil-runtime-ts")
-        .expect("TypeScript runtime")
-        ["canonicalTagNamespace"]
+        .expect("TypeScript runtime")["canonicalTagNamespace"]
         .clone();
-    units.iter_mut()
+    units
+        .iter_mut()
         .find(|unit| unit["id"] == "vexil-runtime-go")
         .expect("Go runtime")["canonicalTagNamespace"] = ts_namespace;
     vexil_release_governance_validator::validate_catalog(&root, &duplicate_namespace)
         .expect_err("future canonical tag namespaces must remain unique");
 
-    for invalid_version in ["", "\n", "0.1.0\n\n", " 0.1.0\n", "0.1.0 \n", "0.1\n", "01.1.0\n", "0.1.0\r\n"] {
+    for invalid_version in [
+        "",
+        "\n",
+        "0.1.0\n\n",
+        " 0.1.0\n",
+        "0.1.0 \n",
+        "0.1\n",
+        "01.1.0\n",
+        "0.1.0\r\n",
+    ] {
         vexil_release_governance_validator::strict_go_version_declaration(invalid_version)
             .expect_err("Go VERSION must be exactly one strict SemVer token followed by LF");
     }
@@ -591,7 +887,8 @@ fn go_runtime_version_decision_establishes_one_checked_in_source() {
         "0.4.1",
     )
     .expect_err("TypeScript lockfile disagreement must not become version authority");
-    let mut rootless_lockfile: Value = serde_json::from_str(&lockfile).expect("parse TypeScript lockfile");
+    let mut rootless_lockfile: Value =
+        serde_json::from_str(&lockfile).expect("parse TypeScript lockfile");
     rootless_lockfile["packages"]
         .as_object_mut()
         .expect("lockfile packages")
@@ -1116,8 +1413,10 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/additive-repair-proposal.schema.json",
         "release/schemas/history-reconciliation-decision.schema.json",
         "release/schemas/catalog.schema.json",
+        "release/schemas/catalog-lifecycle.schema.json",
         "release/schemas/version-rationale.schema.json",
         "release/catalog.json",
+        "release/catalog-lifecycle.json",
         "release/rationales/vexil-runtime-ts-0-4-1.json",
         "release/decisions/runtime-go-version-2026-07-23.json",
         "release/stewardship/assignments.json",
@@ -1217,8 +1516,13 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     let baseline_path = isolated.join("release/history/baseline-tags.json");
     let invalid_baseline = fs::read_to_string(&baseline_path)
         .expect("read isolated Historical Tag baseline")
-        .replacen("\"status\": \"ratified\"", "\"status\": \"awaiting-ratification\"", 1);
-    fs::write(&baseline_path, invalid_baseline).expect("write invalid isolated Historical Tag baseline");
+        .replacen(
+            "\"status\": \"ratified\"",
+            "\"status\": \"awaiting-ratification\"",
+            1,
+        );
+    fs::write(&baseline_path, invalid_baseline)
+        .expect("write invalid isolated Historical Tag baseline");
     vexil_release_governance_validator::validate_candidate_tag(
         &isolated,
         &isolated_catalog,

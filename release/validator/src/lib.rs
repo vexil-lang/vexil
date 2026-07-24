@@ -202,6 +202,7 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_stewardship_exercises_repository(root)?;
     validate_external_controls_repository(root)?;
     validate_history_repository(root)?;
+    validate_catalog_lifecycle_repository(root)?;
     validate_catalog_repository(root)?;
     validate_version_rationale_repository(root)?;
     validate_public_boundary(root)?;
@@ -219,6 +220,382 @@ pub fn validate_catalog_repository(root: &Path) -> Result<(), String> {
         .map_err(|error| format!("read release catalog documentation: {error}"))?;
     validate_catalog_documentation_parity(root, &catalog, &documentation)?;
     validate_npm_publish_workflow(root)
+}
+
+/// Validates the public lifecycle ledger against the active source-led catalog.
+/// It is structural governance only: it neither selects a Release Set nor creates
+/// a Manifest, tag, provider query, or publication effect.
+pub fn validate_catalog_lifecycle_repository(root: &Path) -> Result<(), String> {
+    validate_schema_syntax(root)?;
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    let lifecycle = read_json(&root.join("release/catalog-lifecycle.json"))?;
+    validate_catalog_schema(root, &catalog)?;
+    validate_catalog_lifecycle_schema(root, &lifecycle)?;
+    validate_catalog_lifecycle(root, &catalog, &lifecycle)
+}
+
+pub fn validate_catalog_lifecycle(
+    root: &Path,
+    catalog: &Value,
+    lifecycle: &Value,
+) -> Result<(), String> {
+    validate_catalog_lifecycle_schema(root, lifecycle)?;
+    ensure_no_private_leakage(&serde_json::to_string(lifecycle).map_err(|error| {
+        format!("serialize catalog lifecycle for boundary validation: {error}")
+    })?)?;
+
+    let catalog_units = array(catalog.get("units"), "release catalog units")?;
+    let ledger = object(lifecycle, "catalog lifecycle ledger")?;
+    let catalog_revision = text(ledger.get("catalogRevision"), "catalog lifecycle revision")?;
+    let records = array(ledger.get("records"), "catalog lifecycle records")?;
+    let expected_roots = expected_catalog_source_roots(root)?;
+    let catalog_roots: BTreeSet<_> = catalog_units
+        .iter()
+        .filter_map(|unit| unit.get("sourceRoot").and_then(Value::as_str))
+        .map(str::to_owned)
+        .collect();
+    if !expected_roots.is_subset(&catalog_roots) {
+        return Err(
+            "catalog lifecycle requires add/propose review for a new source unit".to_owned(),
+        );
+    }
+    if !catalog_roots.is_subset(&expected_roots) {
+        return Err(
+            "catalog lifecycle requires retire/exclude review for a removed source unit".to_owned(),
+        );
+    }
+    let mut record_ids = BTreeSet::new();
+    let mut stable_ids = BTreeSet::new();
+    let mut source_roots = BTreeSet::new();
+    let mut namespaces = BTreeSet::new();
+    let mut targets = BTreeSet::new();
+    let mut active = BTreeMap::new();
+    let mut all_records = BTreeMap::new();
+    let mut previous_unit_id = "";
+
+    for value in records {
+        let record = object(value, "catalog lifecycle record")?;
+        let record_id = text(
+            record.get("lifecycleRecordId"),
+            "catalog lifecycle record ID",
+        )?;
+        let unit_id = text(record.get("unitId"), "catalog lifecycle unit ID")?;
+        if !record_ids.insert(record_id.to_owned()) || !stable_ids.insert(unit_id.to_owned()) {
+            return Err("catalog lifecycle record and stable unit IDs must be unique".to_owned());
+        }
+        if unit_id <= previous_unit_id {
+            return Err("catalog lifecycle records must be sorted by stable unit ID".to_owned());
+        }
+        previous_unit_id = unit_id;
+        let source_root = text(record.get("sourceRoot"), "catalog lifecycle source root")?;
+        if !source_roots.insert(source_root.to_owned()) {
+            return Err("catalog lifecycle source roots must never be reused".to_owned());
+        }
+        let namespace = text(
+            record.get("canonicalTagNamespace"),
+            "catalog lifecycle tag namespace",
+        )?;
+        if namespace != "not-applicable" && !namespaces.insert(namespace.to_owned()) {
+            return Err(
+                "catalog lifecycle canonical tag namespaces must never be reused".to_owned(),
+            );
+        }
+        for target in array(
+            record.get("targetIdentities"),
+            "catalog lifecycle target identities",
+        )? {
+            let target = object(target, "catalog lifecycle target identity")?;
+            let identity = format!(
+                "{}:{}",
+                text(target.get("kind"), "catalog lifecycle target kind")?,
+                text(target.get("name"), "catalog lifecycle target name")?
+            );
+            if !targets.insert(identity) {
+                return Err("catalog lifecycle target identities must never be reused".to_owned());
+            }
+        }
+        validate_lifecycle_review(root, record)?;
+        let state = text(record.get("state"), "catalog lifecycle state")?;
+        let decision = object(
+            required_value(record, "lifecycleDecision")?,
+            "catalog lifecycle decision",
+        )?;
+        let effective_revision = text(
+            record.get("effectiveRevision"),
+            "catalog lifecycle effective revision",
+        )?;
+        if text(
+            decision.get("effectiveRevision"),
+            "catalog lifecycle decision effective revision",
+        )? != effective_revision
+        {
+            return Err(
+                "catalog lifecycle decision revision must equal its record effective revision"
+                    .to_owned(),
+            );
+        }
+        let expected_decision = match state {
+            "active"
+                if record
+                    .get("predecessorUnitId")
+                    .and_then(Value::as_str)
+                    .is_some() =>
+            {
+                "approved-rename"
+            }
+            "active" => "accepted-active-baseline",
+            "renamed" => "approved-rename",
+            "retired" => "approved-retirement",
+            "excluded" => "approved-exclusion",
+            _ => return Err("catalog lifecycle state is not recognized".to_owned()),
+        };
+        if text(decision.get("state"), "catalog lifecycle decision state")? != expected_decision {
+            return Err(
+                "catalog lifecycle decision state does not match its lifecycle state".to_owned(),
+            );
+        }
+        if state == "active" && effective_revision != catalog_revision {
+            return Err(
+                "active catalog lifecycle revision must equal the catalog revision".to_owned(),
+            );
+        }
+        let successor = record.get("successorUnitId").and_then(Value::as_str);
+        match state {
+            "active" if successor.is_some() => {
+                return Err("active catalog lifecycle entries cannot name a rename successor".to_owned())
+            }
+            "renamed" if successor.is_none() => {
+                return Err("renamed catalog lifecycle entries require an explicit successor".to_owned())
+            }
+            "retired" | "excluded" if successor.is_some() => {
+                return Err("retired or excluded catalog lifecycle entries cannot reuse an identity through a successor".to_owned())
+            }
+            "active" | "renamed" | "retired" | "excluded" => {}
+            _ => return Err("catalog lifecycle state is not recognized".to_owned()),
+        }
+        if state == "active" {
+            active.insert(unit_id, record);
+        }
+        all_records.insert(unit_id, record);
+    }
+
+    for (unit_id, record) in &all_records {
+        let state = text(record.get("state"), "catalog lifecycle state")?;
+        let publication = object(
+            required_value(record, "publication")?,
+            "catalog lifecycle publication",
+        )?;
+        let needs_rationale = state != "active"
+            || record
+                .get("predecessorUnitId")
+                .and_then(Value::as_str)
+                .is_some();
+        if needs_rationale
+            && text(
+                publication.get("classification"),
+                "catalog lifecycle publication classification",
+            )? != "non-publishable"
+        {
+            let impact = object(
+                required_value(record, "compatibilityImpact")?,
+                "catalog lifecycle compatibility impact",
+            )?;
+            if text(
+                impact.get("state"),
+                "catalog lifecycle compatibility impact state",
+            )? != "requires-rationale"
+                || impact
+                    .get("rationaleReference")
+                    .and_then(Value::as_str)
+                    .is_none()
+                || text(
+                    impact.get("decisionState"),
+                    "catalog lifecycle rationale decision state",
+                )? != "accepted"
+            {
+                return Err(format!("catalog lifecycle transition for {unit_id} requires an accepted compatibility rationale"));
+            }
+            let rationale_id = text(
+                impact.get("rationaleReference"),
+                "catalog lifecycle rationale reference",
+            )?;
+            let rationale = read_json(
+                &root
+                    .join("release/rationales")
+                    .join(format!("{rationale_id}.json")),
+            )
+            .map_err(|error| {
+                format!(
+                    "catalog lifecycle rationale reference {rationale_id} is unavailable: {error}"
+                )
+            })?;
+            validate_version_rationale(root, catalog, &rationale)?;
+            let expected_rationale_unit = record
+                .get("successorUnitId")
+                .and_then(Value::as_str)
+                .unwrap_or(unit_id);
+            if text(
+                rationale.get("unitId"),
+                "catalog lifecycle rationale unit ID",
+            )? != expected_rationale_unit
+            {
+                return Err(format!(
+                    "catalog lifecycle rationale for {unit_id} must bind its transitioning unit"
+                ));
+            }
+        }
+        if state == "renamed" {
+            let successor = text(
+                record.get("successorUnitId"),
+                "catalog lifecycle rename successor",
+            )?;
+            let successor_record = all_records.get(successor).ok_or_else(|| {
+                format!("catalog lifecycle rename successor is unknown: {successor}")
+            })?;
+            if successor_record.get("state").and_then(Value::as_str) != Some("active")
+                || successor_record
+                    .get("predecessorUnitId")
+                    .and_then(Value::as_str)
+                    != Some(*unit_id)
+            {
+                return Err(
+                    "catalog lifecycle rename must form an explicit predecessor/successor chain"
+                        .to_owned(),
+                );
+            }
+        }
+        if let Some(predecessor) = record.get("predecessorUnitId").and_then(Value::as_str) {
+            let predecessor_record = all_records.get(predecessor).ok_or_else(|| {
+                format!("catalog lifecycle rename predecessor is unknown: {predecessor}")
+            })?;
+            if predecessor_record.get("state").and_then(Value::as_str) != Some("renamed")
+                || predecessor_record
+                    .get("successorUnitId")
+                    .and_then(Value::as_str)
+                    != Some(*unit_id)
+            {
+                return Err(
+                    "catalog lifecycle active rename successor must link back to its predecessor"
+                        .to_owned(),
+                );
+            }
+        }
+    }
+
+    for unit in catalog_units {
+        let unit = object(unit, "release catalog unit")?;
+        let id = text(unit.get("id"), "release catalog unit ID")?;
+        let Some(record) = active.get(id) else {
+            return Err(format!(
+                "catalog lifecycle requires add/propose review for current unit: {id}"
+            ));
+        };
+        for (record_key, catalog_key) in [
+            ("sourceRoot", "sourceRoot"),
+            ("canonicalTagNamespace", "canonicalTagNamespace"),
+            ("owner", "owner"),
+            ("publication", "publication"),
+        ] {
+            if record.get(record_key) != unit.get(catalog_key) {
+                let action = if record_key == "publication" {
+                    "publishability transition with review"
+                } else {
+                    "rename with predecessor"
+                };
+                return Err(format!(
+                    "catalog lifecycle mismatch for {id} requires {action}"
+                ));
+            }
+        }
+        if record.get("targetIdentities") != unit.get("targets") {
+            return Err(format!(
+                "catalog lifecycle mismatch for {id} requires rename with predecessor"
+            ));
+        }
+    }
+    for (id, _) in active {
+        if !catalog_units
+            .iter()
+            .any(|unit| unit.get("id").and_then(Value::as_str) == Some(id))
+        {
+            return Err(format!(
+                "catalog lifecycle requires retire/exclude review for removed unit: {id}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_lifecycle_review(root: &Path, record: &Map<String, Value>) -> Result<(), String> {
+    let owner = object(required_value(record, "owner")?, "catalog lifecycle owner")?;
+    let proposal = object(
+        required_value(record, "stewardProposal")?,
+        "catalog lifecycle proposal",
+    )?;
+    require_utc_timestamp(
+        proposal.get("proposedAt"),
+        "catalog lifecycle proposal timestamp",
+    )?;
+    if proposal.get("roleId") != owner.get("roleId")
+        || proposal.get("assignmentId") != owner.get("assignmentId")
+    {
+        return Err(
+            "catalog lifecycle proposal must be attributed to the accountable owner".to_owned(),
+        );
+    }
+    let acceptance = object(
+        required_value(record, "releaseStewardAcceptance")?,
+        "catalog lifecycle acceptance",
+    )?;
+    require_utc_timestamp(
+        acceptance.get("acceptedAt"),
+        "catalog lifecycle acceptance timestamp",
+    )?;
+    if text(
+        acceptance.get("roleId"),
+        "catalog lifecycle acceptance role",
+    )? != "release-steward"
+    {
+        return Err("catalog lifecycle acceptance must assert the Release Steward role".to_owned());
+    }
+    let assertions = array(
+        acceptance.get("roleAssertions"),
+        "catalog lifecycle role assertions",
+    )?;
+    if assertions.len() != 2
+        || assertions[0].as_str() != owner.get("roleId").and_then(Value::as_str)
+        || assertions[1].as_str() != Some("release-steward")
+    {
+        return Err("catalog lifecycle acceptance must retain distinct owner and Release Steward role assertions".to_owned());
+    }
+    let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
+    let assignments = array(assignments.get("assignments"), "stewardship assignments")?;
+    for (review, label, expected_role) in [
+        (
+            proposal,
+            "proposal",
+            text(owner.get("roleId"), "catalog lifecycle owner role")?,
+        ),
+        (acceptance, "acceptance", "release-steward"),
+    ] {
+        let assignment_id = text(
+            review.get("assignmentId"),
+            "catalog lifecycle assignment ID",
+        )?;
+        let assignment = assignments
+            .iter()
+            .find(|value| value.get("assignmentId").and_then(Value::as_str) == Some(assignment_id))
+            .ok_or_else(|| format!("catalog lifecycle {label} references an unknown assignment"))?;
+        if assignment.get("roleId").and_then(Value::as_str) != Some(expected_role)
+            || assignment.get("status").and_then(Value::as_str) != Some("active")
+            || assignment.get("primaryActorId") != review.get("actorId")
+        {
+            return Err(format!(
+                "catalog lifecycle {label} actor is not the active asserted steward"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Validates public, per-unit version rationale records without selecting a
@@ -277,10 +654,15 @@ pub fn validate_version_rationale(
 ) -> Result<(), String> {
     validate_version_rationale_schema(root, record)?;
     validate_catalog(root, catalog)?;
-    ensure_no_private_leakage(
-        &serde_json::to_string(record)
-            .map_err(|error| format!("serialize version rationale for boundary validation: {error}"))?,
+    let lifecycle = read_json(&root.join("release/catalog-lifecycle.json"))?;
+    validate_catalog_lifecycle_schema(root, &lifecycle)?;
+    let catalog_revision = text(
+        lifecycle.get("catalogRevision"),
+        "catalog lifecycle revision for version rationale",
     )?;
+    ensure_no_private_leakage(&serde_json::to_string(record).map_err(|error| {
+        format!("serialize version rationale for boundary validation: {error}")
+    })?)?;
 
     let rationale = object(record, "version rationale")?;
     let rationale_id = text(rationale.get("rationaleId"), "version rationale ID")?;
@@ -296,8 +678,10 @@ pub fn validate_version_rationale(
         .ok_or_else(|| format!("version rationale references unknown catalog unit: {unit_id}"))?;
     let unit = object(unit, "version rationale catalog unit")?;
     let publication = object(required_value(unit, "publication")?, "catalog publication")?;
-    if text(publication.get("classification"), "catalog publication classification")?
-        == "non-publishable"
+    if text(
+        publication.get("classification"),
+        "catalog publication classification",
+    )? == "non-publishable"
     {
         return Err("version rationale must bind a publishable catalog unit".to_owned());
     }
@@ -306,7 +690,10 @@ pub fn validate_version_rationale(
         "version rationale proposed package version",
     )?;
     validate_strict_semver(proposed)?;
-    let version_source = object(required_value(unit, "versionSource")?, "catalog version source")?;
+    let version_source = object(
+        required_value(unit, "versionSource")?,
+        "catalog version source",
+    )?;
     if text(
         version_source.get("observedDeclaration"),
         "catalog version declaration",
@@ -318,7 +705,10 @@ pub fn validate_version_rationale(
         );
     }
 
-    let change_class = text(rationale.get("changeClass"), "version rationale change class")?;
+    let change_class = text(
+        rationale.get("changeClass"),
+        "version rationale change class",
+    )?;
     let previous = object(
         required_value(rationale, "previousPackageVersion")?,
         "version rationale previous package version",
@@ -351,15 +741,34 @@ pub fn validate_version_rationale(
             );
         }
         previous_surface = Some((namespace, name));
-        let authority_path = text(surface.get("authorityPath"), "affected surface authority path")?;
+        let authority_path = text(
+            surface.get("authorityPath"),
+            "affected surface authority path",
+        )?;
+        if text(
+            surface.get("authorityRevision"),
+            "affected surface authority revision",
+        )? != catalog_revision
+        {
+            return Err(
+                "affected surface authority revision must equal the canonical catalog lifecycle revision"
+                    .to_owned(),
+            );
+        }
         let authority_path_value = Path::new(authority_path);
         if authority_path_value.components().any(|component| {
             matches!(
                 component,
-                Component::ParentDir | Component::CurDir | Component::RootDir | Component::Prefix(_)
+                Component::ParentDir
+                    | Component::CurDir
+                    | Component::RootDir
+                    | Component::Prefix(_)
             )
         }) {
-            return Err("affected surface authority path must stay within its public authority root".to_owned());
+            return Err(
+                "affected surface authority path must stay within its public authority root"
+                    .to_owned(),
+            );
         }
         let authority_root = authority_path
             .split('/')
@@ -368,8 +777,13 @@ pub fn validate_version_rationale(
         let authority_root = fs::canonicalize(root.join(authority_root))
             .map_err(|error| format!("canonicalize authority root {authority_root}: {error}"))?;
         let resolved_authority_path = fs::canonicalize(root.join(authority_path));
-        if !resolved_authority_path.as_ref().is_ok_and(|path| path.is_file() && path.starts_with(&authority_root)) {
-            return Err(format!("affected surface authority path is missing: {authority_path}"));
+        if !resolved_authority_path
+            .as_ref()
+            .is_ok_and(|path| path.is_file() && path.starts_with(&authority_root))
+        {
+            return Err(format!(
+                "affected surface authority path is missing: {authority_path}"
+            ));
         }
         if namespace == "language-spec"
             && text(surface.get("languageStatus"), "language status")? == "draft"
@@ -379,7 +793,10 @@ pub fn validate_version_rationale(
             return Err("draft language status cannot be claimed as formal conformance".to_owned());
         }
         behavior_changed |= matches!(
-            text(surface.get("compatibility"), "affected surface compatibility")?,
+            text(
+                surface.get("compatibility"),
+                "affected surface compatibility"
+            )?,
             "behavior-changed" | "public-api-changed"
         );
     }
@@ -404,12 +821,19 @@ pub fn validate_version_rationale(
     for claim in array(support_matrix.get("claims"), "support matrix claims")? {
         let claim = object(claim, "support matrix claim")?;
         let platform = text(claim.get("platform"), "support claim platform")?;
-        let language_version = text(claim.get("languageVersion"), "support claim language version")?;
+        let language_version = text(
+            claim.get("languageVersion"),
+            "support claim language version",
+        )?;
         if !support_claims.insert((platform, language_version)) {
-            return Err("support matrix claims must be unique per platform and language version".to_owned());
+            return Err(
+                "support matrix claims must be unique per platform and language version".to_owned(),
+            );
         }
-        if text(claim.get("evidenceIdentity"), "support claim evidence identity")?
-            != evidence_identity
+        if text(
+            claim.get("evidenceIdentity"),
+            "support claim evidence identity",
+        )? != evidence_identity
         {
             return Err(
                 "support claims must link exactly to the rationale compatibility evidence identity"
@@ -426,13 +850,12 @@ pub fn validate_version_rationale(
     for affected_unit in array(impact.get("affectedUnitIds"), "dependency impact unit IDs")? {
         let affected_unit = text(Some(affected_unit), "dependency impact unit ID")?;
         if affected_unit <= prior_affected_unit
-            || !catalog_units.iter().any(|unit| {
-                unit.get("id").and_then(Value::as_str) == Some(affected_unit)
-            })
+            || !catalog_units
+                .iter()
+                .any(|unit| unit.get("id").and_then(Value::as_str) == Some(affected_unit))
         {
             return Err(
-                "dependency-impact unit IDs must be known catalog units in stable order"
-                    .to_owned(),
+                "dependency-impact unit IDs must be known catalog units in stable order".to_owned(),
             );
         }
         prior_affected_unit = affected_unit;
@@ -447,21 +870,30 @@ pub fn validate_version_rationale(
     if text(review.get("roleId"), "Package Steward review role")? != "package-steward"
         || review.get("assignmentId") != owner.get("assignmentId")
     {
-        return Err("version rationale review must be attributed to the unit Package Steward".to_owned());
+        return Err(
+            "version rationale review must be attributed to the unit Package Steward".to_owned(),
+        );
     }
     let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
     let assignments = array(assignments.get("assignments"), "stewardship assignments")?;
     let assignment_id = text(review.get("assignmentId"), "Package Steward assignment ID")?;
     let assignment = assignments
         .iter()
-        .find(|assignment| assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id))
+        .find(|assignment| {
+            assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id)
+        })
         .ok_or("version rationale review references an unknown Package Steward assignment")?;
     let assignment = object(assignment, "Package Steward assignment")?;
     if text(assignment.get("roleId"), "Package Steward assignment role")? != "package-steward"
-        || text(assignment.get("status"), "Package Steward assignment status")? != "active"
+        || text(
+            assignment.get("status"),
+            "Package Steward assignment status",
+        )? != "active"
         || review.get("actorId") != assignment.get("primaryActorId")
     {
-        return Err("version rationale review actor is not the active unit Package Steward".to_owned());
+        return Err(
+            "version rationale review actor is not the active unit Package Steward".to_owned(),
+        );
     }
 
     let decision = rationale
@@ -587,7 +1019,10 @@ pub fn validate_catalog(root: &Path, catalog: &Value) -> Result<(), String> {
         || text(go_version.get("path"), "Go version source path")? != "packages/runtime-go/VERSION"
         || text(go_version.get("format"), "Go version source format")? != "go-version-file"
     {
-        return Err("Go runtime must use its checked-in VERSION source without asserting release readiness".to_owned());
+        return Err(
+            "Go runtime must use its checked-in VERSION source without asserting release readiness"
+                .to_owned(),
+        );
     }
     validate_go_version_decision(root, observed_go_version)?;
     let python = units
@@ -712,7 +1147,8 @@ fn manifest_publish_before_edges(
     for unit in units {
         let unit = object(unit, "release catalog unit")?;
         let publication = object(required_value(unit, "publication")?, "catalog publication")?;
-        if text(publication.get("status"), "catalog publication status")? != "source-inventory-only" {
+        if text(publication.get("status"), "catalog publication status")? != "source-inventory-only"
+        {
             continue;
         }
         let dependent_id = text(unit.get("id"), "release catalog unit id")?;
@@ -738,6 +1174,20 @@ fn manifest_publish_before_edges(
                         targets,
                     )?);
                 }
+                if let Some(dependencies) = manifest.get("build-dependencies") {
+                    let dependencies = dependencies.as_table().ok_or_else(|| {
+                        format!("{manifest_path} [build-dependencies] must be a table")
+                    })?;
+                    edges.extend(cargo_runtime_path_edges(
+                        root,
+                        source_root,
+                        dependent_id,
+                        &manifest_path,
+                        "build-dependencies",
+                        dependencies,
+                        targets,
+                    )?);
+                }
                 if let Some(target_tables) = manifest.get("target") {
                     let target_tables = target_tables
                         .as_table()
@@ -758,6 +1208,22 @@ fn manifest_publish_before_edges(
                                 dependent_id,
                                 &manifest_path,
                                 &format!("target.{target_name}.dependencies"),
+                                dependencies,
+                                targets,
+                            )?);
+                        }
+                        if let Some(dependencies) = target_table.get("build-dependencies") {
+                            let dependencies = dependencies.as_table().ok_or_else(|| {
+                                format!(
+                                    "{manifest_path} target.{target_name}.build-dependencies must be a table"
+                                )
+                            })?;
+                            edges.extend(cargo_runtime_path_edges(
+                                root,
+                                source_root,
+                                dependent_id,
+                                &manifest_path,
+                                &format!("target.{target_name}.build-dependencies"),
                                 dependencies,
                                 targets,
                             )?);
@@ -808,9 +1274,9 @@ fn manifest_publish_before_edges(
                     .and_then(TomlValue::as_table)
                     .and_then(|project| project.get("dependencies"));
                 if let Some(dependencies) = dependencies {
-                    let dependencies = dependencies
-                        .as_array()
-                        .ok_or_else(|| format!("{manifest_path} project.dependencies must be an array"))?;
+                    let dependencies = dependencies.as_array().ok_or_else(|| {
+                        format!("{manifest_path} project.dependencies must be an array")
+                    })?;
                     for requirement in dependencies {
                         let requirement = requirement.as_str().ok_or_else(|| {
                             format!("{manifest_path} project.dependencies must contain strings")
@@ -882,6 +1348,18 @@ fn cargo_runtime_path_edges(
         let Some(declaration) = declaration.as_table() else {
             continue;
         };
+        let (declaration, dependency_path_root) =
+            if declaration.get("workspace").and_then(TomlValue::as_bool) == Some(true) {
+                (
+                    workspace_cargo_dependency(root, name, manifest_path, location_prefix)?,
+                    "",
+                )
+            } else {
+                (TomlValue::Table(declaration.clone()), source_root)
+            };
+        let declaration = declaration
+            .as_table()
+            .expect("workspace Cargo dependency declarations are normalized to tables");
         if !declaration.contains_key("path") {
             continue;
         }
@@ -915,7 +1393,7 @@ fn cargo_runtime_path_edges(
         )?;
         validate_cargo_path_matches_catalog_unit(
             root,
-            source_root,
+            dependency_path_root,
             path,
             &dependency.source_root,
             dependent_id,
@@ -925,12 +1403,39 @@ fn cargo_runtime_path_edges(
         edges.push(PublishBeforeEdge {
             dependency_id: dependency.id,
             dependent_id: dependent_id.to_owned(),
-            source_kind: "cargo-runtime-dependency".to_owned(),
+            source_kind: if location_prefix.ends_with("build-dependencies") {
+                "cargo-build-dependency"
+            } else {
+                "cargo-runtime-dependency"
+            }
+            .to_owned(),
             manifest_path: manifest_path.to_owned(),
             location,
         });
     }
     Ok(edges)
+}
+
+fn workspace_cargo_dependency(
+    root: &Path,
+    name: &str,
+    manifest_path: &str,
+    location_prefix: &str,
+) -> Result<TomlValue, String> {
+    let workspace = parse_toml(
+        &fs::read_to_string(root.join("Cargo.toml"))
+            .map_err(|error| format!("read workspace manifest for {manifest_path}: {error}"))?,
+    )?;
+    workspace
+        .get("workspace")
+        .and_then(TomlValue::as_table)
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(TomlValue::as_table)
+        .and_then(|dependencies| dependencies.get(name))
+        .cloned()
+        .ok_or_else(|| format!(
+            "catalog unit workspace Cargo dependency is not declared at Cargo.toml#workspace.dependencies.{name} for {manifest_path}#{location_prefix}.{name}"
+        ))
 }
 
 fn validate_cargo_path_matches_catalog_unit(
@@ -994,14 +1499,17 @@ fn resolve_known_manifest_dependency(
     } else {
         target_name.to_owned()
     };
-    let matches = targets.iter().filter(|((kind, name), _)| {
-        kind == target_kind
-            && if target_kind == "python-project" {
-                normalize_python_project_name(name) == target_name
-            } else {
-                name == &target_name
-            }
-    }).collect::<Vec<_>>();
+    let matches = targets
+        .iter()
+        .filter(|((kind, name), _)| {
+            kind == target_kind
+                && if target_kind == "python-project" {
+                    normalize_python_project_name(name) == target_name
+                } else {
+                    name == &target_name
+                }
+        })
+        .collect::<Vec<_>>();
     match matches.as_slice() {
         [] => Ok(None),
         [((kind, name), _)] => resolve_manifest_dependency(
@@ -1026,7 +1534,8 @@ fn python_requirement_name(requirement: &str) -> Result<String, String> {
     let name = requirement
         .trim()
         .split(|character: char| {
-            character.is_whitespace() || matches!(character, '[' | '<' | '>' | '=' | '!' | '~' | ';')
+            character.is_whitespace()
+                || matches!(character, '[' | '<' | '>' | '=' | '!' | '~' | ';')
         })
         .next()
         .unwrap_or_default();
@@ -1044,7 +1553,10 @@ fn go_runtime_requirements(content: &str) -> Result<Vec<String>, String> {
     let mut requirements = Vec::new();
     let mut in_block = false;
     for raw_line in content.lines() {
-        let line = raw_line.split_once("//").map_or(raw_line, |(before, _)| before).trim();
+        let line = raw_line
+            .split_once("//")
+            .map_or(raw_line, |(before, _)| before)
+            .trim();
         if line.is_empty() {
             continue;
         }
@@ -1069,7 +1581,9 @@ fn go_runtime_requirements(content: &str) -> Result<Vec<String>, String> {
             .next()
             .ok_or("Go require declaration has no module path")?;
         if fields.next().is_none() {
-            return Err(format!("Go require declaration has no version for {module}"));
+            return Err(format!(
+                "Go require declaration has no version for {module}"
+            ));
         }
         requirements.push(module.to_owned());
     }
@@ -1099,7 +1613,9 @@ fn catalog_publish_before_edges(
             let edge = object(edge, "catalog dependency edge")?;
             let edge_type = text(edge.get("edgeType"), "catalog dependency edge type")?;
             if !matches!(edge_type, "publish_before" | "compatibility" | "bundle") {
-                return Err(format!("catalog unit {dependent_id} has an unknown dependency edge type {edge_type}"));
+                return Err(format!(
+                    "catalog unit {dependent_id} has an unknown dependency edge type {edge_type}"
+                ));
             }
             let related_id = text(edge.get("relatedUnitId"), "catalog related unit id")?;
             if !known_ids.contains(related_id) {
@@ -1109,12 +1625,23 @@ fn catalog_publish_before_edges(
             }
             let direction = text(edge.get("direction"), "catalog dependency edge direction")?;
             if direction != "related-before-unit" {
-                return Err(format!("catalog unit {dependent_id} must use related-before-unit dependency direction"));
+                return Err(format!(
+                    "catalog unit {dependent_id} must use related-before-unit dependency direction"
+                ));
             }
-            let evidence = object(required_value(edge, "sourceEvidence")?, "catalog dependency evidence")?;
-            let source_kind = text(evidence.get("sourceKind"), "catalog dependency evidence kind")?;
+            let evidence = object(
+                required_value(edge, "sourceEvidence")?,
+                "catalog dependency evidence",
+            )?;
+            let source_kind = text(
+                evidence.get("sourceKind"),
+                "catalog dependency evidence kind",
+            )?;
             let manifest_path = text(evidence.get("path"), "catalog dependency evidence path")?;
-            let location = text(evidence.get("location"), "catalog dependency evidence location")?;
+            let location = text(
+                evidence.get("location"),
+                "catalog dependency evidence location",
+            )?;
             if location.is_empty() {
                 return Err("catalog dependency evidence location must not be empty".to_owned());
             }
@@ -1146,10 +1673,14 @@ fn catalog_publish_before_edges(
                     location,
                 )?;
             }
-            let key = format!("{edge_type}\u{0}{related_id}\u{0}{source_kind}\u{0}{manifest_path}\u{0}{location}");
+            let key = format!(
+                "{edge_type}\u{0}{related_id}\u{0}{source_kind}\u{0}{manifest_path}\u{0}{location}"
+            );
             keys.push(key);
             if !directed.insert((edge_type, related_id)) {
-                return Err(format!("catalog unit {dependent_id} has duplicate dependency edge declarations"));
+                return Err(format!(
+                    "catalog unit {dependent_id} has duplicate dependency edge declarations"
+                ));
             }
             if edge_type == "publish_before" {
                 publish_before.insert(PublishBeforeEdge {
@@ -1162,7 +1693,9 @@ fn catalog_publish_before_edges(
             }
         }
         if keys.windows(2).any(|window| window[0] > window[1]) {
-            return Err(format!("catalog unit {dependent_id} dependency edges must use stable sort order"));
+            return Err(format!(
+                "catalog unit {dependent_id} dependency edges must use stable sort order"
+            ));
         }
     }
     Ok(publish_before)
@@ -1191,7 +1724,10 @@ fn validate_non_ordering_edge_decision(
             )
         })
         || !decision_path.starts_with(Path::new("release/decisions"))
-        || decision_path.extension().and_then(|extension| extension.to_str()) != Some("json")
+        || decision_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            != Some("json")
     {
         return Err(format!(
             "catalog unit {dependent_id} {edge_type} edge must cite a public JSON record under release/decisions"
@@ -1199,11 +1735,7 @@ fn validate_non_ordering_edge_decision(
     }
     let decision = read_json(&root.join(decision_path))?;
     let decision = object(&decision, "release dependency edge decision")?;
-    require_string(
-        decision,
-        "recordKind",
-        "release-dependency-edge-decision",
-    )?;
+    require_string(decision, "recordKind", "release-dependency-edge-decision")?;
     require_string(decision, "status", "approved")?;
     require_string(decision, "decisionId", decision_id)?;
     require_string(decision, "edgeType", edge_type)?;
@@ -1221,18 +1753,25 @@ fn release_order_from_edges(
     for unit in units {
         let unit = object(unit, "release catalog unit")?;
         let publication = object(required_value(unit, "publication")?, "catalog publication")?;
-        if text(publication.get("status"), "catalog publication status")? == "source-inventory-only" {
+        if text(publication.get("status"), "catalog publication status")? == "source-inventory-only"
+        {
             let id = text(unit.get("id"), "release catalog unit id")?.to_owned();
             indegree.insert(id.clone(), 0usize);
             successors.insert(id, BTreeSet::new());
         }
     }
     for edge in edges {
-        let successor = successors
-            .get_mut(&edge.dependency_id)
-            .ok_or_else(|| format!("catalog publish_before edge has missing dependency unit {}", edge.dependency_id))?;
+        let successor = successors.get_mut(&edge.dependency_id).ok_or_else(|| {
+            format!(
+                "catalog publish_before edge has missing dependency unit {}",
+                edge.dependency_id
+            )
+        })?;
         if !indegree.contains_key(&edge.dependent_id) {
-            return Err(format!("catalog publish_before edge has non-publishable dependent unit {}", edge.dependent_id));
+            return Err(format!(
+                "catalog publish_before edge has non-publishable dependent unit {}",
+                edge.dependent_id
+            ));
         }
         if successor.insert(edge.dependent_id.clone()) {
             *indegree
@@ -1242,13 +1781,16 @@ fn release_order_from_edges(
     }
     let mut ready: BTreeSet<String> = indegree
         .iter()
-        .filter_map(|(id, degree)| (*degree == 0).then(|| id.clone()))
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(id, _)| id.clone())
         .collect();
     let mut order = Vec::new();
     while let Some(id) = ready.pop_first() {
         order.push(id.clone());
         for successor in successors[&id].clone() {
-            let degree = indegree.get_mut(&successor).expect("validated successor exists");
+            let degree = indegree
+                .get_mut(&successor)
+                .expect("validated successor exists");
             *degree -= 1;
             if *degree == 0 {
                 ready.insert(successor);
@@ -1260,7 +1802,8 @@ fn release_order_from_edges(
     }
     let remaining: BTreeSet<String> = indegree
         .iter()
-        .filter_map(|(id, degree)| (*degree > 0).then(|| id.clone()))
+        .filter(|(_, degree)| **degree > 0)
+        .map(|(id, _)| id.clone())
         .collect();
     let conflicts = edges
         .iter()
@@ -1314,7 +1857,9 @@ pub fn validate_candidate_tag(root: &Path, catalog: &Value, candidate: &str) -> 
     }
     if let Some(version) = candidate.strip_prefix('v') {
         if validate_strict_semver(version).is_ok() {
-            return Err("project-wide root v<semver> tags are prohibited during recovery".to_owned());
+            return Err(
+                "project-wide root v<semver> tags are prohibited during recovery".to_owned(),
+            );
         }
     }
     let mut matched_unit = None;
@@ -1331,8 +1876,11 @@ pub fn validate_candidate_tag(root: &Path, catalog: &Value, candidate: &str) -> 
             validate_strict_semver(version)?;
             let id = text(unit.get("id"), "catalog unit id")?;
             let observed = text(
-                object(required_value(unit, "versionSource")?, "catalog version source")?
-                    .get("observedDeclaration"),
+                object(
+                    required_value(unit, "versionSource")?,
+                    "catalog version source",
+                )?
+                .get("observedDeclaration"),
                 "catalog version source observed declaration",
             )?;
             if version != observed {
@@ -1341,7 +1889,9 @@ pub fn validate_candidate_tag(root: &Path, catalog: &Value, candidate: &str) -> 
                 ));
             }
             if matched_unit.replace(id).is_some() {
-                return Err("candidate tag matches more than one canonical future tag namespace".to_owned());
+                return Err(
+                    "candidate tag matches more than one canonical future tag namespace".to_owned(),
+                );
             }
         }
     }
@@ -1351,7 +1901,10 @@ pub fn validate_candidate_tag(root: &Path, catalog: &Value, candidate: &str) -> 
     validate_history_repository(root)?;
     let history = read_json(&root.join("release/history/baseline-tags.json"))?;
     let historical_tags = array(history.get("tags"), "historical tag baseline tags")?;
-    if historical_tags.iter().any(|tag| tag.get("name").and_then(Value::as_str) == Some(candidate)) {
+    if historical_tags
+        .iter()
+        .any(|tag| tag.get("name").and_then(Value::as_str) == Some(candidate))
+    {
         return Err("candidate tag collides with the ratified Historical Tag baseline".to_owned());
     }
     Ok(())
@@ -1502,7 +2055,9 @@ fn validate_catalog_version_source(
             .map_err(|error| format!("read catalog version source {path}: {error}"))?;
         let declaration = strict_go_version_declaration(&content)?;
         if declaration != observed {
-            return Err(format!("catalog observed declaration is stale or absent: {path}"));
+            return Err(format!(
+                "catalog observed declaration is stale or absent: {path}"
+            ));
         }
         validate_go_version_decision(root, observed)?;
         return Ok(());
@@ -1704,8 +2259,7 @@ fn validate_catalog_targets(root: &Path, unit: &Map<String, Value>) -> Result<()
             "go-module" => {
                 if format != "go-version-file" || classification != "publishable-source-unit" {
                     return Err(
-                        "catalog Go target must use the checked-in VERSION source"
-                            .to_owned(),
+                        "catalog Go target must use the checked-in VERSION source".to_owned()
                     );
                 }
                 let go_mod = root.join(source_root).join("go.mod");
@@ -1761,29 +2315,51 @@ fn version_declaration_from_source(content: &str, format: &str) -> Result<String
 fn validate_go_version_decision(root: &Path, selected_version: &str) -> Result<(), String> {
     let decision = read_json(&root.join("release/decisions/runtime-go-version-2026-07-23.json"))?;
     let decision = object(&decision, "Go runtime version decision")?;
-    require_string(decision, "$id", "https://vexil.dev/release/decisions/runtime-go-version-2026-07-23.json")?;
+    require_string(
+        decision,
+        "$id",
+        "https://vexil.dev/release/decisions/runtime-go-version-2026-07-23.json",
+    )?;
     require_string(decision, "recordKind", "package-maintenance-decision")?;
     require_string(decision, "decisionId", "runtime-go-version-2026-07-23")?;
     require_string(decision, "status", "approved")?;
     require_string(decision, "unitId", "vexil-runtime-go")?;
     require_string(decision, "versionSource", "packages/runtime-go/VERSION")?;
-    require_string(decision, "canonicalTagNamespace", "packages/runtime-go/v<semver>")?;
-    if text(decision.get("selectedVersion"), "Go decision selected version")? != selected_version {
-        return Err("Go VERSION must agree with the approved public maintenance decision".to_owned());
+    require_string(
+        decision,
+        "canonicalTagNamespace",
+        "packages/runtime-go/v<semver>",
+    )?;
+    if text(
+        decision.get("selectedVersion"),
+        "Go decision selected version",
+    )? != selected_version
+    {
+        return Err(
+            "Go VERSION must agree with the approved public maintenance decision".to_owned(),
+        );
     }
     validate_strict_semver(selected_version)?;
-    let approval = object(required_value(decision, "approval")?, "Go version decision approval")?;
+    let approval = object(
+        required_value(decision, "approval")?,
+        "Go version decision approval",
+    )?;
     require_string(approval, "actorId", "github:furkanmamuk")?;
     if text(approval.get("approvedAt"), "Go decision approval timestamp")?.is_empty()
         || text(approval.get("decision"), "Go decision approval text")?.is_empty()
     {
-        return Err("Go version decision approval must retain timestamp and decision text".to_owned());
+        return Err(
+            "Go version decision approval must retain timestamp and decision text".to_owned(),
+        );
     }
     Ok(())
 }
 
 pub fn strict_go_version_declaration(content: &str) -> Result<String, String> {
-    if content.contains('\r') || !content.ends_with('\n') || content[..content.len() - 1].contains('\n') {
+    if content.contains('\r')
+        || !content.ends_with('\n')
+        || content[..content.len() - 1].contains('\n')
+    {
         return Err("Go VERSION must contain exactly one SemVer token followed by LF".to_owned());
     }
     let version = &content[..content.len() - 1];
@@ -1931,13 +2507,19 @@ pub fn validate_vexilc_version_display(source: &str, package_version: &str) -> R
     }
     let closing = closing.ok_or("vexilc --version command branch is not closed")?;
     let body = &version_arm[opening + 1..closing];
-    let normalized: String = body.chars().filter(|character| !character.is_whitespace()).collect();
+    let normalized: String = body
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect();
     if body.contains("//")
         || body.contains("/*")
         || normalized != "println!(\"vexilc{}\",env!(\"CARGO_PKG_VERSION\"));return;"
         || package_version.is_empty()
     {
-        Err("vexilc --version must display CARGO_PKG_VERSION from its Cargo package source".to_owned())
+        Err(
+            "vexilc --version must display CARGO_PKG_VERSION from its Cargo package source"
+                .to_owned(),
+        )
     } else {
         Ok(())
     }
@@ -1992,18 +2574,30 @@ pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, S
         let dependent = text(unit.get("id"), "release catalog unit id")?;
         for edge in array(unit.get("dependencyEdges"), "catalog dependency edges")? {
             let edge = object(edge, "catalog dependency edge")?;
-            let evidence = object(required_value(edge, "sourceEvidence")?, "catalog dependency evidence")?;
+            let evidence = object(
+                required_value(edge, "sourceEvidence")?,
+                "catalog dependency evidence",
+            )?;
             markdown.push_str(&format!(
                 "| `{}` | `{dependent}` | `{}` | `{}` `{}` |\n",
                 text(edge.get("relatedUnitId"), "catalog related unit id")?,
                 text(edge.get("edgeType"), "catalog dependency edge type")?,
                 text(evidence.get("path"), "catalog dependency evidence path")?,
-                text(evidence.get("location"), "catalog dependency evidence location")?,
+                text(
+                    evidence.get("location"),
+                    "catalog dependency evidence location"
+                )?,
             ));
         }
     }
     markdown.push_str("\nOnly `publish_before` participates in structural ordering. `compatibility` requires an approved shared-evidence decision without imposing registry order; `bundle` requires an approved identity decision and never creates a second Release Unit.\n\n## Structural source order\n\nThe current all-unit structural order is derived from checked-in manifests and catalog edges only:\n\n");
-    markdown.push_str(&order.iter().map(|id| format!("`{id}`")).collect::<Vec<_>>().join(" → "));
+    markdown.push_str(
+        &order
+            .iter()
+            .map(|id| format!("`{id}`"))
+            .collect::<Vec<_>>()
+            .join(" → "),
+    );
     markdown.push_str("\n\n## Boundary and validation\n\n`candidate-unreleased` means the Python source unit is planned work, not a PyPI availability claim. The Go module's checked-in `VERSION` source identifies only its source state; `go.mod` supplies the module target identity, not its version. `non-publishable` roots are deliberately cataloged so they cannot be silently mistaken for releases.\n\nA valid graph does not establish packageability, authorization, registry identity, publication eligibility, Release Set membership, Manifest approval, tags, or publication. Root project-wide `v<semver>` tags remain prohibited during recovery.\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe offline command validates source paths, runtime manifest declarations, typed graph agreement, deterministic structural order, unique unit identities, canonical tag policy, and byte-exact generated-view parity. It performs no provider query or release effect.\n");
     Ok(markdown)
 }
@@ -2021,7 +2615,12 @@ pub fn validate_npm_publish_workflow_source(workflow: &str) -> Result<(), String
         .filter_map(|line| {
             let uncommented = line.split_once('#').map_or(line, |(before, _)| before);
             let trimmed = uncommented.trim_end();
-            (!trimmed.trim().is_empty()).then(|| (trimmed.len() - trimmed.trim_start().len(), trimmed.trim().to_owned()))
+            (!trimmed.trim().is_empty()).then(|| {
+                (
+                    trimmed.len() - trimmed.trim_start().len(),
+                    trimmed.trim().to_owned(),
+                )
+            })
         })
         .collect();
 
@@ -6598,6 +7197,15 @@ pub fn validate_version_rationale_schema(root: &Path, record: &Value) -> Result<
     )
 }
 
+pub fn validate_catalog_lifecycle_schema(root: &Path, record: &Value) -> Result<(), String> {
+    validate_schema_instance(
+        root,
+        "release/schemas/catalog-lifecycle.schema.json",
+        record,
+        "catalog lifecycle ledger",
+    )
+}
+
 fn validate_schema_instance(
     root: &Path,
     schema_relative: &str,
@@ -6686,6 +7294,10 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
         (
             "release/schemas/catalog.schema.json",
             "https://vexil.dev/release/schemas/catalog.schema.json",
+        ),
+        (
+            "release/schemas/catalog-lifecycle.schema.json",
+            "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json",
         ),
         (
             "release/schemas/version-rationale.schema.json",
@@ -6937,6 +7549,45 @@ mod catalog_manifest_tests {
     }
 
     #[test]
+    fn workspace_and_build_cargo_path_dependencies_become_publish_before_edges() {
+        let root = std::env::temp_dir().join(format!(
+            "vexil-graph-workspace-build-dependencies-{}",
+            std::process::id()
+        ));
+        let manifest_path = root.join("crates/dependent/Cargo.toml");
+        fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        fs::create_dir_all(root.join("crates/source")).unwrap();
+        fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nmembers = []\nexclude = []\n\n[workspace.dependencies]\nsource = { path = \"crates/source\", version = \"0.1.0\" }\n",
+        )
+        .unwrap();
+        fs::write(
+            &manifest_path,
+            "[package]\nname = \"dependent\"\nversion = \"0.1.0\"\n\n[build-dependencies]\nsource = { workspace = true }\n",
+        )
+        .unwrap();
+        let units = vec![json!({
+            "id": "dependent", "kind": "rust-package", "sourceRoot": "crates/dependent",
+            "publication": {"status": "source-inventory-only"}, "targets": []
+        })];
+        let targets = BTreeMap::from([(
+            ("cargo-package".to_owned(), "source".to_owned()),
+            CatalogTarget {
+                id: "source".to_owned(),
+                status: "source-inventory-only".to_owned(),
+                source_root: "crates/source".to_owned(),
+            },
+        )]);
+        let edges = manifest_publish_before_edges(&root, &units, &targets).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert!(edges.iter().any(|edge| {
+            edge.location == "build-dependencies.source"
+                && edge.source_kind == "cargo-build-dependency"
+        }));
+    }
+
+    #[test]
     fn normalized_python_target_names_must_not_be_ambiguous() {
         let targets = BTreeMap::from([
             (
@@ -7004,13 +7655,25 @@ mod catalog_manifest_tests {
         ];
         let edges = BTreeSet::from([
             PublishBeforeEdge {
-                dependency_id: "a".into(), dependent_id: "b".into(), source_kind: "fixture".into(), manifest_path: "crates/a/Cargo.toml".into(), location: "dependencies.b".into(),
+                dependency_id: "a".into(),
+                dependent_id: "b".into(),
+                source_kind: "fixture".into(),
+                manifest_path: "crates/a/Cargo.toml".into(),
+                location: "dependencies.b".into(),
             },
             PublishBeforeEdge {
-                dependency_id: "b".into(), dependent_id: "a".into(), source_kind: "fixture".into(), manifest_path: "crates/b/Cargo.toml".into(), location: "dependencies.a".into(),
+                dependency_id: "b".into(),
+                dependent_id: "a".into(),
+                source_kind: "fixture".into(),
+                manifest_path: "crates/b/Cargo.toml".into(),
+                location: "dependencies.a".into(),
             },
             PublishBeforeEdge {
-                dependency_id: "b".into(), dependent_id: "tail".into(), source_kind: "fixture".into(), manifest_path: "crates/tail/Cargo.toml".into(), location: "dependencies.b".into(),
+                dependency_id: "b".into(),
+                dependent_id: "tail".into(),
+                source_kind: "fixture".into(),
+                manifest_path: "crates/tail/Cargo.toml".into(),
+                location: "dependencies.b".into(),
             },
         ]);
         let error = release_order_from_edges(&units, &edges)
