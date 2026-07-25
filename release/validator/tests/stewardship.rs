@@ -912,6 +912,15 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
         },
     )
     .expect("same reviewed input must be repeatable");
+    let candidate_plan =
+        vexil_release_governance_validator::prepare_isolated_candidate_build(&root, &first.bytes)
+            .expect("a clean exact Manifest commit may form an isolated candidate-build plan");
+    assert_eq!(candidate_plan.manifest_id, "manifest-generation-fixture");
+    assert_eq!(candidate_plan.base_commit, fixture_head_commit(&root));
+    assert_eq!(
+        candidate_plan.source_commits.get("vexil-runtime-ts"),
+        Some(&fixture_head_commit(&root))
+    );
     assert_eq!(first.bytes, second.bytes);
     assert_eq!(first.external_digest, second.external_digest);
     assert_eq!(

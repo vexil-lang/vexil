@@ -59,6 +59,17 @@ pub struct GeneratedReleaseManifest {
     pub external_digest: String,
 }
 
+/// A validated, non-executing candidate-build plan. It is deliberately only
+/// the isolated-build contract: callers still need a separate clean workspace
+/// and must not treat this as an artifact, attestation, or release authority.
+#[derive(Debug, PartialEq, Eq)]
+pub struct IsolatedCandidateBuildPlan {
+    pub manifest_id: String,
+    pub manifest_digest: String,
+    pub base_commit: String,
+    pub source_commits: BTreeMap<String, String>,
+}
+
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ManifestGenerationDiagnostic {
     pub requirement: &'static str,
@@ -1434,6 +1445,64 @@ fn canonical_json_bytes(value: &Value) -> Result<Vec<u8>, String> {
         serde_json::to_vec(value).map_err(|error| format!("encode canonical JSON: {error}"))?;
     bytes.push(b'\n');
     Ok(bytes)
+}
+
+/// Validates the inputs that an isolated, non-publishing candidate build may
+/// consume. It neither creates a workspace nor invokes a build tool, network,
+/// credential, adapter, tag, registry, or provider operation.
+pub fn prepare_isolated_candidate_build(
+    root: &Path,
+    manifest_bytes: &[u8],
+) -> Result<IsolatedCandidateBuildPlan, String> {
+    validate_manifest_clean_worktree(root)?;
+    let manifest = parse_canonical_json_bytes(manifest_bytes, "candidate-build Manifest")?;
+    validate_canonical_release_record_schema(root, &manifest)?;
+    let manifest = object(&manifest, "candidate-build Manifest")?;
+    if text(manifest.get("recordKind"), "candidate-build Manifest kind")? != "release-manifest"
+        || text(
+            manifest.get("schemaVersion"),
+            "candidate-build Manifest schema version",
+        )? != "1.1"
+    {
+        return Err("candidate build requires a retained release-manifest@1.1".to_owned());
+    }
+    let base_commit = text(manifest.get("baseCommit"), "candidate-build base commit")?;
+    validate_reviewed_commit(root, base_commit, "candidate-build base commit")?;
+    let head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("resolve candidate-build HEAD: {error}"))?;
+    if !head.status.success() || String::from_utf8_lossy(&head.stdout).trim() != base_commit {
+        return Err(
+            "candidate build requires a clean checkout at the Manifest base commit".to_owned(),
+        );
+    }
+    let mut source_commits = BTreeMap::new();
+    for unit in array(
+        manifest.get("releaseUnits"),
+        "candidate-build Manifest units",
+    )? {
+        let unit = object(unit, "candidate-build Manifest unit")?;
+        let unit_id = text(unit.get("unitId"), "candidate-build unit ID")?;
+        let source_commit = text(
+            unit.get("sourceCommit"),
+            "candidate-build unit source commit",
+        )?;
+        validate_reviewed_commit(root, source_commit, "candidate-build unit source commit")?;
+        if source_commits
+            .insert(unit_id.to_owned(), source_commit.to_owned())
+            .is_some()
+        {
+            return Err(format!("candidate build has duplicate unit {unit_id}"));
+        }
+    }
+    Ok(IsolatedCandidateBuildPlan {
+        manifest_id: text(manifest.get("manifestId"), "candidate-build Manifest ID")?.to_owned(),
+        manifest_digest: sha256_hex(manifest_bytes),
+        base_commit: base_commit.to_owned(),
+        source_commits,
+    })
 }
 
 /// Builds one exact Release Manifest from reviewed inputs. A successful result
