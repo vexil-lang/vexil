@@ -231,6 +231,13 @@ pub struct SealedCandidateCustody {
     pub bundle_digest: String,
     pub subject_digest: String,
     pub attestation_digest: String,
+    pub repository: String,
+    pub workflow: String,
+    pub reference: String,
+    pub source_commit: String,
+    pub manifest_digest: String,
+    pub attestation_issuer: String,
+    pub attestation_identity: String,
 }
 
 struct CandidateArtifactSnapshot {
@@ -2623,7 +2630,7 @@ pub fn seal_candidate_custody(
     let subject_digest = candidate_content_digest(b"vexil-candidate-subjects-v1\n", &subjects.into_iter().map(|(name, digest)| (name.to_owned(), digest.to_owned())).collect());
     let mut frame = b"vexil-candidate-custody-v1\n".to_vec();
     for value in [request.repository, request.workflow, request.reference, request.source_commit, request.manifest_digest, request.attestation_issuer, request.attestation_identity, request.attestation_digest, &subject_digest] { frame.extend_from_slice(value.len().to_string().as_bytes()); frame.extend_from_slice(b":"); frame.extend_from_slice(value.as_bytes()); frame.extend_from_slice(b"\n"); }
-    Ok(SealedCandidateCustody { bundle_digest: sha256_hex(&frame), subject_digest, attestation_digest: request.attestation_digest.to_owned() })
+    Ok(SealedCandidateCustody { bundle_digest: sha256_hex(&frame), subject_digest, attestation_digest: request.attestation_digest.to_owned(), repository: request.repository.to_owned(), workflow: request.workflow.to_owned(), reference: request.reference.to_owned(), source_commit: request.source_commit.to_owned(), manifest_digest: request.manifest_digest.to_owned(), attestation_issuer: request.attestation_issuer.to_owned(), attestation_identity: request.attestation_identity.to_owned() })
 }
 
 fn candidate_tar<const N: usize>(

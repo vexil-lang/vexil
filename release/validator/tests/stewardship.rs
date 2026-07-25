@@ -1785,6 +1785,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         bundle_digest: candidate["bundleDigest"].as_str().expect("bundle digest").to_owned(),
         subject_digest: candidate["subjectDigest"].as_str().expect("subject digest").to_owned(),
         attestation_digest: candidate["attestationDigest"].as_str().expect("attestation digest").to_owned(),
+        repository: "fixture/repository".into(), workflow: "fixture-workflow".into(), reference: "refs/heads/main".into(), source_commit: "0".repeat(40), manifest_digest: "0".repeat(64), attestation_issuer: "fixture-issuer".into(), attestation_identity: "fixture-identity".into(),
     };
     let request = PrivilegedRunStartRequest {
         authorization: &authorization,
