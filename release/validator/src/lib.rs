@@ -162,6 +162,20 @@ pub struct PrivilegedRunStartRequest<'a> {
     pub evaluation_time: &'a str,
 }
 
+/// Static inputs a future privileged job must present before dispatch. Lease
+/// acquisition and Run sequencing remain owned by Epic 10; this only rejects
+/// missing or mismatched proof before any credential or provider access.
+pub struct PrivilegedJobPreflight<'a> {
+    pub authorization_bytes: &'a [u8],
+    pub run_id: &'a str,
+    pub actor: &'a str,
+    pub role: &'a str,
+    pub assignment_id: &'a str,
+    pub evaluation_time: &'a str,
+    pub coordinator_lease_active: bool,
+    pub sequenced_run_context_active: bool,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct GeneratedPrivilegedRunStartAuthorization {
     pub bytes: Vec<u8>,
@@ -738,6 +752,63 @@ pub fn authorize_privileged_run_start(
             message: error,
         }])),
     }
+}
+
+/// Validates the dual gate required before future privileged-job dispatch.
+/// This creates no lease, event, Run state, credential access, or effect.
+pub fn validate_privileged_job_preflight(
+    root: &Path,
+    request: &PrivilegedJobPreflight<'_>,
+) -> Result<(), String> {
+    let authorization = parse_canonical_json_bytes(
+        request.authorization_bytes,
+        "privileged job start authorization",
+    )?;
+    validate_canonical_release_record_schema(root, &authorization)?;
+    let authorization = object(&authorization, "privileged job start authorization")?;
+    if text(
+        authorization.get("recordKind"),
+        "privileged job authorization kind",
+    )? != "privileged-run-start-authorization"
+    {
+        return Err("privileged job requires a start authorization record".to_owned());
+    }
+    if text(
+        authorization.get("runId"),
+        "privileged job authorization Run ID",
+    )? != request.run_id
+    {
+        return Err("privileged job Run ID does not match its authorization".to_owned());
+    }
+    validate_authorization_time_window(authorization, request.evaluation_time)?;
+    let principal = object(
+        authorization
+            .get("executionPrincipal")
+            .ok_or("privileged job authorization lacks execution principal")?,
+        "privileged job execution principal",
+    )?;
+    for (field, actual) in [
+        ("actor", request.actor),
+        ("role", request.role),
+        ("assignment", request.assignment_id),
+    ] {
+        if text(
+            principal.get(field),
+            "privileged job execution-principal field",
+        )? != actual
+        {
+            return Err(format!(
+                "privileged job {field} does not match its authorization"
+            ));
+        }
+    }
+    if !request.coordinator_lease_active {
+        return Err("privileged job requires an active Coordinator-owned lease".to_owned());
+    }
+    if !request.sequenced_run_context_active {
+        return Err("privileged job requires an active sequenced Run context".to_owned());
+    }
+    Ok(())
 }
 
 fn push_authorization_blocker(

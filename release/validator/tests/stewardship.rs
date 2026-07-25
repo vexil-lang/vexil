@@ -1399,8 +1399,8 @@ fn detached_approval_constructor_binds_exact_inputs_and_revalidates_governance()
 fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     use vexil_release_governance_validator::{
         authorize_privileged_run_start, construct_detached_approval, governance_revision_v1,
-        ApprovalMergeEvidence, DetachedApprovalPreflight, DetachedApprovalRequest,
-        PrivilegedRunStartRequest,
+        validate_privileged_job_preflight, ApprovalMergeEvidence, DetachedApprovalPreflight,
+        DetachedApprovalRequest, PrivilegedJobPreflight, PrivilegedRunStartRequest,
     };
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -1513,6 +1513,28 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         !run_path.exists(),
         "authorization preflight must not materialize a Run, lease, or event"
     );
+    let job = PrivilegedJobPreflight {
+        authorization_bytes: &generated.bytes,
+        run_id: "run-preflight",
+        actor: "github:furkanmamuk",
+        role: "release-run-coordinator",
+        assignment_id: "assignment-release-run-coordinator-2026-07-14",
+        evaluation_time: "2026-07-25T12:00:00Z",
+        coordinator_lease_active: true,
+        sequenced_run_context_active: true,
+    };
+    validate_privileged_job_preflight(&root, &job)
+        .expect("only exact authorization plus both future Coordinator gates can dispatch");
+    let missing_lease = PrivilegedJobPreflight {
+        coordinator_lease_active: false,
+        ..job
+    };
+    assert!(validate_privileged_job_preflight(&root, &missing_lease).is_err());
+    let missing_context = PrivilegedJobPreflight {
+        sequenced_run_context_active: false,
+        ..job
+    };
+    assert!(validate_privileged_job_preflight(&root, &missing_context).is_err());
     let mut altered_authorization = authorization.clone();
     altered_authorization["allowedTargets"] = serde_json::json!(["registry:other"]);
     let altered_request = PrivilegedRunStartRequest {

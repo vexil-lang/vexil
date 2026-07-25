@@ -87,6 +87,10 @@ their external SHA-256 identity, or a deterministic ordered blocker set. It
 does not materialize the path, acquire a lease, create an event, access a
 credential or environment, invoke an adapter, or perform a provider effect.
 Those additional Coordinator-owned Run controls begin in Epic 10.
+Before a future privileged job is dispatchable, its exact canonical
+authorization, asserted Coordinator principal, active Coordinator-owned lease,
+and sequenced Run context must all match. Authorization alone, or lease/Run
+context alone, is rejected before credential or environment access.
 
 Run execution, time-based eligibility, state reduction, and effect semantics
 are owned by later stories. At this stage, the offline validator verifies that
