@@ -921,6 +921,41 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
         candidate_plan.source_commits.get("vexil-runtime-ts"),
         Some(&fixture_head_commit(&root))
     );
+    let candidate_workspace_root = std::env::temp_dir().join(format!(
+        "vexil-candidate-workspaces-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    let candidate_workspaces =
+        vexil_release_governance_validator::materialize_isolated_candidate_workspaces(
+            &root,
+            &first.bytes,
+            &candidate_workspace_root,
+        )
+        .expect("a clean exact Manifest must materialize detached candidate workspaces");
+    assert_eq!(candidate_workspaces.len(), 1);
+    let workspace = &candidate_workspaces[0];
+    assert_eq!(workspace.unit_id, "vexil-runtime-ts");
+    assert_eq!(workspace.source_commit, fixture_head_commit(&root));
+    assert!(workspace.path.is_dir());
+    assert!(!workspace.path.join("_bmad").exists());
+    assert!(!workspace.path.join(".agents").exists());
+    assert!(!workspace.path.join("_bmad-output").exists());
+    let output = Command::new("git")
+        .current_dir(&root)
+        .args(["worktree", "remove", "--force"])
+        .arg(&workspace.path)
+        .output()
+        .expect("remove candidate fixture workspace");
+    assert!(
+        output.status.success(),
+        "candidate fixture workspace removal failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::remove_dir_all(&candidate_workspace_root).expect("remove candidate fixture workspace root");
     assert_eq!(first.bytes, second.bytes);
     assert_eq!(first.external_digest, second.external_digest);
     assert_eq!(

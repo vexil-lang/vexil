@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use toml::{Table as TomlTable, Value as TomlValue};
@@ -68,6 +68,15 @@ pub struct IsolatedCandidateBuildPlan {
     pub manifest_digest: String,
     pub base_commit: String,
     pub source_commits: BTreeMap<String, String>,
+}
+
+/// A materialized detached checkout for one declared Release Unit. It carries
+/// no build result, credential, artifact, attestation, or release authority.
+#[derive(Debug, PartialEq, Eq)]
+pub struct IsolatedCandidateWorkspace {
+    pub unit_id: String,
+    pub source_commit: String,
+    pub path: PathBuf,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -1503,6 +1512,120 @@ pub fn prepare_isolated_candidate_build(
         base_commit: base_commit.to_owned(),
         source_commits,
     })
+}
+
+/// Materializes one detached, clean Git worktree for every exact Release Unit
+/// in a canonical Manifest. The caller supplies a new, absolute workspace
+/// root outside the reviewed checkout and owns removal after inspection. This
+/// function does not build, package, attest, contact a network, load
+/// credentials, or create any release/provider effect.
+pub fn materialize_isolated_candidate_workspaces(
+    root: &Path,
+    manifest_bytes: &[u8],
+    workspace_root: &Path,
+) -> Result<Vec<IsolatedCandidateWorkspace>, String> {
+    let plan = prepare_isolated_candidate_build(root, manifest_bytes)?;
+    if !workspace_root.is_absolute() {
+        return Err("candidate workspace root must be an absolute path".to_owned());
+    }
+    if workspace_root.exists() {
+        return Err("candidate workspace root must not already exist".to_owned());
+    }
+    let source_root = root
+        .canonicalize()
+        .map_err(|error| format!("resolve reviewed source root: {error}"))?;
+    let workspace_parent = workspace_root
+        .parent()
+        .ok_or_else(|| "candidate workspace root must have a parent directory".to_owned())?
+        .canonicalize()
+        .map_err(|error| format!("resolve candidate workspace parent: {error}"))?;
+    let resolved_workspace_root = workspace_parent.join(
+        workspace_root
+            .file_name()
+            .ok_or_else(|| "candidate workspace root must name one directory".to_owned())?,
+    );
+    if resolved_workspace_root.starts_with(&source_root) {
+        return Err("candidate workspace root must be outside the reviewed checkout".to_owned());
+    }
+
+    fs::create_dir(workspace_root)
+        .map_err(|error| format!("create candidate workspace root: {error}"))?;
+    let mut workspaces = Vec::new();
+    for (unit_id, source_commit) in &plan.source_commits {
+        let path = workspace_root.join(unit_id);
+        let result = Command::new("git")
+            .current_dir(root)
+            .args(["worktree", "add", "--detach"])
+            .arg(&path)
+            .arg(source_commit)
+            .output()
+            .map_err(|error| format!("create candidate workspace for {unit_id}: {error}"));
+        match result {
+            Ok(output) if output.status.success() => {}
+            Ok(output) => {
+                cleanup_isolated_candidate_workspaces(root, &workspaces);
+                let _ = fs::remove_dir_all(workspace_root);
+                return Err(format!(
+                    "create candidate workspace for {unit_id}: {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ));
+            }
+            Err(error) => {
+                cleanup_isolated_candidate_workspaces(root, &workspaces);
+                let _ = fs::remove_dir_all(workspace_root);
+                return Err(error);
+            }
+        }
+        if let Err(error) = validate_isolated_candidate_workspace(&path, source_commit) {
+            let failed = IsolatedCandidateWorkspace {
+                unit_id: unit_id.clone(),
+                source_commit: source_commit.clone(),
+                path,
+            };
+            cleanup_isolated_candidate_workspaces(root, &workspaces);
+            cleanup_isolated_candidate_workspaces(root, std::slice::from_ref(&failed));
+            let _ = fs::remove_dir_all(workspace_root);
+            return Err(error);
+        }
+        workspaces.push(IsolatedCandidateWorkspace {
+            unit_id: unit_id.clone(),
+            source_commit: source_commit.clone(),
+            path,
+        });
+    }
+    Ok(workspaces)
+}
+
+fn cleanup_isolated_candidate_workspaces(root: &Path, workspaces: &[IsolatedCandidateWorkspace]) {
+    for workspace in workspaces {
+        let _ = Command::new("git")
+            .current_dir(root)
+            .args(["worktree", "remove", "--force"])
+            .arg(&workspace.path)
+            .output();
+    }
+}
+
+fn validate_isolated_candidate_workspace(path: &Path, source_commit: &str) -> Result<(), String> {
+    validate_manifest_clean_worktree(path)?;
+    let output = Command::new("git")
+        .current_dir(path)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .map_err(|error| format!("resolve isolated candidate checkout HEAD: {error}"))?;
+    if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim() != source_commit {
+        return Err(
+            "isolated candidate checkout does not match its exact source commit".to_owned(),
+        );
+    }
+    for private_path in ["_bmad", ".agents", "_bmad-output"] {
+        if path.join(private_path).exists() {
+            return Err(format!(
+                "isolated candidate checkout contains prohibited private path {private_path}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Builds one exact Release Manifest from reviewed inputs. A successful result
