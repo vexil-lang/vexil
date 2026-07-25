@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -88,6 +89,7 @@ pub struct NpmCandidateArtifactInspectionRequest<'a> {
     pub source_commit: &'a str,
     pub expected_package_name: &'a str,
     pub expected_version: &'a str,
+    pub declared_entries: &'a BTreeSet<String>,
     pub artifact_path: &'a Path,
 }
 
@@ -106,29 +108,98 @@ pub struct InspectedNpmCandidateArtifact {
     pub version: String,
 }
 
+/// Exact Python wheel from an isolated candidate workspace. The inspector
+/// reads the wheel itself, binding the reported inventory to its bytes.
+pub struct PythonWheelCandidateArtifactInspectionRequest<'a> {
+    pub unit_id: &'a str,
+    pub source_commit: &'a str,
+    pub expected_project_name: &'a str,
+    pub expected_version: &'a str,
+    pub declared_entries: &'a BTreeSet<String>,
+    pub artifact_path: &'a Path,
+}
+
+/// Deterministic inspection evidence for one Python wheel. It carries no
+/// publication, candidate-custody, or adapter authority.
+#[derive(Debug, PartialEq, Eq)]
+pub struct InspectedPythonWheelCandidateArtifact {
+    pub artifact_name: String,
+    pub content_digest: String,
+    pub entries: BTreeMap<String, String>,
+    pub project_name: String,
+    pub sha256: String,
+    pub size: u64,
+    pub source_commit: String,
+    pub unit_id: String,
+    pub version: String,
+}
+
+/// Exact Cargo crate archive from an isolated candidate workspace. Its contents
+/// are inspected from a private snapshot of the archive bytes.
+pub struct CargoCrateCandidateArtifactInspectionRequest<'a> {
+    pub unit_id: &'a str,
+    pub source_commit: &'a str,
+    pub expected_package_name: &'a str,
+    pub expected_version: &'a str,
+    pub declared_entries: &'a BTreeSet<String>,
+    pub artifact_path: &'a Path,
+}
+
+/// Deterministic inspection evidence for one Cargo crate. It cannot authorize
+/// publication, candidate custody, or an adapter invocation.
+#[derive(Debug, PartialEq, Eq)]
+pub struct InspectedCargoCrateCandidateArtifact {
+    pub artifact_name: String,
+    pub content_digest: String,
+    pub entries: BTreeMap<String, String>,
+    pub package_name: String,
+    pub sha256: String,
+    pub size: u64,
+    pub source_commit: String,
+    pub unit_id: String,
+    pub version: String,
+}
+
 struct CandidateArtifactSnapshot {
+    directory: PathBuf,
     path: PathBuf,
 }
 
 impl CandidateArtifactSnapshot {
-    fn create(bytes: &[u8]) -> Result<Self, String> {
-        let path = std::env::temp_dir().join(format!(
-            "vexil-npm-candidate-{}-{}.tgz",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|error| format!("read candidate snapshot clock: {error}"))?
-                .as_nanos()
-        ));
-        fs::write(&path, bytes)
-            .map_err(|error| format!("write candidate artifact snapshot: {error}"))?;
-        Ok(Self { path })
+    fn create(bytes: &[u8], extension: &str) -> Result<Self, String> {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| format!("read candidate snapshot clock: {error}"))?
+            .as_nanos();
+        for sequence in 0..128 {
+            let directory = std::env::temp_dir().join(format!(
+                "vexil-candidate-artifact-{}-{nonce}-{sequence}",
+                std::process::id(),
+            ));
+            match fs::create_dir(&directory) {
+                Ok(()) => {
+                    let path = directory.join(format!("artifact{extension}"));
+                    let mut file = fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&path)
+                        .map_err(|error| format!("create candidate artifact snapshot: {error}"))?;
+                    file.write_all(bytes)
+                        .map_err(|error| format!("write candidate artifact snapshot: {error}"))?;
+                    return Ok(Self { directory, path });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(format!("create candidate snapshot directory: {error}")),
+            }
+        }
+        Err("create unique candidate snapshot directory: exhausted attempts".to_owned())
     }
 }
 
 impl Drop for CandidateArtifactSnapshot {
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.path);
+        let _ = fs::remove_dir(&self.directory);
     }
 }
 
@@ -2121,9 +2192,10 @@ pub fn inspect_npm_tgz_candidate(
         || !valid_git_object_id(request.source_commit)
         || request.expected_package_name.trim().is_empty()
         || request.expected_version.trim().is_empty()
+        || request.declared_entries.is_empty()
     {
         return Err(
-            "candidate npm artifact requires unit, source commit, package, and version".to_owned(),
+            "candidate npm artifact requires unit, source commit, package, version, and declared entries".to_owned(),
         );
     }
     let artifact_name = request
@@ -2137,15 +2209,18 @@ pub fn inspect_npm_tgz_candidate(
     if artifact_bytes.is_empty() {
         return Err("candidate npm artifact bytes must not be empty".to_owned());
     }
-    let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes)?;
+    let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes, ".tgz")?;
+    validate_candidate_archive_entry_types(&snapshot.path, ["-tvzf"])?;
     let listing = candidate_tar(&snapshot.path, ["-tzf"], None)?;
     let mut entries = BTreeMap::new();
     for path in String::from_utf8(listing)
         .map_err(|error| format!("candidate npm archive listing is not UTF-8: {error}"))?
         .lines()
-        .filter(|path| !path.ends_with('/'))
     {
         let path = validate_npm_candidate_entry_path(path)?;
+        if path.ends_with('/') {
+            continue;
+        }
         let bytes = candidate_tar(&snapshot.path, ["-xOzf"], Some(path.as_str()))?;
         reject_candidate_credential_material(&path, &bytes)?;
         if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() {
@@ -2159,6 +2234,7 @@ pub fn inspect_npm_tgz_candidate(
             "candidate npm archive must contain package/package.json and content".to_owned(),
         );
     }
+    require_declared_candidate_entries(&entries, request.declared_entries, "npm")?;
     let package_json = candidate_tar(&snapshot.path, ["-xOzf"], Some("package/package.json"))?;
     let package_json: Value = serde_json::from_slice(&package_json)
         .map_err(|error| format!("parse candidate npm package.json: {error}"))?;
@@ -2169,20 +2245,204 @@ pub fn inspect_npm_tgz_candidate(
             "candidate npm package.json does not match expected package and version".to_owned(),
         );
     }
-    let mut frame = b"vexil-npm-candidate-contents-v1\n".to_vec();
-    for (path, digest) in &entries {
-        frame.extend_from_slice(path.len().to_string().as_bytes());
-        frame.extend_from_slice(b":");
-        frame.extend_from_slice(path.as_bytes());
-        frame.extend_from_slice(b"\n");
-        frame.extend_from_slice(digest.as_bytes());
-        frame.extend_from_slice(b"\n");
-    }
+    let content_digest = candidate_content_digest(b"vexil-npm-candidate-contents-v1\n", &entries);
     Ok(InspectedNpmCandidateArtifact {
         artifact_name: artifact_name.to_owned(),
         package_name: request.expected_package_name.to_owned(),
         entries,
-        content_digest: sha256_hex(&frame),
+        content_digest,
+        sha256: sha256_hex(&artifact_bytes),
+        size: artifact_bytes.len() as u64,
+        source_commit: request.source_commit.to_owned(),
+        unit_id: request.unit_id.to_owned(),
+        version: request.expected_version.to_owned(),
+    })
+}
+
+/// Reads and inspects a Python wheel candidate without publication, tags,
+/// credentials, or adapter invocation. BSD tar is the checked Windows archive
+/// reader; its automatic format recognition is required for wheel inspection.
+pub fn inspect_python_wheel_candidate(
+    request: &PythonWheelCandidateArtifactInspectionRequest<'_>,
+) -> Result<InspectedPythonWheelCandidateArtifact, String> {
+    if request.unit_id.trim().is_empty()
+        || !valid_git_object_id(request.source_commit)
+        || request.expected_project_name.trim().is_empty()
+        || request.expected_version.trim().is_empty()
+        || request.declared_entries.is_empty()
+    {
+        return Err(
+            "candidate Python wheel requires unit, source commit, project, version, and declared entries".to_owned(),
+        );
+    }
+    let artifact_name = request
+        .artifact_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| valid_python_wheel_filename(name, request.expected_project_name, request.expected_version))
+        .ok_or("candidate Python wheel must have a matching distribution-version .whl filename")?;
+    let artifact_bytes = fs::read(request.artifact_path)
+        .map_err(|error| format!("read candidate Python wheel: {error}"))?;
+    if artifact_bytes.is_empty() {
+        return Err("candidate Python wheel bytes must not be empty".to_owned());
+    }
+    let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes, ".whl")?;
+    validate_candidate_archive_entry_types(&snapshot.path, ["-tvf"])?;
+    let listing = candidate_tar(&snapshot.path, ["-tf"], None)?;
+    let mut entries = BTreeMap::new();
+    let mut metadata_path = None;
+    for path in String::from_utf8(listing)
+        .map_err(|error| format!("candidate Python wheel listing is not UTF-8: {error}"))?
+        .lines()
+    {
+        let path = validate_python_wheel_candidate_entry_path(path)?;
+        if path.ends_with('/') {
+            continue;
+        }
+        if path.ends_with(".dist-info/METADATA") && metadata_path.replace(path.clone()).is_some() {
+            return Err("candidate Python wheel contains multiple METADATA entries".to_owned());
+        }
+        let bytes = candidate_tar(&snapshot.path, ["-xOf"], Some(path.as_str()))?;
+        reject_candidate_credential_material(&path, &bytes)?;
+        if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() {
+            return Err(format!(
+                "candidate Python wheel contains duplicate entry {path}"
+            ));
+        }
+    }
+    let distribution = normalize_python_wheel_distribution(request.expected_project_name)?;
+    let dist_info_root = format!("{distribution}-{}.dist-info", request.expected_version);
+    let metadata_path = metadata_path.ok_or("candidate Python wheel must contain one .dist-info/METADATA entry")?;
+    let required_wheel_entries = BTreeSet::from([
+        format!("{dist_info_root}/METADATA"),
+        format!("{dist_info_root}/WHEEL"),
+        format!("{dist_info_root}/RECORD"),
+    ]);
+    if metadata_path != format!("{dist_info_root}/METADATA")
+        || !required_wheel_entries.iter().all(|path| entries.contains_key(path))
+    {
+        return Err("candidate Python wheel must contain one matching .dist-info METADATA/WHEEL/RECORD set".to_owned());
+    }
+    require_declared_candidate_entries(&entries, request.declared_entries, "Python wheel")?;
+    let metadata = candidate_tar(&snapshot.path, ["-xOf"], Some(metadata_path.as_str()))?;
+    let (project_name, version) = parse_python_wheel_metadata(&metadata)?;
+    if project_name != request.expected_project_name || version != request.expected_version {
+        return Err("candidate Python wheel metadata does not match expected project and version".to_owned());
+    }
+    let wheel_metadata = candidate_tar(
+        &snapshot.path,
+        ["-xOf"],
+        Some(format!("{dist_info_root}/WHEEL").as_str()),
+    )?;
+    validate_python_wheel_metadata(&wheel_metadata)?;
+    let record = candidate_tar(
+        &snapshot.path,
+        ["-xOf"],
+        Some(format!("{dist_info_root}/RECORD").as_str()),
+    )?;
+    validate_python_wheel_record(
+        &record,
+        &snapshot.path,
+        &entries,
+        format!("{dist_info_root}/RECORD").as_str(),
+    )?;
+    let content_digest = candidate_content_digest(b"vexil-python-wheel-candidate-contents-v1\n", &entries);
+    Ok(InspectedPythonWheelCandidateArtifact {
+        artifact_name: artifact_name.to_owned(),
+        content_digest,
+        entries,
+        project_name,
+        sha256: sha256_hex(&artifact_bytes),
+        size: artifact_bytes.len() as u64,
+        source_commit: request.source_commit.to_owned(),
+        unit_id: request.unit_id.to_owned(),
+        version,
+    })
+}
+
+/// Reads and inspects a Cargo `.crate` candidate without publication, tags,
+/// credentials, or adapter invocation. Every entry must live below Cargo's
+/// exact `name-version/` archive root and the normalized Cargo.toml identity
+/// must match the declared target.
+pub fn inspect_cargo_crate_candidate(
+    request: &CargoCrateCandidateArtifactInspectionRequest<'_>,
+) -> Result<InspectedCargoCrateCandidateArtifact, String> {
+    if request.unit_id.trim().is_empty()
+        || !valid_git_object_id(request.source_commit)
+        || request.expected_package_name.trim().is_empty()
+        || request.expected_version.trim().is_empty()
+        || request.declared_entries.is_empty()
+    {
+        return Err(
+            "candidate Cargo crate requires unit, source commit, package, version, and declared entries".to_owned(),
+        );
+    }
+    let expected_filename = format!(
+        "{}-{}.crate",
+        request.expected_package_name, request.expected_version
+    );
+    let artifact_name = request
+        .artifact_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| *name == expected_filename)
+        .ok_or("candidate Cargo crate must have the exact package-version.crate filename")?;
+    let artifact_bytes = fs::read(request.artifact_path)
+        .map_err(|error| format!("read candidate Cargo crate: {error}"))?;
+    if artifact_bytes.is_empty() {
+        return Err("candidate Cargo crate bytes must not be empty".to_owned());
+    }
+    let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes, ".crate")?;
+    validate_candidate_archive_entry_types(&snapshot.path, ["-tvzf"])?;
+    let archive_root = format!(
+        "{}-{}/",
+        request.expected_package_name, request.expected_version
+    );
+    let listing = candidate_tar(&snapshot.path, ["-tzf"], None)?;
+    let mut entries = BTreeMap::new();
+    for path in String::from_utf8(listing)
+        .map_err(|error| format!("candidate Cargo crate listing is not UTF-8: {error}"))?
+        .lines()
+    {
+        let path = validate_cargo_crate_candidate_entry_path(path, &archive_root)?;
+        if path.ends_with('/') {
+            continue;
+        }
+        let bytes = candidate_tar(&snapshot.path, ["-xOzf"], Some(path.as_str()))?;
+        reject_candidate_credential_material(&path, &bytes)?;
+        if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() {
+            return Err(format!("candidate Cargo crate contains duplicate entry {path}"));
+        }
+    }
+    let cargo_toml_path = format!("{archive_root}Cargo.toml");
+    if entries.len() < 2 || !entries.contains_key(&cargo_toml_path) {
+        return Err("candidate Cargo crate must contain Cargo.toml and content".to_owned());
+    }
+    require_declared_candidate_entries(&entries, request.declared_entries, "Cargo crate")?;
+    let cargo_toml = candidate_tar(&snapshot.path, ["-xOzf"], Some(cargo_toml_path.as_str()))?;
+    let cargo_toml: toml::Value = toml::from_slice(&cargo_toml)
+        .map_err(|error| format!("parse candidate Cargo crate Cargo.toml: {error}"))?;
+    if cargo_toml
+        .get("package")
+        .and_then(toml::Value::as_table)
+        .and_then(|package| package.get("name"))
+        .and_then(toml::Value::as_str)
+        != Some(request.expected_package_name)
+        || cargo_toml
+            .get("package")
+            .and_then(toml::Value::as_table)
+            .and_then(|package| package.get("version"))
+            .and_then(toml::Value::as_str)
+            != Some(request.expected_version)
+    {
+        return Err("candidate Cargo crate Cargo.toml does not match expected package and version".to_owned());
+    }
+    let content_digest = candidate_content_digest(b"vexil-cargo-crate-candidate-contents-v1\n", &entries);
+    Ok(InspectedCargoCrateCandidateArtifact {
+        artifact_name: artifact_name.to_owned(),
+        content_digest,
+        entries,
+        package_name: request.expected_package_name.to_owned(),
         sha256: sha256_hex(&artifact_bytes),
         size: artifact_bytes.len() as u64,
         source_commit: request.source_commit.to_owned(),
@@ -2199,7 +2459,7 @@ fn candidate_tar<const N: usize>(
     let mut command = Command::new("tar");
     command.args(args).arg(artifact);
     if let Some(entry) = entry {
-        command.arg(entry);
+        command.arg("--").arg(entry);
     }
     let output = command
         .output()
@@ -2213,13 +2473,46 @@ fn candidate_tar<const N: usize>(
     Ok(output.stdout)
 }
 
+fn validate_candidate_archive_entry_types<const N: usize>(
+    artifact: &Path,
+    args: [&str; N],
+) -> Result<(), String> {
+    let listing = candidate_tar(artifact, args, None)?;
+    let listing = String::from_utf8(listing)
+        .map_err(|error| format!("candidate archive detail listing is not UTF-8: {error}"))?;
+    if listing.lines().any(|line| {
+        !matches!(line.as_bytes().first(), Some(b'-' | b'd'))
+    }) {
+        return Err(
+            "candidate artifact archive contains a non-regular or link entry".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn require_declared_candidate_entries(
+    entries: &BTreeMap<String, String>,
+    declared_entries: &BTreeSet<String>,
+    artifact_kind: &str,
+) -> Result<(), String> {
+    let actual_entries: BTreeSet<_> = entries.keys().cloned().collect();
+    if &actual_entries != declared_entries {
+        return Err(format!(
+            "candidate {artifact_kind} entries differ from the declared inventory"
+        ));
+    }
+    Ok(())
+}
+
 fn validate_npm_candidate_entry_path(path: &str) -> Result<String, String> {
     let normalized = path.replace('\\', "/");
+    let segments = normalized.trim_end_matches('/');
     if !normalized.starts_with("package/")
         || path.trim().is_empty()
+        || normalized.starts_with('-')
         || Path::new(path).is_absolute()
         || path.contains(':')
-        || normalized
+        || segments
             .split('/')
             .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
     {
@@ -2230,8 +2523,198 @@ fn validate_npm_candidate_entry_path(path: &str) -> Result<String, String> {
     Ok(normalized)
 }
 
+fn validate_python_wheel_candidate_entry_path(path: &str) -> Result<String, String> {
+    let normalized = path.replace('\\', "/");
+    let segments = normalized.trim_end_matches('/');
+    if path.trim().is_empty()
+        || normalized.starts_with('-')
+        || Path::new(path).is_absolute()
+        || path.contains(':')
+        || path.contains([',', '"'])
+        || segments
+            .split('/')
+            .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
+    {
+        return Err(format!(
+            "candidate Python wheel has prohibited entry path {path}"
+        ));
+    }
+    Ok(normalized)
+}
+
+fn normalize_python_wheel_distribution(project_name: &str) -> Result<String, String> {
+    let normalized = project_name.replace('-', "_");
+    if normalized.is_empty()
+        || !normalized
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    {
+        return Err("candidate Python wheel project name is not filename-safe".to_owned());
+    }
+    Ok(normalized)
+}
+
+fn valid_python_wheel_filename(name: &str, project_name: &str, version: &str) -> bool {
+    let Some(stem) = name.strip_suffix(".whl") else {
+        return false;
+    };
+    let Ok(distribution) = normalize_python_wheel_distribution(project_name) else {
+        return false;
+    };
+    let fields: Vec<_> = stem.split('-').collect();
+    matches!(fields.len(), 5 | 6)
+        && fields.first() == Some(&distribution.as_str())
+        && fields.get(1) == Some(&version)
+        && fields[fields.len() - 3..].iter().all(|field| !field.is_empty())
+}
+
+fn validate_cargo_crate_candidate_entry_path(
+    path: &str,
+    archive_root: &str,
+) -> Result<String, String> {
+    let normalized = path.replace('\\', "/");
+    let segments = normalized.trim_end_matches('/');
+    if !normalized.starts_with(archive_root)
+        || path.trim().is_empty()
+        || normalized.starts_with('-')
+        || Path::new(path).is_absolute()
+        || path.contains(':')
+        || segments
+            .split('/')
+            .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
+    {
+        return Err(format!("candidate Cargo crate has prohibited entry path {path}"));
+    }
+    Ok(normalized)
+}
+
+fn parse_python_wheel_metadata(bytes: &[u8]) -> Result<(String, String), String> {
+    let metadata = std::str::from_utf8(bytes)
+        .map_err(|error| format!("candidate Python wheel METADATA is not UTF-8: {error}"))?;
+    let name = unique_python_wheel_header(metadata, "Name")?;
+    let version = unique_python_wheel_header(metadata, "Version")?;
+    Ok((name.to_owned(), version.to_owned()))
+}
+
+fn unique_python_wheel_header<'a>(metadata: &'a str, header: &str) -> Result<&'a str, String> {
+    let prefix = format!("{header}: ");
+    let mut values = metadata
+        .lines()
+        .filter_map(|line| line.strip_prefix(&prefix))
+        .filter(|value| !value.trim().is_empty());
+    let value = values
+        .next()
+        .ok_or_else(|| format!("candidate Python wheel metadata has no {header} field"))?;
+    if values.next().is_some() {
+        return Err(format!(
+            "candidate Python wheel metadata has duplicate {header} fields"
+        ));
+    }
+    Ok(value)
+}
+
+fn validate_python_wheel_metadata(bytes: &[u8]) -> Result<(), String> {
+    let metadata = std::str::from_utf8(bytes)
+        .map_err(|error| format!("candidate Python wheel WHEEL is not UTF-8: {error}"))?;
+    let wheel_version = unique_python_wheel_header(metadata, "Wheel-Version")?;
+    if !wheel_version.starts_with('1')
+        || !metadata
+            .lines()
+            .any(|line| line.starts_with("Root-Is-Purelib: "))
+        || !metadata.lines().any(|line| line.starts_with("Tag: "))
+    {
+        return Err("candidate Python wheel WHEEL metadata is incomplete or unsupported".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_python_wheel_record(
+    bytes: &[u8],
+    artifact: &Path,
+    entries: &BTreeMap<String, String>,
+    record_path: &str,
+) -> Result<(), String> {
+    let record = std::str::from_utf8(bytes)
+        .map_err(|error| format!("candidate Python wheel RECORD is not UTF-8: {error}"))?;
+    let mut recorded_paths = BTreeSet::new();
+    for line in record.lines() {
+        let fields: Vec<_> = line.split(',').collect();
+        let path = fields
+            .first()
+            .copied()
+            .filter(|path| !path.is_empty())
+            .ok_or("candidate Python wheel RECORD has an empty path")?;
+        if fields.len() != 3 || path.contains('"') {
+            return Err("candidate Python wheel RECORD has malformed fields".to_owned());
+        }
+        if !recorded_paths.insert(path.to_owned()) {
+            return Err("candidate Python wheel RECORD has duplicate paths".to_owned());
+        }
+        if path == record_path {
+            if !fields[1].is_empty() || !fields[2].is_empty() {
+                return Err("candidate Python wheel RECORD must not self-hash".to_owned());
+            }
+            continue;
+        }
+        let entry_bytes = candidate_tar(artifact, ["-xOf"], Some(path))?;
+        let expected_hash = format!("sha256={}", sha256_urlsafe_base64(&entry_bytes));
+        if fields[1] != expected_hash || fields[2] != entry_bytes.len().to_string() {
+            return Err("candidate Python wheel RECORD digest or size does not match archive entry".to_owned());
+        }
+    }
+    let actual_paths: BTreeSet<_> = entries.keys().cloned().collect();
+    if recorded_paths != actual_paths {
+        return Err("candidate Python wheel RECORD does not match archive inventory".to_owned());
+    }
+    Ok(())
+}
+
+fn sha256_urlsafe_base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(43);
+    let mut chunks = digest.chunks_exact(3);
+    for chunk in &mut chunks {
+        encoded.push(ALPHABET[(chunk[0] >> 2) as usize] as char);
+        encoded.push(ALPHABET[((chunk[0] & 0x03) << 4 | (chunk[1] >> 4)) as usize] as char);
+        encoded.push(ALPHABET[((chunk[1] & 0x0f) << 2 | (chunk[2] >> 6)) as usize] as char);
+        encoded.push(ALPHABET[(chunk[2] & 0x3f) as usize] as char);
+    }
+    match chunks.remainder() {
+        [first] => {
+            encoded.push(ALPHABET[(first >> 2) as usize] as char);
+            encoded.push(ALPHABET[((first & 0x03) << 4) as usize] as char);
+        }
+        [first, second] => {
+            encoded.push(ALPHABET[(first >> 2) as usize] as char);
+            encoded.push(ALPHABET[((first & 0x03) << 4 | (second >> 4)) as usize] as char);
+            encoded.push(ALPHABET[((second & 0x0f) << 2) as usize] as char);
+        }
+        [] => {}
+        _ => unreachable!("SHA-256 remainder has at most two bytes"),
+    }
+    encoded
+}
+
+fn candidate_content_digest(prefix: &[u8], entries: &BTreeMap<String, String>) -> String {
+    let mut frame = prefix.to_vec();
+    for (path, digest) in entries {
+        frame.extend_from_slice(path.len().to_string().as_bytes());
+        frame.extend_from_slice(b":");
+        frame.extend_from_slice(path.as_bytes());
+        frame.extend_from_slice(b"\n");
+        frame.extend_from_slice(digest.as_bytes());
+        frame.extend_from_slice(b"\n");
+    }
+    sha256_hex(&frame)
+}
+
 fn reject_candidate_credential_material(path: &str, bytes: &[u8]) -> Result<(), String> {
-    if path.ends_with("/.npmrc") || path.ends_with("/.pypirc") || path.ends_with("/credentials") {
+    if matches!(path, ".npmrc" | ".pypirc" | "credentials")
+        || path.ends_with("/.npmrc")
+        || path.ends_with("/.pypirc")
+        || path.ends_with("/credentials")
+    {
         return Err(format!(
             "candidate artifact entry {path} is credential-bearing configuration"
         ));

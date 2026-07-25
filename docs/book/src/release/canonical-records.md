@@ -105,6 +105,15 @@ content, then records the artifact SHA-256, size, and deterministic entry
 inventory. This transient inspection is not an attestation, custody record, or
 publication request.
 
+The same archive-bound inspection boundary covers Python wheels and Cargo
+crates: wheels must have one matching `.dist-info/METADATA` identity, while
+crates must have the exact package-version archive root and matching normalized
+`Cargo.toml`. Each archive must match its build-declared file inventory exactly;
+unexpected or missing files fail inspection. All inspected archive formats
+reject non-regular entries, unsafe/private paths, and credential-like material.
+These checks are still transient local evidence, not a tag, publication, custody
+record, or release decision.
+
 Before a future privileged job is dispatchable, its exact canonical
 authorization, asserted Coordinator principal, active Coordinator-owned lease,
 and sequenced Run context must all match. Authorization alone, or lease/Run

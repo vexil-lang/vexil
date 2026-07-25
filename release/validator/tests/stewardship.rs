@@ -1,6 +1,6 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1978,11 +1978,16 @@ fn npm_candidate_artifact_inspection_binds_archive_bytes_and_metadata() {
         String::from_utf8_lossy(&output.stderr)
     );
     let source_commit = "a".repeat(40);
+    let declared_entries = BTreeSet::from([
+        "package/package.json".to_owned(),
+        "package/dist/index.js".to_owned(),
+    ]);
     let request = NpmCandidateArtifactInspectionRequest {
         unit_id: "vexil-runtime-ts",
         source_commit: &source_commit,
         expected_package_name: "@vexil-lang/runtime",
         expected_version: "0.4.1",
+        declared_entries: &declared_entries,
         artifact_path: &artifact,
     };
     let inspected = inspect_npm_tgz_candidate(&request).expect("inspect exact npm archive");
@@ -2009,6 +2014,252 @@ fn npm_candidate_artifact_inspection_binds_archive_bytes_and_metadata() {
     assert!(output.status.success());
     assert!(inspect_npm_tgz_candidate(&request).is_err());
     fs::remove_dir_all(fixture).expect("remove npm candidate fixture");
+}
+
+#[test]
+fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
+    use vexil_release_governance_validator::{
+        inspect_python_wheel_candidate, PythonWheelCandidateArtifactInspectionRequest,
+    };
+
+    let fixture = std::env::temp_dir().join(format!(
+        "vexil-wheel-candidate-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    fn urlsafe_base64(bytes: &[u8]) -> String {
+        const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let digest = Sha256::digest(bytes);
+        let mut encoded = String::with_capacity(43);
+        let mut chunks = digest.chunks_exact(3);
+        for chunk in &mut chunks {
+            encoded.push(ALPHABET[(chunk[0] >> 2) as usize] as char);
+            encoded.push(ALPHABET[((chunk[0] & 0x03) << 4 | (chunk[1] >> 4)) as usize] as char);
+            encoded.push(ALPHABET[((chunk[1] & 0x0f) << 2 | (chunk[2] >> 6)) as usize] as char);
+            encoded.push(ALPHABET[(chunk[2] & 0x3f) as usize] as char);
+        }
+        match chunks.remainder() {
+            [first] => {
+                encoded.push(ALPHABET[(first >> 2) as usize] as char);
+                encoded.push(ALPHABET[((first & 0x03) << 4) as usize] as char);
+            }
+            [first, second] => {
+                encoded.push(ALPHABET[(first >> 2) as usize] as char);
+                encoded.push(ALPHABET[((first & 0x03) << 4 | (second >> 4)) as usize] as char);
+                encoded.push(ALPHABET[((second & 0x0f) << 2) as usize] as char);
+            }
+            [] => {}
+            _ => unreachable!("SHA-256 remainder has at most two bytes"),
+        }
+        encoded
+    }
+
+    let metadata = fixture.join("vexil_runtime-0.1.0.dist-info");
+    fs::create_dir_all(&metadata).expect("create Python wheel metadata fixture");
+    let metadata_contents = "Metadata-Version: 2.4\nName: vexil_runtime\nVersion: 0.1.0\n";
+    fs::write(
+        metadata.join("METADATA"),
+        metadata_contents,
+    )
+    .expect("write Python wheel metadata");
+    let wheel_contents = "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n";
+    fs::write(
+        metadata.join("WHEEL"),
+        wheel_contents,
+    )
+    .expect("write Python wheel metadata");
+    let module_contents = "VALUE = 1\n";
+    fs::write(fixture.join("vexil_runtime.py"), module_contents)
+        .expect("write Python wheel content");
+    let wheel_record_entry = |path: &str, contents: &str| {
+        format!(
+            "{path},sha256={},{}\n",
+            urlsafe_base64(contents.as_bytes()),
+            contents.len()
+        )
+    };
+    let record_contents = format!(
+        "{}{}{}vexil_runtime-0.1.0.dist-info/RECORD,,\n",
+        wheel_record_entry("vexil_runtime.py", module_contents),
+        wheel_record_entry(
+            "vexil_runtime-0.1.0.dist-info/METADATA",
+            metadata_contents
+        ),
+        wheel_record_entry("vexil_runtime-0.1.0.dist-info/WHEEL", wheel_contents),
+    );
+    fs::write(
+        metadata.join("RECORD"),
+        &record_contents,
+    )
+    .expect("write Python wheel record");
+    let artifact = fixture.join("vexil_runtime-0.1.0-py3-none-any.whl");
+    let output = Command::new("tar")
+        .args(["-a", "-cf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .args(["vexil_runtime.py", "vexil_runtime-0.1.0.dist-info"])
+        .output()
+        .expect("create Python wheel fixture");
+    assert!(
+        output.status.success(),
+        "tar fixture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let source_commit = "b".repeat(40);
+    let declared_entries = BTreeSet::from([
+        "vexil_runtime.py".to_owned(),
+        "vexil_runtime-0.1.0.dist-info/METADATA".to_owned(),
+        "vexil_runtime-0.1.0.dist-info/WHEEL".to_owned(),
+        "vexil_runtime-0.1.0.dist-info/RECORD".to_owned(),
+    ]);
+    let request = PythonWheelCandidateArtifactInspectionRequest {
+        unit_id: "vexil-runtime-py",
+        source_commit: &source_commit,
+        expected_project_name: "vexil_runtime",
+        expected_version: "0.1.0",
+        declared_entries: &declared_entries,
+        artifact_path: &artifact,
+    };
+    let inspected = inspect_python_wheel_candidate(&request).expect("inspect exact Python wheel");
+    assert_eq!(inspected.entries.len(), 4);
+    assert_eq!(inspected.project_name, "vexil_runtime");
+    assert_eq!(inspected.version, "0.1.0");
+    let wrong_project = PythonWheelCandidateArtifactInspectionRequest {
+        expected_project_name: "another_project",
+        ..request
+    };
+    assert!(inspect_python_wheel_candidate(&wrong_project).is_err());
+    fs::write(
+        metadata.join("RECORD"),
+        record_contents.replacen("sha256=", "sha256=invalid", 1),
+    )
+    .expect("write tampered Python wheel record");
+    let output = Command::new("tar")
+        .args(["-a", "-cf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .args(["vexil_runtime.py", "vexil_runtime-0.1.0.dist-info"])
+        .output()
+        .expect("recreate tampered Python wheel fixture");
+    assert!(output.status.success());
+    assert!(inspect_python_wheel_candidate(&request).is_err());
+    fs::write(metadata.join("RECORD"), &record_contents)
+        .expect("restore Python wheel record");
+    fs::write(fixture.join("backdoor.py"), "VALUE = 2\n")
+        .expect("write undeclared wheel content");
+    let output = Command::new("tar")
+        .args(["-a", "-cf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .args([
+            "vexil_runtime.py",
+            "backdoor.py",
+            "vexil_runtime-0.1.0.dist-info",
+        ])
+        .output()
+        .expect("recreate undeclared Python wheel fixture");
+    assert!(output.status.success());
+    assert!(inspect_python_wheel_candidate(&request).is_err());
+    fs::remove_file(fixture.join("backdoor.py")).expect("remove undeclared wheel content");
+    fs::create_dir_all(fixture.join("_bmad")).expect("create prohibited wheel path");
+    fs::write(fixture.join("_bmad/private.txt"), "private\n")
+        .expect("write prohibited wheel path");
+    let output = Command::new("tar")
+        .args(["-a", "-cf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .args([
+            "vexil_runtime.py",
+            "vexil_runtime-0.1.0.dist-info",
+            "_bmad",
+        ])
+        .output()
+        .expect("recreate prohibited Python wheel fixture");
+    assert!(output.status.success());
+    assert!(inspect_python_wheel_candidate(&request).is_err());
+    fs::remove_dir_all(fixture).expect("remove Python wheel candidate fixture");
+}
+
+#[test]
+fn cargo_crate_candidate_inspection_binds_archive_bytes_and_metadata() {
+    use vexil_release_governance_validator::{
+        inspect_cargo_crate_candidate, CargoCrateCandidateArtifactInspectionRequest,
+    };
+
+    let fixture = std::env::temp_dir().join(format!(
+        "vexil-crate-candidate-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    let crate_root = fixture.join("vexil-example-0.4.3");
+    fs::create_dir_all(crate_root.join("src")).expect("create Cargo crate fixture");
+    fs::write(
+        crate_root.join("Cargo.toml"),
+        "[package]\nname = \"vexil-example\"\nversion = \"0.4.3\"\n",
+    )
+    .expect("write Cargo crate metadata");
+    fs::write(crate_root.join("src/lib.rs"), "pub const VALUE: u8 = 1;\n")
+        .expect("write Cargo crate content");
+    let artifact = fixture.join("vexil-example-0.4.3.crate");
+    let output = Command::new("tar")
+        .args(["-czf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .arg("vexil-example-0.4.3")
+        .output()
+        .expect("create Cargo crate fixture");
+    assert!(
+        output.status.success(),
+        "tar fixture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let source_commit = "c".repeat(40);
+    let declared_entries = BTreeSet::from([
+        "vexil-example-0.4.3/Cargo.toml".to_owned(),
+        "vexil-example-0.4.3/src/lib.rs".to_owned(),
+    ]);
+    let request = CargoCrateCandidateArtifactInspectionRequest {
+        unit_id: "vexil-example",
+        source_commit: &source_commit,
+        expected_package_name: "vexil-example",
+        expected_version: "0.4.3",
+        declared_entries: &declared_entries,
+        artifact_path: &artifact,
+    };
+    let inspected = inspect_cargo_crate_candidate(&request).expect("inspect exact Cargo crate");
+    assert_eq!(inspected.entries.len(), 2);
+    assert_eq!(inspected.package_name, "vexil-example");
+    assert_eq!(inspected.version, "0.4.3");
+    let wrong_version = CargoCrateCandidateArtifactInspectionRequest {
+        expected_version: "0.4.4",
+        ..request
+    };
+    assert!(inspect_cargo_crate_candidate(&wrong_version).is_err());
+    fs::create_dir_all(crate_root.join(".agents")).expect("create prohibited crate path");
+    fs::write(crate_root.join(".agents/private.txt"), "private\n")
+        .expect("write prohibited crate path");
+    let output = Command::new("tar")
+        .args(["-czf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .arg("vexil-example-0.4.3")
+        .output()
+        .expect("recreate prohibited Cargo crate fixture");
+    assert!(output.status.success());
+    assert!(inspect_cargo_crate_candidate(&request).is_err());
+    fs::remove_dir_all(fixture).expect("remove Cargo crate candidate fixture");
 }
 
 #[test]
