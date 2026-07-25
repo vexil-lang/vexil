@@ -1780,6 +1780,12 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         approval_bytes: &approval_bytes,
         merge,
     }];
+    let candidate = authorization["candidate"].as_object().expect("fixture candidate");
+    let custody = vexil_release_governance_validator::SealedCandidateCustody {
+        bundle_digest: candidate["bundleDigest"].as_str().expect("bundle digest").to_owned(),
+        subject_digest: candidate["subjectDigest"].as_str().expect("subject digest").to_owned(),
+        attestation_digest: candidate["attestationDigest"].as_str().expect("attestation digest").to_owned(),
+    };
     let request = PrivilegedRunStartRequest {
         authorization: &authorization,
         manifest_bytes: &manifest_bytes,
@@ -1787,6 +1793,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         approvals: &approvals,
         historical_tag_baseline: &baseline,
         historical_tag_snapshot: &snapshot,
+        custody: &custody,
         evaluation_time: "2026-07-25T12:00:00Z",
     };
     let run_path = root.join("release/runs/run-preflight");

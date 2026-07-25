@@ -442,6 +442,7 @@ pub struct PrivilegedRunStartRequest<'a> {
     pub approvals: &'a [DetachedApprovalPreflight<'a>],
     pub historical_tag_baseline: &'a Value,
     pub historical_tag_snapshot: &'a Value,
+    pub custody: &'a SealedCandidateCustody,
     pub evaluation_time: &'a str,
 }
 
@@ -980,6 +981,14 @@ pub fn authorize_privileged_run_start(
             error,
         );
     }
+    if let Err(error) = validate_authorization_candidate_custody(record, request.custody) {
+        push_authorization_blocker(
+            &mut blockers,
+            "immutable-candidate-custody",
+            "candidate-custody",
+            error,
+        );
+    }
     if let Err(error) = validate_authorization_history_tags(
         record,
         request.historical_tag_baseline,
@@ -1254,6 +1263,19 @@ fn validate_authorization_manifest_and_evidence(
         return Err(
             "authorization security findings do not bind the Manifest security artifact".to_owned(),
         );
+    }
+    Ok(())
+}
+
+fn validate_authorization_candidate_custody(
+    authorization: &Map<String, Value>,
+    custody: &SealedCandidateCustody,
+) -> Result<(), String> {
+    let candidate = object(required_value(authorization, "candidate")?, "authorization candidate")?;
+    if text(candidate.get("bundleDigest"), "authorization candidate bundle digest")? != custody.bundle_digest
+        || text(candidate.get("subjectDigest"), "authorization candidate subject digest")? != custody.subject_digest
+        || text(candidate.get("attestationDigest"), "authorization candidate attestation digest")? != custody.attestation_digest {
+        return Err("authorization candidate identities do not match sealed custody".to_owned());
     }
     Ok(())
 }
