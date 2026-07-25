@@ -82,8 +82,10 @@ The validator's `authorize_privileged_run_start` preflight is pure. It accepts
 only a retained Manifest 1.1 and byte-exact reviewed evidence, currently
 eligible detached approvals with protected-main evidence, a matching fresh
 Historical Tag snapshot, current governance/principal assertions, and exact
-candidate/security/scope bindings. It also revalidates the checked-in
-external-control contract before emission. It emits canonical authorization bytes and
+candidate/security/scope bindings. Allowed targets must belong to the selected
+Manifest units; operations must be reviewed privileged operations, and permissions
+must exactly match those operations' minimum permissions. It also revalidates the
+checked-in external-control contract before emission. It emits canonical authorization bytes and
 their external SHA-256 identity, or a deterministic ordered blocker set. It
 does not materialize the path, acquire a lease, create an event, access a
 credential or environment, invoke an adapter, or perform a provider effect.

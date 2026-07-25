@@ -823,7 +823,7 @@ pub fn authorize_privileged_run_start(
             error,
         );
     }
-    if let Err(error) = validate_authorization_scope(record, request.manifest_bytes) {
+    if let Err(error) = validate_authorization_scope(root, record, request.manifest_bytes) {
         push_authorization_blocker(
             &mut blockers,
             "exact-authorized-scope",
@@ -1224,6 +1224,7 @@ fn validate_authorization_governance_and_principals(
 }
 
 fn validate_authorization_scope(
+    root: &Path,
     record: &Map<String, Value>,
     manifest_bytes: &[u8],
 ) -> Result<(), String> {
@@ -1248,20 +1249,162 @@ fn validate_authorization_scope(
     }
     let manifest = parse_canonical_json_bytes(manifest_bytes, "authorization Manifest")?;
     let manifest = object(&manifest, "authorization Manifest")?;
-    if let Some(units) = manifest.get("releaseUnits") {
-        let manifest_units = array(Some(units), "Manifest release units")?
-            .iter()
-            .map(|value| {
-                let value = object(value, "Manifest release unit")?;
-                text(value.get("unitId"), "Manifest release unit ID").map(str::to_owned)
-            })
-            .collect::<Result<BTreeSet<_>, _>>()?;
-        for unit in array(record.get("allowedUnits"), "authorization units")? {
-            let unit = text(Some(unit), "authorization unit")?;
-            if !manifest_units.contains(unit) {
-                return Err(format!("authorization expands scope with unit {unit}"));
+    let selected_units = array(record.get("allowedUnits"), "authorization units")?
+        .iter()
+        .map(|value| text(Some(value), "authorization unit").map(str::to_owned))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let mut manifest_targets_for_selected_units = BTreeSet::new();
+    let mut manifest_units = BTreeSet::new();
+    for value in array(manifest.get("releaseUnits"), "Manifest release units")? {
+        let unit = object(value, "Manifest release unit")?;
+        let unit_id = text(unit.get("unitId"), "Manifest release unit ID")?;
+        manifest_units.insert(unit_id.to_owned());
+        if selected_units.contains(unit_id) {
+            for target in array(unit.get("targets"), "Manifest release-unit targets")? {
+                let target = object(target, "Manifest release-unit target")?;
+                manifest_targets_for_selected_units.insert(manifest_target_identity(
+                    text(target.get("kind"), "Manifest target kind")?,
+                    text(target.get("name"), "Manifest target name")?,
+                )?);
             }
         }
+    }
+    for unit in &selected_units {
+        if !manifest_units.contains(unit) {
+            return Err(format!("authorization expands scope with unit {unit}"));
+        }
+    }
+    let manifest_bound_tag_target = "release-manifest-bound-tag";
+    let concrete_targets = targets
+        .iter()
+        .filter(|target| target.as_str() != manifest_bound_tag_target)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    if !concrete_targets.is_subset(&manifest_targets_for_selected_units) {
+        let unexpected = concrete_targets
+            .difference(&manifest_targets_for_selected_units)
+            .next()
+            .expect("non-subset must have an unexpected target");
+        return Err(format!(
+            "authorization expands scope with target {unexpected} outside its selected Manifest units"
+        ));
+    }
+    validate_authorization_operation_scope(
+        root,
+        record,
+        &selected_units,
+        &concrete_targets,
+        targets.contains(manifest_bound_tag_target),
+    )?;
+    Ok(())
+}
+
+fn manifest_target_identity(kind: &str, name: &str) -> Result<String, String> {
+    if kind.contains(':') || name.contains(':') {
+        return Err(
+            "Manifest target kind and name must not contain ':' in authorization scope".to_owned(),
+        );
+    }
+    Ok(format!("{kind}:{name}"))
+}
+
+#[cfg(test)]
+#[test]
+fn authorization_scope_rejects_ambiguous_manifest_target_components() {
+    assert!(manifest_target_identity("npm-package", "@vexil-lang/runtime").is_ok());
+    assert!(manifest_target_identity("npm:package", "runtime").is_err());
+    assert!(manifest_target_identity("npm-package", "@vexil:lang/runtime").is_err());
+}
+
+fn validate_authorization_operation_scope(
+    root: &Path,
+    record: &Map<String, Value>,
+    selected_units: &BTreeSet<String>,
+    selected_targets: &BTreeSet<String>,
+    manifest_bound_tag_target_authorized: bool,
+) -> Result<(), String> {
+    validate_privileged_operations_repository(root)?;
+    let requested_operations = array(record.get("allowedOperations"), "authorization operations")?
+        .iter()
+        .map(|value| text(Some(value), "authorization operation").map(str::to_owned))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let requested_permissions = array(
+        record.get("allowedPermissions"),
+        "authorization permissions",
+    )?
+    .iter()
+    .map(|value| text(Some(value), "authorization permission").map(str::to_owned))
+    .collect::<Result<BTreeSet<_>, _>>()?;
+    let contract = read_json(&root.join("release/privileged/operations-contract.json"))?;
+    let contract = object(&contract, "privileged operation contract")?;
+    let mut operations = BTreeMap::new();
+    for value in array(
+        contract.get("operations"),
+        "privileged operation contract operations",
+    )? {
+        let operation = object(value, "privileged operation contract entry")?;
+        let operation_id = text(operation.get("id"), "privileged operation ID")?;
+        if operations.insert(operation_id, operation).is_some() {
+            return Err(format!(
+                "privileged operation contract contains duplicate operation {operation_id}"
+            ));
+        }
+    }
+    let mut minimum_permissions = BTreeSet::new();
+    for operation_id in requested_operations {
+        let operation = operations.get(operation_id.as_str()).ok_or_else(|| {
+            format!("authorization names unknown privileged operation {operation_id}")
+        })?;
+        if text(
+            operation.get("authorityClass"),
+            "privileged operation authority class",
+        )? != "privileged"
+        {
+            return Err(format!(
+                "authorization operation {operation_id} is not a privileged operation"
+            ));
+        }
+        let target = object(
+            operation
+                .get("target")
+                .ok_or("privileged operation lacks target")?,
+            "privileged operation target",
+        )?;
+        let target_identity = text(
+            target.get("identity"),
+            "privileged operation target identity",
+        )?;
+        if target_identity == "release-unit:exact-approved-manifest-entry" {
+            if selected_units.is_empty() || selected_targets.is_empty() {
+                return Err(format!(
+                    "authorization operation {operation_id} requires selected Manifest units and targets"
+                ));
+            }
+        } else if target_identity == "release-manifest-bound-tag" {
+            if selected_units.is_empty() || !manifest_bound_tag_target_authorized {
+                return Err(format!(
+                    "authorization operation {operation_id} requires the selected units' Manifest-bound tag scope"
+                ));
+            }
+        } else if !selected_targets.contains(target_identity) {
+            return Err(format!(
+                "authorization operation {operation_id} target {target_identity} is outside allowed targets"
+            ));
+        }
+        for permission in array(
+            operation.get("minimumPermissions"),
+            "privileged operation minimum permissions",
+        )? {
+            minimum_permissions.insert(
+                text(Some(permission), "privileged operation minimum permission")?.to_owned(),
+            );
+        }
+    }
+    if requested_permissions != minimum_permissions {
+        return Err(
+            "authorization permissions must exactly match the selected operations' minimum permissions"
+                .to_owned(),
+        );
     }
     Ok(())
 }

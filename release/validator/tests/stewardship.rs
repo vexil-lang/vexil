@@ -1742,11 +1742,11 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "expiresAt":"2026-07-26T00:00:00Z","governanceRevision":{"digest":governance_digest,"id":"governance-revision-v1"},
         "historicalTagBaseline":{"digest":baseline_digest,"id":"baseline-tags"},"historicalTagSnapshot":{"digest":digest(&canonical_json(&snapshot)),"id":"snapshot-fixture"},
         "issuedAt":"2026-07-25T00:00:00Z","issuer":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
-        "allowedOperations":["publish-runtime"],"allowedPermissions":["packages:write"],"allowedTargets":["registry:crates-io"],"allowedUnits":["vexil-runtime"],
+        "allowedOperations":["privileged-operation-rbr-004"],"allowedPermissions":["publish:exact-approved-release-unit"],"allowedTargets":["npm-package:@vexil-lang/runtime"],"allowedUnits":["vexil-runtime"],
         "manifestDigest":digest(&manifest_bytes),"manifestId":"authorization-manifest","materializationPath":"release/runs/run-preflight/start-authorization.json","notBefore":"2026-07-25T00:00:00Z",
         "protectedEnvironment":"production","recordKind":"privileged-run-start-authorization","reducer":manifest["reducer"].clone(),"runId":"run-preflight","schemaVersion":"1.0",
         "security":{"exceptionsDigest":"3".repeat(64),"findingsDigest":security_scan_digest},"selectedApprovals":[{"approvalDigest":approval_digest,"approvalId":"authorization-approval","disposition":null}],
-        "stateSchema":manifest["stateSchema"].clone(),"targetControlEvidence":[{"permissionDigest":"5".repeat(64),"target":"registry:crates-io","targetControlDigest":"6".repeat(64)}],"workload":"production-release"
+        "stateSchema":manifest["stateSchema"].clone(),"targetControlEvidence":[{"permissionDigest":"5".repeat(64),"target":"npm-package:@vexil-lang/runtime","targetControlDigest":"6".repeat(64)}],"workload":"production-release"
     });
     let merge = ApprovalMergeEvidence {
         repository: "vexil-lang/vexil",
@@ -1792,6 +1792,27 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         !run_path.exists(),
         "authorization preflight must not materialize a Run, lease, or event"
     );
+    let mut tag_authorization = authorization.clone();
+    tag_authorization["allowedOperations"] = serde_json::json!(["privileged-operation-rbr-003"]);
+    tag_authorization["allowedPermissions"] =
+        serde_json::json!(["contents:write:refs/tags/exact-approved-manifest-tag"]);
+    tag_authorization["allowedTargets"] = serde_json::json!(["release-manifest-bound-tag"]);
+    tag_authorization["targetControlEvidence"] = serde_json::json!([{
+        "permissionDigest":"5".repeat(64),
+        "target":"release-manifest-bound-tag",
+        "targetControlDigest":"6".repeat(64)
+    }]);
+    let tag_request = PrivilegedRunStartRequest {
+        authorization: &tag_authorization,
+        ..request
+    };
+    assert_eq!(
+        authorize_privileged_run_start(&root, &tag_request)
+            .unwrap()
+            .bytes,
+        canonical_json(&tag_authorization),
+        "the reviewed tag operation is bound to the selected units' canonical tags"
+    );
     let job = PrivilegedJobPreflight {
         authorization_bytes: &generated.bytes,
         run_id: "run-preflight",
@@ -1821,6 +1842,41 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         ..request
     };
     let error = authorize_privileged_run_start(&root, &altered_request).unwrap_err();
+    assert!(error
+        .blockers
+        .iter()
+        .any(|blocker| blocker.requirement == "exact-authorized-scope"));
+    let mut unknown_operation = authorization.clone();
+    unknown_operation["allowedOperations"] = serde_json::json!(["unreviewed-operation"]);
+    let unknown_operation_request = PrivilegedRunStartRequest {
+        authorization: &unknown_operation,
+        ..request
+    };
+    let error = authorize_privileged_run_start(&root, &unknown_operation_request).unwrap_err();
+    assert!(error
+        .blockers
+        .iter()
+        .any(|blocker| blocker.requirement == "exact-authorized-scope"));
+    let mut expanded_permissions = authorization.clone();
+    expanded_permissions["allowedPermissions"] =
+        serde_json::json!(["publish:exact-approved-release-unit", "packages:write"]);
+    let expanded_permissions_request = PrivilegedRunStartRequest {
+        authorization: &expanded_permissions,
+        ..request
+    };
+    let error = authorize_privileged_run_start(&root, &expanded_permissions_request).unwrap_err();
+    assert!(error
+        .blockers
+        .iter()
+        .any(|blocker| blocker.requirement == "exact-authorized-scope"));
+    let mut policy_operation = authorization.clone();
+    policy_operation["allowedOperations"] = serde_json::json!(["privileged-operation-rbr-008"]);
+    policy_operation["allowedPermissions"] = serde_json::json!(["repository-metadata:read"]);
+    let policy_operation_request = PrivilegedRunStartRequest {
+        authorization: &policy_operation,
+        ..request
+    };
+    let error = authorize_privileged_run_start(&root, &policy_operation_request).unwrap_err();
     assert!(error
         .blockers
         .iter()
