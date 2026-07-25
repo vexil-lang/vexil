@@ -729,6 +729,14 @@ pub fn authorize_privileged_run_start(
             error,
         );
     }
+    if let Err(error) = validate_external_controls_repository(root) {
+        push_authorization_blocker(
+            &mut blockers,
+            "external-control-contract",
+            "release/controls",
+            error,
+        );
+    }
     if let Err(error) = validate_authorization_scope(record, request.manifest_bytes) {
         push_authorization_blocker(
             &mut blockers,
