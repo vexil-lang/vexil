@@ -138,6 +138,13 @@ pub enum LocalGitTagFixtureProbe {
     Conflicting,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum LocalGitTagFixtureFailure {
+    Rejected,
+    TerminalConflict,
+    Unknown,
+}
+
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ManifestGenerationDiagnostic {
     pub requirement: &'static str,
@@ -1945,6 +1952,35 @@ pub fn publish_local_git_tag_fixture(
         ));
     }
     probe_local_git_tag_fixture(request, plan)
+}
+
+/// Verifies only the normalized immutable fixture identity. It does not infer
+/// Run completion, safe recovery, or authorization from a matching tag.
+pub fn verify_local_git_tag_fixture(
+    request: &LocalGitTagFixtureRequest<'_>,
+    plan: &LocalGitTagFixturePlan,
+) -> Result<LocalGitTagFixtureProbe, String> {
+    match probe_local_git_tag_fixture(request, plan)? {
+        matching @ LocalGitTagFixtureProbe::Matching { .. } => Ok(matching),
+        LocalGitTagFixtureProbe::Absent => {
+            Err("tag fixture verification found no tag at the immutable identity".to_owned())
+        }
+        LocalGitTagFixtureProbe::Conflicting => {
+            Err("tag fixture verification found conflicting immutable identity".to_owned())
+        }
+    }
+}
+
+/// Classifies fixture-local failures conservatively. Any transport, process,
+/// or unrecognized failure is `Unknown`; no caller may treat it as safe retry.
+pub fn classify_local_git_tag_fixture_failure(error: &str) -> LocalGitTagFixtureFailure {
+    if error.contains("conflicting") || error.contains("overwrite") {
+        LocalGitTagFixtureFailure::TerminalConflict
+    } else if error.contains("reject") || error.contains("must") || error.contains("requires") {
+        LocalGitTagFixtureFailure::Rejected
+    } else {
+        LocalGitTagFixtureFailure::Unknown
+    }
 }
 
 fn validate_local_bare_fixture_repository(repository: &Path) -> Result<(), String> {

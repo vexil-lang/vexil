@@ -182,6 +182,20 @@ fn local_git_tag_adapter_is_immutable_and_has_no_remote_target() {
         Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching { .. })
     ));
     assert!(matches!(
+        vexil_release_governance_validator::verify_local_git_tag_fixture(&request, &plan),
+        Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching { .. })
+    ));
+    assert_eq!(
+        vexil_release_governance_validator::classify_local_git_tag_fixture_failure(
+            "tag fixture refuses to overwrite conflicting tag identity"
+        ),
+        vexil_release_governance_validator::LocalGitTagFixtureFailure::TerminalConflict
+    );
+    assert_eq!(
+        vexil_release_governance_validator::classify_local_git_tag_fixture_failure("git exited 1"),
+        vexil_release_governance_validator::LocalGitTagFixtureFailure::Unknown
+    );
+    assert!(matches!(
         vexil_release_governance_validator::publish_local_git_tag_fixture(&request, &plan),
         Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching { .. })
     ));
