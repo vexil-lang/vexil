@@ -1,7 +1,8 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[test]
 fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_drift() {
@@ -629,6 +630,544 @@ fn canonical_json(value: &Value) -> Vec<u8> {
 
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
+    let isolated = std::env::temp_dir().join(format!(
+        "vexil-manifest-generation-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    let output = Command::new("git")
+        .env("GIT_CLONE_PROTECTION_ACTIVE", "false")
+        .args(["clone", "--quiet", "--no-local"])
+        .arg(source_root)
+        .arg(&isolated)
+        .output()
+        .expect("clone clean public fixture repository");
+    assert!(
+        output.status.success(),
+        "git clone failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::copy(
+        source_root.join("release/schemas/release-manifest-1.0.schema.json"),
+        isolated.join("release/schemas/release-manifest-1.0.schema.json"),
+    )
+    .expect("copy current Manifest schema into clean fixture repository");
+    fs::copy(
+        source_root.join("release/schemas/release-manifest-1.1.schema.json"),
+        isolated.join("release/schemas/release-manifest-1.1.schema.json"),
+    )
+    .expect("copy current generated Manifest schema into clean fixture repository");
+    fs::copy(
+        source_root.join("release/schemas/history-observation.schema.json"),
+        isolated.join("release/schemas/history-observation.schema.json"),
+    )
+    .expect("copy current history observation schema into clean fixture repository");
+    fs::copy(
+        source_root.join("release/schemas/checkpoint-change-unit-1.0.schema.json"),
+        isolated.join("release/schemas/checkpoint-change-unit-1.0.schema.json"),
+    )
+    .expect("copy current checkpoint Change Unit schema into clean fixture repository");
+    fs::copy(
+        source_root.join("release/schemas/security-scan-1.0.schema.json"),
+        isolated.join("release/schemas/security-scan-1.0.schema.json"),
+    )
+    .expect("copy current security scan schema into clean fixture repository");
+    let output = Command::new("git")
+        .current_dir(&isolated)
+        .args([
+            "add",
+            "release/schemas/release-manifest-1.0.schema.json",
+            "release/schemas/release-manifest-1.1.schema.json",
+            "release/schemas/history-observation.schema.json",
+            "release/schemas/checkpoint-change-unit-1.0.schema.json",
+            "release/schemas/security-scan-1.0.schema.json",
+        ])
+        .output()
+        .expect("stage fixture Manifest schema");
+    assert!(
+        output.status.success(),
+        "git add failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new("git")
+        .current_dir(&isolated)
+        .args([
+            "-c",
+            "user.name=Vexil fixture",
+            "-c",
+            "user.email=fixture@invalid.example",
+            "commit",
+            "--quiet",
+            "-m",
+            "test: update Manifest fixture schema",
+        ])
+        .output()
+        .expect("commit fixture Manifest schema");
+    assert!(
+        output.status.success(),
+        "git commit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    isolated
+}
+
+fn commit_fixture_path(root: &Path, path: &str, message: &str) {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["add", path])
+        .output()
+        .expect("stage fixture path");
+    assert!(
+        output.status.success(),
+        "git add failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = Command::new("git")
+        .current_dir(root)
+        .args([
+            "-c",
+            "user.name=Vexil fixture",
+            "-c",
+            "user.email=fixture@invalid.example",
+            "commit",
+            "--quiet",
+            "-m",
+            message,
+        ])
+        .output()
+        .expect("commit fixture path");
+    assert!(
+        output.status.success(),
+        "git commit failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn fixture_head_commit(root: &Path) -> String {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("resolve fixture commit");
+    assert!(output.status.success(), "fixture commit resolution failed");
+    String::from_utf8(output.stdout)
+        .expect("fixture commit output is UTF-8")
+        .trim()
+        .to_owned()
+}
+
+#[test]
+fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_free() {
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = clean_manifest_generation_root(&source_root);
+    let change_unit_path = "release/checkpoint-change-units/checkpoint-python-generator-fix.json";
+    let change_unit_destination = root.join(change_unit_path);
+    fs::create_dir_all(
+        change_unit_destination
+            .parent()
+            .expect("Change Unit parent"),
+    )
+    .expect("create Change Unit parent");
+    fs::copy(source_root.join(change_unit_path), &change_unit_destination)
+        .expect("copy fixture Change Unit record");
+    let catalog_bytes = fs::read(root.join("release/catalog.json")).expect("read catalog");
+    let rationale_bytes = fs::read(root.join("release/rationales/vexil-runtime-ts-0-4-1.json"))
+        .expect("read version rationale");
+    for (path, contents) in [
+        ("release/policies/approval-1.0.json", "approval\n"),
+        ("release/policies/approval-1.1.json", "updated approval\n"),
+        ("release/policies/failure-1.0.json", "failure\n"),
+        ("release/policies/recovery-1.0.json", "recovery\n"),
+        ("release/policies/closeout-1.0.json", "closeout\n"),
+        ("release/candidates/candidate-1.0.json", "candidate\n"),
+        ("release/rehearsals/rehearsal-1.0.json", "rehearsal\n"),
+        ("release/identities/registry-custody-1.0.json", "custody\n"),
+        ("release/evidence/compatibility-1.0.json", "compatibility\n"),
+        (
+            "release/schemas/run-state-1.0.schema.json",
+            "state schema\n",
+        ),
+        ("release/reducers/run-state-1.0.wasm", "reducer\n"),
+    ] {
+        let destination = root.join(path);
+        fs::create_dir_all(destination.parent().expect("fixture source parent"))
+            .expect("create fixture source parent");
+        fs::write(destination, contents).expect("write fixture source");
+    }
+    let history_snapshot_path = "release/history/observations/tag-snapshot-1.0.json";
+    let history_snapshot = serde_json::json!({
+        "$schema":"https://json-schema.org/draft/2020-12/schema",
+        "$id":"https://vexil.dev/release/history/observations/tag-snapshot-1.0.json",
+        "claim":{"tags":[]},"collectorVersion":"fixture-1.0","contentId":format!("sha256:{}", "a".repeat(64)),
+        "observationId":"tag-snapshot-1.0","observedAt":"2026-07-24T00:00:00Z","query":"git ls-remote --tags origin",
+        "recordKind":"release-history-observation","sourceId":"git-remote-tags","state":"observed","validUntil":"2026-07-26T00:00:00Z","version":"1.0"
+    });
+    let history_snapshot_destination = root.join(history_snapshot_path);
+    fs::create_dir_all(
+        history_snapshot_destination
+            .parent()
+            .expect("history observation parent"),
+    )
+    .expect("create history observation parent");
+    fs::write(
+        &history_snapshot_destination,
+        canonical_json(&history_snapshot),
+    )
+    .expect("write fixture history observation");
+    let history_ledger_path = root.join("release/history/ledger.md");
+    let mut history_ledger =
+        fs::read_to_string(&history_ledger_path).expect("read fixture history ledger");
+    history_ledger.push_str("- `tag-snapshot-1.0` — observed from `git-remote-tags` (`sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`)\n");
+    fs::write(&history_ledger_path, history_ledger).expect("render fixture history ledger");
+    let security_scan_path = "release/security/scans/security-fixture-1.0.json";
+    let security_scan_destination = root.join(security_scan_path);
+    fs::create_dir_all(
+        security_scan_destination
+            .parent()
+            .expect("security scan parent"),
+    )
+    .expect("create security scan parent");
+    let security_scan = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/security-scan-1.0.schema.json","recordKind":"release-security-scan","schemaVersion":"1.0","scanId":"security-fixture-1.0","observedAt":"2026-07-25T00:00:00Z","scanner":"npm-audit@2",
+        "scope":{"manifest":"packages/runtime-ts/package.json","lockfile":"packages/runtime-ts/package-lock.json","exposure":"build-test-release-chain"},"lockfileDigest":format!("sha256:{}",digest(&fs::read(root.join("packages/runtime-ts/package-lock.json")).expect("read fixture lockfile"))),
+        "findings":[{"id":"fixture-remediated","package":"fixture","severity":"low","status":"remediated","releaseRelevant":true}]
+    });
+    fs::write(&security_scan_destination, canonical_json(&security_scan))
+        .expect("write fixture security scan");
+    commit_fixture_path(
+        &root,
+        "release",
+        "test: add Manifest generation fixture inputs",
+    );
+    let artifact = |path: &str| serde_json::json!({"digest":digest(&fs::read(root.join(path)).expect("read fixture artifact")),"id":path,"version":"1.0"});
+    let evidence_entry = |id: &str, path: &str| serde_json::json!({"contentDigest":digest(&fs::read(root.join(path)).expect("read fixture evidence")),"id":id,"kind":"fixture-input","path":path});
+    let evidence_set = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "entries":[
+            evidence_entry("approval-policy","release/policies/approval-1.0.json"),
+            evidence_entry("candidate","release/candidates/candidate-1.0.json"),
+            evidence_entry("change-unit-checkpoint-python-generator-fix",change_unit_path),
+            evidence_entry("closeout","release/policies/closeout-1.0.json"),
+            evidence_entry("compatibility","release/evidence/compatibility-1.0.json"),
+            evidence_entry("failure-policy","release/policies/failure-1.0.json"),
+            evidence_entry("historical-tag-snapshot",history_snapshot_path),
+            evidence_entry("recovery-policy","release/policies/recovery-1.0.json"),
+            evidence_entry("reducer","release/reducers/run-state-1.0.wasm"),
+            evidence_entry("registry-custody","release/identities/registry-custody-1.0.json"),
+            evidence_entry("rehearsal","release/rehearsals/rehearsal-1.0.json"),
+            evidence_entry("security",security_scan_path),
+            evidence_entry("state-schema","release/schemas/run-state-1.0.schema.json"),
+            evidence_entry("version-rationale","release/rationales/vexil-runtime-ts-0-4-1.json"),
+            {"contentDigest":digest(&catalog_bytes),"id":"catalog","kind":"release-catalog","path":"release/catalog.json"}
+        ],
+        "evidenceSetId":"manifest-generation-evidence","recordKind":"release-evidence-set","reviewedAt":"2026-07-25T00:00:00Z",
+        "schemaVersion":"1.0","steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"}
+    });
+    let evidence_set_bytes = canonical_json(&evidence_set);
+    let evidence_set_path =
+        root.join("release/evidence-sets/manifest-generation-evidence/evidence-set.json");
+    fs::create_dir_all(evidence_set_path.parent().expect("evidence-set parent"))
+        .expect("create canonical evidence-set fixture parent");
+    fs::write(&evidence_set_path, &evidence_set_bytes)
+        .expect("write canonical reviewed evidence-set fixture");
+    commit_fixture_path(
+        &root,
+        "release/evidence-sets/manifest-generation-evidence/evidence-set.json",
+        "test: add canonical Manifest evidence-set fixture",
+    );
+    let manifest = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+        "approvalPolicy":artifact("release/policies/approval-1.0.json"),
+        "baseCommit":fixture_head_commit(&root),"closeoutRequirements":artifact("release/policies/closeout-1.0.json"),
+        "candidate":artifact("release/candidates/candidate-1.0.json"),"compatibilityEvidence":artifact("release/evidence/compatibility-1.0.json"),
+        "evidenceSetDigest":digest(&evidence_set_bytes),"evidenceSetId":"manifest-generation-evidence","failurePolicy":artifact("release/policies/failure-1.0.json"),
+        "historicalTagSnapshot":artifact(history_snapshot_path),
+        "manifestId":"manifest-generation-fixture","publicationOrder":["vexil-runtime-ts"],"recordKind":"release-manifest","recoveryPolicy":artifact("release/policies/recovery-1.0.json"),
+        "registryCustody":artifact("release/identities/registry-custody-1.0.json"),"rehearsal":artifact("release/rehearsals/rehearsal-1.0.json"),
+        "reducer":artifact("release/reducers/run-state-1.0.wasm"),
+        "releaseUnits":[{"canonicalTag":"vexil-runtime-ts-v0.4.1","changeUnits":[{"digest":digest(&fs::read(root.join(change_unit_path)).expect("read checkpoint fixture")),"id":"checkpoint-python-generator-fix"}],"previousVersion":null,"proposedVersion":"0.4.1","sourceCommit":fixture_head_commit(&root),"targets":[{"kind":"npm-package","mandatory":true,"name":"@vexil-lang/runtime"}],"unitId":"vexil-runtime-ts","versionRationale":{"digest":digest(&rationale_bytes),"id":"vexil-runtime-ts-0-4-1"},"versionSource":{"observedDeclaration":"0.4.1","path":"packages/runtime-ts/package.json"}}],
+        "schemaVersion":"1.1","security":artifact(security_scan_path),"stateSchema":artifact("release/schemas/run-state-1.0.schema.json"),"supersedes":null
+    });
+
+    let first = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &manifest,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect("complete synthetic input must generate a Manifest");
+    let second = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &manifest,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect("same reviewed input must be repeatable");
+    assert_eq!(first.bytes, second.bytes);
+    assert_eq!(first.external_digest, second.external_digest);
+    assert_eq!(
+        first.external_digest,
+        format!("sha256:{}", digest(&first.bytes))
+    );
+    assert!(!root
+        .join("release/manifests/manifest-generation-fixture")
+        .exists());
+
+    let mut changed_policy = manifest.clone();
+    let mut changed_evidence_set = evidence_set.clone();
+    changed_evidence_set["evidenceSetId"] = serde_json::json!("manifest-generation-evidence-2");
+    changed_evidence_set["entries"][0] =
+        evidence_entry("approval-policy", "release/policies/approval-1.1.json");
+    let changed_evidence_set_bytes = canonical_json(&changed_evidence_set);
+    let changed_evidence_set_path =
+        root.join("release/evidence-sets/manifest-generation-evidence-2/evidence-set.json");
+    fs::create_dir_all(
+        changed_evidence_set_path
+            .parent()
+            .expect("changed evidence-set parent"),
+    )
+    .expect("create changed canonical evidence-set fixture parent");
+    fs::write(&changed_evidence_set_path, &changed_evidence_set_bytes)
+        .expect("write changed canonical reviewed evidence-set fixture");
+    commit_fixture_path(
+        &root,
+        "release/evidence-sets/manifest-generation-evidence-2/evidence-set.json",
+        "test: add changed canonical Manifest evidence-set fixture",
+    );
+    changed_policy["approvalPolicy"] = artifact("release/policies/approval-1.1.json");
+    changed_policy["evidenceSetId"] = serde_json::json!("manifest-generation-evidence-2");
+    changed_policy["evidenceSetDigest"] = serde_json::json!(digest(&changed_evidence_set_bytes));
+    changed_policy["baseCommit"] = serde_json::json!(fixture_head_commit(&root));
+    changed_policy["releaseUnits"][0]["sourceCommit"] =
+        serde_json::json!(fixture_head_commit(&root));
+    let changed = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &changed_policy,
+            evidence_set_bytes: &changed_evidence_set_bytes,
+        },
+    )
+    .expect("a material policy change must form a distinct Manifest candidate");
+    assert_ne!(first.external_digest, changed.external_digest);
+
+    let expired_history_path = "release/history/observations/tag-snapshot-expired-1.0.json";
+    let mut expired_history = history_snapshot.clone();
+    expired_history["$id"] = serde_json::json!(
+        "https://vexil.dev/release/history/observations/tag-snapshot-expired-1.0.json"
+    );
+    expired_history["observationId"] = serde_json::json!("tag-snapshot-expired-1.0");
+    expired_history["validUntil"] = serde_json::json!("2026-07-24T23:59:59Z");
+    let expired_history_destination = root.join(expired_history_path);
+    fs::write(
+        &expired_history_destination,
+        canonical_json(&expired_history),
+    )
+    .expect("write expired fixture history observation");
+    let history_ledger =
+        fs::read_to_string(&history_ledger_path).expect("read fixture history ledger");
+    let history_ledger = history_ledger.replace(
+        "- `tag-snapshot-1.0` — observed from `git-remote-tags` (`sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`)\n",
+        "- `tag-snapshot-1.0` — observed from `git-remote-tags` (`sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`)\n- `tag-snapshot-expired-1.0` — observed from `git-remote-tags` (`sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`)\n",
+    );
+    fs::write(&history_ledger_path, history_ledger).expect("render expired fixture history ledger");
+    let mut expired_evidence_set = evidence_set.clone();
+    expired_evidence_set["evidenceSetId"] = serde_json::json!("manifest-generation-expired");
+    let expired_history_entry =
+        evidence_entry("historical-tag-snapshot-expired", expired_history_path);
+    let entries = expired_evidence_set["entries"]
+        .as_array_mut()
+        .expect("expired evidence entries");
+    let entry = entries
+        .iter_mut()
+        .find(|entry| entry["id"] == "historical-tag-snapshot")
+        .expect("historical snapshot evidence entry");
+    *entry = expired_history_entry;
+    let expired_evidence_set_bytes = canonical_json(&expired_evidence_set);
+    let expired_evidence_set_path =
+        root.join("release/evidence-sets/manifest-generation-expired/evidence-set.json");
+    fs::create_dir_all(
+        expired_evidence_set_path
+            .parent()
+            .expect("expired evidence-set parent"),
+    )
+    .expect("create expired evidence-set fixture parent");
+    fs::write(&expired_evidence_set_path, &expired_evidence_set_bytes)
+        .expect("write expired canonical reviewed evidence-set fixture");
+    commit_fixture_path(
+        &root,
+        "release",
+        "test: add expired Manifest tag observation fixture",
+    );
+    let mut expired_manifest = manifest.clone();
+    expired_manifest["manifestId"] = serde_json::json!("expired-observation-manifest");
+    expired_manifest["historicalTagSnapshot"] = artifact(expired_history_path);
+    expired_manifest["evidenceSetId"] = serde_json::json!("manifest-generation-expired");
+    expired_manifest["evidenceSetDigest"] = serde_json::json!(digest(&expired_evidence_set_bytes));
+    expired_manifest["baseCommit"] = serde_json::json!(fixture_head_commit(&root));
+    expired_manifest["releaseUnits"][0]["sourceCommit"] =
+        serde_json::json!(fixture_head_commit(&root));
+    let error = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &expired_manifest,
+            evidence_set_bytes: &expired_evidence_set_bytes,
+        },
+    )
+    .expect_err("an expired live-tag observation must block Manifest emission");
+    assert!(error
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.requirement == "fresh-live-tag-observation"));
+
+    let mut prior = manifest.clone();
+    prior["manifestId"] = serde_json::json!("prior-manifest");
+    let prior_bytes = canonical_json(&prior);
+    let prior_path = root.join("release/manifests/prior-manifest/manifest.json");
+    fs::create_dir_all(prior_path.parent().expect("prior Manifest parent"))
+        .expect("create prior Manifest fixture directory");
+    fs::write(&prior_path, &prior_bytes).expect("write prior immutable Manifest fixture");
+    commit_fixture_path(
+        &root,
+        "release/manifests/prior-manifest/manifest.json",
+        "test: add prior Manifest fixture",
+    );
+    let mut successor = manifest.clone();
+    successor["manifestId"] = serde_json::json!("successor-manifest");
+    successor["baseCommit"] = serde_json::json!(fixture_head_commit(&root));
+    successor["releaseUnits"][0]["sourceCommit"] = serde_json::json!(fixture_head_commit(&root));
+    successor["supersedes"] = serde_json::json!({
+        "manifestId":"prior-manifest",
+        "manifestDigest":digest(&prior_bytes)
+    });
+    let successor = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &successor,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect("a distinct Manifest may reference immutable predecessor bytes");
+    assert_ne!(first.external_digest, successor.external_digest);
+
+    let mut self_digest = manifest.clone();
+    self_digest["payloadDigest"] = serde_json::json!("0".repeat(64));
+    assert!(
+        vexil_release_governance_validator::generate_release_manifest(
+            &root,
+            &vexil_release_governance_validator::ReleaseManifestRequest {
+                manifest: &self_digest,
+                evidence_set_bytes: &evidence_set_bytes,
+            },
+        )
+        .is_err()
+    );
+
+    let mut wrong_evidence = manifest.clone();
+    wrong_evidence["evidenceSetDigest"] = serde_json::json!("0".repeat(64));
+    let error = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &wrong_evidence,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect_err("a mismatched reviewed evidence set must not emit a Manifest");
+    assert!(error
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.requirement == "reviewed-evidence-binding"));
+
+    let mut nonexistent_commit = manifest.clone();
+    nonexistent_commit["baseCommit"] = serde_json::json!("0".repeat(40));
+    let error = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &nonexistent_commit,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect_err("a nonexistent reviewed commit must block Manifest emission");
+    assert!(error
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.requirement == "source-led-release-set"));
+
+    let mut missing_reducer = manifest.clone();
+    missing_reducer["reducer"]["digest"] = serde_json::json!("0".repeat(64));
+    let error = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &missing_reducer,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect_err("a stale retained reducer digest must block Manifest emission");
+    assert!(error
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.requirement == "retained-state-artifacts"));
+
+    let mut missing_security = manifest.clone();
+    missing_security
+        .as_object_mut()
+        .expect("Manifest object")
+        .remove("security");
+    let error = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &missing_security,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect_err("missing security evidence must block Manifest emission");
+    assert!(error
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.requirement == "source-led-release-set"));
+
+    let mut private_input = manifest.clone();
+    private_input["candidate"]["id"] = serde_json::json!("_bmad/private-candidate-1.0.json");
+    assert!(
+        vexil_release_governance_validator::generate_release_manifest(
+            &root,
+            &vexil_release_governance_validator::ReleaseManifestRequest {
+                manifest: &private_input,
+                evidence_set_bytes: &evidence_set_bytes,
+            },
+        )
+        .is_err()
+    );
+    assert!(!root
+        .join("release/manifests/manifest-generation-fixture")
+        .exists());
+    fs::write(
+        root.join("release/manifest-generation-dirty-fixture.txt"),
+        "dirty\n",
+    )
+    .expect("create dirty public fixture file");
+    let error = vexil_release_governance_validator::generate_release_manifest(
+        &root,
+        &vexil_release_governance_validator::ReleaseManifestRequest {
+            manifest: &manifest,
+            evidence_set_bytes: &evidence_set_bytes,
+        },
+    )
+    .expect_err("a dirty public worktree must block Manifest emission");
+    assert!(error
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.requirement == "clean-reviewed-source"));
+    fs::remove_file(root.join("release/manifest-generation-dirty-fixture.txt"))
+        .expect("remove dirty public fixture file");
+    fs::remove_dir_all(root).expect("remove clean Manifest generation fixture repository");
 }
 
 #[test]
@@ -2246,6 +2785,8 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/catalog-lifecycle.schema.json",
         "release/schemas/version-rationale.schema.json",
         "release/schemas/release-manifest-1.0.schema.json",
+        "release/schemas/release-manifest-1.1.schema.json",
+        "release/schemas/security-scan-1.0.schema.json",
         "release/schemas/release-evidence-set-1.0.schema.json",
         "release/schemas/release-detached-approval-1.0.schema.json",
         "release/schemas/release-approval-disposition-1.0.schema.json",

@@ -1,8 +1,10 @@
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt;
 use std::fs;
 use std::path::{Component, Path};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use toml::{Table as TomlTable, Value as TomlValue};
 
@@ -42,6 +44,51 @@ struct CanonicalRecord {
     path: std::path::PathBuf,
     value: Value,
 }
+
+/// Reviewed, caller-supplied inputs for deterministic Manifest construction.
+/// This constructor is pure: it returns bytes only and never materializes a
+/// Manifest, approval, authorization, Run, tag, or provider operation.
+pub struct ReleaseManifestRequest<'a> {
+    pub manifest: &'a Value,
+    pub evidence_set_bytes: &'a [u8],
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct GeneratedReleaseManifest {
+    pub bytes: Vec<u8>,
+    pub external_digest: String,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ManifestGenerationDiagnostic {
+    pub requirement: &'static str,
+    pub source: String,
+    pub message: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct ManifestGenerationError {
+    pub diagnostics: Vec<ManifestGenerationDiagnostic>,
+}
+
+impl fmt::Display for ManifestGenerationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let diagnostics = self
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                format!(
+                    "{} [{}]: {}",
+                    diagnostic.requirement, diagnostic.source, diagnostic.message
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        formatter.write_str(&diagnostics)
+    }
+}
+
+impl std::error::Error for ManifestGenerationError {}
 
 /// Exact, caller-supplied inputs for a detached approval. The constructor only
 /// returns canonical bytes; it never writes a record or creates release authority.
@@ -774,6 +821,1013 @@ fn canonical_json_bytes(value: &Value) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// Builds one exact Release Manifest from reviewed inputs. A successful result
+/// contains only canonical UTF-8/LF JSON bytes and their external SHA-256
+/// identity; it never writes a public record or creates release authority.
+pub fn generate_release_manifest(
+    root: &Path,
+    request: &ReleaseManifestRequest<'_>,
+) -> Result<GeneratedReleaseManifest, ManifestGenerationError> {
+    let mut diagnostics = Vec::new();
+    let manifest = request.manifest;
+
+    if let Err(error) = validate_canonical_release_record_schema(root, manifest) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "schema-valid-manifest",
+            "release/schemas/release-manifest-1.1.schema.json",
+            error,
+        );
+    }
+    if manifest.get("schemaVersion").and_then(Value::as_str) != Some("1.1") {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "manifest-generation-schema",
+            "manifest.schemaVersion",
+            "Manifest generation requires the retained release-manifest@1.1 contract".to_owned(),
+        );
+    }
+    if let Err(error) = ensure_no_private_leakage(&manifest.to_string()) {
+        push_manifest_diagnostic(&mut diagnostics, "public-inputs-only", "manifest", error);
+    }
+    if let Err(error) = validate_canonical_reference_paths(manifest) {
+        push_manifest_diagnostic(&mut diagnostics, "public-inputs-only", "manifest", error);
+    }
+    if let Ok(manifest) = object(manifest, "Release Manifest") {
+        if let Err(error) = validate_retained_state_artifacts(root, manifest) {
+            push_manifest_diagnostic(
+                &mut diagnostics,
+                "retained-state-artifacts",
+                "manifest.stateSchema/reducer",
+                error,
+            );
+        }
+    }
+
+    let evidence_set =
+        match parse_canonical_json_bytes(request.evidence_set_bytes, "reviewed evidence set") {
+            Ok(evidence_set) => Some(evidence_set),
+            Err(error) => {
+                push_manifest_diagnostic(
+                    &mut diagnostics,
+                    "canonical-evidence-set",
+                    "evidence-set.json",
+                    error,
+                );
+                None
+            }
+        };
+    if let Some(evidence_set) = evidence_set.as_ref() {
+        if let Err(error) = ensure_no_private_leakage(&evidence_set.to_string()) {
+            push_manifest_diagnostic(
+                &mut diagnostics,
+                "public-inputs-only",
+                "evidence-set.json",
+                error,
+            );
+        }
+        if let Err(error) = validate_canonical_reference_paths(evidence_set) {
+            push_manifest_diagnostic(
+                &mut diagnostics,
+                "public-inputs-only",
+                "evidence-set.json",
+                error,
+            );
+        }
+        if let Err(error) = validate_canonical_release_record_schema(root, evidence_set) {
+            push_manifest_diagnostic(
+                &mut diagnostics,
+                "schema-valid-evidence-set",
+                "evidence-set.json",
+                error,
+            );
+        }
+        if let Ok(evidence_set) = object(evidence_set, "reviewed evidence set") {
+            match text(
+                evidence_set.get("evidenceSetId"),
+                "reviewed evidence-set ID",
+            ) {
+                Ok(evidence_set_id) => {
+                    let materialized = root
+                        .join("release/evidence-sets")
+                        .join(evidence_set_id)
+                        .join("evidence-set.json");
+                    match fs::read(&materialized) {
+                        Ok(bytes) if bytes == request.evidence_set_bytes => {}
+                        Ok(_) => push_manifest_diagnostic(
+                            &mut diagnostics,
+                            "reviewed-evidence-binding",
+                            materialized.display().to_string(),
+                            "supplied reviewed evidence-set bytes do not match the canonical public materialization".to_owned(),
+                        ),
+                        Err(error) => push_manifest_diagnostic(
+                            &mut diagnostics,
+                            "reviewed-evidence-binding",
+                            materialized.display().to_string(),
+                            format!("canonical reviewed evidence-set materialization is missing or unreadable: {error}"),
+                        ),
+                    }
+                }
+                Err(error) => push_manifest_diagnostic(
+                    &mut diagnostics,
+                    "reviewed-evidence-binding",
+                    "evidence-set.json",
+                    error,
+                ),
+            }
+            if let Err(error) = validate_evidence_set_entries(root, evidence_set) {
+                push_manifest_diagnostic(
+                    &mut diagnostics,
+                    "reviewed-evidence-binding",
+                    "evidence-set.json",
+                    error,
+                );
+            }
+            if let Ok(manifest) = object(manifest, "Release Manifest") {
+                let expected_id = evidence_set.get("evidenceSetId").and_then(Value::as_str);
+                let expected_digest = sha256_hex(request.evidence_set_bytes);
+                if manifest.get("evidenceSetId").and_then(Value::as_str) != expected_id {
+                    push_manifest_diagnostic(
+                        &mut diagnostics,
+                        "reviewed-evidence-binding",
+                        "manifest.evidenceSetId",
+                        "Manifest does not bind the supplied reviewed evidence-set ID".to_owned(),
+                    );
+                }
+                if manifest.get("evidenceSetDigest").and_then(Value::as_str)
+                    != Some(expected_digest.as_str())
+                {
+                    push_manifest_diagnostic(
+                        &mut diagnostics,
+                        "reviewed-evidence-binding",
+                        "manifest.evidenceSetDigest",
+                        "Manifest does not bind the supplied reviewed evidence-set digest"
+                            .to_owned(),
+                    );
+                }
+                if let Err(error) = validate_manifest_evidence_coverage(manifest, evidence_set) {
+                    push_manifest_diagnostic(
+                        &mut diagnostics,
+                        "complete-reviewed-evidence",
+                        "evidence-set.json",
+                        error,
+                    );
+                }
+                if let Err(error) =
+                    validate_manifest_live_tag_observation(root, manifest, evidence_set)
+                {
+                    push_manifest_diagnostic(
+                        &mut diagnostics,
+                        "fresh-live-tag-observation",
+                        "manifest.historicalTagSnapshot",
+                        error,
+                    );
+                }
+            }
+        }
+    }
+
+    if let Err(error) = validate_manifest_release_units_all(root, manifest) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "source-led-release-set",
+            "release/catalog.json",
+            error,
+        );
+    }
+    if let Err(error) = validate_manifest_change_units(root, manifest) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "checkpoint-change-unit-binding",
+            "manifest.releaseUnits.changeUnits",
+            error,
+        );
+    }
+    if let Err(error) = validate_manifest_security(root, manifest) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "manifest-bound-security-gate",
+            "manifest.security",
+            error,
+        );
+    }
+    if let Err(error) = validate_manifest_clean_worktree(root) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "clean-reviewed-source",
+            "git-status",
+            error,
+        );
+    }
+    if let Err(error) = validate_manifest_supersession(root, manifest) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "immutable-supersession",
+            "release/manifests",
+            error,
+        );
+    }
+    if let Err(error) = validate_manifest_id_is_unmaterialized(root, manifest) {
+        push_manifest_diagnostic(
+            &mut diagnostics,
+            "immutable-manifest-identity",
+            "release/manifests",
+            error,
+        );
+    }
+
+    diagnostics.sort();
+    diagnostics.dedup();
+    if !diagnostics.is_empty() {
+        return Err(ManifestGenerationError { diagnostics });
+    }
+
+    let bytes = canonical_json_bytes(manifest).map_err(|error| ManifestGenerationError {
+        diagnostics: vec![ManifestGenerationDiagnostic {
+            requirement: "canonical-emission",
+            source: "manifest".to_owned(),
+            message: error,
+        }],
+    })?;
+    Ok(GeneratedReleaseManifest {
+        external_digest: format!("sha256:{}", sha256_hex(&bytes)),
+        bytes,
+    })
+}
+
+fn push_manifest_diagnostic(
+    diagnostics: &mut Vec<ManifestGenerationDiagnostic>,
+    requirement: &'static str,
+    source: impl Into<String>,
+    message: String,
+) {
+    diagnostics.push(ManifestGenerationDiagnostic {
+        requirement,
+        source: source.into(),
+        message,
+    });
+}
+
+fn validate_manifest_clean_worktree(root: &Path) -> Result<(), String> {
+    let output = Command::new("git")
+        .args(["status", "--porcelain=v1", "--untracked-files=all"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("inspect reviewed public worktree: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "inspect reviewed public worktree: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let dirty = String::from_utf8(output.stdout)
+        .map_err(|error| format!("decode reviewed public worktree status: {error}"))?;
+    if dirty.trim().is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "reviewed public worktree is modified or contains untracked source: {}",
+            dirty.trim().replace('\n', ", ")
+        ))
+    }
+}
+
+fn validate_reviewed_commit(root: &Path, commit: &str, label: &str) -> Result<(), String> {
+    if !valid_git_object_id(commit) || commit.len() != 40 {
+        return Err(format!(
+            "{label} must be a lowercase full 40-hex source commit"
+        ));
+    }
+    let output = Command::new("git")
+        .args(["cat-file", "-e", &format!("{commit}^{{commit}}")])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("resolve {label}: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "{label} does not resolve to a commit in the reviewed repository"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_manifest_evidence_coverage(
+    manifest: &Map<String, Value>,
+    evidence_set: &Map<String, Value>,
+) -> Result<(), String> {
+    let entries = array(evidence_set.get("entries"), "reviewed evidence-set entries")?;
+    let mut evidence = BTreeSet::new();
+    for entry in entries {
+        let entry = object(entry, "reviewed evidence-set entry")?;
+        evidence.insert((
+            text(entry.get("path"), "reviewed evidence-set entry path")?.to_owned(),
+            text(
+                entry.get("contentDigest"),
+                "reviewed evidence-set entry digest",
+            )?
+            .to_owned(),
+        ));
+    }
+    let mut bound_artifacts = BTreeSet::new();
+    let mut errors = Vec::new();
+    for (field, required_prefix) in [
+        ("approvalPolicy", "release/policies/"),
+        ("failurePolicy", "release/policies/"),
+        ("recoveryPolicy", "release/policies/"),
+        ("closeoutRequirements", "release/policies/"),
+        ("security", "release/security/"),
+        ("candidate", "release/candidates/"),
+        ("rehearsal", "release/rehearsals/"),
+        ("registryCustody", "release/identities/"),
+        ("historicalTagSnapshot", "release/history/"),
+        ("compatibilityEvidence", "release/evidence/"),
+        ("stateSchema", "release/schemas/"),
+        ("reducer", "release/reducers/"),
+    ] {
+        let artifact = match required_value(manifest, field)
+            .and_then(|value| object(value, "Manifest reviewed immutable evidence identity"))
+        {
+            Ok(artifact) => artifact,
+            Err(error) => {
+                errors.push(format!("Manifest {field} evidence: {error}"));
+                continue;
+            }
+        };
+        let identity = (
+            text(
+                artifact.get("id"),
+                "Manifest reviewed immutable evidence path",
+            )?
+            .to_owned(),
+            text(
+                artifact.get("digest"),
+                "Manifest reviewed immutable evidence digest",
+            )?
+            .to_owned(),
+        );
+        if !identity.0.starts_with(required_prefix) {
+            errors.push(format!(
+                "Manifest {field} evidence must be materialized under {required_prefix}: {}",
+                identity.0
+            ));
+        }
+        if !bound_artifacts.insert(identity.clone()) {
+            errors.push(format!(
+                "Manifest reuses one reviewed evidence identity for multiple required gates: {}",
+                identity.0
+            ));
+        }
+        if !evidence.contains(&identity) {
+            errors.push(format!(
+                "Manifest required evidence is absent from its reviewed evidence set: {}",
+                identity.0
+            ));
+        }
+    }
+    for release_unit in array(manifest.get("releaseUnits"), "Manifest release units")? {
+        let release_unit = object(release_unit, "Manifest release unit")?;
+        let rationale = match release_unit
+            .get("versionRationale")
+            .ok_or_else(|| "Manifest release unit has no version rationale".to_owned())
+            .and_then(|value| object(value, "Manifest version rationale"))
+        {
+            Ok(rationale) => rationale,
+            Err(error) => {
+                errors.push(error.to_owned());
+                continue;
+            }
+        };
+        let rationale_identity = (
+            format!(
+                "release/rationales/{}.json",
+                text(rationale.get("id"), "Manifest version rationale ID")?
+            ),
+            text(rationale.get("digest"), "Manifest version rationale digest")?.to_owned(),
+        );
+        if !evidence.contains(&rationale_identity) {
+            errors.push(format!(
+                "Manifest version rationale is absent from its reviewed evidence set: {}",
+                rationale_identity.0
+            ));
+        }
+        for change_unit in array(release_unit.get("changeUnits"), "Manifest Change Units")? {
+            let change_unit = object(change_unit, "Manifest Change Unit")?;
+            let identity = (
+                format!(
+                    "release/checkpoint-change-units/{}.json",
+                    text(change_unit.get("id"), "Manifest Change Unit ID")?
+                ),
+                text(change_unit.get("digest"), "Manifest Change Unit digest")?.to_owned(),
+            );
+            if !evidence.contains(&identity) {
+                errors.push(format!(
+                    "Manifest Change Unit is absent from its reviewed evidence set: {}",
+                    identity.0
+                ));
+            }
+        }
+    }
+    errors.sort();
+    errors.dedup();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+/// A Manifest may rely on a tag observation only when its exact, public
+/// observation record remains valid for the time that reviewed evidence was
+/// accepted. Historic observations remain useful evidence, but cannot silently
+/// become fresh release authority merely because they are still present.
+fn validate_manifest_live_tag_observation(
+    root: &Path,
+    manifest: &Map<String, Value>,
+    evidence_set: &Map<String, Value>,
+) -> Result<(), String> {
+    let snapshot = object(
+        required_value(manifest, "historicalTagSnapshot")?,
+        "Manifest historical tag snapshot identity",
+    )?;
+    let path = text(snapshot.get("id"), "Manifest historical tag snapshot path")?;
+    if !path.starts_with("release/history/observations/") || !path.ends_with(".json") {
+        return Err(
+            "Manifest historicalTagSnapshot must name a public history observation record"
+                .to_owned(),
+        );
+    }
+    let bytes = fs::read(root.join(path))
+        .map_err(|error| format!("read Manifest historical tag observation {path}: {error}"))?;
+    let digest = text(
+        snapshot.get("digest"),
+        "Manifest historical tag snapshot digest",
+    )?;
+    if sha256_hex(&bytes) != digest {
+        return Err(
+            "Manifest historicalTagSnapshot digest does not match its exact public observation bytes"
+                .to_owned(),
+        );
+    }
+    let observation = parse_canonical_json_bytes(&bytes, "Manifest historical tag observation")?;
+    validate_schema_instance(
+        root,
+        "release/schemas/history-observation.schema.json",
+        &observation,
+        "Manifest historical tag observation",
+    )?;
+    let observation = object(&observation, "Manifest historical tag observation")?;
+    if text(
+        observation.get("state"),
+        "Manifest historical tag observation state",
+    )? != "observed"
+    {
+        return Err(
+            "Manifest historicalTagSnapshot must be an observed live-tag observation".to_owned(),
+        );
+    }
+    let observed_at = text(
+        observation.get("observedAt"),
+        "Manifest historical tag observation time",
+    )?;
+    let valid_until = text(
+        observation.get("validUntil"),
+        "Manifest historical tag observation validity",
+    )?;
+    let reviewed_at = text(
+        evidence_set.get("reviewedAt"),
+        "Manifest reviewed evidence-set time",
+    )?;
+    let observed_at = utc_second_timestamp(observed_at)?;
+    let valid_until = utc_second_timestamp(valid_until)?;
+    let reviewed_at = utc_second_timestamp(reviewed_at)?;
+    if observed_at > reviewed_at {
+        return Err(
+            "Manifest historicalTagSnapshot was observed after its evidence set was reviewed"
+                .to_owned(),
+        );
+    }
+    if valid_until < reviewed_at {
+        return Err(
+            "Manifest historicalTagSnapshot validUntil does not cover the evidence-set review time"
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_manifest_change_units(root: &Path, manifest: &Value) -> Result<(), String> {
+    let manifest = object(manifest, "Release Manifest")?;
+    let mut identifiers = BTreeSet::new();
+    let mut errors = Vec::new();
+    for unit in array(manifest.get("releaseUnits"), "Manifest release units")? {
+        let unit = object(unit, "Manifest release unit")?;
+        let unit_id = text(unit.get("unitId"), "Manifest release unit ID")?;
+        for reference in array(unit.get("changeUnits"), "Manifest Change Units")? {
+            let reference = match object(reference, "Manifest Change Unit reference") {
+                Ok(reference) => reference,
+                Err(error) => {
+                    errors.push(error);
+                    continue;
+                }
+            };
+            let id = match text(reference.get("id"), "Manifest Change Unit ID") {
+                Ok(id) => id,
+                Err(error) => {
+                    errors.push(error);
+                    continue;
+                }
+            };
+            if !identifiers.insert(id.to_owned()) {
+                errors.push(format!(
+                    "Manifest Change Unit is reused by more than one release unit: {id}"
+                ));
+                continue;
+            }
+            let path = root
+                .join("release/checkpoint-change-units")
+                .join(format!("{id}.json"));
+            let bytes = match fs::read(&path) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    errors.push(format!(
+                        "Manifest Change Unit is missing from public records for {unit_id}: {id}: {error}"
+                    ));
+                    continue;
+                }
+            };
+            let digest = match text(reference.get("digest"), "Manifest Change Unit digest") {
+                Ok(digest) => digest,
+                Err(error) => {
+                    errors.push(error);
+                    continue;
+                }
+            };
+            if sha256_hex(&bytes) != digest {
+                errors.push(format!(
+                    "Manifest Change Unit digest does not match its exact public record bytes: {id}"
+                ));
+                continue;
+            }
+            let record = match parse_canonical_json_bytes(&bytes, "Manifest Change Unit") {
+                Ok(record) => record,
+                Err(error) => {
+                    errors.push(format!("Manifest Change Unit {id}: {error}"));
+                    continue;
+                }
+            };
+            if let Err(error) = validate_schema_instance(
+                root,
+                "release/schemas/checkpoint-change-unit-1.0.schema.json",
+                &record,
+                "Manifest Change Unit",
+            ) {
+                errors.push(format!("Manifest Change Unit {id}: {error}"));
+                continue;
+            }
+            match object(&record, "Manifest Change Unit")
+                .and_then(|record| text(record.get("changeUnitId"), "checkpoint Change Unit ID"))
+            {
+                Ok(record_id) if record_id == id => {}
+                Ok(_) => errors.push(format!(
+                    "Manifest Change Unit record identity does not match its filename reference: {id}"
+                )),
+                Err(error) => errors.push(format!("Manifest Change Unit {id}: {error}")),
+            }
+        }
+    }
+    errors.sort();
+    errors.dedup();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+fn validate_manifest_security(root: &Path, manifest: &Value) -> Result<(), String> {
+    let manifest = object(manifest, "Release Manifest")?;
+    let security = object(
+        required_value(manifest, "security")?,
+        "Manifest security identity",
+    )?;
+    let path = text(security.get("id"), "Manifest security path")?;
+    if !path.starts_with("release/security/scans/") || !path.ends_with(".json") {
+        return Err("Manifest security must name a retained public security scan".to_owned());
+    }
+    let bytes = fs::read(root.join(path))
+        .map_err(|error| format!("read Manifest security scan {path}: {error}"))?;
+    if sha256_hex(&bytes) != text(security.get("digest"), "Manifest security digest")? {
+        return Err("Manifest security digest does not match exact public scan bytes".to_owned());
+    }
+    let scan = parse_canonical_json_bytes(&bytes, "Manifest security scan")?;
+    validate_schema_instance(
+        root,
+        "release/schemas/security-scan-1.0.schema.json",
+        &scan,
+        "Manifest security scan",
+    )?;
+    let scan = object(&scan, "Manifest security scan")?;
+    let scope = object(
+        scan.get("scope").ok_or("security scan has no scope")?,
+        "security scan scope",
+    )?;
+    let lockfile = text(scope.get("lockfile"), "security scan lockfile")?;
+    let expected = format!(
+        "sha256:{}",
+        sha256_hex(
+            &fs::read(root.join(lockfile))
+                .map_err(|error| format!("read security scan lockfile: {error}"))?
+        )
+    );
+    if scan.get("lockfileDigest").and_then(Value::as_str) != Some(expected.as_str()) {
+        return Err("security scan lockfile digest is stale".to_owned());
+    }
+    for finding in array(scan.get("findings"), "security scan findings")? {
+        let finding = object(finding, "security finding")?;
+        let severity = text(finding.get("severity"), "security finding severity")?;
+        let status = text(finding.get("status"), "security finding status")?;
+        if matches!(severity, "high" | "critical") && status != "remediated" {
+            return Err(format!(
+                "unresolved {severity} security finding blocks Manifest: {}",
+                text(finding.get("id"), "security finding ID")?
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_manifest_id_is_unmaterialized(root: &Path, manifest: &Value) -> Result<(), String> {
+    let manifest = object(manifest, "Release Manifest")?;
+    let manifest_id = text(manifest.get("manifestId"), "Manifest ID")?;
+    let materialized = root
+        .join("release/manifests")
+        .join(manifest_id)
+        .join("manifest.json");
+    if materialized.exists() {
+        return Err(format!(
+            "Manifest ID already has immutable materialized bytes: {manifest_id}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_manifest_release_units_all(root: &Path, manifest: &Value) -> Result<(), String> {
+    let manifest_object = object(manifest, "Release Manifest")?;
+    let units = array(
+        manifest_object.get("releaseUnits"),
+        "Manifest release units",
+    )?;
+    let mut errors = Vec::new();
+    for unit in units {
+        let Some(unit_id) = unit.get("unitId").cloned() else {
+            continue;
+        };
+        let mut isolated = manifest.clone();
+        let isolated = isolated
+            .as_object_mut()
+            .ok_or("Release Manifest must be an object")?;
+        isolated.insert("releaseUnits".to_owned(), Value::Array(vec![unit.clone()]));
+        isolated.insert("publicationOrder".to_owned(), Value::Array(vec![unit_id]));
+        if let Err(error) = validate_manifest_release_units(root, &Value::Object(isolated.clone()))
+        {
+            errors.push(error);
+        }
+    }
+    if let Err(error) = validate_manifest_release_units(root, manifest) {
+        errors.push(error);
+    }
+    errors.sort();
+    errors.dedup();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("; "))
+    }
+}
+
+fn validate_manifest_release_units(root: &Path, manifest: &Value) -> Result<(), String> {
+    let manifest = object(manifest, "Release Manifest")?;
+    for field in [
+        "approvalPolicy",
+        "failurePolicy",
+        "recoveryPolicy",
+        "closeoutRequirements",
+        "security",
+        "candidate",
+        "rehearsal",
+        "registryCustody",
+        "historicalTagSnapshot",
+        "compatibilityEvidence",
+    ] {
+        let artifact = object(
+            required_value(manifest, field)?,
+            "Manifest reviewed immutable evidence identity",
+        )?;
+        for required in ["id", "version", "digest"] {
+            text(
+                artifact.get(required),
+                "Manifest reviewed immutable evidence identity field",
+            )?;
+        }
+    }
+    let base_commit = text(manifest.get("baseCommit"), "Manifest base commit")?;
+    validate_reviewed_commit(root, base_commit, "Manifest baseCommit")?;
+    let head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("resolve reviewed public HEAD: {error}"))?;
+    if !head.status.success() || String::from_utf8_lossy(&head.stdout).trim() != base_commit {
+        return Err("Manifest baseCommit must match the clean reviewed public HEAD".to_owned());
+    }
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    let lifecycle = read_json(&root.join("release/catalog-lifecycle.json"))?;
+    validate_catalog_lifecycle(root, &catalog, &lifecycle)?;
+    let release_order = derive_release_order(root, &catalog)?;
+    let catalog = object(&catalog, "release catalog")?;
+    let catalog_units = array(catalog.get("units"), "release catalog units")?;
+    let mut by_id = BTreeMap::new();
+    for unit in catalog_units {
+        let unit = object(unit, "release catalog unit")?;
+        by_id.insert(
+            text(unit.get("id"), "release catalog unit ID")?.to_owned(),
+            unit,
+        );
+    }
+    let units = array(manifest.get("releaseUnits"), "Manifest release units")?;
+    let mut selected = BTreeSet::new();
+    let mut release_unit_order = Vec::new();
+    for release_unit in units {
+        let release_unit = object(release_unit, "Manifest release unit")?;
+        let unit_id = text(release_unit.get("unitId"), "Manifest release unit ID")?;
+        if !selected.insert(unit_id.to_owned()) {
+            return Err(format!(
+                "Manifest selects release unit more than once: {unit_id}"
+            ));
+        }
+        release_unit_order.push(unit_id.to_owned());
+        let source_commit = text(
+            release_unit.get("sourceCommit"),
+            "Manifest unit source commit",
+        )?;
+        validate_reviewed_commit(
+            root,
+            source_commit,
+            &format!("Manifest release unit {unit_id} sourceCommit"),
+        )?;
+        let catalog_unit = by_id
+            .get(unit_id)
+            .ok_or_else(|| format!("Manifest selects missing catalog unit {unit_id}"))?;
+        let publication = object(
+            catalog_unit
+                .get("publication")
+                .ok_or("catalog unit has no publication")?,
+            "catalog publication",
+        )?;
+        if publication.get("classification").and_then(Value::as_str)
+            != Some("publishable-source-unit")
+        {
+            return Err(format!(
+                "Manifest selects non-publishable catalog unit {unit_id}"
+            ));
+        }
+        let version_source = object(
+            release_unit
+                .get("versionSource")
+                .ok_or("Manifest release unit has no version source")?,
+            "Manifest version source",
+        )?;
+        let catalog_version_source = object(
+            catalog_unit
+                .get("versionSource")
+                .ok_or("catalog unit has no version source")?,
+            "catalog version source",
+        )?;
+        for field in ["path", "observedDeclaration"] {
+            if version_source.get(field) != catalog_version_source.get(field) {
+                return Err(format!(
+                    "Manifest release unit {unit_id} {field} does not match source-led catalog authority"
+                ));
+            }
+        }
+        let version_path = text(version_source.get("path"), "Manifest version source path")?;
+        let expected_source_bytes = fs::read(root.join(version_path)).map_err(|error| {
+            format!("read current source-led version path {version_path}: {error}")
+        })?;
+        let source_version = Command::new("git")
+            .args(["show", &format!("{source_commit}:{version_path}")])
+            .current_dir(root)
+            .output()
+            .map_err(|error| {
+                format!("read Manifest release unit {unit_id} version source at commit: {error}")
+            })?;
+        if !source_version.status.success() || source_version.stdout != expected_source_bytes {
+            return Err(format!(
+                "Manifest release unit {unit_id} sourceCommit does not contain the reviewed authoritative version source"
+            ));
+        }
+        if release_unit.get("proposedVersion") != catalog_version_source.get("observedDeclaration")
+        {
+            return Err(format!(
+                "Manifest release unit {unit_id} proposedVersion does not match its authoritative checked-in version"
+            ));
+        }
+        let catalog_targets = array(catalog_unit.get("targets"), "catalog unit targets")?;
+        let mut catalog_target_identities = BTreeSet::new();
+        for target in catalog_targets {
+            let target = object(target, "catalog target")?;
+            catalog_target_identities.insert((
+                text(target.get("kind"), "catalog target kind")?.to_owned(),
+                text(target.get("name"), "catalog target name")?.to_owned(),
+            ));
+        }
+        let mut manifest_target_identities = BTreeSet::new();
+        let mut manifest_target_order = Vec::new();
+        for target in array(release_unit.get("targets"), "Manifest release unit targets")? {
+            let target = object(target, "Manifest release unit target")?;
+            if target.get("mandatory").and_then(Value::as_bool) != Some(true) {
+                return Err(format!(
+                    "Manifest release unit {unit_id} cannot mark a source-led catalog target optional without explicit catalog authority"
+                ));
+            }
+            let identity = (
+                text(target.get("kind"), "Manifest target kind")?.to_owned(),
+                text(target.get("name"), "Manifest target name")?.to_owned(),
+            );
+            if !catalog_target_identities.contains(&identity) {
+                return Err(format!(
+                    "Manifest release unit {unit_id} binds an unknown catalog target {}/{}",
+                    identity.0, identity.1
+                ));
+            }
+            if !manifest_target_identities.insert(identity) {
+                return Err(format!(
+                    "Manifest release unit {unit_id} binds a target more than once"
+                ));
+            }
+            manifest_target_order.push((
+                text(target.get("kind"), "Manifest target kind")?.to_owned(),
+                text(target.get("name"), "Manifest target name")?.to_owned(),
+            ));
+        }
+        if manifest_target_identities != catalog_target_identities {
+            return Err(format!(
+                "Manifest release unit {unit_id} targets do not exactly match source-led catalog targets"
+            ));
+        }
+        if manifest_target_order
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        {
+            return Err(format!(
+                "Manifest release unit {unit_id} targets must use ascending kind/name order"
+            ));
+        }
+        let namespace = text(
+            catalog_unit.get("canonicalTagNamespace"),
+            "catalog canonical tag namespace",
+        )?;
+        let proposed_version = text(
+            release_unit.get("proposedVersion"),
+            "Manifest release unit proposed version",
+        )?;
+        let expected_tag = namespace.replace("<semver>", proposed_version);
+        if release_unit.get("canonicalTag").and_then(Value::as_str) != Some(expected_tag.as_str()) {
+            return Err(format!(
+                "Manifest release unit {unit_id} canonicalTag does not match its catalog namespace"
+            ));
+        }
+        validate_candidate_tag(root, &Value::Object(catalog.clone()), &expected_tag)?;
+        let rationale = object(
+            release_unit
+                .get("versionRationale")
+                .ok_or("Manifest release unit has no version rationale")?,
+            "Manifest version rationale",
+        )?;
+        let rationale_id = text(rationale.get("id"), "Manifest version rationale ID")?;
+        let rationale_path = root
+            .join("release/rationales")
+            .join(format!("{rationale_id}.json"));
+        let rationale_bytes = fs::read(&rationale_path).map_err(|error| {
+            format!("Manifest version rationale is missing or unreadable {rationale_id}: {error}")
+        })?;
+        if rationale.get("digest").and_then(Value::as_str)
+            != Some(sha256_hex(&rationale_bytes).as_str())
+        {
+            return Err(format!(
+                "Manifest version rationale digest does not match exact public bytes: {rationale_id}"
+            ));
+        }
+        let rationale_record: Value = serde_json::from_slice(&rationale_bytes)
+            .map_err(|error| format!("parse Manifest version rationale {rationale_id}: {error}"))?;
+        validate_version_rationale(root, &Value::Object(catalog.clone()), &rationale_record)?;
+        let rationale_record = object(&rationale_record, "Manifest version rationale record")?;
+        if rationale_record.get("unitId").and_then(Value::as_str) != Some(unit_id)
+            || rationale_record.get("proposedPackageVersion") != release_unit.get("proposedVersion")
+            || rationale_record
+                .get("previousPackageVersion")
+                .and_then(Value::as_object)
+                .and_then(|previous| previous.get("version"))
+                != release_unit.get("previousVersion")
+        {
+            return Err(format!(
+                "Manifest release unit {unit_id} does not match its authoritative version rationale"
+            ));
+        }
+        let mut change_units = BTreeSet::new();
+        let mut change_unit_order = Vec::new();
+        for change_unit in array(release_unit.get("changeUnits"), "Manifest Change Units")? {
+            let change_unit = object(change_unit, "Manifest Change Unit")?;
+            let id = text(change_unit.get("id"), "Manifest Change Unit ID")?;
+            let digest = text(change_unit.get("digest"), "Manifest Change Unit digest")?;
+            if !change_units.insert((id.to_owned(), digest.to_owned())) {
+                return Err(format!(
+                    "Manifest release unit {unit_id} binds a Change Unit more than once"
+                ));
+            }
+            change_unit_order.push((id.to_owned(), digest.to_owned()));
+        }
+        if change_unit_order.windows(2).any(|pair| pair[0] >= pair[1]) {
+            return Err(format!(
+                "Manifest release unit {unit_id} Change Units must use ascending ID/digest order"
+            ));
+        }
+    }
+    let expected_order = release_order
+        .into_iter()
+        .filter(|unit_id| selected.contains(unit_id))
+        .collect::<Vec<_>>();
+    let actual_order = array(
+        manifest.get("publicationOrder"),
+        "Manifest publication order",
+    )?
+    .iter()
+    .map(|value| text(Some(value), "Manifest publication-order unit").map(str::to_owned))
+    .collect::<Result<Vec<_>, String>>()?;
+    if actual_order != expected_order {
+        return Err(
+            "Manifest publicationOrder does not freeze the catalog's typed dependency order"
+                .to_owned(),
+        );
+    }
+    if release_unit_order != expected_order {
+        return Err("Manifest releaseUnits must use the frozen typed publication order".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_manifest_supersession(root: &Path, manifest: &Value) -> Result<(), String> {
+    let manifest = object(manifest, "Release Manifest")?;
+    let Some(supersedes) = manifest.get("supersedes") else {
+        return Ok(());
+    };
+    if supersedes.is_null() {
+        return Ok(());
+    }
+    let supersedes = object(supersedes, "Manifest supersedes reference")?;
+    let manifest_id = text(manifest.get("manifestId"), "Manifest ID")?;
+    let prior_id = text(supersedes.get("manifestId"), "superseded Manifest ID")?;
+    if manifest_id == prior_id {
+        return Err("a Manifest cannot supersede itself".to_owned());
+    }
+    let prior_path = root
+        .join("release/manifests")
+        .join(prior_id)
+        .join("manifest.json");
+    let root_canonical =
+        fs::canonicalize(root).map_err(|error| format!("canonicalize repository root: {error}"))?;
+    let prior_canonical = fs::canonicalize(&prior_path).map_err(|error| {
+        format!("superseded Manifest is missing or unreadable {prior_id}: {error}")
+    })?;
+    if !prior_canonical.starts_with(&root_canonical) {
+        return Err(format!(
+            "superseded Manifest escapes the reviewed public repository: {prior_id}"
+        ));
+    }
+    let prior_bytes = fs::read(&prior_path).map_err(|error| {
+        format!("superseded Manifest is missing or unreadable {prior_id}: {error}")
+    })?;
+    let prior = parse_canonical_json_bytes(&prior_bytes, "superseded Manifest")?;
+    validate_canonical_release_record(root, &prior, &prior_canonical)?;
+    let prior = object(&prior, "superseded Manifest")?;
+    if text(prior.get("recordKind"), "superseded Manifest kind")? != "release-manifest"
+        || text(prior.get("manifestId"), "superseded Manifest ID")? != prior_id
+    {
+        return Err(format!(
+            "superseded Manifest is not a canonical Manifest with its claimed identity: {prior_id}"
+        ));
+    }
+    validate_canonical_record_location(root, &prior_canonical, "release-manifest", prior_id)?;
+    if supersedes.get("manifestDigest").and_then(Value::as_str)
+        != Some(sha256_hex(&prior_bytes).as_str())
+    {
+        return Err(format!(
+            "superseded Manifest digest does not match exact immutable bytes: {prior_id}"
+        ));
+    }
+    Ok(())
+}
+
 fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -797,8 +1851,142 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_catalog_lifecycle_repository(root)?;
     validate_catalog_repository(root)?;
     validate_version_rationale_repository(root)?;
+    if root.join(".git").exists() {
+        validate_checkpoint_change_units_repository(root)?;
+    }
     validate_canonical_release_records_repository(root)?;
     validate_public_boundary(root)?;
+    Ok(())
+}
+
+/// Validates the non-promoting checkpoint inventory against its retained Git slice.
+pub fn validate_checkpoint_change_units_repository(root: &Path) -> Result<(), String> {
+    let directory = root.join("release/checkpoint-change-units");
+    let mut seen_paths = BTreeSet::new();
+    let mut records = 0usize;
+    for entry in fs::read_dir(&directory)
+        .map_err(|error| format!("read checkpoint Change Units: {error}"))?
+    {
+        let path = entry
+            .map_err(|error| format!("read checkpoint Change Unit: {error}"))?
+            .path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            return Err(format!(
+                "checkpoint Change Unit is not JSON: {}",
+                path.display()
+            ));
+        }
+        let record = read_json(&path)?;
+        validate_schema_instance(
+            root,
+            "release/schemas/checkpoint-change-unit-1.0.schema.json",
+            &record,
+            "checkpoint Change Unit",
+        )?;
+        let record = object(&record, "checkpoint Change Unit")?;
+        let base = text(record.get("baseCommit"), "checkpoint base commit")?;
+        let checkpoint = text(record.get("checkpointCommit"), "checkpoint commit")?;
+        let paths = array(record.get("paths"), "checkpoint Change Unit paths")?;
+        let mut diff_paths = Vec::new();
+        for change in paths {
+            let change = object(change, "checkpoint Change Unit path")?;
+            let before = text(change.get("beforePath"), "checkpoint before path")?;
+            if !seen_paths.insert(before.to_owned()) {
+                return Err(format!(
+                    "checkpoint path belongs to more than one Change Unit: {before}"
+                ));
+            }
+            diff_paths.push(before.to_owned());
+            let before_blob = Command::new("git")
+                .args(["rev-parse", &format!("{base}:{before}")])
+                .current_dir(root)
+                .output()
+                .map_err(|error| format!("resolve checkpoint before blob: {error}"))?;
+            if !before_blob.status.success()
+                || change.get("beforeBlob").and_then(Value::as_str)
+                    != Some(String::from_utf8_lossy(&before_blob.stdout).trim())
+            {
+                return Err(format!("checkpoint before blob does not match: {before}"));
+            }
+            let after_blob = match change.get("afterPath").and_then(Value::as_str) {
+                Some(after) => Command::new("git")
+                    .args(["rev-parse", &format!("{checkpoint}:{after}")])
+                    .current_dir(root)
+                    .output()
+                    .map_err(|error| format!("resolve checkpoint after blob: {error}"))?,
+                None => {
+                    if change.get("afterBlob").and_then(Value::as_str)
+                        != Some("0000000000000000000000000000000000000000")
+                    {
+                        return Err(format!(
+                            "deleted checkpoint path has a nonzero after blob: {before}"
+                        ));
+                    }
+                    continue;
+                }
+            };
+            if !after_blob.status.success()
+                || change.get("afterBlob").and_then(Value::as_str)
+                    != Some(String::from_utf8_lossy(&after_blob.stdout).trim())
+            {
+                return Err(format!("checkpoint after blob does not match: {before}"));
+            }
+        }
+        let output = Command::new("git")
+            .args([
+                "diff",
+                "--no-ext-diff",
+                "--binary",
+                "--full-index",
+                base,
+                checkpoint,
+                "--",
+            ])
+            .args(&diff_paths)
+            .current_dir(root)
+            .output()
+            .map_err(|error| format!("recompute checkpoint Change Unit patch: {error}"))?;
+        if !output.status.success()
+            || record.get("patchDigest").and_then(Value::as_str)
+                != Some(format!("sha256:{}", sha256_hex(&output.stdout)).as_str())
+        {
+            return Err(format!(
+                "checkpoint Change Unit patch digest does not match: {}",
+                path.display()
+            ));
+        }
+        records += 1;
+    }
+    let expected = Command::new("git")
+        .args([
+            "diff",
+            "--name-status",
+            "-M100%",
+            "11f315880415038ac6013d7ee4d378296cd51c5d",
+            "d4099e8188f40603ebf52473d6543ce4a6054201",
+        ])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("enumerate checkpoint paths: {error}"))?;
+    let expected_paths = String::from_utf8_lossy(&expected.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split('\t');
+            fields.next()?;
+            let first = fields.next()?;
+            Some(first.to_owned())
+        })
+        .collect::<BTreeSet<_>>();
+    if !expected.status.success() || expected_paths != seen_paths {
+        return Err(
+            "checkpoint Change Units do not exactly cover the retained checkpoint diff".to_owned(),
+        );
+    }
+    if records != 5 || seen_paths.len() != 28 {
+        return Err(
+            "checkpoint Change Units must retain exactly five records covering 28 paths".to_owned(),
+        );
+    }
     Ok(())
 }
 
@@ -1015,6 +2203,10 @@ fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &
         ("release-manifest", "1.0") => Some((
             "release/schemas/release-manifest-1.0.schema.json",
             "https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        )),
+        ("release-manifest", "1.1") => Some((
+            "release/schemas/release-manifest-1.1.schema.json",
+            "https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
         )),
         ("release-evidence-set", "1.0") => Some((
             "release/schemas/release-evidence-set-1.0.schema.json",

@@ -6,6 +6,36 @@ closeout are distinct retained record families. Their Draft 2020-12 contracts
 are physically version-addressed under `release/schemas/`; a new dotted
 version is a new retained schema file and never replaces an old one.
 
+## Deterministic Manifest generation
+
+A Release Manifest is constructed from explicitly reviewed inputs through the
+offline validator's pure `generate_release_manifest` library API. It emits one
+compact UTF-8/LF JSON payload and reports its identity separately as
+`sha256:<lowercase-hex>` over those exact bytes. It does not write the payload,
+create an approval or Run, query a provider, create a tag, or publish anything.
+
+The generated payload freezes the reviewed base commit, every selected Release
+Unit's exact source commit, checked-in version source, rationale, Change Unit,
+canonical tag, target identity, typed publication order, evidence-set identity,
+state/reducer identity, approval/failure/recovery policies, and closeout
+requirements. Any material change produces different exact bytes and therefore
+a new external digest and a new approval obligation. A successor may reference
+an earlier immutable Manifest by ID and digest, but cannot reuse or edit it.
+
+Generation is fail-closed. Missing or non-canonical reviewed evidence, a
+catalog/version/tag/rationale mismatch, a non-publishable or duplicate unit,
+an invalid source commit, an order mismatch, unsafe/private input, or an
+unresolvable supersession returns deterministic diagnostics and no bytes or
+digest. A passing synthetic fixture proves only the offline construction
+contract; it is not an approvable production Manifest.
+
+The historical-tag input is an exact public observation record, not a retained
+baseline standing in for current provider state. Its `observed` state and
+whole-second UTC `validUntil` must cover the reviewed evidence-set timestamp.
+Each referenced Checkpoint Change Unit must likewise resolve to its exact,
+canonical public record bytes and schema-valid stable ID. Neither check grants
+approval, promotion, tagging, or publication authority.
+
 The release validator dispatches a record only by its exact `(recordKind,
 schemaVersion)` and matching schema ID. Canonical records use compact UTF-8
 JSON without a BOM or CR, lexicographic object keys, no insignificant
