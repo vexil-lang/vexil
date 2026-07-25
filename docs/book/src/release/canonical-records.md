@@ -73,8 +73,8 @@ bytes. The reviewed evidence-set is
 Release-Steward reviewed, a deterministically ordered inventory with external
 SHA-256 identity; it is bound identically by the Manifest, approval, and
 authorization, but does not reference the Manifest itself. Detached approvals
-also bind the exact payload digest and canonical `release/stewardship.json`
-governance digest. Historical state replay resolves the exact retained public
+also bind the exact external SHA-256 digest of canonical Manifest bytes and
+the canonical `release/stewardship.json` governance digest. Historical state replay resolves the exact retained public
 state-schema and reducer bytes by their frozen version and digest, never the
 newest implementation.
 

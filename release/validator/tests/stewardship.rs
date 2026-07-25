@@ -1296,6 +1296,29 @@ fn detached_approval_constructor_binds_exact_inputs_and_revalidates_governance()
         .unwrap(),
         DetachedApprovalOutcome::InvalidStructure
     );
+    let mut successor_manifest = manifest.clone();
+    successor_manifest["manifestId"] = Value::String("manifest-fixture-successor".into());
+    let successor_manifest_bytes = canonical_json(&successor_manifest);
+    assert_ne!(
+        digest(&manifest_bytes),
+        digest(&successor_manifest_bytes),
+        "any canonical Manifest-byte change must have a new external identity"
+    );
+    let successor_manifest_merge = ApprovalMergeEvidence {
+        manifest_bytes: &successor_manifest_bytes,
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-25T12:00:00Z",
+            Some(&successor_manifest_merge),
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::InvalidStructure,
+        "an approval cannot be reused for different canonical Manifest bytes"
+    );
     let incomplete_dispositions = ApprovalMergeEvidence {
         dispositions_complete: false,
         ..merge
