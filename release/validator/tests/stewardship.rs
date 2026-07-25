@@ -921,6 +921,20 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
         candidate_plan.source_commits.get("vexil-runtime-ts"),
         Some(&fixture_head_commit(&root))
     );
+    let forbidden_workspace_root = root.join("candidate-workspace-must-not-be-here");
+    assert!(
+        vexil_release_governance_validator::materialize_isolated_candidate_workspaces(
+            &root,
+            &first.bytes,
+            &forbidden_workspace_root,
+        )
+        .is_err(),
+        "candidate workspaces must not be created inside the reviewed checkout"
+    );
+    assert!(
+        !forbidden_workspace_root.exists(),
+        "a rejected in-repository candidate destination must have no filesystem effect"
+    );
     let candidate_workspace_root = std::env::temp_dir().join(format!(
         "vexil-candidate-workspaces-{}-{}",
         std::process::id(),
@@ -956,6 +970,18 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
         String::from_utf8_lossy(&output.stderr)
     );
     fs::remove_dir_all(&candidate_workspace_root).expect("remove candidate fixture workspace root");
+    fs::create_dir(&candidate_workspace_root).expect("create occupied candidate workspace root");
+    assert!(
+        vexil_release_governance_validator::materialize_isolated_candidate_workspaces(
+            &root,
+            &first.bytes,
+            &candidate_workspace_root,
+        )
+        .is_err(),
+        "candidate setup must reject an occupied workspace root"
+    );
+    fs::remove_dir_all(&candidate_workspace_root)
+        .expect("remove occupied candidate workspace root");
     assert_eq!(first.bytes, second.bytes);
     assert_eq!(first.external_digest, second.external_digest);
     assert_eq!(
