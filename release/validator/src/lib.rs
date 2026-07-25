@@ -10545,6 +10545,7 @@ pub fn ensure_no_private_leakage(content: &str) -> Result<(), String> {
         || lower.contains("/users/")
         || lower.contains("/home/")
         || lower.contains("restricted-workspace-reference")
+        || lower.contains("_bmad")
         || lower.contains("\\\\")
         || has_windows_drive_path
     {

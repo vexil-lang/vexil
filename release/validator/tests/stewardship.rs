@@ -1499,9 +1499,18 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         historical_tag_snapshot: &snapshot,
         evaluation_time: "2026-07-25T12:00:00Z",
     };
+    let run_path = root.join("release/runs/run-preflight");
+    assert!(
+        !run_path.exists(),
+        "the fixture must start without Run state"
+    );
     let generated = authorize_privileged_run_start(&root, &request).unwrap();
     assert_eq!(generated.bytes, canonical_json(&authorization));
     assert_eq!(generated.external_digest, digest(&generated.bytes));
+    assert!(
+        !run_path.exists(),
+        "authorization preflight must not materialize a Run, lease, or event"
+    );
     let mut altered_authorization = authorization.clone();
     altered_authorization["allowedTargets"] = serde_json::json!(["registry:other"]);
     let altered_request = PrivilegedRunStartRequest {
@@ -1534,6 +1543,26 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         .blockers
         .iter()
         .any(|blocker| blocker.requirement == "fresh-historical-tag-observation"));
+    let mut private_input = authorization.clone();
+    private_input["candidate"]["bundleId"] = Value::String("_bmad/private-candidate".into());
+    let private_input_request = PrivilegedRunStartRequest {
+        authorization: &private_input,
+        ..request
+    };
+    let error = authorize_privileged_run_start(&root, &private_input_request).unwrap_err();
+    assert!(error
+        .blockers
+        .iter()
+        .any(|blocker| blocker.requirement == "public-inputs-only"));
+    let expired_request = PrivilegedRunStartRequest {
+        evaluation_time: "2026-07-26T00:00:00Z",
+        ..request
+    };
+    let error = authorize_privileged_run_start(&root, &expired_request).unwrap_err();
+    assert!(error
+        .blockers
+        .iter()
+        .any(|blocker| blocker.requirement == "authorization-window"));
     let mut changed_manifest = manifest.clone();
     changed_manifest["manifestId"] = Value::String("authorization-manifest-successor".into());
     let changed_manifest_bytes = canonical_json(&changed_manifest);
