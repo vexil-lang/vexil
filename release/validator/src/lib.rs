@@ -141,6 +141,65 @@ pub struct ApprovalDispositionRequest<'a> {
     pub collector: &'a str,
 }
 
+/// Exact immutable approval evidence supplied to the pure Run-start preflight.
+/// The embedded merge observation is data only; this type cannot query a
+/// provider or materialize a canonical record.
+pub struct DetachedApprovalPreflight<'a> {
+    pub approval_bytes: &'a [u8],
+    pub merge: ApprovalMergeEvidence<'a>,
+}
+
+/// Complete public inputs for a deterministic privileged Run-start preflight.
+/// `authorization` is the proposed retained record; it is returned as canonical
+/// bytes only when every local, byte-exact gate passes.
+pub struct PrivilegedRunStartRequest<'a> {
+    pub authorization: &'a Value,
+    pub manifest_bytes: &'a [u8],
+    pub evidence_set_bytes: &'a [u8],
+    pub approvals: &'a [DetachedApprovalPreflight<'a>],
+    pub historical_tag_baseline: &'a Value,
+    pub historical_tag_snapshot: &'a Value,
+    pub evaluation_time: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct GeneratedPrivilegedRunStartAuthorization {
+    pub bytes: Vec<u8>,
+    pub external_digest: String,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct AuthorizationBlocker {
+    pub requirement: &'static str,
+    pub source: String,
+    pub message: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct PrivilegedRunStartError {
+    pub blockers: Vec<AuthorizationBlocker>,
+}
+
+impl fmt::Display for PrivilegedRunStartError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(
+            &self
+                .blockers
+                .iter()
+                .map(|blocker| {
+                    format!(
+                        "{} [{}]: {}",
+                        blocker.requirement, blocker.source, blocker.message
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
+    }
+}
+
+impl std::error::Error for PrivilegedRunStartError {}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum DetachedApprovalOutcome {
     InvalidStructure,
@@ -563,6 +622,482 @@ pub fn assess_detached_approval(
     } else {
         Ok(DetachedApprovalOutcome::CanonicalButCurrentlyIneligible)
     }
+}
+
+/// Performs the authorization-only preflight required before a future Release
+/// Run may begin. It is deliberately side-effect free: success returns only
+/// canonical record bytes and their external SHA-256 identity; failure returns
+/// every independently evaluable blocker and no bytes, lease, event, or effect.
+pub fn authorize_privileged_run_start(
+    root: &Path,
+    request: &PrivilegedRunStartRequest<'_>,
+) -> Result<GeneratedPrivilegedRunStartAuthorization, PrivilegedRunStartError> {
+    let mut blockers = Vec::new();
+    let authorization = request.authorization;
+    let record = match object(authorization, "privileged Run start authorization") {
+        Ok(record) => record,
+        Err(error) => {
+            push_authorization_blocker(
+                &mut blockers,
+                "authorization-structure",
+                "authorization",
+                error,
+            );
+            return Err(authorization_error(blockers));
+        }
+    };
+
+    if let Err(error) = validate_canonical_release_record_schema(root, authorization) {
+        push_authorization_blocker(
+            &mut blockers,
+            "authorization-schema",
+            "release/schemas/privileged-run-start-authorization-1.0.schema.json",
+            error,
+        );
+    }
+    if let Err(error) = ensure_no_private_leakage(
+        &serde_json::to_string(authorization)
+            .map_err(|error| format!("serialize authorization: {error}"))
+            .unwrap_or_else(|error| error),
+    ) {
+        push_authorization_blocker(&mut blockers, "public-inputs-only", "authorization", error);
+    }
+    if let Err(error) = validate_authorization_time_window(record, request.evaluation_time) {
+        push_authorization_blocker(
+            &mut blockers,
+            "authorization-window",
+            "authorization",
+            error,
+        );
+    }
+    if let Err(error) = validate_authorization_manifest_and_evidence(
+        root,
+        record,
+        request.manifest_bytes,
+        request.evidence_set_bytes,
+    ) {
+        push_authorization_blocker(
+            &mut blockers,
+            "manifest-and-evidence-binding",
+            "authorization",
+            error,
+        );
+    }
+    if let Err(error) = validate_authorization_history_tags(
+        record,
+        request.historical_tag_baseline,
+        request.historical_tag_snapshot,
+    ) {
+        push_authorization_blocker(
+            &mut blockers,
+            "fresh-historical-tag-observation",
+            "release/history",
+            error,
+        );
+    }
+    if let Err(error) =
+        validate_authorization_approvals(root, record, request.approvals, request.evaluation_time)
+    {
+        push_authorization_blocker(
+            &mut blockers,
+            "current-detached-approval",
+            "release/manifests",
+            error,
+        );
+    }
+    if let Err(error) =
+        validate_authorization_governance_and_principals(root, record, request.evaluation_time)
+    {
+        push_authorization_blocker(
+            &mut blockers,
+            "current-governance-and-principals",
+            "release/stewardship",
+            error,
+        );
+    }
+    if let Err(error) = validate_authorization_scope(record, request.manifest_bytes) {
+        push_authorization_blocker(
+            &mut blockers,
+            "exact-authorized-scope",
+            "authorization",
+            error,
+        );
+    }
+
+    if !blockers.is_empty() {
+        return Err(authorization_error(blockers));
+    }
+    match canonical_json_bytes(authorization) {
+        Ok(bytes) => Ok(GeneratedPrivilegedRunStartAuthorization {
+            external_digest: sha256_hex(&bytes),
+            bytes,
+        }),
+        Err(error) => Err(authorization_error(vec![AuthorizationBlocker {
+            requirement: "authorization-canonical-bytes",
+            source: "authorization".to_owned(),
+            message: error,
+        }])),
+    }
+}
+
+fn push_authorization_blocker(
+    blockers: &mut Vec<AuthorizationBlocker>,
+    requirement: &'static str,
+    source: impl Into<String>,
+    message: String,
+) {
+    blockers.push(AuthorizationBlocker {
+        requirement,
+        source: source.into(),
+        message,
+    });
+}
+
+fn authorization_error(mut blockers: Vec<AuthorizationBlocker>) -> PrivilegedRunStartError {
+    blockers.sort();
+    blockers.dedup();
+    PrivilegedRunStartError { blockers }
+}
+
+fn validate_authorization_time_window(
+    record: &Map<String, Value>,
+    evaluation_time: &str,
+) -> Result<(), String> {
+    let issued_at = utc_second_timestamp(text(record.get("issuedAt"), "authorization issuedAt")?)?;
+    let not_before =
+        utc_second_timestamp(text(record.get("notBefore"), "authorization notBefore")?)?;
+    let expires_at =
+        utc_second_timestamp(text(record.get("expiresAt"), "authorization expiresAt")?)?;
+    let evaluation = utc_second_timestamp(evaluation_time)?;
+    if issued_at > not_before || not_before >= expires_at {
+        return Err("authorization must satisfy issuedAt <= notBefore < expiresAt".to_owned());
+    }
+    if evaluation < not_before || evaluation >= expires_at {
+        return Err("authorization is not valid at the supplied evaluation time".to_owned());
+    }
+    let run_id = text(record.get("runId"), "authorization Run ID")?;
+    let expected_path = format!("release/runs/{run_id}/start-authorization.json");
+    if text(
+        record.get("materializationPath"),
+        "authorization materialization path",
+    )? != expected_path
+    {
+        return Err("authorization materialization path does not bind its exact Run ID".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_authorization_manifest_and_evidence(
+    root: &Path,
+    record: &Map<String, Value>,
+    manifest_bytes: &[u8],
+    evidence_set_bytes: &[u8],
+) -> Result<(), String> {
+    let manifest = parse_canonical_json_bytes(manifest_bytes, "authorization Manifest")?;
+    validate_canonical_release_record_schema(root, &manifest)?;
+    let manifest = object(&manifest, "authorization Manifest")?;
+    if text(manifest.get("recordKind"), "authorization Manifest kind")? != "release-manifest" {
+        return Err("authorization input is not a Release Manifest".to_owned());
+    }
+    if text(
+        manifest.get("schemaVersion"),
+        "authorization Manifest schema version",
+    )? != "1.1"
+    {
+        return Err("authorization requires the retained release-manifest@1.1 contract".to_owned());
+    }
+    let evidence_set =
+        parse_canonical_json_bytes(evidence_set_bytes, "authorization evidence set")?;
+    validate_canonical_release_record_schema(root, &evidence_set)?;
+    let evidence_set = object(&evidence_set, "authorization evidence set")?;
+    if text(
+        evidence_set.get("recordKind"),
+        "authorization evidence-set kind",
+    )? != "release-evidence-set"
+    {
+        return Err("authorization input is not a reviewed evidence set".to_owned());
+    }
+    for field in ["manifestId", "evidenceSetId", "evidenceSetDigest"] {
+        if record.get(field) != manifest.get(field) {
+            return Err(format!(
+                "authorization does not bind its exact Manifest {field}"
+            ));
+        }
+    }
+    if text(
+        record.get("manifestDigest"),
+        "authorization Manifest digest",
+    )? != sha256_hex(manifest_bytes)
+    {
+        return Err("authorization Manifest digest does not bind exact canonical bytes".to_owned());
+    }
+    if record.get("evidenceSetId") != evidence_set.get("evidenceSetId")
+        || text(
+            record.get("evidenceSetDigest"),
+            "authorization evidence digest",
+        )? != sha256_hex(evidence_set_bytes)
+    {
+        return Err("authorization evidence set does not bind exact canonical bytes".to_owned());
+    }
+    for field in ["stateSchema", "reducer"] {
+        if record.get(field) != manifest.get(field) {
+            return Err(format!(
+                "authorization does not freeze the Manifest {field}"
+            ));
+        }
+    }
+    let candidate = object(
+        record
+            .get("candidate")
+            .ok_or("authorization lacks candidate binding")?,
+        "authorization candidate binding",
+    )?;
+    let manifest_candidate = object(
+        manifest
+            .get("candidate")
+            .ok_or("Manifest lacks candidate custody artifact")?,
+        "Manifest candidate custody artifact",
+    )?;
+    if text(
+        candidate.get("bundleDigest"),
+        "authorization candidate bundle digest",
+    )? != text(
+        manifest_candidate.get("digest"),
+        "Manifest candidate custody digest",
+    )? {
+        return Err(
+            "authorization candidate bundle does not bind the Manifest custody artifact".to_owned(),
+        );
+    }
+    let security = object(
+        record
+            .get("security")
+            .ok_or("authorization lacks security binding")?,
+        "authorization security binding",
+    )?;
+    let manifest_security = object(
+        manifest
+            .get("security")
+            .ok_or("Manifest lacks security artifact")?,
+        "Manifest security artifact",
+    )?;
+    if text(
+        security.get("findingsDigest"),
+        "authorization security findings digest",
+    )? != text(
+        manifest_security.get("digest"),
+        "Manifest security artifact digest",
+    )? {
+        return Err(
+            "authorization security findings do not bind the Manifest security artifact".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_authorization_history_tags(
+    record: &Map<String, Value>,
+    baseline: &Value,
+    snapshot: &Value,
+) -> Result<(), String> {
+    validate_history_tag_snapshot(baseline, snapshot)?;
+    let baseline = object(baseline, "authorization historical-tag baseline")?;
+    let baseline_digest = text(
+        baseline.get("baselineDigest"),
+        "historical-tag baseline digest",
+    )?
+    .strip_prefix("sha256:")
+    .ok_or("historical-tag baseline digest must use sha256:")?;
+    let baseline_binding = object(
+        record
+            .get("historicalTagBaseline")
+            .ok_or("authorization lacks baseline binding")?,
+        "authorization historical-tag baseline binding",
+    )?;
+    if text(
+        baseline_binding.get("digest"),
+        "authorization baseline digest",
+    )? != baseline_digest
+    {
+        return Err("authorization baseline digest does not bind the ratified baseline".to_owned());
+    }
+    let snapshot_binding = object(
+        record
+            .get("historicalTagSnapshot")
+            .ok_or("authorization lacks snapshot binding")?,
+        "authorization historical-tag snapshot binding",
+    )?;
+    if text(
+        snapshot_binding.get("digest"),
+        "authorization snapshot digest",
+    )? != sha256_hex(&canonical_json_bytes(snapshot)?)
+    {
+        return Err(
+            "authorization snapshot digest does not bind exact fresh observation bytes".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_authorization_approvals(
+    root: &Path,
+    record: &Map<String, Value>,
+    supplied: &[DetachedApprovalPreflight<'_>],
+    evaluation_time: &str,
+) -> Result<(), String> {
+    let selected = array(
+        record.get("selectedApprovals"),
+        "authorization selected approvals",
+    )?;
+    if selected.len() != supplied.len() {
+        return Err(
+            "authorization selected approvals do not match the complete supplied approval set"
+                .to_owned(),
+        );
+    }
+    let mut supplied_by_id = BTreeMap::new();
+    for preflight in supplied {
+        let approval =
+            parse_canonical_json_bytes(preflight.approval_bytes, "authorization approval")?;
+        validate_canonical_release_record_schema(root, &approval)?;
+        let approval = object(&approval, "authorization approval")?;
+        let approval_id = text(approval.get("approvalId"), "authorization approval ID")?;
+        if supplied_by_id
+            .insert(approval_id.to_owned(), preflight)
+            .is_some()
+        {
+            return Err(format!(
+                "authorization supplies duplicate approval {approval_id}"
+            ));
+        }
+    }
+    for selected_approval in selected {
+        let selected_approval = object(selected_approval, "authorization selected approval")?;
+        let approval_id = text(selected_approval.get("approvalId"), "selected approval ID")?;
+        let preflight = supplied_by_id.remove(approval_id).ok_or_else(|| {
+            format!("authorization selected approval {approval_id} was not supplied")
+        })?;
+        if text(
+            selected_approval.get("approvalDigest"),
+            "selected approval digest",
+        )? != sha256_hex(preflight.approval_bytes)
+        {
+            return Err(format!(
+                "authorization selected approval {approval_id} digest is misbound"
+            ));
+        }
+        if assess_detached_approval(
+            root,
+            preflight.approval_bytes,
+            evaluation_time,
+            Some(&preflight.merge),
+        )? != DetachedApprovalOutcome::Eligible
+        {
+            return Err(format!(
+                "authorization selected approval {approval_id} is not currently eligible"
+            ));
+        }
+    }
+    if !supplied_by_id.is_empty() {
+        return Err("authorization did not select every supplied approval".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_authorization_governance_and_principals(
+    root: &Path,
+    record: &Map<String, Value>,
+    evaluation_time: &str,
+) -> Result<(), String> {
+    let governance = object(
+        record
+            .get("governanceRevision")
+            .ok_or("authorization lacks governance revision")?,
+        "authorization governance revision",
+    )?;
+    if text(governance.get("id"), "authorization governance revision ID")?
+        != "governance-revision-v1"
+        || text(
+            governance.get("digest"),
+            "authorization governance revision digest",
+        )? != governance_revision_v1(root)?
+    {
+        return Err("authorization governance revision is stale or misbound".to_owned());
+    }
+    let issuer = object(
+        record.get("issuer").ok_or("authorization lacks issuer")?,
+        "authorization issuer",
+    )?;
+    ensure_active_assignment(
+        root,
+        text(issuer.get("actor"), "authorization issuer actor")?,
+        text(issuer.get("role"), "authorization issuer role")?,
+        text(issuer.get("assignment"), "authorization issuer assignment")?,
+        "release-manifest-lifecycle",
+        evaluation_time,
+        "authorization issuer",
+    )?;
+    let principal = object(
+        record
+            .get("executionPrincipal")
+            .ok_or("authorization lacks execution principal")?,
+        "authorization execution principal",
+    )?;
+    ensure_active_assignment(
+        root,
+        text(principal.get("actor"), "authorization execution actor")?,
+        text(principal.get("role"), "authorization execution role")?,
+        text(
+            principal.get("assignment"),
+            "authorization execution assignment",
+        )?,
+        "release-run-execution",
+        evaluation_time,
+        "authorization execution principal",
+    )
+}
+
+fn validate_authorization_scope(
+    record: &Map<String, Value>,
+    manifest_bytes: &[u8],
+) -> Result<(), String> {
+    let targets = array(record.get("allowedTargets"), "authorization targets")?
+        .iter()
+        .map(|value| text(Some(value), "authorization target").map(str::to_owned))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let controls = array(
+        record.get("targetControlEvidence"),
+        "authorization target control evidence",
+    )?
+    .iter()
+    .map(|value| {
+        let control = object(value, "authorization target control evidence")?;
+        text(control.get("target"), "authorization target control target").map(str::to_owned)
+    })
+    .collect::<Result<BTreeSet<_>, _>>()?;
+    if targets != controls {
+        return Err(
+            "authorization target controls must cover exactly the allowed targets".to_owned(),
+        );
+    }
+    let manifest = parse_canonical_json_bytes(manifest_bytes, "authorization Manifest")?;
+    let manifest = object(&manifest, "authorization Manifest")?;
+    if let Some(units) = manifest.get("releaseUnits") {
+        let manifest_units = array(Some(units), "Manifest release units")?
+            .iter()
+            .map(|value| {
+                let value = object(value, "Manifest release unit")?;
+                text(value.get("unitId"), "Manifest release unit ID").map(str::to_owned)
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        for unit in array(record.get("allowedUnits"), "authorization units")? {
+            let unit = text(Some(unit), "authorization unit")?;
+            if !manifest_units.contains(unit) {
+                return Err(format!("authorization expands scope with unit {unit}"));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn collect_checked_in_governance_paths(value: &Value, paths: &mut Vec<String>) {

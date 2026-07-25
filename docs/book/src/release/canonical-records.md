@@ -78,6 +78,16 @@ the canonical `release/stewardship.json` governance digest. Historical state rep
 state-schema and reducer bytes by their frozen version and digest, never the
 newest implementation.
 
+The validator's `authorize_privileged_run_start` preflight is pure. It accepts
+only a retained Manifest 1.1 and byte-exact reviewed evidence, currently
+eligible detached approvals with protected-main evidence, a matching fresh
+Historical Tag snapshot, current governance/principal assertions, and exact
+candidate/security/scope bindings. It emits canonical authorization bytes and
+their external SHA-256 identity, or a deterministic ordered blocker set. It
+does not materialize the path, acquire a lease, create an event, access a
+credential or environment, invoke an adapter, or perform a provider effect.
+Those additional Coordinator-owned Run controls begin in Epic 10.
+
 Run execution, time-based eligibility, state reduction, and effect semantics
 are owned by later stories. At this stage, the offline validator verifies that
 each Run event, adapter result, Run-evidence record, and closeout binds its
