@@ -1175,6 +1175,11 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.requirement == "clean-reviewed-source"));
+    assert!(
+        vexil_release_governance_validator::prepare_isolated_candidate_build(&root, &first.bytes)
+            .is_err(),
+        "a dirty public checkout must not form an isolated candidate-build plan"
+    );
     fs::remove_file(root.join("release/manifest-generation-dirty-fixture.txt"))
         .expect("remove dirty public fixture file");
     fs::remove_dir_all(root).expect("remove clean Manifest generation fixture repository");
