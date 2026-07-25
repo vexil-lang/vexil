@@ -170,6 +170,14 @@ pub struct GoModuleCandidateArtifactInspectionRequest<'a> {
     pub artifact_path: &'a Path,
 }
 
+/// Exact local inputs for validating a selective checkpoint promotion. This is
+/// read-only: it neither creates commits nor contacts a remote.
+pub struct SelectivePromotionRequest<'a> {
+    pub current_base: &'a str,
+    pub proposed_commit: &'a str,
+    pub approved_change_units: &'a BTreeSet<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct InspectedGoModuleCandidateArtifact {
     pub artifact_name: String,
@@ -4465,6 +4473,39 @@ pub fn validate_checkpoint_change_units_repository(root: &Path) -> Result<(), St
         return Err(
             "checkpoint Change Units must retain exactly five records covering 28 paths".to_owned(),
         );
+    }
+    Ok(())
+}
+
+/// Validates that a proposed local commit changes only paths owned by the
+/// approved Change Units and never reuses the prohibited wholesale checkpoint.
+pub fn validate_selective_promotion(
+    root: &Path,
+    request: &SelectivePromotionRequest<'_>,
+) -> Result<(), String> {
+    if !valid_git_object_id(request.current_base) || !valid_git_object_id(request.proposed_commit)
+        || request.approved_change_units.is_empty() || request.proposed_commit == "d4099e8188f40603ebf52473d6543ce4a6054201" {
+        return Err("selective promotion has invalid or prohibited commit inputs".to_owned());
+    }
+    let mut allowed = BTreeSet::new();
+    for entry in fs::read_dir(root.join("release/checkpoint-change-units")).map_err(|error| format!("read checkpoint Change Units: {error}"))? {
+        let record = read_json(&entry.map_err(|error| format!("read checkpoint Change Unit: {error}"))?.path())?;
+        let record = object(&record, "checkpoint Change Unit")?;
+        let id = text(record.get("changeUnitId"), "checkpoint Change Unit ID")?;
+        if request.approved_change_units.contains(id) {
+            if text(record.get("disposition"), "checkpoint Change Unit disposition")? != "approved" { return Err(format!("selected Change Unit is not approved: {id}")); }
+            for change in array(record.get("paths"), "checkpoint Change Unit paths")? {
+                let change = object(change, "checkpoint Change Unit path")?;
+                allowed.insert(text(change.get("beforePath"), "checkpoint before path")?.to_owned());
+                if let Some(after) = change.get("afterPath").and_then(Value::as_str) { allowed.insert(after.to_owned()); }
+            }
+        }
+    }
+    let output = Command::new("git").args(["diff", "--name-only", request.current_base, request.proposed_commit, "--"]).current_dir(root).output().map_err(|error| format!("read proposed promotion diff: {error}"))?;
+    if !output.status.success() { return Err("read proposed promotion diff failed".to_owned()); }
+    let paths: BTreeSet<_> = String::from_utf8_lossy(&output.stdout).lines().map(str::to_owned).collect();
+    if paths.is_empty() || paths.iter().any(|path| path.starts_with("_bmad/") || path.starts_with(".agents/") || path.starts_with("_bmad-output/") || !allowed.contains(path)) {
+        return Err("proposed promotion includes private or unapproved paths".to_owned());
     }
     Ok(())
 }

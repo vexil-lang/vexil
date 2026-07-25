@@ -2293,6 +2293,21 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
 }
 
 #[test]
+fn selective_promotion_rejects_the_wholesale_checkpoint_identity() {
+    use vexil_release_governance_validator::{
+        validate_selective_promotion, SelectivePromotionRequest,
+    };
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let approved = BTreeSet::from(["checkpoint-python-generator-fix".to_owned()]);
+    let request = SelectivePromotionRequest {
+        current_base: &"a".repeat(40),
+        proposed_commit: "d4099e8188f40603ebf52473d6543ce4a6054201",
+        approved_change_units: &approved,
+    };
+    assert!(validate_selective_promotion(&root, &request).is_err());
+}
+
+#[test]
 fn canonical_contract_and_all_fixtures_have_the_expected_result() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_repository(&root)
