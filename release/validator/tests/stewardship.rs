@@ -5,6 +5,30 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[test]
+fn security_inventory_covers_every_maintained_dependency_and_workflow_surface() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let inventory = fs::read_to_string(root.join("release/security/inventory.toml"))
+        .expect("read checked-in security inventory");
+    vexil_release_governance_validator::validate_security_inventory(&root, &inventory)
+        .expect("complete security inventory must validate");
+    vexil_release_governance_validator::validate_security_inventory(
+        &root,
+        &inventory.replacen("Cargo.lock", "_bmad/private-lock", 1),
+    )
+    .expect_err("private inventory inputs must fail");
+    vexil_release_governance_validator::validate_security_inventory(
+        &root,
+        &inventory.replacen("id = \"github-actions\"", "id = \"missing-actions\"", 1),
+    )
+    .expect_err("every maintained workflow surface must remain inventoried");
+    vexil_release_governance_validator::validate_security_inventory(
+        &root,
+        &inventory.replacen("status = \"scanned\"", "status = \"passing\"", 1),
+    )
+    .expect_err("unknown inventory status must not become a pass");
+}
+
+#[test]
 fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_drift() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let isolated =
@@ -3064,6 +3088,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
     fs::create_dir_all(isolated.join("spec")).unwrap();
     for relative in [
         "Cargo.toml",
+        "Cargo.lock",
         "release/stewardship.json",
         "release/schemas/stewardship.schema.json",
         "release/schemas/stewardship-assignment.schema.json",
@@ -3111,6 +3136,9 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/controls/observations/baseline-2026-07-13.json",
         "release/controls/remediation-plan-github-protections.json",
         "release/identities/custody.json",
+        "release/security/inventory.toml",
+        "release/security/scan-coverage.md",
+        "release/security/scans/npm-runtime-ts-2026-07-25.json",
         "release/history/baseline-tags.json",
         "release/history/ratifications/history-ratification-release-steward-2026-07-23.json",
         "release/history/ratifications/history-ratification-repository-administrator-2026-07-23.json",

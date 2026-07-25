@@ -2654,6 +2654,7 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_privileged_operations_repository(root)?;
     validate_stewardship_exercises_repository(root)?;
     validate_external_controls_repository(root)?;
+    validate_security_inventory_repository(root)?;
     validate_history_repository(root)?;
     validate_catalog_lifecycle_repository(root)?;
     validate_catalog_repository(root)?;
@@ -2664,6 +2665,176 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_canonical_release_records_repository(root)?;
     validate_public_boundary(root)?;
     Ok(())
+}
+
+/// Validates that every maintained dependency and workflow surface has a
+/// visible security-scanning route. A `blocking-unknown` row proves coverage
+/// is incomplete; it never becomes a release-ready result.
+pub fn validate_security_inventory_repository(root: &Path) -> Result<(), String> {
+    let content = fs::read_to_string(root.join("release/security/inventory.toml"))
+        .map_err(|error| format!("read security inventory: {error}"))?;
+    validate_security_inventory(root, &content)
+}
+
+pub fn validate_security_inventory(root: &Path, content: &str) -> Result<(), String> {
+    let inventory = parse_toml(content)?;
+    if inventory.get("version").and_then(TomlValue::as_integer) != Some(1) {
+        return Err("security inventory must declare version = 1".to_owned());
+    }
+    let surfaces = inventory
+        .get("surface")
+        .and_then(TomlValue::as_array)
+        .ok_or("security inventory must declare [[surface]] records")?;
+    let expected = [
+        ("cargo-workspace", "cargo", "Cargo.toml", "Cargo.lock"),
+        (
+            "runtime-ts",
+            "npm",
+            "packages/runtime-ts/package.json",
+            "packages/runtime-ts/package-lock.json",
+        ),
+        (
+            "runtime-py",
+            "python",
+            "packages/runtime-py/pyproject.toml",
+            "",
+        ),
+        ("runtime-go", "go", "packages/runtime-go/go.mod", ""),
+        ("github-actions", "github-actions", ".github/workflows", ""),
+    ]
+    .into_iter()
+    .map(|(id, ecosystem, manifest, lockfile)| (id, (ecosystem, manifest, lockfile)))
+    .collect::<BTreeMap<_, _>>();
+    let mut seen = BTreeSet::new();
+    for surface in surfaces {
+        let surface = surface
+            .as_table()
+            .ok_or("security inventory surface must be a TOML table")?;
+        let id = toml_required_string(surface, "id", "security inventory surface")?;
+        let Some((ecosystem, manifest, lockfile)) = expected.get(id.as_str()) else {
+            return Err(format!("security inventory has unknown surface {id}"));
+        };
+        if !seen.insert(id.clone()) {
+            return Err(format!("security inventory repeats surface {id}"));
+        }
+        if toml_required_string(surface, "ecosystem", "security inventory surface")? != *ecosystem
+            || toml_required_string(surface, "manifest", "security inventory surface")? != *manifest
+            || toml_required_string(surface, "lockfile", "security inventory surface")? != *lockfile
+        {
+            return Err(format!(
+                "security inventory surface {id} does not match its maintained source"
+            ));
+        }
+        validate_security_inventory_path(root, manifest, "manifest")?;
+        if !lockfile.is_empty() {
+            validate_security_inventory_path(root, lockfile, "lockfile")?;
+        }
+        for field in [
+            "scanner",
+            "update_path",
+            "cadence",
+            "owner",
+            "exposure",
+            "evidence",
+        ] {
+            if toml_required_string(surface, field, "security inventory surface")?
+                .trim()
+                .is_empty()
+            {
+                return Err(format!(
+                    "security inventory surface {id} has an empty {field}"
+                ));
+            }
+        }
+        if toml_required_string(surface, "owner", "security inventory surface")?
+            != "assignment-security-steward-2026-07-14"
+        {
+            return Err(format!(
+                "security inventory surface {id} must name the Security Steward"
+            ));
+        }
+        let evidence = toml_required_string(surface, "evidence", "security inventory surface")?;
+        validate_security_inventory_path(root, &evidence, "evidence")?;
+        match toml_required_string(surface, "status", "security inventory surface")?.as_str() {
+            "scanned" => {
+                if !evidence.starts_with("release/security/scans/") {
+                    return Err(format!(
+                        "scanned security inventory surface {id} needs retained scanner output"
+                    ));
+                }
+            }
+            "blocking-unknown" => {
+                let review_by =
+                    toml_required_string(surface, "review_by", "security inventory surface")?;
+                if !is_iso_date(&review_by) {
+                    return Err(format!(
+                        "blocking security inventory surface {id} needs YYYY-MM-DD review_by"
+                    ));
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "security inventory surface {id} has invalid status"
+                ))
+            }
+        }
+    }
+    if seen.len() != expected.len() {
+        let missing = expected
+            .keys()
+            .filter(|id| !seen.contains(**id))
+            .copied()
+            .collect::<Vec<_>>();
+        return Err(format!(
+            "security inventory misses maintained surfaces: {}",
+            missing.join(", ")
+        ));
+    }
+    Ok(())
+}
+
+fn toml_required_string(table: &TomlTable, field: &str, label: &str) -> Result<String, String> {
+    table
+        .get(field)
+        .and_then(TomlValue::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{label} must declare string {field}"))
+}
+
+fn validate_security_inventory_path(root: &Path, path: &str, label: &str) -> Result<(), String> {
+    let relative = Path::new(path);
+    if relative.is_absolute()
+        || relative.components().any(|component| {
+            matches!(
+                component,
+                Component::CurDir
+                    | Component::ParentDir
+                    | Component::RootDir
+                    | Component::Prefix(_)
+            )
+        })
+        || path.starts_with("_bmad/")
+        || path.starts_with(".agents/")
+        || path.starts_with("_bmad-output/")
+    {
+        return Err(format!(
+            "security inventory {label} must be a public checked-in relative path"
+        ));
+    }
+    if !root.join(relative).exists() {
+        return Err(format!("security inventory {label} does not exist: {path}"));
+    }
+    Ok(())
+}
+
+fn is_iso_date(value: &str) -> bool {
+    value.len() == 10
+        && value.as_bytes().get(4) == Some(&b'-')
+        && value.as_bytes().get(7) == Some(&b'-')
+        && value
+            .bytes()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
 }
 
 /// Validates the non-promoting checkpoint inventory against its retained Git slice.
