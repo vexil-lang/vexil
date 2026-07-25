@@ -703,6 +703,7 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
             "-c",
             "user.email=fixture@invalid.example",
             "commit",
+            "--allow-empty",
             "--quiet",
             "-m",
             "test: update Manifest fixture schema",
