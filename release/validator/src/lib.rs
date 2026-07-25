@@ -109,6 +109,35 @@ pub struct NonPublishingRehearsalPlan {
     pub fixture_evidence: BTreeMap<String, String>,
 }
 
+/// The only Git-tag adapter fixture target accepted by this validator: a
+/// remote-free local bare repository, never a public repository or provider.
+pub struct LocalGitTagFixtureRequest<'a> {
+    pub bare_repository: &'a Path,
+    pub unit_id: &'a str,
+    pub version: &'a str,
+    pub tag_name: &'a str,
+    pub manifest_digest: &'a str,
+    pub source_commit: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct LocalGitTagFixturePlan {
+    pub tag_name: String,
+    pub immutable_key: String,
+    pub source_commit: String,
+    pub manifest_digest: String,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LocalGitTagFixtureProbe {
+    Absent,
+    Matching {
+        tag_object: String,
+        peeled_commit: String,
+    },
+    Conflicting,
+}
+
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ManifestGenerationDiagnostic {
     pub requirement: &'static str,
@@ -1770,6 +1799,177 @@ fn valid_lowercase_sha256(value: &str) -> bool {
         && value.bytes().all(|byte| {
             byte.is_ascii_digit() || (byte.is_ascii_lowercase() && byte.is_ascii_hexdigit())
         })
+}
+
+/// Validates all immutable inputs before a local tag-fixture write. This is a
+/// conformance helper, not release authority: it only admits remote-free bare
+/// repositories and rejects project-wide root version tags.
+pub fn prepare_local_git_tag_fixture(
+    request: &LocalGitTagFixtureRequest<'_>,
+) -> Result<LocalGitTagFixturePlan, String> {
+    validate_local_bare_fixture_repository(request.bare_repository)?;
+    if request.unit_id.trim().is_empty() || !valid_lowercase_sha256(request.manifest_digest) {
+        return Err("tag fixture requires a unit ID and full Manifest digest".to_owned());
+    }
+    validate_strict_semver(request.version)?;
+    if request.tag_name == format!("v{}", request.version)
+        || request.tag_name.starts_with("refs/")
+        || request.tag_name.contains("..")
+        || request.tag_name.ends_with('/')
+        || request.tag_name.trim().is_empty()
+    {
+        return Err(
+            "tag fixture rejects reserved, malformed, or root project tag names".to_owned(),
+        );
+    }
+    let check = fixture_git(
+        request.bare_repository,
+        ["check-ref-format", "--allow-onelevel"],
+    )?
+    .arg(format!("refs/tags/{}", request.tag_name))
+    .output()
+    .map_err(|error| format!("validate fixture tag name: {error}"))?;
+    if !check.status.success() {
+        return Err("tag fixture tag name is not a valid Git ref".to_owned());
+    }
+    let commit = fixture_git(
+        request.bare_repository,
+        [
+            "cat-file",
+            "-e",
+            &format!("{}^{{commit}}", request.source_commit),
+        ],
+    )?
+    .output()
+    .map_err(|error| format!("resolve fixture source commit: {error}"))?;
+    if !commit.status.success()
+        || !valid_git_object_id(request.source_commit)
+        || request.source_commit.len() != 40
+    {
+        return Err("tag fixture source commit must be a full resolved commit".to_owned());
+    }
+    Ok(LocalGitTagFixturePlan {
+        tag_name: request.tag_name.to_owned(),
+        immutable_key: format!(
+            "{}:{}:{}:{}",
+            request.unit_id, request.version, request.manifest_digest, request.source_commit
+        ),
+        source_commit: request.source_commit.to_owned(),
+        manifest_digest: request.manifest_digest.to_owned(),
+    })
+}
+
+pub fn probe_local_git_tag_fixture(
+    request: &LocalGitTagFixtureRequest<'_>,
+    plan: &LocalGitTagFixturePlan,
+) -> Result<LocalGitTagFixtureProbe, String> {
+    if plan.tag_name != request.tag_name
+        || plan.source_commit != request.source_commit
+        || plan.manifest_digest != request.manifest_digest
+    {
+        return Err("tag fixture plan does not match its immutable request".to_owned());
+    }
+    let reference = format!("refs/tags/{}", request.tag_name);
+    let exists = fixture_git(request.bare_repository, ["show-ref", "--verify", "--quiet"])?
+        .arg(&reference)
+        .status()
+        .map_err(|error| format!("probe fixture tag: {error}"))?;
+    if !exists.success() {
+        return Ok(LocalGitTagFixtureProbe::Absent);
+    }
+    let object = fixture_git(request.bare_repository, ["rev-parse"])?
+        .arg(&reference)
+        .output()
+        .map_err(|error| format!("resolve fixture tag object: {error}"))?;
+    let peeled = fixture_git(request.bare_repository, ["rev-parse"])?
+        .arg(format!("{reference}^{{}}"))
+        .output()
+        .map_err(|error| format!("resolve fixture peeled commit: {error}"))?;
+    let contents = fixture_git(request.bare_repository, ["cat-file", "-p"])?
+        .arg(&reference)
+        .output()
+        .map_err(|error| format!("read fixture tag object: {error}"))?;
+    if !object.status.success() || !peeled.status.success() || !contents.status.success() {
+        return Ok(LocalGitTagFixtureProbe::Conflicting);
+    }
+    let object = String::from_utf8_lossy(&object.stdout).trim().to_owned();
+    let peeled = String::from_utf8_lossy(&peeled.stdout).trim().to_owned();
+    let contents = String::from_utf8_lossy(&contents.stdout);
+    let expected_message = format!(
+        "unit={}\nversion={}\nmanifest-sha256={}\ncommit={}",
+        request.unit_id, request.version, request.manifest_digest, request.source_commit
+    );
+    if valid_git_object_id(&object)
+        && peeled == request.source_commit
+        && contents.contains("type commit")
+        && contents.contains(&expected_message)
+    {
+        Ok(LocalGitTagFixtureProbe::Matching {
+            tag_object: object,
+            peeled_commit: peeled,
+        })
+    } else {
+        Ok(LocalGitTagFixtureProbe::Conflicting)
+    }
+}
+
+/// Creates exactly one annotated tag in the validated local fixture. Existing
+/// tags are never moved or overwritten; callers must probe first.
+pub fn publish_local_git_tag_fixture(
+    request: &LocalGitTagFixtureRequest<'_>,
+    plan: &LocalGitTagFixturePlan,
+) -> Result<LocalGitTagFixtureProbe, String> {
+    match probe_local_git_tag_fixture(request, plan)? {
+        LocalGitTagFixtureProbe::Absent => {}
+        LocalGitTagFixtureProbe::Matching { .. } => {
+            return probe_local_git_tag_fixture(request, plan)
+        }
+        LocalGitTagFixtureProbe::Conflicting => {
+            return Err("tag fixture refuses to overwrite conflicting tag identity".to_owned())
+        }
+    }
+    let message = format!(
+        "Vexil local fixture tag\n\nunit={}\nversion={}\nmanifest-sha256={}\ncommit={}",
+        request.unit_id, request.version, request.manifest_digest, request.source_commit
+    );
+    let output = fixture_git(request.bare_repository, ["tag", "-a", request.tag_name])?
+        .arg(request.source_commit)
+        .arg("-m")
+        .arg(message)
+        .output()
+        .map_err(|error| format!("create local fixture tag: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "create local fixture tag: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    probe_local_git_tag_fixture(request, plan)
+}
+
+fn validate_local_bare_fixture_repository(repository: &Path) -> Result<(), String> {
+    let bare = fixture_git(repository, ["rev-parse", "--is-bare-repository"])?
+        .output()
+        .map_err(|error| format!("inspect tag fixture repository: {error}"))?;
+    if !bare.status.success() || String::from_utf8_lossy(&bare.stdout).trim() != "true" {
+        return Err("tag adapter requires a local bare fixture repository".to_owned());
+    }
+    let remotes = fixture_git(repository, ["remote"])?
+        .output()
+        .map_err(|error| format!("inspect tag fixture remotes: {error}"))?;
+    if !remotes.status.success() || !String::from_utf8_lossy(&remotes.stdout).trim().is_empty() {
+        return Err("tag adapter fixture repository must not have remotes".to_owned());
+    }
+    Ok(())
+}
+
+fn fixture_git<const N: usize>(repository: &Path, args: [&str; N]) -> Result<Command, String> {
+    if !repository.is_absolute() {
+        return Err("tag fixture repository must be an absolute local path".to_owned());
+    }
+    let mut command = Command::new("git");
+    command.arg("--git-dir").arg(repository).args(args);
+    Ok(command)
 }
 
 /// Builds one exact Release Manifest from reviewed inputs. A successful result

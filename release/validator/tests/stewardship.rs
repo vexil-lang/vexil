@@ -100,6 +100,101 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
 }
 
 #[test]
+fn local_git_tag_adapter_is_immutable_and_has_no_remote_target() {
+    let fixture_root = std::env::temp_dir().join(format!(
+        "vexil-local-tag-adapter-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    let seed = fixture_root.join("seed");
+    let bare = fixture_root.join("fixture.git");
+    fs::create_dir_all(&seed).expect("create tag fixture seed");
+    for args in [
+        vec!["init", "--quiet"],
+        vec!["config", "user.name", "Vexil fixture"],
+        vec!["config", "user.email", "fixture@invalid.example"],
+    ] {
+        let output = Command::new("git")
+            .current_dir(&seed)
+            .args(args)
+            .output()
+            .expect("configure tag fixture seed");
+        assert!(output.status.success());
+    }
+    fs::write(seed.join("README.md"), "fixture\n").expect("write tag fixture source");
+    for args in [
+        vec!["add", "README.md"],
+        vec!["commit", "--quiet", "-m", "fixture source"],
+    ] {
+        let output = Command::new("git")
+            .current_dir(&seed)
+            .args(args)
+            .output()
+            .expect("commit tag fixture source");
+        assert!(output.status.success());
+    }
+    let head = String::from_utf8(
+        Command::new("git")
+            .current_dir(&seed)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .expect("resolve tag fixture source commit")
+            .stdout,
+    )
+    .expect("decode tag fixture source commit")
+    .trim()
+    .to_owned();
+    let output = Command::new("git")
+        .args(["clone", "--bare", "--quiet"])
+        .arg(&seed)
+        .arg(&bare)
+        .output()
+        .expect("create bare tag fixture");
+    assert!(output.status.success());
+    let output = Command::new("git")
+        .arg("--git-dir")
+        .arg(&bare)
+        .args(["remote", "remove", "origin"])
+        .output()
+        .expect("remove bare fixture remote");
+    assert!(output.status.success());
+
+    let manifest_digest = "a".repeat(64);
+    let request = vexil_release_governance_validator::LocalGitTagFixtureRequest {
+        bare_repository: &bare,
+        unit_id: "runtime-fixture",
+        version: "0.1.0",
+        tag_name: "runtime-fixture-v0.1.0",
+        manifest_digest: &manifest_digest,
+        source_commit: &head,
+    };
+    let plan = vexil_release_governance_validator::prepare_local_git_tag_fixture(&request)
+        .expect("local bare tag fixture must prepare");
+    assert_eq!(
+        vexil_release_governance_validator::probe_local_git_tag_fixture(&request, &plan),
+        Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Absent)
+    );
+    assert!(matches!(
+        vexil_release_governance_validator::publish_local_git_tag_fixture(&request, &plan),
+        Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching { .. })
+    ));
+    assert!(matches!(
+        vexil_release_governance_validator::publish_local_git_tag_fixture(&request, &plan),
+        Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching { .. })
+    ));
+    let reserved = vexil_release_governance_validator::LocalGitTagFixtureRequest {
+        tag_name: "v0.1.0",
+        ..request
+    };
+    vexil_release_governance_validator::prepare_local_git_tag_fixture(&reserved)
+        .expect_err("root project tag must not be a fixture target");
+    fs::remove_dir_all(&fixture_root).expect("remove local tag fixture");
+}
+
+#[test]
 fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_drift() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let isolated =
