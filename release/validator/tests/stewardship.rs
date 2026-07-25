@@ -1414,6 +1414,8 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     });
     let evidence_set_bytes = canonical_json(&evidence_set);
     let evidence_digest = digest(&evidence_set_bytes);
+    let security_scan_path = "release/security/scans/npm-runtime-ts-2026-07-25.json";
+    let security_scan_digest = digest(&fs::read(root.join(security_scan_path)).unwrap());
     let artifact =
         |id: &str, digest: String| serde_json::json!({"digest":digest,"id":id,"version":"1.0"});
     let manifest = serde_json::json!({
@@ -1421,7 +1423,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "approvalPolicy":artifact("release/policies/approval.json","a".repeat(64)),"baseCommit":"b".repeat(40),"candidate":artifact("release/candidates/candidate.json","1".repeat(64)),"closeoutRequirements":artifact("release/policies/closeout.json","c".repeat(64)),"compatibilityEvidence":artifact("release/evidence/compatibility.json","d".repeat(64)),
         "evidenceSetDigest":evidence_digest,"evidenceSetId":"authorization-evidence","failurePolicy":artifact("release/policies/failure.json","e".repeat(64)),"historicalTagSnapshot":artifact("release/history/observations/snapshot.json","f".repeat(64)),"manifestId":"authorization-manifest","publicationOrder":["vexil-runtime"],"recordKind":"release-manifest","recoveryPolicy":artifact("release/policies/recovery.json","0".repeat(64)),"registryCustody":artifact("release/identities/custody.json","2".repeat(64)),"rehearsal":artifact("release/rehearsals/rehearsal.json","3".repeat(64)),
         "reducer":{"digest":"c".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},"releaseUnits":[{"canonicalTag":"vexil-runtime-v0.5.1","changeUnits":[{"digest":"4".repeat(64),"id":"checkpoint-python-generator-fix"}],"previousVersion":null,"proposedVersion":"0.5.1","sourceCommit":"5".repeat(40),"targets":[{"kind":"npm-package","mandatory":true,"name":"@vexil-lang/runtime"}],"unitId":"vexil-runtime","versionRationale":{"digest":"6".repeat(64),"id":"runtime-rationale"},"versionSource":{"observedDeclaration":"0.5.1","path":"packages/runtime-ts/package.json"}}],
-        "schemaVersion":"1.1","security":artifact("release/security/scans/fixture.json","4".repeat(64)),"stateSchema":{"digest":"d".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"},"supersedes":null
+        "schemaVersion":"1.1","security":artifact(security_scan_path,security_scan_digest.clone()),"stateSchema":{"digest":"d".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"},"supersedes":null
     });
     let manifest_bytes = canonical_json(&manifest);
     let governance_digest = governance_revision_v1(&root).unwrap();
@@ -1464,7 +1466,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "allowedOperations":["publish-runtime"],"allowedPermissions":["packages:write"],"allowedTargets":["registry:crates-io"],"allowedUnits":["vexil-runtime"],
         "manifestDigest":digest(&manifest_bytes),"manifestId":"authorization-manifest","materializationPath":"release/runs/run-preflight/start-authorization.json","notBefore":"2026-07-25T00:00:00Z",
         "protectedEnvironment":"production","recordKind":"privileged-run-start-authorization","reducer":manifest["reducer"].clone(),"runId":"run-preflight","schemaVersion":"1.0",
-        "security":{"exceptionsDigest":"3".repeat(64),"findingsDigest":"4".repeat(64)},"selectedApprovals":[{"approvalDigest":approval_digest,"approvalId":"authorization-approval","disposition":null}],
+        "security":{"exceptionsDigest":"3".repeat(64),"findingsDigest":security_scan_digest},"selectedApprovals":[{"approvalDigest":approval_digest,"approvalId":"authorization-approval","disposition":null}],
         "stateSchema":manifest["stateSchema"].clone(),"targetControlEvidence":[{"permissionDigest":"5".repeat(64),"target":"registry:crates-io","targetControlDigest":"6".repeat(64)}],"workload":"production-release"
     });
     let merge = ApprovalMergeEvidence {

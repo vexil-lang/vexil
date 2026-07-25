@@ -793,9 +793,9 @@ fn validate_authorization_manifest_and_evidence(
     manifest_bytes: &[u8],
     evidence_set_bytes: &[u8],
 ) -> Result<(), String> {
-    let manifest = parse_canonical_json_bytes(manifest_bytes, "authorization Manifest")?;
-    validate_canonical_release_record_schema(root, &manifest)?;
-    let manifest = object(&manifest, "authorization Manifest")?;
+    let manifest_value = parse_canonical_json_bytes(manifest_bytes, "authorization Manifest")?;
+    validate_canonical_release_record_schema(root, &manifest_value)?;
+    let manifest = object(&manifest_value, "authorization Manifest")?;
     if text(manifest.get("recordKind"), "authorization Manifest kind")? != "release-manifest" {
         return Err("authorization input is not a Release Manifest".to_owned());
     }
@@ -806,6 +806,7 @@ fn validate_authorization_manifest_and_evidence(
     {
         return Err("authorization requires the retained release-manifest@1.1 contract".to_owned());
     }
+    validate_manifest_security(root, &manifest_value)?;
     let evidence_set =
         parse_canonical_json_bytes(evidence_set_bytes, "authorization evidence set")?;
     validate_canonical_release_record_schema(root, &evidence_set)?;
