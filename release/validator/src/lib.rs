@@ -37,6 +37,78 @@ const ROOT_FIELDS: [&str; 10] = [
     "publicationBlock",
 ];
 
+struct CanonicalRecord {
+    digest: String,
+    path: std::path::PathBuf,
+    value: Value,
+}
+
+/// Exact, caller-supplied inputs for a detached approval. The constructor only
+/// returns canonical bytes; it never writes a record or creates release authority.
+pub struct DetachedApprovalRequest<'a> {
+    pub approval_id: &'a str,
+    pub manifest_bytes: &'a [u8],
+    pub evidence_set_id: &'a str,
+    pub evidence_set_digest: &'a str,
+    pub governance_digest: &'a str,
+    pub actor: &'a str,
+    pub role: &'a str,
+    pub assignment_id: &'a str,
+    pub manifest_approver_actor: Option<&'a str>,
+    pub approved_at: &'a str,
+    pub expires_at: &'a str,
+    pub provider_audit_reference: Option<&'a str>,
+}
+
+/// Source-attributed protected-main evidence supplied by an external collector.
+/// This is evidence for an offline decision, never a provider query or release effect.
+pub struct ApprovalMergeEvidence<'a> {
+    pub repository: &'a str,
+    pub reference: &'a str,
+    pub commit_id: &'a str,
+    pub tree_id: &'a str,
+    pub approval_path: &'a str,
+    pub blob_id: &'a str,
+    pub observed_blob_bytes: &'a [u8],
+    pub approval_digest: &'a str,
+    pub manifest_bytes: &'a [u8],
+    pub evidence_set_bytes: &'a [u8],
+    pub merge_or_pr_id: &'a str,
+    pub observed_at: &'a str,
+    pub collector: &'a str,
+    pub manifest_approver_actor: Option<&'a str>,
+    pub dispositions: &'a [&'a [u8]],
+    pub dispositions_complete: bool,
+}
+
+pub struct ApprovalDispositionRequest<'a> {
+    pub disposition_id: &'a str,
+    pub disposition: &'a str,
+    pub effective_at: &'a str,
+    pub actor: &'a str,
+    pub role: &'a str,
+    pub assignment_id: &'a str,
+    pub reason: &'a str,
+    pub source: &'a str,
+    pub observed_at: &'a str,
+    pub collector: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum DetachedApprovalOutcome {
+    InvalidStructure,
+    ValidButNotCanonical,
+    CanonicalButCurrentlyIneligible,
+    Eligible,
+}
+
+#[derive(Default)]
+struct CanonicalRecordIndex {
+    records: BTreeMap<(String, String), CanonicalRecord>,
+    events: Vec<(std::path::PathBuf, Value)>,
+    visited_directories: BTreeSet<std::path::PathBuf>,
+}
+
 #[derive(Clone)]
 struct ExpectedControl {
     provider: String,
@@ -186,6 +258,526 @@ const PRIVILEGED_OPERATION_FIELDS: [&str; 17] = [
     "effectPolicy",
 ];
 
+/// Computes the retained governance-revision-v1 digest from the public files
+/// that determine detached-approval eligibility. This intentionally frames
+/// path and content bytes, so neither concatenation ambiguity nor JSON
+/// reserialization can change the identity.
+pub fn governance_revision_v1(root: &Path) -> Result<String, String> {
+    let assignments_path = "release/stewardship/assignments.json";
+    let assignments = read_json(&root.join(assignments_path))?;
+    validate_assignments(&assignments)?;
+    let mut paths = vec![
+        "release/stewardship.json".to_owned(),
+        assignments_path.to_owned(),
+        "release/schemas/stewardship.schema.json".to_owned(),
+        "release/schemas/stewardship-assignment.schema.json".to_owned(),
+        "release/schemas/release-detached-approval-1.0.schema.json".to_owned(),
+        "release/schemas/release-approval-disposition-1.0.schema.json".to_owned(),
+    ];
+    collect_checked_in_governance_paths(&assignments, &mut paths);
+    paths.sort();
+    if paths.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err("governance revision has duplicate public inputs".to_owned());
+    }
+    let root_canonical =
+        fs::canonicalize(root).map_err(|error| format!("canonicalize repository root: {error}"))?;
+    let mut revision = b"vexil-governance-revision-1.0\n".to_vec();
+    for path in paths {
+        let candidate = Path::new(&path);
+        if candidate.is_absolute()
+            || candidate
+                .components()
+                .any(|component| matches!(component, Component::ParentDir))
+        {
+            return Err(format!(
+                "governance revision has unsafe public path: {path}"
+            ));
+        }
+        let full_path = fs::canonicalize(root.join(&path))
+            .map_err(|error| format!("governance revision input is missing {path}: {error}"))?;
+        if !full_path.starts_with(&root_canonical) {
+            return Err(format!(
+                "governance revision input escapes repository root: {path}"
+            ));
+        }
+        let bytes = fs::read(&full_path)
+            .map_err(|error| format!("read governance revision input {path}: {error}"))?;
+        revision.extend_from_slice(path.len().to_string().as_bytes());
+        revision.extend_from_slice(b":");
+        revision.extend_from_slice(path.as_bytes());
+        revision.extend_from_slice(b"\n");
+        revision.extend_from_slice(bytes.len().to_string().as_bytes());
+        revision.extend_from_slice(b":");
+        revision.extend_from_slice(&bytes);
+        revision.extend_from_slice(b"\n");
+    }
+    Ok(sha256_hex(&revision))
+}
+
+/// Constructs one schema-valid detached approval from exact canonical Manifest
+/// bytes and current public governance. It has no filesystem side effects.
+pub fn construct_detached_approval(
+    root: &Path,
+    request: &DetachedApprovalRequest<'_>,
+) -> Result<Vec<u8>, String> {
+    if request
+        .provider_audit_reference
+        .is_some_and(|reference| reference.is_empty())
+    {
+        return Err("provider audit reference must not be empty when supplied".to_owned());
+    }
+    let manifest = parse_canonical_json_bytes(request.manifest_bytes, "Release Manifest")?;
+    validate_canonical_release_record_schema(root, &manifest)?;
+    let manifest = object(&manifest, "Release Manifest")?;
+    if text(manifest.get("recordKind"), "Release Manifest kind")? != "release-manifest" {
+        return Err("approval constructor requires a Release Manifest".to_owned());
+    }
+    let manifest_id = text(manifest.get("manifestId"), "Release Manifest ID")?;
+    let manifest_digest = sha256_hex(request.manifest_bytes);
+    if text(manifest.get("evidenceSetId"), "Manifest evidence-set ID")? != request.evidence_set_id
+        || text(
+            manifest.get("evidenceSetDigest"),
+            "Manifest evidence-set digest",
+        )? != request.evidence_set_digest
+    {
+        return Err(
+            "approval constructor input does not bind the Manifest's exact evidence set".to_owned(),
+        );
+    }
+    if request.governance_digest != governance_revision_v1(root)? {
+        return Err(
+            "approval constructor governance digest does not match governance-revision-v1"
+                .to_owned(),
+        );
+    }
+    ensure_release_steward_eligible(
+        root,
+        request.actor,
+        request.role,
+        request.assignment_id,
+        request.approved_at,
+        request.manifest_approver_actor,
+        true,
+    )?;
+    let approved = utc_second_timestamp(request.approved_at)?;
+    let expires = utc_second_timestamp(request.expires_at)?;
+    if approved >= expires {
+        return Err("detached approval must have approvedAt before expiresAt".to_owned());
+    }
+    let mut approval = serde_json::json!({
+        "$schema": "https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+        "approvalId": request.approval_id,
+        "approvedAt": request.approved_at,
+        "approver": {"actor": request.actor, "assignment": request.assignment_id, "role": request.role},
+        "evidenceSetDigest": request.evidence_set_digest,
+        "evidenceSetId": request.evidence_set_id,
+        "expiresAt": request.expires_at,
+        "governanceDigest": request.governance_digest,
+        "manifestDigest": manifest_digest,
+        "manifestId": manifest_id,
+        "recordKind": "release-detached-approval",
+        "schemaVersion": "1.0"
+    });
+    if let Some(actor) = request.manifest_approver_actor {
+        approval
+            .as_object_mut()
+            .ok_or("constructed approval is not an object")?
+            .insert(
+                "manifestApproverActor".to_owned(),
+                Value::String(actor.to_owned()),
+            );
+    }
+    validate_canonical_release_record_schema(root, &approval)?;
+    canonical_json_bytes(&approval)
+}
+
+/// Constructs a retained withdrawal or revocation record. The
+/// original approval bytes are read-only input and are never rewritten.
+pub fn construct_approval_disposition(
+    root: &Path,
+    approval_bytes: &[u8],
+    request: &ApprovalDispositionRequest<'_>,
+) -> Result<Vec<u8>, String> {
+    let approval = parse_canonical_json_bytes(approval_bytes, "detached approval")?;
+    validate_canonical_release_record_schema(root, &approval)?;
+    let approval = object(&approval, "detached approval")?;
+    if text(approval.get("recordKind"), "detached approval kind")? != "release-detached-approval" {
+        return Err("disposition constructor requires a detached approval".to_owned());
+    }
+    if !matches!(request.disposition, "withdrawn" | "revoked") {
+        return Err("approval disposition must be withdrawn or revoked".to_owned());
+    }
+    ensure_repository_administrator(
+        root,
+        request.actor,
+        request.role,
+        request.assignment_id,
+        request.effective_at,
+    )?;
+    if utc_second_timestamp(request.effective_at)?
+        < utc_second_timestamp(text(approval.get("approvedAt"), "approval time")?)?
+    {
+        return Err("approval disposition predates the approval".to_owned());
+    }
+    let record = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+        "approvalDigest":sha256_hex(approval_bytes),
+        "approvalId":text(approval.get("approvalId"), "approval ID")?,
+        "authority":{"actor":request.actor,"assignment":request.assignment_id,"role":request.role},
+        "disposition":request.disposition,
+        "dispositionId":request.disposition_id,
+        "effectiveAt":request.effective_at,
+        "reason":request.reason,
+        "recordKind":"release-approval-disposition",
+        "schemaVersion":"1.0",
+        "sourceEvidence":{"collector":request.collector,"observedAt":request.observed_at,"source":request.source}
+    });
+    validate_canonical_release_record_schema(root, &record)?;
+    canonical_json_bytes(&record)
+}
+
+/// Rechecks an immutable detached approval immediately before a privileged
+/// effect. The result distinguishes malformed data, missing canonical-merge
+/// evidence, current ineligibility, and an offline eligible approval.
+pub fn assess_detached_approval(
+    root: &Path,
+    approval_bytes: &[u8],
+    evaluation_time: &str,
+    merge: Option<&ApprovalMergeEvidence<'_>>,
+) -> Result<DetachedApprovalOutcome, String> {
+    let approval = match parse_canonical_json_bytes(approval_bytes, "detached approval") {
+        Ok(approval) => approval,
+        Err(_) => return Ok(DetachedApprovalOutcome::InvalidStructure),
+    };
+    if validate_canonical_release_record_schema(root, &approval).is_err() {
+        return Ok(DetachedApprovalOutcome::InvalidStructure);
+    }
+    let approval = object(&approval, "detached approval")?;
+    if text(approval.get("recordKind"), "detached approval kind")? != "release-detached-approval" {
+        return Ok(DetachedApprovalOutcome::InvalidStructure);
+    }
+    let Some(merge) = merge else {
+        return Ok(DetachedApprovalOutcome::ValidButNotCanonical);
+    };
+    if !valid_detached_approval_dependencies(root, approval, merge)? {
+        return Ok(DetachedApprovalOutcome::InvalidStructure);
+    }
+    if !valid_protected_main_merge_evidence(approval, approval_bytes, evaluation_time, merge)? {
+        return Ok(DetachedApprovalOutcome::ValidButNotCanonical);
+    }
+    if !merge.dispositions_complete {
+        return Ok(DetachedApprovalOutcome::CanonicalButCurrentlyIneligible);
+    }
+    let approver = object(
+        approval.get("approver").ok_or("approval has no approver")?,
+        "approver",
+    )?;
+    let governance_current = text(
+        approval.get("governanceDigest"),
+        "approval governance digest",
+    )? == governance_revision_v1(root)?;
+    let time_eligible = utc_second_timestamp(text(approval.get("approvedAt"), "approval time")?)?
+        <= utc_second_timestamp(evaluation_time)?
+        && utc_second_timestamp(evaluation_time)?
+            < utc_second_timestamp(text(approval.get("expiresAt"), "approval expiry")?)?;
+    let actor_eligible = ensure_release_steward_eligible(
+        root,
+        text(approver.get("actor"), "approval actor")?,
+        text(approver.get("role"), "approval role")?,
+        text(approver.get("assignment"), "approval assignment")?,
+        evaluation_time,
+        merge.manifest_approver_actor,
+        true,
+    )
+    .is_ok();
+    let disposition_invalidates = merge.dispositions.iter().any(|bytes| {
+        let Ok(disposition) = parse_canonical_json_bytes(bytes, "approval disposition") else {
+            return true;
+        };
+        if validate_canonical_release_record_schema(root, &disposition).is_err() {
+            return true;
+        }
+        let Ok(disposition) = object(&disposition, "approval disposition") else {
+            return true;
+        };
+        disposition.get("approvalId") == approval.get("approvalId")
+            && disposition.get("approvalDigest").and_then(Value::as_str)
+                == Some(sha256_hex(approval_bytes).as_str())
+            && disposition
+                .get("effectiveAt")
+                .and_then(Value::as_str)
+                .and_then(|effective| utc_second_timestamp(effective).ok())
+                .is_none_or(|effective| {
+                    utc_second_timestamp(evaluation_time).map_or(true, |now| now >= effective)
+                })
+    });
+    if governance_current && time_eligible && actor_eligible && !disposition_invalidates {
+        Ok(DetachedApprovalOutcome::Eligible)
+    } else {
+        Ok(DetachedApprovalOutcome::CanonicalButCurrentlyIneligible)
+    }
+}
+
+fn collect_checked_in_governance_paths(value: &Value, paths: &mut Vec<String>) {
+    match value {
+        Value::Object(entries) => entries
+            .values()
+            .for_each(|entry| collect_checked_in_governance_paths(entry, paths)),
+        Value::Array(entries) => entries
+            .iter()
+            .for_each(|entry| collect_checked_in_governance_paths(entry, paths)),
+        Value::String(path)
+            if path.starts_with("release/")
+                && !path.contains("..")
+                && (path.ends_with(".json") || path.ends_with(".md")) =>
+        {
+            paths.push(path.to_owned());
+        }
+        _ => {}
+    }
+}
+
+fn ensure_release_steward_eligible(
+    root: &Path,
+    actor: &str,
+    role: &str,
+    assignment_id: &str,
+    evaluation_time: &str,
+    manifest_approver_actor: Option<&str>,
+    require_distinct_manifest_approver: bool,
+) -> Result<(), String> {
+    if role != "release-steward" {
+        return Err("detached approval requires the asserted release-steward role".to_owned());
+    }
+    let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
+    validate_assignments(&assignments)?;
+    let root = object(&assignments, "assignment record")?;
+    let qualified = strings(
+        object(
+            root.get("continuity")
+                .ok_or("assignment record has no continuity")?,
+            "continuity",
+        )?
+        .get("qualifiedReleaseStewardActorIds"),
+        "qualified Release Steward actor IDs",
+    )?;
+    if !qualified.contains(&actor) {
+        return Err("approval actor is not a current qualified Release Steward".to_owned());
+    }
+    let assignment = array(root.get("assignments"), "assignments")?
+        .iter()
+        .filter_map(Value::as_object)
+        .filter(|assignment| {
+            assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id)
+        })
+        .collect::<Vec<_>>();
+    let [assignment] = assignment.as_slice() else {
+        return Err("approval assignment is missing or ambiguous".to_owned());
+    };
+    if assignment.get("primaryActorId").and_then(Value::as_str) != Some(actor)
+        || assignment.get("roleId").and_then(Value::as_str) != Some(role)
+        || assignment.get("status").and_then(Value::as_str) != Some("active")
+        || assignment
+            .get("scope")
+            .and_then(Value::as_object)
+            .and_then(|scope| scope.get("kind"))
+            .and_then(Value::as_str)
+            != Some("release-manifest-lifecycle")
+    {
+        return Err("approval actor/role/assignment is not currently eligible".to_owned());
+    }
+    let effective = text(assignment.get("effectiveFrom"), "assignment effective date")?;
+    if format!("{effective}T00:00:00Z").as_str() > evaluation_time {
+        return Err("approval assignment is not effective at the evaluation time".to_owned());
+    }
+    if require_distinct_manifest_approver
+        && qualified.len() > 1
+        && manifest_approver_actor.is_none_or(|other| other == actor)
+    {
+        return Err(
+            "multi-steward governance requires a distinct Manifest approver actor".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn ensure_active_assignment(
+    root: &Path,
+    actor: &str,
+    role: &str,
+    assignment_id: &str,
+    scope_kind: &str,
+    evaluation_time: &str,
+    context: &str,
+) -> Result<(), String> {
+    let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
+    validate_assignments(&assignments)?;
+    let assignments = object(&assignments, "assignment record")?;
+    let matches = array(assignments.get("assignments"), "assignments")?
+        .iter()
+        .filter_map(Value::as_object)
+        .filter(|assignment| {
+            assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id)
+                && assignment.get("primaryActorId").and_then(Value::as_str) == Some(actor)
+                && assignment.get("roleId").and_then(Value::as_str) == Some(role)
+                && assignment.get("status").and_then(Value::as_str) == Some("active")
+                && assignment
+                    .get("scope")
+                    .and_then(Value::as_object)
+                    .and_then(|scope| scope.get("kind"))
+                    .and_then(Value::as_str)
+                    == Some(scope_kind)
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err(format!(
+            "{context} actor/role/assignment is not currently eligible"
+        ));
+    }
+    let effective = text(matches[0].get("effectiveFrom"), "assignment effective date")?;
+    if format!("{effective}T00:00:00Z").as_str() > evaluation_time {
+        return Err(format!(
+            "{context} assignment is not effective at the evaluation time"
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_repository_administrator(
+    root: &Path,
+    actor: &str,
+    role: &str,
+    assignment_id: &str,
+    evaluation_time: &str,
+) -> Result<(), String> {
+    if role != "repository-administrator" {
+        return Err(
+            "approval disposition requires a repository-administrator authority".to_owned(),
+        );
+    }
+    let assignments = read_json(&root.join("release/stewardship/assignments.json"))?;
+    validate_assignments(&assignments)?;
+    let assignments = object(&assignments, "assignment record")?;
+    let matches = array(assignments.get("assignments"), "assignments")?
+        .iter()
+        .filter_map(Value::as_object)
+        .filter(|assignment| {
+            assignment.get("assignmentId").and_then(Value::as_str) == Some(assignment_id)
+                && assignment.get("primaryActorId").and_then(Value::as_str) == Some(actor)
+                && assignment.get("roleId").and_then(Value::as_str) == Some(role)
+                && assignment.get("status").and_then(Value::as_str) == Some("active")
+        })
+        .collect::<Vec<_>>();
+    let [assignment] = matches.as_slice() else {
+        return Err("approval disposition authority is missing or ambiguous".to_owned());
+    };
+    if format!(
+        "{}T00:00:00Z",
+        text(assignment.get("effectiveFrom"), "assignment effective date")?
+    )
+    .as_str()
+        > evaluation_time
+    {
+        return Err("approval disposition authority is not effective".to_owned());
+    }
+    Ok(())
+}
+
+fn valid_protected_main_merge_evidence(
+    approval: &Map<String, Value>,
+    approval_bytes: &[u8],
+    evaluation_time: &str,
+    merge: &ApprovalMergeEvidence<'_>,
+) -> Result<bool, String> {
+    let manifest_id = text(approval.get("manifestId"), "approval Manifest ID")?;
+    let approval_id = text(approval.get("approvalId"), "approval ID")?;
+    let expected_path = format!("release/manifests/{manifest_id}/approvals/{approval_id}.json");
+    Ok(merge.repository == "vexil-lang/vexil"
+        && merge.reference == "refs/heads/main"
+        && valid_git_object_id(merge.commit_id)
+        && valid_git_object_id(merge.tree_id)
+        && valid_git_object_id(merge.blob_id)
+        && merge.approval_path == expected_path
+        && merge.observed_blob_bytes == approval_bytes
+        && merge.approval_digest == sha256_hex(approval_bytes)
+        && !merge.merge_or_pr_id.is_empty()
+        && !merge.collector.is_empty()
+        && merge.observed_at == evaluation_time
+        && is_valid_utc_second(merge.observed_at))
+}
+
+fn valid_detached_approval_dependencies(
+    root: &Path,
+    approval: &Map<String, Value>,
+    merge: &ApprovalMergeEvidence<'_>,
+) -> Result<bool, String> {
+    let manifest = match parse_canonical_json_bytes(merge.manifest_bytes, "merged Release Manifest")
+    {
+        Ok(value) if validate_canonical_release_record_schema(root, &value).is_ok() => value,
+        _ => return Ok(false),
+    };
+    let evidence_set = match parse_canonical_json_bytes(
+        merge.evidence_set_bytes,
+        "merged reviewed evidence set",
+    ) {
+        Ok(value) if validate_canonical_release_record_schema(root, &value).is_ok() => value,
+        _ => return Ok(false),
+    };
+    let Ok(manifest) = object(&manifest, "merged Release Manifest") else {
+        return Ok(false);
+    };
+    let Ok(evidence_set) = object(&evidence_set, "merged reviewed evidence set") else {
+        return Ok(false);
+    };
+    if text(manifest.get("recordKind"), "merged Release Manifest kind")? != "release-manifest"
+        || text(evidence_set.get("recordKind"), "merged evidence-set kind")?
+            != "release-evidence-set"
+        || validate_evidence_set_entries(root, evidence_set).is_err()
+    {
+        return Ok(false);
+    }
+    Ok(approval.get("manifestId") == manifest.get("manifestId")
+        && approval.get("manifestDigest").and_then(Value::as_str)
+            == Some(sha256_hex(merge.manifest_bytes).as_str())
+        && approval.get("evidenceSetId") == manifest.get("evidenceSetId")
+        && approval.get("evidenceSetDigest") == manifest.get("evidenceSetDigest")
+        && approval.get("evidenceSetId") == evidence_set.get("evidenceSetId")
+        && approval.get("evidenceSetDigest").and_then(Value::as_str)
+            == Some(sha256_hex(merge.evidence_set_bytes).as_str()))
+}
+
+fn valid_git_object_id(value: &str) -> bool {
+    matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn parse_canonical_json_bytes(bytes: &[u8], label: &str) -> Result<Value, String> {
+    if bytes.starts_with(&[0xef, 0xbb, 0xbf]) || bytes.contains(&b'\r') || !bytes.ends_with(b"\n") {
+        return Err(format!("{label} has invalid raw-byte profile"));
+    }
+    let value: Value =
+        serde_json::from_slice(bytes).map_err(|error| format!("parse {label}: {error}"))?;
+    if canonical_json_bytes(&value)? != bytes {
+        return Err(format!(
+            "{label} is parse-equivalent but not canonically encoded"
+        ));
+    }
+    Ok(value)
+}
+
+fn canonical_json_bytes(value: &Value) -> Result<Vec<u8>, String> {
+    let mut bytes =
+        serde_json::to_vec(value).map_err(|error| format!("encode canonical JSON: {error}"))?;
+    bytes.push(b'\n');
+    Ok(bytes)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
 pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_schema_syntax(root)?;
     let record = read_json(&root.join("release/stewardship.json"))?;
@@ -205,7 +797,1374 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_catalog_lifecycle_repository(root)?;
     validate_catalog_repository(root)?;
     validate_version_rationale_repository(root)?;
+    validate_canonical_release_records_repository(root)?;
     validate_public_boundary(root)?;
+    Ok(())
+}
+
+/// Validates retained, public canonical release-record families. This is a
+/// structural/offline boundary only; it neither creates nor authorizes records.
+pub fn validate_canonical_release_records_repository(root: &Path) -> Result<(), String> {
+    validate_schema_syntax(root)?;
+    let mut index = CanonicalRecordIndex::default();
+    for relative in ["release/evidence-sets", "release/manifests", "release/runs"] {
+        let directory = root.join(relative);
+        if !directory.exists() {
+            continue;
+        }
+        validate_canonical_release_record_tree(root, &directory, &mut index)?;
+    }
+    validate_canonical_record_references(root, &index)
+}
+
+fn validate_canonical_release_record_tree(
+    root: &Path,
+    directory: &Path,
+    index: &mut CanonicalRecordIndex,
+) -> Result<(), String> {
+    let directory = fs::canonicalize(directory).map_err(|error| {
+        format!(
+            "canonicalize release-record directory {}: {error}",
+            directory.display()
+        )
+    })?;
+    if !index.visited_directories.insert(directory.clone()) {
+        return Err(format!(
+            "canonical release-record directory is revisited through a symlink or junction: {}",
+            directory.display()
+        ));
+    }
+    let root_canonical =
+        fs::canonicalize(root).map_err(|error| format!("canonicalize repository root: {error}"))?;
+    let mut entries = fs::read_dir(&directory)
+        .map_err(|error| {
+            format!(
+                "read canonical release-record directory {}: {error}",
+                directory.display()
+            )
+        })?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            format!(
+                "enumerate canonical release-record directory {}: {error}",
+                directory.display()
+            )
+        })?;
+    entries.sort();
+    for path in entries {
+        let canonical = fs::canonicalize(&path).map_err(|error| {
+            format!(
+                "canonicalize release-record path {}: {error}",
+                path.display()
+            )
+        })?;
+        if !canonical.starts_with(&root_canonical) {
+            return Err(format!(
+                "canonical release-record path escapes repository root: {}",
+                path.display()
+            ));
+        }
+        if canonical.is_dir() {
+            validate_canonical_release_record_tree(root, &canonical, index)?;
+        } else if canonical
+            .extension()
+            .is_some_and(|extension| extension == "json")
+        {
+            let record = read_canonical_json(&canonical)?;
+            validate_canonical_release_record(root, &record, &canonical)?;
+            let (kind, id) = canonical_record_identity(&record)?;
+            let kind = kind.to_owned();
+            let id = id.to_owned();
+            validate_canonical_record_location(root, &canonical, &kind, &id)?;
+            let digest = format!(
+                "{:x}",
+                Sha256::digest(fs::read(&canonical).map_err(|error| {
+                    format!(
+                        "read canonical record {} for digest: {error}",
+                        canonical.display()
+                    )
+                })?)
+            );
+            if index
+                .records
+                .insert(
+                    (kind.clone(), id.clone()),
+                    CanonicalRecord {
+                        digest,
+                        path: canonical,
+                        value: record,
+                    },
+                )
+                .is_some()
+            {
+                return Err(format!("duplicate canonical record identity: {kind}/{id}"));
+            }
+        } else if canonical
+            .extension()
+            .is_some_and(|extension| extension == "jsonl")
+        {
+            index
+                .events
+                .extend(validate_canonical_jsonl(root, &canonical)?);
+        } else {
+            return Err(format!(
+                "canonical release-record directory contains unsupported file: {}",
+                canonical.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn canonical_record_identity(record: &Value) -> Result<(&str, &str), String> {
+    let object = object(record, "canonical release record")?;
+    let kind = text(object.get("recordKind"), "canonical release record kind")?;
+    let field = match kind {
+        "release-manifest" => "manifestId",
+        "release-evidence-set" => "evidenceSetId",
+        "release-detached-approval" => "approvalId",
+        "release-approval-disposition" => "dispositionId",
+        "privileged-run-start-authorization" => "authorizationId",
+        "release-adapter-result-envelope" => "adapterResultId",
+        "release-run-evidence" => "evidenceId",
+        "release-closeout" => "closeoutId",
+        other => return Err(format!("{other} has no canonical file identity")),
+    };
+    Ok((
+        kind,
+        text(object.get(field), "canonical release record ID")?,
+    ))
+}
+
+fn validate_canonical_record_location(
+    root: &Path,
+    path: &Path,
+    kind: &str,
+    id: &str,
+) -> Result<(), String> {
+    let root =
+        fs::canonicalize(root).map_err(|error| format!("canonicalize repository root: {error}"))?;
+    let relative = path.strip_prefix(&root).map_err(|_| {
+        format!(
+            "canonical release-record path escapes repository root: {}",
+            path.display()
+        )
+    })?;
+    let parts = relative
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let matches = match kind {
+        "release-evidence-set" => parts == ["release", "evidence-sets", id, "evidence-set.json"],
+        "release-manifest" => parts == ["release", "manifests", id, "manifest.json"],
+        "release-detached-approval" => {
+            parts.len() == 5
+                && parts[0] == "release"
+                && parts[1] == "manifests"
+                && parts[3] == "approvals"
+                && parts[4] == format!("{id}.json")
+        }
+        "release-approval-disposition" => {
+            parts.len() == 5
+                && parts[0] == "release"
+                && parts[1] == "manifests"
+                && parts[3] == "approval-dispositions"
+                && parts[4] == format!("{id}.json")
+        }
+        "privileged-run-start-authorization" => {
+            parts.len() == 4
+                && parts[0] == "release"
+                && parts[1] == "runs"
+                && parts[3] == "start-authorization.json"
+        }
+        "release-adapter-result-envelope" => {
+            parts.len() == 6
+                && parts[0] == "release"
+                && parts[1] == "runs"
+                && parts[3] == "evidence"
+                && parts[4] == "adapter-results"
+                && parts[5] == format!("{id}.json")
+        }
+        "release-run-evidence" => {
+            parts.len() == 5
+                && parts[0] == "release"
+                && parts[1] == "runs"
+                && parts[3] == "evidence"
+                && parts[4] == format!("{id}.json")
+        }
+        "release-closeout" => {
+            parts.len() == 4
+                && parts[0] == "release"
+                && parts[1] == "runs"
+                && parts[3] == "closeout.json"
+        }
+        _ => unreachable!("canonical file identities were checked before path validation"),
+    };
+    if !matches {
+        return Err(format!(
+            "canonical {kind} record is not materialized at its required public location: {}",
+            relative.display()
+        ));
+    }
+    Ok(())
+}
+
+fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &'static str)> {
+    match (kind, version) {
+        ("release-manifest", "1.0") => Some((
+            "release/schemas/release-manifest-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        )),
+        ("release-evidence-set", "1.0") => Some((
+            "release/schemas/release-evidence-set-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        )),
+        ("release-detached-approval", "1.0") => Some((
+            "release/schemas/release-detached-approval-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+        )),
+        ("release-approval-disposition", "1.0") => Some((
+            "release/schemas/release-approval-disposition-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+        )),
+        ("privileged-run-start-authorization", "1.0") => Some((
+            "release/schemas/privileged-run-start-authorization-1.0.schema.json",
+            "https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        )),
+        ("release-adapter-result-envelope", "1.0") => Some((
+            "release/schemas/release-adapter-result-envelope-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-adapter-result-envelope-1.0.schema.json",
+        )),
+        ("release-run-event", "1.0") => Some((
+            "release/schemas/release-run-event-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-run-event-1.0.schema.json",
+        )),
+        ("release-run-evidence", "1.0") => Some((
+            "release/schemas/release-run-evidence-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-run-evidence-1.0.schema.json",
+        )),
+        ("release-closeout", "1.0") => Some((
+            "release/schemas/release-closeout-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-closeout-1.0.schema.json",
+        )),
+        _ => None,
+    }
+}
+
+fn read_canonical_json(path: &Path) -> Result<Value, String> {
+    let bytes = fs::read(path)
+        .map_err(|error| format!("read canonical record {}: {error}", path.display()))?;
+    if bytes.starts_with(&[0xef, 0xbb, 0xbf]) || bytes.contains(&b'\r') || !bytes.ends_with(b"\n") {
+        return Err(format!(
+            "canonical record has invalid raw-byte profile: {}",
+            path.display()
+        ));
+    }
+    let record: Value = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("parse canonical record {}: {error}", path.display()))?;
+    let expected = [
+        serde_json::to_vec(&record)
+            .map_err(|error| format!("encode canonical record {}: {error}", path.display()))?,
+        vec![b'\n'],
+    ]
+    .concat();
+    if bytes != expected {
+        return Err(format!(
+            "canonical record is parse-equivalent but not canonically encoded: {}",
+            path.display()
+        ));
+    }
+    Ok(record)
+}
+
+fn validate_canonical_release_record(
+    root: &Path,
+    record: &Value,
+    path: &Path,
+) -> Result<(), String> {
+    validate_canonical_release_record_schema(root, record)?;
+    let object = object(record, "canonical release record")?;
+    let kind = text(object.get("recordKind"), "canonical release record kind")?;
+    ensure_no_private_leakage(&record.to_string())?;
+    validate_canonical_reference_paths(record)?;
+    validate_canonical_record_times(kind, object)?;
+    validate_canonical_digest_fields(record, path)?;
+    if matches!(
+        kind,
+        "release-manifest" | "privileged-run-start-authorization"
+    ) {
+        validate_retained_state_artifacts(root, object)?;
+    }
+    Ok(())
+}
+
+fn validate_retained_state_artifacts(
+    root: &Path,
+    record: &Map<String, Value>,
+) -> Result<(), String> {
+    for field in ["stateSchema", "reducer"] {
+        let artifact = object(required_value(record, field)?, "retained state artifact")?;
+        let id = text(artifact.get("id"), "retained artifact ID")?;
+        let version = text(artifact.get("version"), "retained artifact version")?;
+        let digest = text(artifact.get("digest"), "retained artifact digest")?;
+        let relative = Path::new(id);
+        if relative.is_absolute()
+            || relative.components().any(|component| {
+                matches!(
+                    component,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            })
+        {
+            return Err(format!("retained {field} artifact path is unsafe: {id}"));
+        }
+        let file_name = relative
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .ok_or_else(|| format!("retained {field} artifact has no public filename"))?;
+        if !file_name.contains(&format!("-{version}.")) {
+            return Err(format!(
+                "retained {field} artifact filename does not carry its exact version {version}"
+            ));
+        }
+        let root_canonical = fs::canonicalize(root)
+            .map_err(|error| format!("canonicalize repository root: {error}"))?;
+        let artifact_path = fs::canonicalize(root.join(relative)).map_err(|error| {
+            format!("retained {field} artifact is missing or unreadable {id}: {error}")
+        })?;
+        if !artifact_path.starts_with(&root_canonical) {
+            return Err(format!(
+                "retained {field} artifact escapes the repository root: {id}"
+            ));
+        }
+        let actual = format!(
+            "{:x}",
+            Sha256::digest(
+                fs::read(&artifact_path)
+                    .map_err(|error| format!("read retained {field} artifact {id}: {error}"))?,
+            )
+        );
+        if actual != digest {
+            return Err(format!(
+                "retained {field} artifact digest does not match its exact public bytes: {id}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validates one retained canonical record against its exact kind/version schema.
+/// Repository validation additionally enforces canonical bytes, locations, and
+/// cross-family ownership references.
+pub fn validate_canonical_release_record_schema(root: &Path, record: &Value) -> Result<(), String> {
+    let object = object(record, "canonical release record")?;
+    let kind = text(object.get("recordKind"), "canonical release record kind")?;
+    let version = text(
+        object.get("schemaVersion"),
+        "canonical release record schema version",
+    )?;
+    let Some((schema, id)) = canonical_record_schema(kind, version) else {
+        return Err(format!(
+            "unknown or unsupported canonical record kind/version: {kind}@{version}"
+        ));
+    };
+    if text(object.get("$schema"), "canonical release record schema ID")? != id {
+        return Err(format!(
+            "canonical record $schema does not match retained kind/version dispatch: {kind}@{version}"
+        ));
+    }
+    validate_schema_instance(root, schema, record, kind)
+}
+
+fn validate_canonical_digest_fields(value: &Value, path: &Path) -> Result<(), String> {
+    match value {
+        Value::Object(fields) => {
+            for (field, value) in fields {
+                if (field.ends_with("Digest") || field == "digest")
+                    && !(field == "priorEventDigest" && value.is_null())
+                    && !value.as_str().is_some_and(|digest| {
+                        digest.len() == 64
+                            && digest
+                                .bytes()
+                                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                    })
+                {
+                    return Err(format!(
+                        "canonical record has malformed SHA-256 digest field {field}: {}",
+                        path.display()
+                    ));
+                }
+                validate_canonical_digest_fields(value, path)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                validate_canonical_digest_fields(value, path)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_canonical_reference_paths(record: &Value) -> Result<(), String> {
+    match record {
+        Value::Object(fields) => {
+            for (name, value) in fields {
+                if name.ends_with("Path") || name == "path" {
+                    let path = text(Some(value), "canonical record path")?;
+                    if path.starts_with('/') || path.contains("..") || path.contains('\\') {
+                        return Err(format!(
+                            "canonical record contains unsafe public path: {path}"
+                        ));
+                    }
+                }
+                validate_canonical_reference_paths(value)?;
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                validate_canonical_reference_paths(value)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_canonical_record_times(kind: &str, record: &Map<String, Value>) -> Result<(), String> {
+    for field in [
+        "approvedAt",
+        "expiresAt",
+        "effectiveAt",
+        "issuedAt",
+        "notBefore",
+        "observedAt",
+        "reviewedAt",
+    ] {
+        if let Some(value) = record.get(field) {
+            let value = text(Some(value), "security-relevant timestamp")?;
+            if !is_valid_utc_second(value) {
+                return Err(format!(
+                    "canonical {kind} timestamp {field} must be whole-second UTC"
+                ));
+            }
+        }
+    }
+    if let (Some(approved), Some(expires)) = (record.get("approvedAt"), record.get("expiresAt")) {
+        if text(Some(approved), "approval time")? >= text(Some(expires), "approval expiry")? {
+            return Err("detached approval must have approvedAt before expiresAt".to_owned());
+        }
+    }
+    if let (Some(issued), Some(not_before), Some(expires)) = (
+        record.get("issuedAt"),
+        record.get("notBefore"),
+        record.get("expiresAt"),
+    ) {
+        if !(text(Some(issued), "authorization issue time")?
+            <= text(Some(not_before), "authorization not-before time")?
+            && text(Some(not_before), "authorization not-before time")?
+                < text(Some(expires), "authorization expiry")?)
+        {
+            return Err(
+                "start authorization must have issuedAt <= notBefore < expiresAt".to_owned(),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_utc_second(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+        || bytes[19] != b'Z'
+    {
+        return false;
+    }
+    let number = |start: usize, end: usize| -> Option<u32> {
+        std::str::from_utf8(&bytes[start..end]).ok()?.parse().ok()
+    };
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        number(0, 4),
+        number(5, 7),
+        number(8, 10),
+        number(11, 13),
+        number(14, 16),
+        number(17, 19),
+    ) else {
+        return false;
+    };
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let max_day = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    day >= 1 && day <= max_day && hour < 24 && minute < 60 && second < 60
+}
+
+fn utc_second_timestamp(value: &str) -> Result<i64, String> {
+    if !is_valid_utc_second(value) {
+        return Err(format!("invalid whole-second UTC timestamp: {value}"));
+    }
+    let parse = |start: usize, end: usize| -> Result<i64, String> {
+        value[start..end]
+            .parse()
+            .map_err(|_| format!("invalid whole-second UTC timestamp: {value}"))
+    };
+    let year = parse(0, 4)?;
+    let month = parse(5, 7)?;
+    let day = parse(8, 10)?;
+    let hour = parse(11, 13)?;
+    let minute = parse(14, 16)?;
+    let second = parse(17, 19)?;
+    let adjusted_year = year - i64::from(month <= 2);
+    let era = adjusted_year.div_euclid(400);
+    let year_of_era = adjusted_year - era * 400;
+    let month_from_march = month + if month > 2 { -3 } else { 9 };
+    let day_of_year = (153 * month_from_march + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    Ok((era * 146_097 + day_of_era - 719_468) * 86_400 + hour * 3600 + minute * 60 + second)
+}
+
+fn validate_canonical_jsonl(
+    root: &Path,
+    path: &Path,
+) -> Result<Vec<(std::path::PathBuf, Value)>, String> {
+    let bytes = fs::read(path)
+        .map_err(|error| format!("read canonical event stream {}: {error}", path.display()))?;
+    if bytes.starts_with(&[0xef, 0xbb, 0xbf])
+        || bytes.contains(&b'\r')
+        || !bytes.ends_with(b"\n")
+        || bytes.windows(2).any(|window| window == b"\n\n")
+    {
+        return Err(format!(
+            "canonical JSONL stream has invalid raw-byte profile: {}",
+            path.display()
+        ));
+    }
+    let mut previous = None;
+    let mut sequence = 0_u64;
+    let mut dedupe = BTreeSet::new();
+    let mut events = Vec::new();
+    for line in bytes.split_inclusive(|byte| *byte == b'\n') {
+        let record: Value = serde_json::from_slice(line)
+            .map_err(|error| format!("parse canonical JSONL event {}: {error}", path.display()))?;
+        let expected = [
+            serde_json::to_vec(&record).map_err(|error| {
+                format!("encode canonical JSONL event {}: {error}", path.display())
+            })?,
+            vec![b'\n'],
+        ]
+        .concat();
+        if line != expected {
+            return Err(format!(
+                "canonical JSONL event is not canonically encoded: {}",
+                path.display()
+            ));
+        }
+        validate_canonical_release_record(root, &record, path)?;
+        let event = object(&record, "release Run event")?;
+        sequence += 1;
+        if event.get("sequenceNumber").and_then(Value::as_u64) != Some(sequence) {
+            return Err(
+                "release Run events must have contiguous sequence numbers beginning at one"
+                    .to_owned(),
+            );
+        }
+        let prior = event.get("priorEventDigest");
+        let expected_prior = previous
+            .as_ref()
+            .map(|previous: &Vec<u8>| format!("{:x}", Sha256::digest(previous)));
+        if prior.and_then(Value::as_str) != expected_prior.as_deref() {
+            return Err("release Run event prior-event digest chain is invalid".to_owned());
+        }
+        let key = (
+            text(event.get("runId"), "release Run event run ID")?.to_owned(),
+            text(event.get("operationId"), "release Run event operation ID")?.to_owned(),
+            event
+                .get("attempt")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "release Run event attempt must be an integer".to_owned())?,
+        );
+        if !dedupe.insert(key) {
+            return Err(
+                "release Run event operation/attempt deduplication key is not unique".to_owned(),
+            );
+        }
+        validate_canonical_event_location(root, path, event)?;
+        events.push((path.to_owned(), record));
+        previous = Some(line.to_vec());
+    }
+    Ok(events)
+}
+
+fn validate_canonical_event_location(
+    root: &Path,
+    path: &Path,
+    event: &Map<String, Value>,
+) -> Result<(), String> {
+    let root =
+        fs::canonicalize(root).map_err(|error| format!("canonicalize repository root: {error}"))?;
+    let relative = path.strip_prefix(&root).map_err(|_| {
+        format!(
+            "canonical JSONL event stream escapes repository root: {}",
+            path.display()
+        )
+    })?;
+    let parts = relative
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let run_id = text(event.get("runId"), "release Run event run ID")?;
+    if parts.len() != 4
+        || parts[0] != "release"
+        || parts[1] != "runs"
+        || parts[2] != run_id
+        || parts[3] != "events.jsonl"
+    {
+        return Err(format!(
+            "release Run event is not materialized in its Run events.jsonl stream: {}",
+            relative.display()
+        ));
+    }
+    Ok(())
+}
+
+fn validate_canonical_record_references(
+    root: &Path,
+    index: &CanonicalRecordIndex,
+) -> Result<(), String> {
+    for ((kind, id), record) in &index.records {
+        let object = object(&record.value, "canonical release record")?;
+        match kind.as_str() {
+            "release-evidence-set" => validate_evidence_set_entries(root, object)?,
+            "release-manifest" => validate_record_reference(
+                index,
+                object,
+                "evidenceSetId",
+                "evidenceSetDigest",
+                "release-evidence-set",
+                id,
+            )?,
+            "release-detached-approval" => {
+                validate_manifest_and_evidence_references(index, object, id)?;
+                validate_detached_approval_bindings(root, object, id)?;
+                validate_manifest_directory_reference(&record.path, object, kind)?;
+            }
+            "release-approval-disposition" => {
+                validate_record_reference(
+                    index,
+                    object,
+                    "approvalId",
+                    "approvalDigest",
+                    "release-detached-approval",
+                    id,
+                )?;
+                validate_approval_disposition_directory(index, &record.path, object)?;
+            }
+            "privileged-run-start-authorization" => {
+                validate_manifest_and_evidence_references(index, object, id)?;
+                validate_start_authorization_bindings(root, index, object, &record.path, id)?;
+                validate_run_directory_reference(&record.path, object, kind)?;
+            }
+            "release-adapter-result-envelope" | "release-run-evidence" | "release-closeout" => {
+                validate_record_reference(
+                    index,
+                    object,
+                    "manifestId",
+                    "manifestDigest",
+                    "release-manifest",
+                    id,
+                )?;
+                validate_run_directory_reference(&record.path, object, kind)?;
+            }
+            _ => {}
+        }
+    }
+    validate_approval_dispositions(root, index)?;
+    validate_run_event_bindings(index)?;
+    validate_run_scoped_record_bindings(root, index)?;
+    validate_closeout_evidence_bindings(index)?;
+    Ok(())
+}
+
+fn start_authorization_for_run<'a>(
+    index: &'a CanonicalRecordIndex,
+    run_id: &str,
+) -> Result<&'a Map<String, Value>, String> {
+    let mut matches = index.records.iter().filter_map(|((kind, _), record)| {
+        (kind == "privileged-run-start-authorization"
+            && record.value.get("runId").and_then(Value::as_str) == Some(run_id))
+        .then_some(&record.value)
+    });
+    let authorization = matches
+        .next()
+        .ok_or_else(|| format!("Run {run_id} has no start authorization"))?;
+    if matches.next().is_some() {
+        return Err(format!("Run {run_id} has ambiguous start authorizations"));
+    }
+    object(authorization, "Run start authorization")
+}
+
+fn validate_run_authorization_binding(
+    index: &CanonicalRecordIndex,
+    record: &Map<String, Value>,
+    context: &str,
+) -> Result<(), String> {
+    let run_id = text(record.get("runId"), "canonical Run reference")?;
+    let authorization = start_authorization_for_run(index, run_id)?;
+    let authorization_id = text(
+        authorization.get("authorizationId"),
+        "Run start authorization ID",
+    )?;
+    let authorization_record = index
+        .records
+        .get(&(
+            String::from("privileged-run-start-authorization"),
+            authorization_id.to_owned(),
+        ))
+        .ok_or_else(|| {
+            format!("{context} references missing Run start authorization {authorization_id}")
+        })?;
+    if record.get("authorizationId").and_then(Value::as_str) != Some(authorization_id)
+        || record.get("authorizationDigest").and_then(Value::as_str)
+            != Some(authorization_record.digest.as_str())
+    {
+        return Err(format!(
+            "{context} does not bind its Run start authorization's exact immutable identity and digest"
+        ));
+    }
+    for field in [
+        "manifestId",
+        "manifestDigest",
+        "evidenceSetId",
+        "evidenceSetDigest",
+    ] {
+        if record.get(field) != authorization.get(field) {
+            return Err(format!(
+                "{context} does not bind the Run start authorization's frozen {field}"
+            ));
+        }
+    }
+    if let Some(operation_id) = record.get("operationId").and_then(Value::as_str) {
+        let allowed_operations = array(
+            authorization.get("allowedOperations"),
+            "start authorization allowed operations",
+        )?;
+        if !allowed_operations
+            .iter()
+            .any(|allowed| allowed.as_str() == Some(operation_id))
+        {
+            return Err(format!(
+                "{context} operation {operation_id} is not allowed by its Run start authorization"
+            ));
+        }
+    }
+    if let Some(actor) = record.get("actor").and_then(Value::as_str) {
+        let execution_principal = object(
+            authorization
+                .get("executionPrincipal")
+                .ok_or("Run start authorization has no execution principal")?,
+            "Run start authorization execution principal",
+        )?;
+        if execution_principal.get("actor").and_then(Value::as_str) != Some(actor) {
+            return Err(format!(
+                "{context} actor does not match its Run start authorization execution principal"
+            ));
+        }
+        if let Some(event_principal) = record.get("executionPrincipal") {
+            if Some(event_principal) != authorization.get("executionPrincipal") {
+                return Err(format!(
+                    "{context} execution principal does not match its Run start authorization"
+                ));
+            }
+        }
+    }
+    for field in ["stateSchema", "reducer"] {
+        if let Some(value) = record.get(field) {
+            if Some(value) != authorization.get(field) {
+                return Err(format!(
+                    "{context} does not bind the Run start authorization's frozen {field}"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_run_event_bindings(index: &CanonicalRecordIndex) -> Result<(), String> {
+    for (_, event) in &index.events {
+        validate_run_authorization_binding(
+            index,
+            object(event, "release Run event")?,
+            "release Run event",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_run_scoped_record_bindings(
+    root: &Path,
+    index: &CanonicalRecordIndex,
+) -> Result<(), String> {
+    for ((kind, id), record) in &index.records {
+        if matches!(
+            kind.as_str(),
+            "release-adapter-result-envelope" | "release-run-evidence" | "release-closeout"
+        ) {
+            validate_run_authorization_binding(
+                index,
+                object(&record.value, "canonical Run-scoped record")?,
+                &format!("{kind} {id}"),
+            )?;
+            if kind == "release-closeout" {
+                let closeout = object(&record.value, "release closeout")?;
+                let steward = object(
+                    required_value(closeout, "steward")?,
+                    "release closeout steward",
+                )?;
+                ensure_active_assignment(
+                    root,
+                    text(steward.get("actor"), "release closeout steward actor")?,
+                    text(steward.get("role"), "release closeout steward role")?,
+                    text(
+                        steward.get("assignment"),
+                        "release closeout steward assignment",
+                    )?,
+                    "release-manifest-lifecycle",
+                    text(closeout.get("closedAt"), "release closeout time")?,
+                    "release closeout steward",
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_closeout_evidence_bindings(index: &CanonicalRecordIndex) -> Result<(), String> {
+    for ((kind, id), record) in &index.records {
+        if kind != "release-closeout" {
+            continue;
+        }
+        let closeout = object(&record.value, "release closeout")?;
+        let run_id = text(closeout.get("runId"), "release closeout Run ID")?;
+        let mut expected = Vec::new();
+        for ((evidence_kind, evidence_id), evidence) in &index.records {
+            if !matches!(
+                evidence_kind.as_str(),
+                "release-adapter-result-envelope" | "release-run-evidence"
+            ) {
+                continue;
+            }
+            let evidence_record = object(&evidence.value, "Run evidence record")?;
+            if evidence_record.get("runId").and_then(Value::as_str) == Some(run_id) {
+                expected.push((
+                    evidence_kind.clone(),
+                    evidence_id.clone(),
+                    evidence.digest.clone(),
+                ));
+            }
+        }
+        let actual = array(closeout.get("evidence"), "release closeout evidence")?
+            .iter()
+            .map(|entry| {
+                let entry = object(entry, "release closeout evidence entry")?;
+                Ok((
+                    text(entry.get("kind"), "release closeout evidence kind")?.to_owned(),
+                    text(entry.get("id"), "release closeout evidence ID")?.to_owned(),
+                    text(entry.get("digest"), "release closeout evidence digest")?.to_owned(),
+                ))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if actual != expected {
+            return Err(format!(
+                "release closeout {id} evidence must be the exact ordered digest-checked inventory for Run {run_id}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_approval_disposition_directory(
+    index: &CanonicalRecordIndex,
+    path: &Path,
+    record: &Map<String, Value>,
+) -> Result<(), String> {
+    let approval_id = text(record.get("approvalId"), "approval disposition approval ID")?;
+    let approval = index
+        .records
+        .get(&(
+            String::from("release-detached-approval"),
+            approval_id.to_owned(),
+        ))
+        .ok_or_else(|| format!("approval disposition references missing approval {approval_id}"))?;
+    let manifest_directory = |path: &Path| {
+        path.ancestors()
+            .nth(2)
+            .and_then(Path::file_name)
+            .map(|name| name.to_string_lossy().into_owned())
+    };
+    if manifest_directory(path) != manifest_directory(&approval.path) {
+        return Err(
+            "approval disposition is materialized under a different Manifest than its approval"
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_approval_dispositions(root: &Path, index: &CanonicalRecordIndex) -> Result<(), String> {
+    let mut dispositions = BTreeSet::new();
+    for ((kind, _), record) in &index.records {
+        if kind != "release-approval-disposition" {
+            continue;
+        }
+        let disposition = object(&record.value, "approval disposition")?;
+        let approval_id = text(
+            disposition.get("approvalId"),
+            "approval disposition approval ID",
+        )?;
+        if !dispositions.insert(approval_id.to_owned()) {
+            return Err(format!(
+                "approval {approval_id} has more than one immutable disposition"
+            ));
+        }
+        let approval = index
+            .records
+            .get(&(
+                String::from("release-detached-approval"),
+                approval_id.to_owned(),
+            ))
+            .ok_or_else(|| {
+                format!("approval disposition references missing approval {approval_id}")
+            })?;
+        let approval = object(&approval.value, "detached approval")?;
+        if utc_second_timestamp(text(
+            disposition.get("effectiveAt"),
+            "disposition effective time",
+        )?)? < utc_second_timestamp(text(approval.get("approvedAt"), "approval time")?)?
+        {
+            return Err(format!(
+                "approval disposition predates approval {approval_id}"
+            ));
+        }
+        let authority = object(
+            disposition
+                .get("authority")
+                .ok_or("approval disposition has no authority")?,
+            "approval disposition authority",
+        )?;
+        ensure_repository_administrator(
+            root,
+            text(authority.get("actor"), "approval disposition actor")?,
+            text(authority.get("role"), "approval disposition role")?,
+            text(
+                authority.get("assignment"),
+                "approval disposition assignment",
+            )?,
+            text(
+                disposition.get("effectiveAt"),
+                "approval disposition effective time",
+            )?,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_evidence_set_entries(root: &Path, record: &Map<String, Value>) -> Result<(), String> {
+    let steward = object(
+        record
+            .get("steward")
+            .ok_or("reviewed evidence set has no Release Steward")?,
+        "reviewed evidence-set steward",
+    )?;
+    ensure_release_steward_eligible(
+        root,
+        text(steward.get("actor"), "reviewed evidence-set steward actor")?,
+        text(steward.get("role"), "reviewed evidence-set steward role")?,
+        text(
+            steward.get("assignment"),
+            "reviewed evidence-set steward assignment",
+        )?,
+        text(record.get("reviewedAt"), "reviewed evidence-set time")?,
+        None,
+        false,
+    )?;
+    let entries = array(record.get("entries"), "reviewed evidence-set entries")?;
+    let mut previous = None;
+    for entry in entries {
+        let entry = object(entry, "reviewed evidence-set entry")?;
+        let key = (
+            text(entry.get("kind"), "reviewed evidence-set entry kind")?.to_owned(),
+            text(entry.get("id"), "reviewed evidence-set entry ID")?.to_owned(),
+            text(entry.get("path"), "reviewed evidence-set entry path")?.to_owned(),
+            text(
+                entry.get("contentDigest"),
+                "reviewed evidence-set entry digest",
+            )?
+            .to_owned(),
+        );
+        if key.0 == "release-manifest" || key.2.starts_with("release/manifests/") {
+            return Err("reviewed evidence-set must not reference a Release Manifest".to_owned());
+        }
+        let evidence_path = root.join(&key.2);
+        let root_canonical = fs::canonicalize(root)
+            .map_err(|error| format!("canonicalize repository root: {error}"))?;
+        let evidence_canonical = fs::canonicalize(&evidence_path).map_err(|error| {
+            format!(
+                "reviewed evidence-set entry path is missing or unreadable {}: {error}",
+                key.2
+            )
+        })?;
+        if !evidence_canonical.starts_with(&root_canonical) {
+            return Err(format!(
+                "reviewed evidence-set entry path escapes repository root: {}",
+                key.2
+            ));
+        }
+        let actual_digest = format!(
+            "{:x}",
+            Sha256::digest(fs::read(&evidence_canonical).map_err(|error| {
+                format!("read reviewed evidence-set entry {}: {error}", key.2)
+            })?)
+        );
+        if actual_digest != key.3 {
+            return Err(format!(
+                "reviewed evidence-set entry digest does not match public path: {}",
+                key.2
+            ));
+        }
+        if previous.as_ref().is_some_and(|previous| previous >= &key) {
+            return Err(
+                "reviewed evidence-set entries must be strictly deterministically ordered"
+                    .to_owned(),
+            );
+        }
+        previous = Some(key);
+    }
+    Ok(())
+}
+
+fn validate_manifest_and_evidence_references(
+    index: &CanonicalRecordIndex,
+    record: &Map<String, Value>,
+    context: &str,
+) -> Result<(), String> {
+    validate_record_reference(
+        index,
+        record,
+        "manifestId",
+        "manifestDigest",
+        "release-manifest",
+        context,
+    )?;
+    validate_record_reference(
+        index,
+        record,
+        "evidenceSetId",
+        "evidenceSetDigest",
+        "release-evidence-set",
+        context,
+    )?;
+    let manifest_id = text(record.get("manifestId"), "canonical Manifest reference")?;
+    let manifest = index
+        .records
+        .get(&(String::from("release-manifest"), manifest_id.to_owned()))
+        .ok_or_else(|| format!("canonical record references missing Manifest {manifest_id}"))?;
+    let manifest = object(&manifest.value, "Release Manifest")?;
+    for field in ["evidenceSetId", "evidenceSetDigest"] {
+        if record.get(field) != manifest.get(field) {
+            return Err(format!(
+                "{context} does not bind the exact evidence set frozen in Manifest {manifest_id}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_detached_approval_bindings(
+    _root: &Path,
+    record: &Map<String, Value>,
+    _context: &str,
+) -> Result<(), String> {
+    text(
+        record.get("governanceDigest"),
+        "detached approval governance digest",
+    )?;
+    Ok(())
+}
+
+fn validate_start_authorization_bindings(
+    root: &Path,
+    index: &CanonicalRecordIndex,
+    record: &Map<String, Value>,
+    path: &Path,
+    context: &str,
+) -> Result<(), String> {
+    let manifest_id = text(record.get("manifestId"), "start authorization Manifest ID")?;
+    let manifest = index
+        .records
+        .get(&(String::from("release-manifest"), manifest_id.to_owned()))
+        .ok_or_else(|| format!("{context} references missing Manifest {manifest_id}"))?;
+    let manifest = object(&manifest.value, "Release Manifest")?;
+    for field in ["stateSchema", "reducer"] {
+        if record.get(field) != manifest.get(field) {
+            return Err(format!(
+                "{context} does not freeze the exact {field} retained by Manifest {manifest_id}"
+            ));
+        }
+    }
+    let governance = object(
+        required_value(record, "governanceRevision")?,
+        "start authorization governance revision",
+    )?;
+    if text(
+        governance.get("id"),
+        "start authorization governance revision ID",
+    )? != "governance-revision-v1"
+        || text(
+            governance.get("digest"),
+            "start authorization governance revision digest",
+        )? != governance_revision_v1(root)?
+    {
+        return Err(format!(
+            "{context} does not bind the exact governance-revision-v1 identity and digest"
+        ));
+    }
+    let run_id = text(record.get("runId"), "start authorization Run ID")?;
+    let expected_path = format!("release/runs/{run_id}/start-authorization.json");
+    if text(
+        record.get("materializationPath"),
+        "start authorization materialization path",
+    )? != expected_path
+    {
+        return Err(format!(
+            "{context} materialization path does not bind its exact Run location"
+        ));
+    }
+    let mut approvals = BTreeSet::new();
+    for selected in array(
+        record.get("selectedApprovals"),
+        "start authorization selected approvals",
+    )? {
+        let selected = object(selected, "start authorization selected approval")?;
+        let approval_id = text(selected.get("approvalId"), "selected approval ID")?;
+        if !approvals.insert(approval_id.to_owned()) {
+            return Err(format!(
+                "{context} selects approval {approval_id} more than once"
+            ));
+        }
+        validate_record_reference(
+            index,
+            selected,
+            "approvalId",
+            "approvalDigest",
+            "release-detached-approval",
+            context,
+        )?;
+        let approval = index
+            .records
+            .get(&(
+                String::from("release-detached-approval"),
+                approval_id.to_owned(),
+            ))
+            .ok_or_else(|| format!("{context} references missing approval {approval_id}"))?;
+        let approval = object(&approval.value, "selected detached approval")?;
+        for field in [
+            "manifestId",
+            "manifestDigest",
+            "evidenceSetId",
+            "evidenceSetDigest",
+        ] {
+            if approval.get(field) != record.get(field) {
+                return Err(format!(
+                    "{context} selected approval {approval_id} does not bind its frozen {field}"
+                ));
+            }
+        }
+        if let Some(disposition) = selected.get("disposition").filter(|value| !value.is_null()) {
+            let disposition = object(disposition, "selected approval disposition")?;
+            let disposition_id = text(disposition.get("id"), "selected disposition ID")?;
+            let disposition_digest =
+                text(disposition.get("digest"), "selected disposition digest")?;
+            let target = index
+                .records
+                .get(&(
+                    String::from("release-approval-disposition"),
+                    disposition_id.to_owned(),
+                ))
+                .ok_or_else(|| {
+                    format!("{context} references missing approval disposition {disposition_id}")
+                })?;
+            if target.digest != disposition_digest {
+                return Err(format!(
+                    "{context} references approval disposition {disposition_id} with a mismatched immutable digest"
+                ));
+            }
+            let target = object(&target.value, "approval disposition")?;
+            if target.get("approvalId") != selected.get("approvalId")
+                || target.get("approvalDigest") != selected.get("approvalDigest")
+            {
+                return Err(format!(
+                    "{context} disposition {disposition_id} does not bind its selected approval"
+                ));
+            }
+        }
+    }
+    let actual_path = path
+        .strip_prefix(fs::canonicalize(root).map_err(|error| {
+            format!("canonicalize repository root for start authorization: {error}")
+        })?)
+        .map_err(|_| format!("{context} start authorization path escapes repository root"))?
+        .to_string_lossy()
+        .replace('\\', "/");
+    if actual_path != expected_path {
+        return Err(format!(
+            "{context} start authorization is not materialized at its declared path"
+        ));
+    }
+    let issuer = object(
+        required_value(record, "issuer")?,
+        "start authorization Release Steward issuer",
+    )?;
+    ensure_active_assignment(
+        root,
+        text(issuer.get("actor"), "start authorization issuer actor")?,
+        text(issuer.get("role"), "start authorization issuer role")?,
+        text(
+            issuer.get("assignment"),
+            "start authorization issuer assignment",
+        )?,
+        "release-manifest-lifecycle",
+        text(record.get("issuedAt"), "start authorization issuance time")?,
+        "start authorization issuer",
+    )?;
+    let execution_principal = object(
+        required_value(record, "executionPrincipal")?,
+        "start authorization Release Run Coordinator execution principal",
+    )?;
+    ensure_active_assignment(
+        root,
+        text(
+            execution_principal.get("actor"),
+            "start authorization execution actor",
+        )?,
+        text(
+            execution_principal.get("role"),
+            "start authorization execution role",
+        )?,
+        text(
+            execution_principal.get("assignment"),
+            "start authorization execution assignment",
+        )?,
+        "release-run-execution",
+        text(
+            record.get("notBefore"),
+            "start authorization not-before time",
+        )?,
+        "start authorization execution principal",
+    )?;
+    let allowed_targets = array(record.get("allowedTargets"), "start authorization targets")?
+        .iter()
+        .map(|target| text(Some(target), "start authorization target").map(str::to_owned))
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let target_control_evidence = array(
+        record.get("targetControlEvidence"),
+        "start authorization target-control evidence",
+    )?;
+    let evidence_targets = target_control_evidence
+        .iter()
+        .map(|evidence| {
+            let evidence = object(evidence, "start authorization target-control evidence")?;
+            text(evidence.get("target"), "target-control evidence target").map(str::to_owned)
+        })
+        .collect::<Result<BTreeSet<_>, String>>()?;
+    if allowed_targets != evidence_targets
+        || evidence_targets.len() != target_control_evidence.len()
+    {
+        return Err(format!(
+            "{context} allowed targets must exactly match target-control and permission evidence"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_record_reference(
+    index: &CanonicalRecordIndex,
+    record: &Map<String, Value>,
+    id_field: &str,
+    digest_field: &str,
+    expected_kind: &str,
+    context: &str,
+) -> Result<(), String> {
+    let id = text(record.get(id_field), "canonical record reference ID")?;
+    let digest = text(
+        record.get(digest_field),
+        "canonical record reference digest",
+    )?;
+    let Some(target) = index
+        .records
+        .get(&(expected_kind.to_owned(), id.to_owned()))
+    else {
+        return Err(format!(
+            "{context} references missing {expected_kind} identity {id}"
+        ));
+    };
+    if target.digest != digest {
+        return Err(format!(
+            "{context} references {expected_kind} {id} with a mismatched immutable digest"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_manifest_directory_reference(
+    path: &Path,
+    record: &Map<String, Value>,
+    kind: &str,
+) -> Result<(), String> {
+    let manifest_id = text(record.get("manifestId"), "canonical Manifest reference")?;
+    let actual = path
+        .ancestors()
+        .nth(2)
+        .and_then(Path::file_name)
+        .map(|name| name.to_string_lossy().into_owned());
+    if actual.as_deref() != Some(manifest_id) {
+        return Err(format!(
+            "{kind} is materialized under a different Manifest identity"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_run_directory_reference(
+    path: &Path,
+    record: &Map<String, Value>,
+    kind: &str,
+) -> Result<(), String> {
+    let run_id = text(record.get("runId"), "canonical Run reference")?;
+    let parts = path
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let actual = parts
+        .iter()
+        .position(|part| part == "runs")
+        .and_then(|index| parts.get(index + 1));
+    if actual.map(String::as_str) != Some(run_id) {
+        return Err(format!(
+            "{kind} is materialized under a different Run identity"
+        ));
+    }
     Ok(())
 }
 
@@ -7302,6 +9261,42 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
         (
             "release/schemas/version-rationale.schema.json",
             "https://vexil.dev/release/schemas/version-rationale.schema.json",
+        ),
+        (
+            "release/schemas/release-manifest-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-evidence-set-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-detached-approval-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-approval-disposition-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+        ),
+        (
+            "release/schemas/privileged-run-start-authorization-1.0.schema.json",
+            "https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-adapter-result-envelope-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-adapter-result-envelope-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-run-event-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-run-event-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-run-evidence-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-run-evidence-1.0.schema.json",
+        ),
+        (
+            "release/schemas/release-closeout-1.0.schema.json",
+            "https://vexil.dev/release/schemas/release-closeout-1.0.schema.json",
         ),
     ] {
         let schema_value = read_json(&root.join(relative))?;

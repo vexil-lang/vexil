@@ -1,6 +1,836 @@
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::Path;
+
+#[test]
+fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_drift() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let isolated =
+        std::env::temp_dir().join(format!("vexil-canonical-records-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&isolated);
+    fs::create_dir_all(isolated.join("release/schemas")).unwrap();
+    fs::create_dir_all(isolated.join("release/stewardship")).unwrap();
+    fs::create_dir_all(isolated.join("release/evidence-sets/evidence-fixture")).unwrap();
+    fs::create_dir_all(isolated.join("release/manifests/manifest-fixture/approvals")).unwrap();
+    fs::create_dir_all(isolated.join("release/manifests/manifest-fixture/approval-dispositions"))
+        .unwrap();
+    fs::create_dir_all(isolated.join("release/runs/run-fixture/evidence/adapter-results")).unwrap();
+    fs::create_dir_all(isolated.join("release/reducers")).unwrap();
+    for schema in fs::read_dir(root.join("release/schemas")).unwrap() {
+        let schema = schema.unwrap().path();
+        fs::copy(
+            &schema,
+            isolated
+                .join("release/schemas")
+                .join(schema.file_name().unwrap()),
+        )
+        .unwrap();
+    }
+    let evidence_source = b"fixture evidence\n";
+    fs::write(isolated.join("release/catalog.json"), evidence_source).unwrap();
+    fs::copy(
+        root.join("release/stewardship.json"),
+        isolated.join("release/stewardship.json"),
+    )
+    .unwrap();
+    fs::copy(
+        root.join("release/stewardship/assignments.json"),
+        isolated.join("release/stewardship/assignments.json"),
+    )
+    .unwrap();
+    let state_schema_source = b"fixture state schema\n";
+    fs::write(
+        isolated.join("release/schemas/run-state-1.0.schema.json"),
+        state_schema_source,
+    )
+    .unwrap();
+    let reducer_source = b"fixture reducer\n";
+    fs::write(
+        isolated.join("release/reducers/run-state-1.0.wasm"),
+        reducer_source,
+    )
+    .unwrap();
+    let state_schema = serde_json::json!({"digest":digest(state_schema_source),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"});
+    let reducer = serde_json::json!({"digest":digest(reducer_source),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"});
+    let evidence_set = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "entries":[{"contentDigest":digest(evidence_source),"id":"catalog","kind":"release-catalog","path":"release/catalog.json"}],"reviewedAt":"2026-07-25T00:00:00Z",
+        "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
+        "evidenceSetId":"evidence-fixture","recordKind":"release-evidence-set","schemaVersion":"1.0"
+    });
+    let evidence_set_bytes = canonical_json(&evidence_set);
+    let evidence_set_digest = digest(&evidence_set_bytes);
+    fs::write(
+        isolated.join("release/evidence-sets/evidence-fixture/evidence-set.json"),
+        &evidence_set_bytes,
+    )
+    .unwrap();
+    let manifest = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        "evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestId":"manifest-fixture",
+        "recordKind":"release-manifest","reducer":reducer,"schemaVersion":"1.0","stateSchema":state_schema
+    });
+    let manifest_bytes = canonical_json(&manifest);
+    let manifest_digest = digest(&manifest_bytes);
+    fs::write(
+        isolated.join("release/manifests/manifest-fixture/manifest.json"),
+        &manifest_bytes,
+    )
+    .unwrap();
+    let approval = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+        "approvalId":"approval-fixture","approvedAt":"2026-07-25T00:00:00Z",
+        "approver":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
+        "evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","expiresAt":"2026-07-26T00:00:00Z",
+        "governanceDigest":vexil_release_governance_validator::governance_revision_v1(&isolated).unwrap(),"manifestDigest":manifest_digest,"manifestId":"manifest-fixture","recordKind":"release-detached-approval","schemaVersion":"1.0"
+    });
+    let approval_bytes = canonical_json(&approval);
+    let approval_digest = digest(&approval_bytes);
+    fs::write(
+        isolated.join("release/manifests/manifest-fixture/approvals/approval-fixture.json"),
+        &approval_bytes,
+    )
+    .unwrap();
+    let disposition = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+        "approvalDigest":approval_digest,"approvalId":"approval-fixture","disposition":"withdrawn",
+        "dispositionId":"withdrawal-fixture","effectiveAt":"2026-07-25T00:01:00Z","authority":{"actor":"github:furkanmamuk","assignment":"assignment-repository-administrator-2026-07-14","role":"repository-administrator"},"reason":"fixture withdrawal","sourceEvidence":{"collector":"fixture","observedAt":"2026-07-25T00:01:00Z","source":"https://example.invalid/evidence/withdrawal-fixture"},
+        "recordKind":"release-approval-disposition","schemaVersion":"1.0"
+    });
+    fs::write(
+        isolated.join(
+            "release/manifests/manifest-fixture/approval-dispositions/withdrawal-fixture.json",
+        ),
+        canonical_json(&disposition),
+    )
+    .unwrap();
+    let authorization = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture",
+        "executionPrincipal":{"actor":"github:furkanmamuk","assignment":"assignment-release-run-coordinator-2026-07-14","role":"release-run-coordinator"},
+        "expiresAt":"2026-07-26T00:00:00Z","issuedAt":"2026-07-25T00:00:00Z",
+        "issuer":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},"allowedOperations":["publish-runtime"],"allowedPermissions":["packages:write"],"allowedTargets":["registry:crates-io"],"allowedUnits":["vexil-runtime"],
+        "manifestDigest":manifest_digest,"manifestId":"manifest-fixture","notBefore":"2026-07-25T00:00:00Z",
+        "recordKind":"privileged-run-start-authorization","runId":"run-fixture","schemaVersion":"1.0","workload":"production-release","protectedEnvironment":"production","materializationPath":"release/runs/run-fixture/start-authorization.json",
+        "selectedApprovals":[{"approvalId":"approval-fixture","approvalDigest":approval_digest,"disposition":{"id":"withdrawal-fixture","digest":digest(&canonical_json(&disposition))}}],"governanceRevision":{"id":"governance-revision-v1","digest":vexil_release_governance_validator::governance_revision_v1(&isolated).unwrap()},
+        "historicalTagBaseline":{"id":"baseline-tags","digest":"1".repeat(64)},"historicalTagSnapshot":{"id":"tag-snapshot","digest":"2".repeat(64)},"security":{"findingsDigest":"3".repeat(64),"exceptionsDigest":"4".repeat(64)},"candidate":{"bundleId":"candidate-bundle","bundleDigest":"5".repeat(64),"subjectDigest":"6".repeat(64),"attestationDigest":"7".repeat(64)},"targetControlEvidence":[{"target":"registry:crates-io","targetControlDigest":"8".repeat(64),"permissionDigest":"9".repeat(64)}],"stateSchema":state_schema,"reducer":reducer
+    });
+    let authorization_bytes = canonical_json(&authorization);
+    let authorization_digest = digest(&authorization_bytes);
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        &authorization_bytes,
+    )
+    .unwrap();
+    let event = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-run-event-1.0.schema.json",
+        "actor":"github:furkanmamuk","attempt":1,"observedAt":"2026-07-25T00:00:00Z",
+        "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","executionPrincipal":{"actor":"github:furkanmamuk","assignment":"assignment-release-run-coordinator-2026-07-14","role":"release-run-coordinator"},"manifestDigest":manifest_digest,"manifestId":"manifest-fixture","operationId":"publish-runtime","priorEventDigest":null,
+        "payloadDigest":"d".repeat(64),"recordKind":"release-run-event","reducer":reducer,"result":"recorded","runId":"run-fixture","schemaVersion":"1.0","sequenceNumber":1,
+        "stateSchema":state_schema
+    });
+    let canonical = canonical_json(&event);
+    let stream = isolated.join("release/runs/run-fixture/events.jsonl");
+    fs::write(&stream, &canonical).unwrap();
+    let adapter_result = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-adapter-result-envelope-1.0.schema.json",
+        "adapter":{"id":"registry-adapter","version":"1.0"},"adapterResultId":"adapter-result-fixture",
+        "observedAt":"2026-07-25T00:00:00Z","observedDigest":"e".repeat(64),"observedIdentity":"package-fixture",
+        "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestDigest":manifest_digest,"manifestId":"manifest-fixture","operationId":"publish-runtime","outcome":"unknown","recordKind":"release-adapter-result-envelope",
+        "retryClassification":"safe-to-retry","runId":"run-fixture","schemaVersion":"1.0","source":"fixture"
+    });
+    let adapter_result_bytes = canonical_json(&adapter_result);
+    let adapter_result_digest = digest(&adapter_result_bytes);
+    fs::write(
+        isolated
+            .join("release/runs/run-fixture/evidence/adapter-results/adapter-result-fixture.json"),
+        &adapter_result_bytes,
+    )
+    .unwrap();
+    let run_evidence = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-run-evidence-1.0.schema.json",
+        "contentDigest":"f".repeat(64),"evidenceId":"run-evidence-fixture","kind":"adapter-log","operationId":"publish-runtime",
+        "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestDigest":manifest_digest,"manifestId":"manifest-fixture","recordKind":"release-run-evidence","runId":"run-fixture","schemaVersion":"1.0"
+    });
+    let run_evidence_bytes = canonical_json(&run_evidence);
+    let run_evidence_digest = digest(&run_evidence_bytes);
+    fs::write(
+        isolated.join("release/runs/run-fixture/evidence/run-evidence-fixture.json"),
+        &run_evidence_bytes,
+    )
+    .unwrap();
+    let closeout = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-closeout-1.0.schema.json",
+        "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","closeoutId":"closeout-fixture","closedAt":"2026-07-25T00:02:00Z","disposition":"aborted","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestDigest":manifest_digest,"manifestId":"manifest-fixture",
+        "evidence":[{"digest":adapter_result_digest,"id":"adapter-result-fixture","kind":"release-adapter-result-envelope"},{"digest":run_evidence_digest,"id":"run-evidence-fixture","kind":"release-run-evidence"}],"recordKind":"release-closeout","runId":"run-fixture","schemaVersion":"1.0",
+        "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"}
+    });
+    let closeout_bytes = canonical_json(&closeout);
+    fs::write(
+        isolated.join("release/runs/run-fixture/closeout.json"),
+        &closeout_bytes,
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect("a retained canonical release-record graph must validate");
+    let mut missing_disposition_authority = disposition.clone();
+    missing_disposition_authority
+        .as_object_mut()
+        .unwrap()
+        .remove("authority");
+    vexil_release_governance_validator::validate_canonical_release_record_schema(
+        &isolated,
+        &missing_disposition_authority,
+    )
+    .expect_err("an approval disposition must name its Repository Administrator authority");
+    let mut forged_issuer = authorization.clone();
+    forged_issuer["issuer"]["actor"] = serde_json::json!("github:unassigned");
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&forged_issuer),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a start authorization issuer must be an active Release Steward");
+    let mut uncovered_target = authorization.clone();
+    uncovered_target["allowedTargets"] = serde_json::json!(["registry:other"]);
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&uncovered_target),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("every allowed target must have exact target-control evidence");
+    let mut duplicate_target_evidence = authorization.clone();
+    let duplicate = duplicate_target_evidence["targetControlEvidence"][0].clone();
+    duplicate_target_evidence["targetControlEvidence"] = serde_json::json!([
+        duplicate,
+        {"permissionDigest":"0".repeat(64),"target":"registry:crates-io","targetControlDigest":"1".repeat(64)}
+    ]);
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&duplicate_target_evidence),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("each target must have exactly one control-and-permission evidence record");
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        &authorization_bytes,
+    )
+    .unwrap();
+    let mut mismatched_event = event.clone();
+    mismatched_event["evidenceSetDigest"] = serde_json::json!("0".repeat(64));
+    fs::write(&stream, canonical_json(&mismatched_event)).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a Run event must bind its authorization's exact evidence set");
+    fs::write(&stream, &canonical).unwrap();
+    let mut forged_closeout = closeout.clone();
+    forged_closeout["steward"]["assignment"] = serde_json::json!("unassigned-steward");
+    fs::write(
+        isolated.join("release/runs/run-fixture/closeout.json"),
+        canonical_json(&forged_closeout),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a closeout must name an active Release Steward");
+    fs::write(
+        isolated.join("release/runs/run-fixture/closeout.json"),
+        &closeout_bytes,
+    )
+    .unwrap();
+    let mut alternate_evidence_set = evidence_set.clone();
+    alternate_evidence_set["evidenceSetId"] = serde_json::json!("evidence-other");
+    let alternate_evidence_set_bytes = canonical_json(&alternate_evidence_set);
+    let alternate_evidence_set_digest = digest(&alternate_evidence_set_bytes);
+    fs::create_dir_all(isolated.join("release/evidence-sets/evidence-other")).unwrap();
+    fs::write(
+        isolated.join("release/evidence-sets/evidence-other/evidence-set.json"),
+        &alternate_evidence_set_bytes,
+    )
+    .unwrap();
+    let mut alternate_manifest = manifest.clone();
+    alternate_manifest["evidenceSetId"] = serde_json::json!("evidence-other");
+    alternate_manifest["evidenceSetDigest"] = serde_json::json!(alternate_evidence_set_digest);
+    alternate_manifest["manifestId"] = serde_json::json!("manifest-other");
+    let alternate_manifest_bytes = canonical_json(&alternate_manifest);
+    let alternate_manifest_digest = digest(&alternate_manifest_bytes);
+    fs::create_dir_all(isolated.join("release/manifests/manifest-other/approvals")).unwrap();
+    fs::write(
+        isolated.join("release/manifests/manifest-other/manifest.json"),
+        &alternate_manifest_bytes,
+    )
+    .unwrap();
+    let mut alternate_approval = approval.clone();
+    alternate_approval["approvalId"] = serde_json::json!("approval-other");
+    alternate_approval["evidenceSetId"] = serde_json::json!("evidence-other");
+    alternate_approval["evidenceSetDigest"] = serde_json::json!(alternate_evidence_set_digest);
+    alternate_approval["manifestId"] = serde_json::json!("manifest-other");
+    alternate_approval["manifestDigest"] = serde_json::json!(alternate_manifest_digest);
+    let alternate_approval_bytes = canonical_json(&alternate_approval);
+    let alternate_approval_digest = digest(&alternate_approval_bytes);
+    fs::write(
+        isolated.join("release/manifests/manifest-other/approvals/approval-other.json"),
+        &alternate_approval_bytes,
+    )
+    .unwrap();
+    let mut cross_manifest_approval = authorization.clone();
+    cross_manifest_approval["selectedApprovals"] = serde_json::json!([{
+        "approvalId":"approval-other",
+        "approvalDigest":alternate_approval_digest,
+        "disposition":null
+    }]);
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&cross_manifest_approval),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err(
+            "selected approvals must bind the start authorization Manifest and evidence set",
+        );
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        &authorization_bytes,
+    )
+    .unwrap();
+    let mut misplaced_authorization = authorization.clone();
+    misplaced_authorization["materializationPath"] =
+        serde_json::json!("release/runs/other-run/start-authorization.json");
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&misplaced_authorization),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("start authorization must bind its exact public Run location");
+    let mut misbound_approval = authorization.clone();
+    misbound_approval["selectedApprovals"][0]["approvalDigest"] = serde_json::json!("0".repeat(64));
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&misbound_approval),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("start authorization must bind the exact selected approval bytes");
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        &authorization_bytes,
+    )
+    .unwrap();
+    let mut misbound_adapter_result = adapter_result.clone();
+    misbound_adapter_result["manifestDigest"] = serde_json::json!("0".repeat(64));
+    fs::write(
+        isolated
+            .join("release/runs/run-fixture/evidence/adapter-results/adapter-result-fixture.json"),
+        canonical_json(&misbound_adapter_result),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a Run adapter result must bind the external Manifest digest");
+    fs::write(
+        isolated
+            .join("release/runs/run-fixture/evidence/adapter-results/adapter-result-fixture.json"),
+        &adapter_result_bytes,
+    )
+    .unwrap();
+    let mut unauthorized_adapter_operation = adapter_result.clone();
+    unauthorized_adapter_operation["operationId"] = serde_json::json!("unapproved-operation");
+    fs::write(
+        isolated
+            .join("release/runs/run-fixture/evidence/adapter-results/adapter-result-fixture.json"),
+        canonical_json(&unauthorized_adapter_operation),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err(
+            "Run-scoped evidence must bind an operation allowed by its start authorization",
+        );
+    fs::write(
+        isolated
+            .join("release/runs/run-fixture/evidence/adapter-results/adapter-result-fixture.json"),
+        &adapter_result_bytes,
+    )
+    .unwrap();
+    let mut invalid_issuer = authorization.clone();
+    invalid_issuer["issuer"]["role"] = serde_json::json!("repository-administrator");
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        canonical_json(&invalid_issuer),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("only a Release Steward can issue a start authorization");
+    fs::write(
+        isolated.join("release/runs/run-fixture/start-authorization.json"),
+        &authorization_bytes,
+    )
+    .unwrap();
+    let mut unauthorized_actor = event.clone();
+    unauthorized_actor["actor"] = serde_json::json!("other-actor");
+    fs::write(&stream, canonical_json(&unauthorized_actor)).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("Run events must bind the authorized execution-principal actor");
+    fs::write(&stream, &canonical).unwrap();
+    let mut misbound_event_manifest = event.clone();
+    misbound_event_manifest["manifestDigest"] = serde_json::json!("0".repeat(64));
+    fs::write(&stream, canonical_json(&misbound_event_manifest)).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("Run events must bind the Manifest frozen by their start authorization");
+    fs::write(&stream, &canonical).unwrap();
+    let mut missing_payload_digest = event.clone();
+    missing_payload_digest
+        .as_object_mut()
+        .unwrap()
+        .remove("payloadDigest");
+    fs::write(&stream, canonical_json(&missing_payload_digest)).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("Run events require an external payload digest");
+    fs::write(&stream, &canonical).unwrap();
+    let mut expired_event = event.clone();
+    expired_event["observedAt"] = serde_json::json!("2026-07-27T00:00:00Z");
+    fs::write(&stream, canonical_json(&expired_event)).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect("Run eligibility is deferred to the later Run workflow");
+    fs::write(&stream, &canonical).unwrap();
+    fs::write(
+        isolated.join("release/reducers/run-state-1.0.wasm"),
+        b"mutated reducer\n",
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a retained Manifest reducer digest must match exact public bytes");
+    fs::write(
+        isolated.join("release/reducers/run-state-1.0.wasm"),
+        reducer_source,
+    )
+    .unwrap();
+    let mut unreviewed_evidence = evidence_set.clone();
+    unreviewed_evidence["steward"]["actor"] = serde_json::json!("unassigned-actor");
+    unreviewed_evidence["steward"]["assignment"] = serde_json::json!("unassigned-assignment");
+    fs::write(
+        isolated.join("release/evidence-sets/evidence-fixture/evidence-set.json"),
+        canonical_json(&unreviewed_evidence),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("reviewed evidence sets require an active Release Steward binding");
+    fs::write(
+        isolated.join("release/evidence-sets/evidence-fixture/evidence-set.json"),
+        &evidence_set_bytes,
+    )
+    .unwrap();
+    let mut incomplete_closeout = closeout.clone();
+    incomplete_closeout["evidence"] = serde_json::json!([]);
+    fs::write(
+        isolated.join("release/runs/run-fixture/closeout.json"),
+        canonical_json(&incomplete_closeout),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("closeout evidence must cover every retained Run evidence record");
+    fs::write(
+        isolated.join("release/runs/run-fixture/closeout.json"),
+        &closeout_bytes,
+    )
+    .unwrap();
+    let mut bom = vec![0xef, 0xbb, 0xbf];
+    bom.extend_from_slice(&canonical);
+    let carriage_return = String::from_utf8(canonical.clone())
+        .unwrap()
+        .replace('\n', "\r\n")
+        .into_bytes();
+    let trailing_line = [canonical.as_slice(), b"\n"].concat();
+    for (label, bytes) in [
+        ("BOM", bom),
+        ("CR", carriage_return),
+        ("trailing LF", trailing_line),
+    ] {
+        fs::write(&stream, bytes).unwrap();
+        let error =
+            vexil_release_governance_validator::validate_canonical_release_records_repository(
+                &isolated,
+            )
+            .expect_err("raw-byte drift must fail canonical JSONL validation");
+        assert!(
+            error.contains("invalid raw-byte profile"),
+            "{label}: {error}"
+        );
+    }
+    fs::write(&stream, &canonical).unwrap();
+    let reordered = String::from_utf8(canonical.clone()).unwrap().replacen(
+        "{\"$schema\"",
+        "{\"recordKind\":\"release-run-event\",\"$schema\"",
+        1,
+    );
+    fs::write(&stream, reordered).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("duplicate/non-lexicographic event keys must fail canonical validation");
+    fs::write(&stream, &canonical).unwrap();
+    let mut private_evidence_set = evidence_set.clone();
+    private_evidence_set["entries"][0]["path"] =
+        serde_json::json!("C:/Users/private/evidence.json");
+    fs::write(
+        isolated.join("release/evidence-sets/evidence-fixture/evidence-set.json"),
+        canonical_json(&private_evidence_set),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("private absolute evidence paths must fail before reference resolution");
+    fs::write(
+        isolated.join("release/evidence-sets/evidence-fixture/evidence-set.json"),
+        &evidence_set_bytes,
+    )
+    .unwrap();
+    let mut unsupported_manifest = manifest.clone();
+    unsupported_manifest["schemaVersion"] = serde_json::json!("1.1");
+    fs::write(
+        isolated.join("release/manifests/manifest-fixture/manifest.json"),
+        canonical_json(&unsupported_manifest),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("an unretained Manifest schema version must fail closed");
+    fs::write(
+        isolated.join("release/manifests/manifest-fixture/manifest.json"),
+        &manifest_bytes,
+    )
+    .unwrap();
+    let mut second_event = event.clone();
+    second_event["sequenceNumber"] = serde_json::json!(2);
+    second_event["attempt"] = serde_json::json!(2);
+    second_event["priorEventDigest"] = serde_json::json!(digest(&canonical));
+    let second = canonical_json(&second_event);
+    fs::write(&stream, [&canonical[..], &second[..]].concat()).unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect("a contiguous digest-chained stream must validate");
+    second_event["priorEventDigest"] = serde_json::json!("0".repeat(64));
+    fs::write(
+        &stream,
+        [&canonical[..], &canonical_json(&second_event)[..]].concat(),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a Run event must retain the exact preceding-line digest");
+    second_event["priorEventDigest"] = serde_json::json!(digest(&canonical));
+    second_event["sequenceNumber"] = serde_json::json!(3);
+    fs::write(
+        &stream,
+        [&canonical[..], &canonical_json(&second_event)[..]].concat(),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("Run event sequence numbers must be contiguous");
+    second_event["sequenceNumber"] = serde_json::json!(2);
+    second_event["attempt"] = serde_json::json!(1);
+    fs::write(
+        &stream,
+        [&canonical[..], &canonical_json(&second_event)[..]].concat(),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("Run operation/attempt identities must not repeat");
+    fs::write(&stream, &canonical).unwrap();
+    fs::write(
+        &stream,
+        String::from_utf8(canonical.clone())
+            .unwrap()
+            .replace(",\"actor\"", ", \"actor\""),
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("parse-equivalent whitespace drift must fail canonical validation");
+    fs::write(&stream, canonical).unwrap();
+    fs::write(
+        isolated.join("release/runs/run-fixture/manifest.json"),
+        "{}\n",
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_canonical_release_records_repository(&isolated)
+        .expect_err("a Manifest-shaped path inside a Run cannot acquire authority");
+    fs::remove_dir_all(isolated).unwrap();
+}
+
+#[test]
+fn canonical_record_initial_contract_uses_external_manifest_identity_and_full_start_preflight() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifest = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        "evidenceSetDigest":"a".repeat(64),"evidenceSetId":"evidence-fixture","manifestId":"manifest-fixture",
+        "recordKind":"release-manifest","reducer":{"digest":"b".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},
+        "schemaVersion":"1.0","stateSchema":{"digest":"c".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"}
+    });
+    vexil_release_governance_validator::validate_canonical_release_record_schema(&root, &manifest)
+        .expect(
+        "a Manifest identity is the external digest of its exact bytes, never a self-digest field",
+    );
+    let mut legacy_self_digest = manifest.clone();
+    legacy_self_digest["payloadDigest"] = serde_json::json!("d".repeat(64));
+    vexil_release_governance_validator::validate_canonical_release_record_schema(
+        &root,
+        &legacy_self_digest,
+    )
+    .expect_err("a Manifest must reject a self-digest field");
+
+    let authorization = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "allowedOperations":["publish-runtime"],"allowedPermissions":["packages:write"],"allowedTargets":["registry:crates-io"],"allowedUnits":["vexil-runtime"],
+        "authorizationId":"authorization-fixture","candidate":{"attestationDigest":"e".repeat(64),"bundleDigest":"f".repeat(64),"bundleId":"candidate-bundle","subjectDigest":"0".repeat(64)},
+        "evidenceSetDigest":"a".repeat(64),"evidenceSetId":"evidence-fixture",
+        "executionPrincipal":{"actor":"coordinator","assignment":"run-coordinator","role":"release-run-coordinator"},"expiresAt":"2026-07-26T00:00:00Z",
+        "governanceRevision":{"digest":"2".repeat(64),"id":"governance-revision-v1"},
+        "historicalTagBaseline":{"digest":"3".repeat(64),"id":"baseline-tags"},"historicalTagSnapshot":{"digest":"4".repeat(64),"id":"tag-snapshot"},
+        "issuedAt":"2026-07-25T00:00:00Z","issuer":{"actor":"steward","assignment":"release-steward","role":"release-steward"},"manifestDigest":"5".repeat(64),"manifestId":"manifest-fixture",
+        "materializationPath":"release/runs/run-fixture/start-authorization.json","notBefore":"2026-07-25T00:00:00Z","protectedEnvironment":"production","recordKind":"privileged-run-start-authorization",
+        "runId":"run-fixture","schemaVersion":"1.0","security":{"exceptionsDigest":"6".repeat(64),"findingsDigest":"7".repeat(64)},
+        "selectedApprovals":[{"approvalDigest":"8".repeat(64),"approvalId":"approval-fixture","disposition":null}],
+        "stateSchema":{"digest":"c".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"},"reducer":{"digest":"b".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},
+        "targetControlEvidence":[{"permissionDigest":"9".repeat(64),"target":"registry:crates-io","targetControlDigest":"a".repeat(64)}],"workload":"release-workload"
+    });
+    vexil_release_governance_validator::validate_canonical_release_record_schema(
+        &root,
+        &authorization,
+    )
+    .expect("start authorization retains every immutable preflight binding");
+    for field in [
+        "selectedApprovals",
+        "governanceRevision",
+        "historicalTagBaseline",
+        "historicalTagSnapshot",
+        "security",
+        "candidate",
+        "targetControlEvidence",
+        "stateSchema",
+        "reducer",
+        "workload",
+        "protectedEnvironment",
+        "allowedOperations",
+        "allowedUnits",
+        "allowedTargets",
+        "allowedPermissions",
+        "materializationPath",
+    ] {
+        let mut incomplete = authorization.clone();
+        incomplete.as_object_mut().unwrap().remove(field);
+        vexil_release_governance_validator::validate_canonical_release_record_schema(
+            &root,
+            &incomplete,
+        )
+        .expect_err(&format!("start authorization must retain {field}"));
+    }
+}
+
+fn canonical_json(value: &Value) -> Vec<u8> {
+    let mut bytes = serde_json::to_vec(value).unwrap();
+    bytes.push(b'\n');
+    bytes
+}
+
+fn digest(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+#[test]
+fn detached_approval_constructor_binds_exact_inputs_and_revalidates_governance() {
+    use vexil_release_governance_validator::{
+        assess_detached_approval, construct_approval_disposition, construct_detached_approval,
+        governance_revision_v1, ApprovalDispositionRequest, ApprovalMergeEvidence,
+        DetachedApprovalOutcome, DetachedApprovalRequest,
+    };
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let evidence_source = fs::read(root.join("release/catalog.json")).unwrap();
+    let evidence_set = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "entries":[{"contentDigest":digest(&evidence_source),"id":"catalog","kind":"release-catalog","path":"release/catalog.json"}],
+        "reviewedAt":"2026-07-25T00:00:00Z",
+        "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
+        "evidenceSetId":"evidence-fixture","recordKind":"release-evidence-set","schemaVersion":"1.0"
+    });
+    let evidence_set_bytes = canonical_json(&evidence_set);
+    let evidence_digest = digest(&evidence_set_bytes);
+    let manifest = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        "evidenceSetDigest":evidence_digest,"evidenceSetId":"evidence-fixture",
+        "manifestId":"manifest-fixture",
+        "recordKind":"release-manifest","reducer":{"digest":"c".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},
+        "schemaVersion":"1.0","stateSchema":{"digest":"d".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"}
+    });
+    let manifest_bytes = canonical_json(&manifest);
+    let governance_digest = governance_revision_v1(&root).unwrap();
+    let request = DetachedApprovalRequest {
+        approval_id: "approval-fixture",
+        manifest_bytes: &manifest_bytes,
+        evidence_set_id: "evidence-fixture",
+        evidence_set_digest: &evidence_digest,
+        governance_digest: &governance_digest,
+        actor: "github:furkanmamuk",
+        role: "release-steward",
+        assignment_id: "assignment-release-steward-2026-07-14",
+        manifest_approver_actor: None,
+        approved_at: "2026-07-25T00:00:00Z",
+        expires_at: "2026-07-26T00:00:00Z",
+        provider_audit_reference: None,
+    };
+    let approval_bytes = construct_detached_approval(&root, &request).unwrap();
+    let provider_only = DetachedApprovalRequest {
+        provider_audit_reference: Some("https://provider.example/audit/fixture"),
+        ..request
+    };
+    let provider_only_bytes = construct_detached_approval(&root, &provider_only).unwrap();
+    assert_eq!(
+        assess_detached_approval(&root, &provider_only_bytes, "2026-07-25T12:00:00Z", None)
+            .unwrap(),
+        DetachedApprovalOutcome::ValidButNotCanonical
+    );
+    let wrong_role = DetachedApprovalRequest {
+        role: "repository-administrator",
+        ..request
+    };
+    assert!(construct_detached_approval(&root, &wrong_role).is_err());
+    let bad_request = DetachedApprovalRequest {
+        governance_digest: &"0".repeat(64),
+        ..request
+    };
+    assert!(construct_detached_approval(&root, &bad_request).is_err());
+    let mut noncanonical = approval_bytes.clone();
+    noncanonical.insert(1, b' ');
+    assert_eq!(
+        assess_detached_approval(&root, &noncanonical, "2026-07-25T12:00:00Z", None).unwrap(),
+        DetachedApprovalOutcome::InvalidStructure
+    );
+    assert_eq!(
+        assess_detached_approval(&root, &approval_bytes, "2026-07-25T12:00:00Z", None).unwrap(),
+        DetachedApprovalOutcome::ValidButNotCanonical
+    );
+    let approval_digest = digest(&approval_bytes);
+    let merge = ApprovalMergeEvidence {
+        repository: "vexil-lang/vexil",
+        reference: "refs/heads/main",
+        commit_id: &"e".repeat(40),
+        tree_id: &"f".repeat(40),
+        approval_path: "release/manifests/manifest-fixture/approvals/approval-fixture.json",
+        blob_id: &"1".repeat(40),
+        observed_blob_bytes: &approval_bytes,
+        approval_digest: &approval_digest,
+        manifest_bytes: &manifest_bytes,
+        evidence_set_bytes: &evidence_set_bytes,
+        merge_or_pr_id: "PR-1",
+        observed_at: "2026-07-25T12:00:00Z",
+        collector: "fixture",
+        manifest_approver_actor: None,
+        dispositions: &[],
+        dispositions_complete: true,
+    };
+    assert_eq!(
+        assess_detached_approval(&root, &approval_bytes, "2026-07-25T12:00:00Z", Some(&merge))
+            .unwrap(),
+        DetachedApprovalOutcome::Eligible
+    );
+    let wrong_blob = ApprovalMergeEvidence {
+        observed_blob_bytes: b"not the approval bytes\n",
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-25T12:00:00Z",
+            Some(&wrong_blob)
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::ValidButNotCanonical
+    );
+    let invalid_dependencies = ApprovalMergeEvidence {
+        manifest_bytes: b"{}\n",
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-25T12:00:00Z",
+            Some(&invalid_dependencies)
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::InvalidStructure
+    );
+    let incomplete_dispositions = ApprovalMergeEvidence {
+        dispositions_complete: false,
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-25T12:00:00Z",
+            Some(&incomplete_dispositions)
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::CanonicalButCurrentlyIneligible
+    );
+    let non_main = ApprovalMergeEvidence {
+        reference: "refs/heads/feature",
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-25T12:00:00Z",
+            Some(&non_main)
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::ValidButNotCanonical
+    );
+    let expiry_merge = ApprovalMergeEvidence {
+        observed_at: "2026-07-26T00:00:00Z",
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-26T00:00:00Z",
+            Some(&expiry_merge),
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::CanonicalButCurrentlyIneligible
+    );
+    let revocation = construct_approval_disposition(
+        &root,
+        &approval_bytes,
+        &ApprovalDispositionRequest {
+            disposition_id: "revocation-fixture",
+            disposition: "revoked",
+            effective_at: "2026-07-25T12:00:00Z",
+            actor: "github:furkanmamuk",
+            role: "repository-administrator",
+            assignment_id: "assignment-repository-administrator-2026-07-14",
+            reason: "fixture containment",
+            source: "https://github.com/vexil-lang/vexil/issues/75",
+            observed_at: "2026-07-25T12:00:00Z",
+            collector: "fixture",
+        },
+    )
+    .unwrap();
+    let dispositions = [revocation.as_slice()];
+    let revoked = ApprovalMergeEvidence {
+        dispositions: &dispositions,
+        ..merge
+    };
+    assert_eq!(
+        assess_detached_approval(
+            &root,
+            &approval_bytes,
+            "2026-07-25T12:00:00Z",
+            Some(&revoked)
+        )
+        .unwrap(),
+        DetachedApprovalOutcome::CanonicalButCurrentlyIneligible
+    );
+}
 
 #[test]
 fn canonical_contract_and_all_fixtures_have_the_expected_result() {
@@ -1415,6 +2245,15 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/catalog.schema.json",
         "release/schemas/catalog-lifecycle.schema.json",
         "release/schemas/version-rationale.schema.json",
+        "release/schemas/release-manifest-1.0.schema.json",
+        "release/schemas/release-evidence-set-1.0.schema.json",
+        "release/schemas/release-detached-approval-1.0.schema.json",
+        "release/schemas/release-approval-disposition-1.0.schema.json",
+        "release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "release/schemas/release-adapter-result-envelope-1.0.schema.json",
+        "release/schemas/release-run-event-1.0.schema.json",
+        "release/schemas/release-run-evidence-1.0.schema.json",
+        "release/schemas/release-closeout-1.0.schema.json",
         "release/catalog.json",
         "release/catalog-lifecycle.json",
         "release/rationales/vexil-runtime-ts-0-4-1.json",
@@ -1454,6 +2293,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "docs/book/src/release/privileged-operations.md",
         "docs/book/src/release/stewardship-exercises.md",
         "docs/book/src/release/catalog.md",
+        "docs/book/src/release/canonical-records.md",
         "docs/book/src/SUMMARY.md",
         "release/runbooks/advisory-automation.md",
         "release/runbooks/privileged-readiness-and-fail-closed.md",
