@@ -1,5 +1,6 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,6 +27,76 @@ fn security_inventory_covers_every_maintained_dependency_and_workflow_surface() 
         &inventory.replacen("status = \"scanned\"", "status = \"passing\"", 1),
     )
     .expect_err("unknown inventory status must not become a pass");
+}
+
+#[test]
+fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let digest = "a".repeat(64);
+    let manifest = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+        "recordKind":"release-manifest", "schemaVersion":"1.1", "manifestId":"rehearsal-fixture",
+        "baseCommit":"b".repeat(40), "evidenceSetId":"rehearsal-evidence", "evidenceSetDigest":digest,
+        "stateSchema":{"id":"release/state","version":"1.0","digest":"c".repeat(64)},
+        "reducer":{"id":"release/reducer","version":"1.0","digest":"d".repeat(64)},
+        "releaseUnits":[{"unitId":"runtime","sourceCommit":"e".repeat(40),"previousVersion":null,"proposedVersion":"0.1.0","versionSource":{"path":"packages/runtime-ts/package.json","observedDeclaration":"0.1.0"},"versionRationale":{"id":"runtime-rationale","digest":"f".repeat(64)},"changeUnits":[{"id":"unit","digest":"0".repeat(64)}],"canonicalTag":"runtime-v0.1.0","targets":[{"kind":"fixture","name":"fixture","mandatory":true}]}],
+        "publicationOrder":["runtime"],
+        "approvalPolicy":{"id":"release/approval","version":"1.0","digest":"1".repeat(64)},
+        "failurePolicy":{"id":"release/failure","version":"1.0","digest":"2".repeat(64)},
+        "recoveryPolicy":{"id":"release/recovery","version":"1.0","digest":"3".repeat(64)},
+        "closeoutRequirements":{"id":"release/closeout","version":"1.0","digest":"4".repeat(64)},
+        "security":{"id":"release/security","version":"1.0","digest":"5".repeat(64)},
+        "candidate":{"id":"release/candidate","version":"1.0","digest":"6".repeat(64)},
+        "rehearsal":{"id":"release/rehearsal","version":"1.0","digest":"7".repeat(64)},
+        "registryCustody":{"id":"release/custody","version":"1.0","digest":"8".repeat(64)},
+        "historicalTagSnapshot":{"id":"release/history","version":"1.0","digest":"9".repeat(64)},
+        "compatibilityEvidence":{"id":"release/compatibility","version":"1.0","digest":"0".repeat(64)},"supersedes":null
+    });
+    let manifest_bytes = canonical_json(&manifest);
+    let fixture_digest = "b".repeat(64);
+    let fixtures = [
+        ("collision", "tag"),
+        ("conflicting-content", "registry"),
+        ("duplicate-operation", "tag"),
+        ("downstream-failure", "documentation"),
+        ("recovery", "registry"),
+        ("supersession", "tag"),
+        ("unknown-outcome", "registry"),
+    ]
+    .map(|(scenario, target)| {
+        vexil_release_governance_validator::NonPublishingRehearsalFixture {
+            scenario,
+            target,
+            evidence_digest: &fixture_digest,
+        }
+    });
+    let request = vexil_release_governance_validator::NonPublishingRehearsalRequest {
+        manifest_bytes: &manifest_bytes,
+        candidate_bundle_digest: &"c".repeat(64),
+        candidate_subject_digest: &"d".repeat(64),
+        candidate_attestation_digest: &"e".repeat(64),
+        typed_graph_digest: &"f".repeat(64),
+        requested_capabilities: &["read", "build", "test", "package", "attest"],
+        fixtures: &fixtures,
+    };
+    let plan =
+        vexil_release_governance_validator::prepare_non_publishing_rehearsal(&root, &request)
+            .expect("complete inert rehearsal inputs must validate");
+    assert_eq!(plan.fixture_evidence.len(), 7);
+    let mut first = BTreeMap::new();
+    first.insert("runtime.tgz".to_owned(), b"candidate".to_vec());
+    vexil_release_governance_validator::compare_rehearsal_build_outputs(&first, &first)
+        .expect("identical isolated candidate bytes must compare");
+    let mut drifted = first.clone();
+    drifted.insert("runtime.tgz".to_owned(), b"drift".to_vec());
+    vexil_release_governance_validator::compare_rehearsal_build_outputs(&first, &drifted)
+        .expect_err("unexplained candidate drift must block rehearsal");
+    let forbidden = vexil_release_governance_validator::NonPublishingRehearsalRequest {
+        requested_capabilities: &["publish"],
+        ..request
+    };
+    vexil_release_governance_validator::prepare_non_publishing_rehearsal(&root, &forbidden)
+        .expect_err("non-publishing rehearsal cannot obtain publication authority");
 }
 
 #[test]

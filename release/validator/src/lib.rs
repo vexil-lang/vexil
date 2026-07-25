@@ -79,6 +79,36 @@ pub struct IsolatedCandidateWorkspace {
     pub path: PathBuf,
 }
 
+/// One inert, normalized rehearsal fixture. Fixtures describe expected
+/// evidence only; they do not create a Run, decide recovery, or invoke an
+/// adapter or provider.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NonPublishingRehearsalFixture<'a> {
+    pub scenario: &'a str,
+    pub target: &'a str,
+    pub evidence_digest: &'a str,
+}
+
+/// Exact, non-authoritative inputs for a target-neutral rehearsal harness.
+pub struct NonPublishingRehearsalRequest<'a> {
+    pub manifest_bytes: &'a [u8],
+    pub candidate_bundle_digest: &'a str,
+    pub candidate_subject_digest: &'a str,
+    pub candidate_attestation_digest: &'a str,
+    pub typed_graph_digest: &'a str,
+    pub requested_capabilities: &'a [&'a str],
+    pub fixtures: &'a [NonPublishingRehearsalFixture<'a>],
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct NonPublishingRehearsalPlan {
+    pub manifest_id: String,
+    pub manifest_digest: String,
+    pub candidate_bundle_digest: String,
+    pub typed_graph_digest: String,
+    pub fixture_evidence: BTreeMap<String, String>,
+}
+
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ManifestGenerationDiagnostic {
     pub requirement: &'static str,
@@ -1626,6 +1656,120 @@ fn validate_isolated_candidate_workspace(path: &Path, source_commit: &str) -> Re
         }
     }
     Ok(())
+}
+
+/// Prepares a deterministic, target-neutral rehearsal plan. It admits only
+/// read/build/test/package/attest capabilities and the required inert failure
+/// fixtures; it never obtains provider, environment, lease, or Run authority.
+pub fn prepare_non_publishing_rehearsal(
+    root: &Path,
+    request: &NonPublishingRehearsalRequest<'_>,
+) -> Result<NonPublishingRehearsalPlan, String> {
+    let manifest = parse_canonical_json_bytes(request.manifest_bytes, "rehearsal Manifest")?;
+    validate_canonical_release_record_schema(root, &manifest)?;
+    let manifest = object(&manifest, "rehearsal Manifest")?;
+    if text(manifest.get("recordKind"), "rehearsal Manifest kind")? != "release-manifest"
+        || text(
+            manifest.get("schemaVersion"),
+            "rehearsal Manifest schema version",
+        )? != "1.1"
+    {
+        return Err("rehearsal requires a canonical release-manifest@1.1".to_owned());
+    }
+    for (label, digest) in [
+        ("candidate bundle", request.candidate_bundle_digest),
+        ("candidate subject", request.candidate_subject_digest),
+        (
+            "candidate attestation",
+            request.candidate_attestation_digest,
+        ),
+        ("typed graph", request.typed_graph_digest),
+    ] {
+        if !valid_lowercase_sha256(digest) {
+            return Err(format!(
+                "rehearsal {label} digest must be a full lowercase SHA-256"
+            ));
+        }
+    }
+    for capability in request.requested_capabilities {
+        if !matches!(
+            *capability,
+            "read" | "build" | "test" | "package" | "attest"
+        ) {
+            return Err(format!(
+                "non-publishing rehearsal cannot request authority {capability}"
+            ));
+        }
+    }
+    let required_scenarios = BTreeSet::from([
+        "collision",
+        "conflicting-content",
+        "duplicate-operation",
+        "downstream-failure",
+        "recovery",
+        "supersession",
+        "unknown-outcome",
+    ]);
+    let mut fixture_evidence = BTreeMap::new();
+    for fixture in request.fixtures {
+        if fixture.target.trim().is_empty() || !valid_lowercase_sha256(fixture.evidence_digest) {
+            return Err(
+                "rehearsal fixture needs a target and full lowercase evidence digest".to_owned(),
+            );
+        }
+        if !required_scenarios.contains(fixture.scenario) {
+            return Err(format!(
+                "rehearsal has unsupported fixture scenario {}",
+                fixture.scenario
+            ));
+        }
+        if fixture_evidence
+            .insert(
+                fixture.scenario.to_owned(),
+                fixture.evidence_digest.to_owned(),
+            )
+            .is_some()
+        {
+            return Err(format!(
+                "rehearsal repeats fixture scenario {}",
+                fixture.scenario
+            ));
+        }
+    }
+    if fixture_evidence.len() != required_scenarios.len()
+        || !required_scenarios
+            .iter()
+            .all(|scenario| fixture_evidence.contains_key(*scenario))
+    {
+        return Err("rehearsal fixtures must cover every required normalized scenario".to_owned());
+    }
+    Ok(NonPublishingRehearsalPlan {
+        manifest_id: text(manifest.get("manifestId"), "rehearsal Manifest ID")?.to_owned(),
+        manifest_digest: sha256_hex(request.manifest_bytes),
+        candidate_bundle_digest: request.candidate_bundle_digest.to_owned(),
+        typed_graph_digest: request.typed_graph_digest.to_owned(),
+        fixture_evidence,
+    })
+}
+
+/// Compares two isolated candidate outputs by exact named bytes. Bounded
+/// nondeterministic comparisons are intentionally not accepted until a
+/// Manifest-bound policy explicitly defines them.
+pub fn compare_rehearsal_build_outputs(
+    first: &BTreeMap<String, Vec<u8>>,
+    second: &BTreeMap<String, Vec<u8>>,
+) -> Result<(), String> {
+    if first != second {
+        return Err("second isolated candidate build has unexplained byte drift".to_owned());
+    }
+    Ok(())
+}
+
+fn valid_lowercase_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value.bytes().all(|byte| {
+            byte.is_ascii_digit() || (byte.is_ascii_lowercase() && byte.is_ascii_hexdigit())
+        })
 }
 
 /// Builds one exact Release Manifest from reviewed inputs. A successful result
