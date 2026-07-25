@@ -160,6 +160,29 @@ pub struct InspectedCargoCrateCandidateArtifact {
     pub version: String,
 }
 
+/// Exact Go module proxy zip from an isolated candidate workspace.
+pub struct GoModuleCandidateArtifactInspectionRequest<'a> {
+    pub unit_id: &'a str,
+    pub source_commit: &'a str,
+    pub expected_module_path: &'a str,
+    pub expected_version: &'a str,
+    pub declared_entries: &'a BTreeSet<String>,
+    pub artifact_path: &'a Path,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InspectedGoModuleCandidateArtifact {
+    pub artifact_name: String,
+    pub content_digest: String,
+    pub entries: BTreeMap<String, String>,
+    pub module_path: String,
+    pub sha256: String,
+    pub size: u64,
+    pub source_commit: String,
+    pub unit_id: String,
+    pub version: String,
+}
+
 struct CandidateArtifactSnapshot {
     directory: PathBuf,
     path: PathBuf,
@@ -2451,6 +2474,46 @@ pub fn inspect_cargo_crate_candidate(
     })
 }
 
+/// Inspects a Go module proxy zip without contacting a proxy or executing Go.
+pub fn inspect_go_module_zip_candidate(
+    request: &GoModuleCandidateArtifactInspectionRequest<'_>,
+) -> Result<InspectedGoModuleCandidateArtifact, String> {
+    if request.unit_id.trim().is_empty() || !valid_git_object_id(request.source_commit)
+        || request.expected_module_path.trim().is_empty() || request.expected_version.trim().is_empty()
+        || request.declared_entries.is_empty() {
+        return Err("candidate Go module zip requires unit, source commit, module, version, and declared entries".to_owned());
+    }
+    let artifact_name = request.artifact_path.file_name().and_then(|name| name.to_str())
+        .filter(|name| name.ends_with(".zip") && name.contains(&format!("@v{}", request.expected_version)))
+        .ok_or("candidate Go module zip must have a versioned .zip filename")?;
+    let artifact_bytes = fs::read(request.artifact_path).map_err(|error| format!("read candidate Go module zip: {error}"))?;
+    if artifact_bytes.is_empty() { return Err("candidate Go module zip bytes must not be empty".to_owned()); }
+    let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes, ".zip")?;
+    validate_candidate_archive_entry_types(&snapshot.path, ["-tvf"])?;
+    let archive_root = format!("{}@v{}/", request.expected_module_path, request.expected_version);
+    let listing = candidate_tar(&snapshot.path, ["-tf"], None)?;
+    let mut entries = BTreeMap::new();
+    for path in String::from_utf8(listing).map_err(|error| format!("candidate Go module zip listing is not UTF-8: {error}"))?.lines() {
+        let path = validate_go_module_candidate_entry_path(path, &archive_root)?;
+        if path.ends_with('/') { continue; }
+        let bytes = candidate_tar(&snapshot.path, ["-xOf"], Some(path.as_str()))?;
+        reject_candidate_credential_material(&path, &bytes)?;
+        if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() { return Err(format!("candidate Go module zip contains duplicate entry {path}")); }
+    }
+    let go_mod = format!("{archive_root}go.mod");
+    let version_file = format!("{archive_root}VERSION");
+    if entries.len() < 3 || !entries.contains_key(&go_mod) || !entries.contains_key(&version_file) { return Err("candidate Go module zip must contain go.mod, VERSION, and content".to_owned()); }
+    require_declared_candidate_entries(&entries, request.declared_entries, "Go module zip")?;
+    let go_mod_bytes = candidate_tar(&snapshot.path, ["-xOf"], Some(go_mod.as_str()))?;
+    let declared_module = std::str::from_utf8(&go_mod_bytes).map_err(|error| format!("candidate Go go.mod is not UTF-8: {error}"))?
+        .lines().find_map(|line| line.strip_prefix("module ")).map(str::trim);
+    if declared_module != Some(request.expected_module_path) { return Err("candidate Go go.mod does not match expected module path".to_owned()); }
+    let version = String::from_utf8(candidate_tar(&snapshot.path, ["-xOf"], Some(version_file.as_str()))?)
+        .map_err(|error| format!("candidate Go VERSION is not UTF-8: {error}"))?;
+    if version.trim() != request.expected_version { return Err("candidate Go VERSION does not match expected version".to_owned()); }
+    Ok(InspectedGoModuleCandidateArtifact { artifact_name: artifact_name.to_owned(), content_digest: candidate_content_digest(b"vexil-go-module-candidate-contents-v1\n", &entries), entries, module_path: request.expected_module_path.to_owned(), sha256: sha256_hex(&artifact_bytes), size: artifact_bytes.len() as u64, source_commit: request.source_commit.to_owned(), unit_id: request.unit_id.to_owned(), version: request.expected_version.to_owned() })
+}
+
 fn candidate_tar<const N: usize>(
     artifact: &Path,
     args: [&str; N],
@@ -2584,6 +2647,20 @@ fn validate_cargo_crate_candidate_entry_path(
             .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
     {
         return Err(format!("candidate Cargo crate has prohibited entry path {path}"));
+    }
+    Ok(normalized)
+}
+
+fn validate_go_module_candidate_entry_path(path: &str, archive_root: &str) -> Result<String, String> {
+    let normalized = path.replace('\\', "/");
+    let segments = normalized.trim_end_matches('/');
+    if normalized.ends_with('/') && archive_root.starts_with(&normalized) {
+        return Ok(normalized);
+    }
+    if !normalized.starts_with(archive_root) || path.trim().is_empty() || normalized.starts_with('-')
+        || Path::new(path).is_absolute() || path.contains(':')
+        || segments.split('/').any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output")) {
+        return Err(format!("candidate Go module zip has prohibited entry path {path}"));
     }
     Ok(normalized)
 }

@@ -2263,6 +2263,36 @@ fn cargo_crate_candidate_inspection_binds_archive_bytes_and_metadata() {
 }
 
 #[test]
+fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
+    use vexil_release_governance_validator::{
+        inspect_go_module_zip_candidate, GoModuleCandidateArtifactInspectionRequest,
+    };
+    let fixture = std::env::temp_dir().join(format!("vexil-go-candidate-{}", std::process::id()));
+    let root = fixture.join("github.com/vexil-lang/vexil/packages/runtime-go@v0.1.0");
+    fs::create_dir_all(&root).expect("create Go module fixture");
+    fs::write(root.join("go.mod"), "module github.com/vexil-lang/vexil/packages/runtime-go\n\ngo 1.22\n").expect("write go.mod");
+    fs::write(root.join("VERSION"), "0.1.0\n").expect("write VERSION");
+    fs::write(root.join("runtime.go"), "package runtime\n").expect("write Go content");
+    let artifact = fixture.join("runtime-go@v0.1.0.zip");
+    let output = Command::new("tar").args(["-a", "-cf"]).arg(&artifact).args(["-C"]).arg(&fixture).arg("github.com").output().expect("create Go proxy zip");
+    assert!(output.status.success());
+    let prefix = "github.com/vexil-lang/vexil/packages/runtime-go@v0.1.0";
+    let declared_entries = BTreeSet::from([
+        format!("{prefix}/go.mod"), format!("{prefix}/VERSION"), format!("{prefix}/runtime.go"),
+    ]);
+    let commit = "d".repeat(40);
+    let request = GoModuleCandidateArtifactInspectionRequest { unit_id: "vexil-runtime-go", source_commit: &commit, expected_module_path: "github.com/vexil-lang/vexil/packages/runtime-go", expected_version: "0.1.0", declared_entries: &declared_entries, artifact_path: &artifact };
+    let inspected = inspect_go_module_zip_candidate(&request).expect("inspect Go module proxy zip");
+    assert_eq!(inspected.entries.len(), 3);
+    fs::create_dir_all(root.join("_bmad")).expect("create private fixture path");
+    fs::write(root.join("_bmad/private.txt"), "private\n").expect("write private fixture path");
+    let output = Command::new("tar").args(["-a", "-cf"]).arg(&artifact).args(["-C"]).arg(&fixture).arg("github.com").output().expect("recreate Go proxy zip");
+    assert!(output.status.success());
+    assert!(inspect_go_module_zip_candidate(&request).is_err());
+    fs::remove_dir_all(fixture).expect("remove Go module fixture");
+}
+
+#[test]
 fn canonical_contract_and_all_fixtures_have_the_expected_result() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_repository(&root)
