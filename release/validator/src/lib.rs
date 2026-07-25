@@ -68,6 +68,7 @@ pub struct IsolatedCandidateBuildPlan {
     pub manifest_digest: String,
     pub base_commit: String,
     pub source_commits: BTreeMap<String, String>,
+    pub toolchains: BTreeMap<String, String>,
 }
 
 /// A materialized detached checkout for one declared Release Unit. It carries
@@ -1673,6 +1674,8 @@ pub fn prepare_isolated_candidate_build(
     manifest_bytes: &[u8],
 ) -> Result<IsolatedCandidateBuildPlan, String> {
     validate_manifest_clean_worktree(root)?;
+    let toolchains = validate_candidate_toolchain_contract(root)?;
+    validate_candidate_inputs_are_tracked(root)?;
     let manifest = parse_canonical_json_bytes(manifest_bytes, "candidate-build Manifest")?;
     validate_canonical_release_record_schema(root, &manifest)?;
     let manifest = object(&manifest, "candidate-build Manifest")?;
@@ -1720,7 +1723,225 @@ pub fn prepare_isolated_candidate_build(
         manifest_digest: sha256_hex(manifest_bytes),
         base_commit: base_commit.to_owned(),
         source_commits,
+        toolchains,
     })
+}
+
+fn validate_candidate_toolchain_contract(root: &Path) -> Result<BTreeMap<String, String>, String> {
+    let rust_toolchain = parse_toml(
+        &fs::read_to_string(root.join("rust-toolchain.toml"))
+            .map_err(|error| format!("read candidate Rust toolchain declaration: {error}"))?,
+    )?;
+    let rust = rust_toolchain
+        .get("toolchain")
+        .and_then(TomlValue::as_table)
+        .and_then(|toolchain| toolchain.get("channel"))
+        .and_then(TomlValue::as_str)
+        .ok_or("candidate Rust toolchain declaration lacks toolchain.channel")?;
+    let node = exact_candidate_toolchain_value(root, ".nvmrc", "Node")?;
+    let python =
+        exact_candidate_toolchain_value(root, "packages/runtime-py/.python-version", "Python")?;
+    let go_mod = fs::read_to_string(root.join("packages/runtime-go/go.mod"))
+        .map_err(|error| format!("read candidate Go toolchain declaration: {error}"))?;
+    let go = go_mod
+        .lines()
+        .map(str::trim)
+        .find_map(|line| line.strip_prefix("toolchain go"))
+        .ok_or("candidate Go toolchain declaration lacks a toolchain directive")?;
+    if rust != "1.94.0" || node != "22.0.0" || python != "3.10.0" || go != "1.22.0" {
+        return Err(format!(
+            "candidate toolchains must pin Rust 1.94.0, Node 22.0.0, Python 3.10.0, and Go 1.22.0 (found Rust {rust}, Node {node}, Python {python}, Go {go})"
+        ));
+    }
+    validate_candidate_locked_inputs(root)?;
+    Ok(BTreeMap::from([
+        ("go".to_owned(), go.to_owned()),
+        ("node".to_owned(), node),
+        ("python".to_owned(), python),
+        ("rust".to_owned(), rust.to_owned()),
+    ]))
+}
+
+fn exact_candidate_toolchain_value(
+    root: &Path,
+    path: &str,
+    ecosystem: &str,
+) -> Result<String, String> {
+    let value = fs::read_to_string(root.join(path))
+        .map_err(|error| format!("read candidate {ecosystem} toolchain declaration: {error}"))?;
+    let value = value.trim();
+    if value.is_empty() || value.lines().count() != 1 {
+        return Err(format!(
+            "candidate {ecosystem} toolchain declaration must contain one exact version"
+        ));
+    }
+    Ok(value.to_owned())
+}
+
+fn validate_candidate_locked_inputs(root: &Path) -> Result<(), String> {
+    for path in ["Cargo.lock", "packages/runtime-ts/package-lock.json"] {
+        if !root.join(path).is_file() {
+            return Err(format!(
+                "candidate build requires committed lock input {path}"
+            ));
+        }
+    }
+    let package_json = read_json(&root.join("packages/runtime-ts/package.json"))?;
+    let package_version = package_json
+        .get("version")
+        .and_then(Value::as_str)
+        .ok_or("candidate TypeScript package manifest lacks version")?;
+    let package_lock_bytes = fs::read(root.join("packages/runtime-ts/package-lock.json"))
+        .map_err(|error| format!("read candidate Node lock input: {error}"))?;
+    let package_lock_content = std::str::from_utf8(&package_lock_bytes)
+        .map_err(|error| format!("candidate Node lock input is not UTF-8: {error}"))?;
+    validate_typescript_lockfile_agreement(package_lock_content, package_version)?;
+    let package_lock: Value = serde_json::from_slice(&package_lock_bytes)
+        .map_err(|error| format!("parse candidate Node lock input: {error}"))?;
+    if package_lock
+        .get("lockfileVersion")
+        .and_then(Value::as_u64)
+        .is_none()
+    {
+        return Err("candidate Node lock input lacks lockfileVersion".to_owned());
+    }
+    let packages = package_lock
+        .get("packages")
+        .and_then(Value::as_object)
+        .ok_or("candidate Node lock input lacks packages")?;
+    for (path, package) in packages {
+        if path.is_empty() || package.get("link").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
+        let package = package
+            .as_object()
+            .ok_or_else(|| format!("candidate Node lock package {path} is not an object"))?;
+        for field in ["version", "resolved", "integrity"] {
+            if package
+                .get(field)
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+            {
+                return Err(format!(
+                    "candidate Node lock package {path} lacks immutable {field}"
+                ));
+            }
+        }
+    }
+    let python_project = parse_toml(
+        &fs::read_to_string(root.join("packages/runtime-py/pyproject.toml"))
+            .map_err(|error| format!("read candidate Python build declaration: {error}"))?,
+    )?;
+    let requires = python_project
+        .get("build-system")
+        .and_then(TomlValue::as_table)
+        .and_then(|build_system| build_system.get("requires"))
+        .and_then(TomlValue::as_array)
+        .ok_or("candidate Python build declaration lacks build-system.requires")?;
+    let requirements = requires
+        .iter()
+        .map(TomlValue::as_str)
+        .collect::<Option<BTreeSet<_>>>()
+        .ok_or("candidate Python build requirements must be strings")?;
+    let expected_requirements = BTreeSet::from([
+        "hatchling==1.31.0",
+        "packaging==25.0",
+        "pathspec==1.0.1",
+        "pluggy==1.6.0",
+        "trove-classifiers==2026.6.1.19",
+    ]);
+    if requirements != expected_requirements {
+        return Err(
+            "candidate Python build requirements must exactly equal the approved pinned set"
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_candidate_inputs_are_tracked(root: &Path) -> Result<(), String> {
+    for path in [
+        "rust-toolchain.toml",
+        ".nvmrc",
+        "Cargo.lock",
+        "packages/runtime-go/go.mod",
+        "packages/runtime-py/.python-version",
+        "packages/runtime-py/pyproject.toml",
+        "packages/runtime-ts/package.json",
+        "packages/runtime-ts/package-lock.json",
+    ] {
+        let output = Command::new("git")
+            .current_dir(root)
+            .args(["ls-tree", "--name-only", "HEAD", "--", path])
+            .output()
+            .map_err(|error| format!("inspect candidate tracked input {path}: {error}"))?;
+        if !output.status.success() || String::from_utf8_lossy(&output.stdout).trim() != path {
+            return Err(format!(
+                "candidate input {path} must be tracked at the reviewed commit"
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn candidate_toolchain_contract_rejects_mutable_or_missing_declarations() {
+    let root = std::env::temp_dir().join(format!(
+        "vexil-candidate-toolchains-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    fs::create_dir_all(root.join("packages/runtime-py")).expect("create Python fixture directory");
+    fs::create_dir_all(root.join("packages/runtime-go")).expect("create Go fixture directory");
+    fs::create_dir_all(root.join("packages/runtime-ts")).expect("create Node fixture directory");
+    fs::write(
+        root.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.94.0\"\n",
+    )
+    .expect("write Rust fixture");
+    fs::write(root.join(".nvmrc"), "22.0.0\n").expect("write Node fixture");
+    fs::write(root.join("packages/runtime-py/.python-version"), "3.10.0\n")
+        .expect("write Python fixture");
+    fs::write(
+        root.join("packages/runtime-go/go.mod"),
+        "module fixture\n\ngo 1.22\n\ntoolchain go1.22.0\n",
+    )
+    .expect("write Go fixture");
+    fs::write(root.join("Cargo.lock"), "# lock fixture\n").expect("write Cargo lock fixture");
+    fs::write(
+        root.join("packages/runtime-ts/package.json"),
+        "{\"name\":\"fixture\",\"version\":\"0.1.0\"}\n",
+    )
+    .expect("write Node package fixture");
+    fs::write(
+        root.join("packages/runtime-ts/package-lock.json"),
+        "{\"lockfileVersion\":3,\"packages\":{\"\":{\"name\":\"fixture\",\"version\":\"0.1.0\"}}}\n",
+    )
+    .expect("write Node lock fixture");
+    fs::write(
+        root.join("packages/runtime-py/pyproject.toml"),
+        "[build-system]\nrequires = [\"hatchling==1.31.0\", \"packaging==25.0\", \"pathspec==1.0.1\", \"pluggy==1.6.0\", \"trove-classifiers==2026.6.1.19\"]\n",
+    )
+    .expect("write Python build fixture");
+    assert_eq!(
+        validate_candidate_toolchain_contract(&root)
+            .expect("fully pinned candidate toolchain contract")
+            .get("node"),
+        Some(&"22.0.0".to_owned())
+    );
+    fs::write(
+        root.join("packages/runtime-py/pyproject.toml"),
+        "[build-system]\nrequires = [\"hatchling==1.31.0\", \"packaging==25.0\", \"pathspec==1.0.1\", \"pluggy==1.6.0\", \"trove-classifiers==2026.6.1.19\", \"attacker-build-hook>=1\"]\n",
+    )
+    .expect("add mutable Python requirement");
+    assert!(validate_candidate_toolchain_contract(&root).is_err());
+    fs::write(root.join(".nvmrc"), "22\n").expect("mutate Node fixture");
+    assert!(validate_candidate_toolchain_contract(&root).is_err());
+    fs::remove_dir_all(root).expect("remove candidate toolchain fixture");
 }
 
 /// Materializes one detached, clean Git worktree for every exact Release Unit
@@ -1817,6 +2038,7 @@ fn cleanup_isolated_candidate_workspaces(root: &Path, workspaces: &[IsolatedCand
 
 fn validate_isolated_candidate_workspace(path: &Path, source_commit: &str) -> Result<(), String> {
     validate_manifest_clean_worktree(path)?;
+    validate_candidate_toolchain_contract(path)?;
     let output = Command::new("git")
         .current_dir(path)
         .args(["rev-parse", "HEAD"])

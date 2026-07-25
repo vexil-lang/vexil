@@ -90,6 +90,14 @@ their external SHA-256 identity, or a deterministic ordered blocker set. It
 does not materialize the path, acquire a lease, create an event, access a
 credential or environment, invoke an adapter, or perform a provider effect.
 Those additional Coordinator-owned Run controls begin in Epic 10.
+
+An isolated candidate-build plan is also non-authoritative. Before it can create
+detached public worktrees, it requires clean exact Manifest commits, pinned Rust
+1.94.0, Node 22.0.0, Python 3.10.0, and Go 1.22.0 declarations, plus the
+committed Cargo, npm, and Python build lock inputs. It rejects mutable or missing
+inputs before any build; planning and workspace materialization never publish,
+tag, access credentials, create a Run, or establish candidate custody.
+
 Before a future privileged job is dispatchable, its exact canonical
 authorization, asserted Coordinator principal, active Coordinator-owned lease,
 and sequenced Run context must all match. Authorization alone, or lease/Run
