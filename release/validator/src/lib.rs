@@ -209,6 +209,30 @@ pub struct InspectedWindowsCliCandidateArtifact {
     pub version: String,
 }
 
+pub struct CandidateCustodySubject<'a> {
+    pub name: &'a str,
+    pub sha256: &'a str,
+}
+
+pub struct CandidateCustodyRequest<'a> {
+    pub repository: &'a str,
+    pub workflow: &'a str,
+    pub reference: &'a str,
+    pub source_commit: &'a str,
+    pub manifest_digest: &'a str,
+    pub attestation_issuer: &'a str,
+    pub attestation_identity: &'a str,
+    pub attestation_digest: &'a str,
+    pub subjects: &'a [CandidateCustodySubject<'a>],
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct SealedCandidateCustody {
+    pub bundle_digest: String,
+    pub subject_digest: String,
+    pub attestation_digest: String,
+}
+
 struct CandidateArtifactSnapshot {
     directory: PathBuf,
     path: PathBuf,
@@ -2557,6 +2581,27 @@ pub fn inspect_windows_cli_candidate(
     let marker = format!("{} {}", request.expected_binary_name.trim_end_matches(".exe"), request.expected_version);
     if !bytes.windows(marker.len()).any(|window| window == marker.as_bytes()) { return Err("candidate Windows CLI does not contain its exact version marker".to_owned()); }
     Ok(InspectedWindowsCliCandidateArtifact { artifact_name: artifact_name.to_owned(), sha256: sha256_hex(&bytes), size: bytes.len() as u64, source_commit: request.source_commit.to_owned(), unit_id: request.unit_id.to_owned(), version: request.expected_version.to_owned() })
+}
+
+/// Seals local candidate identities into a deterministic, non-authoritative
+/// custody bundle. URLs, cache keys, and artifact labels are never accepted.
+pub fn seal_candidate_custody(
+    request: &CandidateCustodyRequest<'_>,
+) -> Result<SealedCandidateCustody, String> {
+    if request.repository.trim().is_empty() || request.workflow.trim().is_empty()
+        || request.reference.trim().is_empty() || !valid_git_object_id(request.source_commit)
+        || request.attestation_issuer.trim().is_empty() || request.attestation_identity.trim().is_empty()
+        || !valid_lowercase_sha256(request.manifest_digest) || !valid_lowercase_sha256(request.attestation_digest)
+        || request.subjects.is_empty() { return Err("candidate custody requires immutable source, manifest, attestation, and subjects".to_owned()); }
+    let mut subjects = BTreeMap::new();
+    for subject in request.subjects {
+        if subject.name.trim().is_empty() || subject.name.contains([':', '/', '\\']) || !valid_lowercase_sha256(subject.sha256)
+            || subjects.insert(subject.name, subject.sha256).is_some() { return Err("candidate custody subjects must be unique immutable digests".to_owned()); }
+    }
+    let subject_digest = candidate_content_digest(b"vexil-candidate-subjects-v1\n", &subjects.into_iter().map(|(name, digest)| (name.to_owned(), digest.to_owned())).collect());
+    let mut frame = b"vexil-candidate-custody-v1\n".to_vec();
+    for value in [request.repository, request.workflow, request.reference, request.source_commit, request.manifest_digest, request.attestation_issuer, request.attestation_identity, request.attestation_digest, &subject_digest] { frame.extend_from_slice(value.len().to_string().as_bytes()); frame.extend_from_slice(b":"); frame.extend_from_slice(value.as_bytes()); frame.extend_from_slice(b"\n"); }
+    Ok(SealedCandidateCustody { bundle_digest: sha256_hex(&frame), subject_digest, attestation_digest: request.attestation_digest.to_owned() })
 }
 
 fn candidate_tar<const N: usize>(

@@ -2309,6 +2309,18 @@ fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
 }
 
 #[test]
+fn candidate_custody_seals_exact_subject_and_attestation_identities() {
+    use vexil_release_governance_validator::{seal_candidate_custody, CandidateCustodyRequest, CandidateCustodySubject};
+    let subject = CandidateCustodySubject { name: "vexilc.exe", sha256: &"a".repeat(64) };
+    let request = CandidateCustodyRequest { repository: "vexil-lang/vexil", workflow: "candidate-build", reference: "refs/heads/main", source_commit: &"b".repeat(40), manifest_digest: &"c".repeat(64), attestation_issuer: "fixture-issuer", attestation_identity: "fixture-identity", attestation_digest: &"d".repeat(64), subjects: &[subject] };
+    let first = seal_candidate_custody(&request).expect("seal custody");
+    assert_eq!(first, seal_candidate_custody(&request).expect("seal custody deterministically"));
+    let substituted = CandidateCustodySubject { name: "vexilc.exe", sha256: &"e".repeat(64) };
+    let changed = CandidateCustodyRequest { subjects: &[substituted], ..request };
+    assert_ne!(first.bundle_digest, seal_candidate_custody(&changed).expect("seal changed custody").bundle_digest);
+}
+
+#[test]
 fn selective_promotion_rejects_the_wholesale_checkpoint_identity() {
     use vexil_release_governance_validator::{
         validate_selective_promotion, SelectivePromotionRequest,
