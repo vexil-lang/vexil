@@ -2,6 +2,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -2305,6 +2306,34 @@ fn selective_promotion_rejects_the_wholesale_checkpoint_identity() {
         approved_change_units: &approved,
     };
     assert!(validate_selective_promotion(&root, &request).is_err());
+}
+
+#[test]
+fn selective_promotion_accepts_one_explicitly_approved_unit_path() {
+    use vexil_release_governance_validator::{validate_selective_promotion, SelectivePromotionRequest};
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = clean_manifest_generation_root(&source);
+    let record = root.join("release/checkpoint-change-units/checkpoint-python-generator-fix.json");
+    let mut value: Value = serde_json::from_slice(&fs::read(&record).expect("read change unit")).expect("parse change unit");
+    value["disposition"] = Value::String("approved".into());
+    fs::write(&record, canonical_json(&value)).expect("approve fixture unit");
+    commit_fixture_path(&root, "release/checkpoint-change-units/checkpoint-python-generator-fix.json", "test: approve fixture unit");
+    let base = Command::new("git").current_dir(&root).args(["rev-parse", "HEAD"]).output().expect("read base");
+    let base = String::from_utf8_lossy(&base.stdout).trim().to_owned();
+    let path = "crates/vexil-codegen-py/src/message.rs";
+    fs::OpenOptions::new().append(true).open(root.join(path)).expect("open approved path").write_all(b"\n// fixture promotion\n").expect("write approved path");
+    commit_fixture_path(&root, path, "test: selective promotion");
+    let proposed = Command::new("git").current_dir(&root).args(["rev-parse", "HEAD"]).output().expect("read proposed");
+    let proposed = String::from_utf8_lossy(&proposed.stdout).trim().to_owned();
+    let units = BTreeSet::from(["checkpoint-python-generator-fix".to_owned()]);
+    validate_selective_promotion(&root, &SelectivePromotionRequest { current_base: &base, proposed_commit: &proposed, approved_change_units: &units }).expect("approved unit path passes");
+    fs::create_dir_all(root.join("_bmad")).expect("create private fixture path");
+    fs::write(root.join("_bmad/private.txt"), "private\n").expect("write private fixture path");
+    commit_fixture_path(&root, "_bmad/private.txt", "test: private leakage");
+    let leaked = Command::new("git").current_dir(&root).args(["rev-parse", "HEAD"]).output().expect("read leaked proposed");
+    let leaked = String::from_utf8_lossy(&leaked.stdout).trim().to_owned();
+    assert!(validate_selective_promotion(&root, &SelectivePromotionRequest { current_base: &base, proposed_commit: &leaked, approved_change_units: &units }).is_err());
+    fs::remove_dir_all(root).expect("remove promotion fixture");
 }
 
 #[test]
