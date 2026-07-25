@@ -2294,6 +2294,21 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
 }
 
 #[test]
+fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
+    use vexil_release_governance_validator::{inspect_windows_cli_candidate, WindowsCliCandidateInspectionRequest};
+    let fixture = std::env::temp_dir().join(format!("vexil-cli-candidate-{}", std::process::id()));
+    fs::create_dir_all(&fixture).expect("create CLI fixture");
+    let artifact = fixture.join("vexilc.exe");
+    fs::write(&artifact, b"MZfixture bytes vexilc 0.5.1\0").expect("write CLI fixture");
+    let commit = "e".repeat(40);
+    let request = WindowsCliCandidateInspectionRequest { unit_id: "vexilc", source_commit: &commit, expected_binary_name: "vexilc.exe", expected_version: "0.5.1", artifact_path: &artifact };
+    assert_eq!(inspect_windows_cli_candidate(&request).expect("inspect CLI fixture").version, "0.5.1");
+    fs::write(&artifact, b"not-a-pe").expect("replace invalid CLI fixture");
+    assert!(inspect_windows_cli_candidate(&request).is_err());
+    fs::remove_dir_all(fixture).expect("remove CLI fixture");
+}
+
+#[test]
 fn selective_promotion_rejects_the_wholesale_checkpoint_identity() {
     use vexil_release_governance_validator::{
         validate_selective_promotion, SelectivePromotionRequest,

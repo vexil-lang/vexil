@@ -191,6 +191,24 @@ pub struct InspectedGoModuleCandidateArtifact {
     pub version: String,
 }
 
+pub struct WindowsCliCandidateInspectionRequest<'a> {
+    pub unit_id: &'a str,
+    pub source_commit: &'a str,
+    pub expected_binary_name: &'a str,
+    pub expected_version: &'a str,
+    pub artifact_path: &'a Path,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InspectedWindowsCliCandidateArtifact {
+    pub artifact_name: String,
+    pub sha256: String,
+    pub size: u64,
+    pub source_commit: String,
+    pub unit_id: String,
+    pub version: String,
+}
+
 struct CandidateArtifactSnapshot {
     directory: PathBuf,
     path: PathBuf,
@@ -2520,6 +2538,25 @@ pub fn inspect_go_module_zip_candidate(
         .map_err(|error| format!("candidate Go VERSION is not UTF-8: {error}"))?;
     if version.trim() != request.expected_version { return Err("candidate Go VERSION does not match expected version".to_owned()); }
     Ok(InspectedGoModuleCandidateArtifact { artifact_name: artifact_name.to_owned(), content_digest: candidate_content_digest(b"vexil-go-module-candidate-contents-v1\n", &entries), entries, module_path: request.expected_module_path.to_owned(), sha256: sha256_hex(&artifact_bytes), size: artifact_bytes.len() as u64, source_commit: request.source_commit.to_owned(), unit_id: request.unit_id.to_owned(), version: request.expected_version.to_owned() })
+}
+
+/// Inspects a Windows CLI candidate without executing it. The PE signature and
+/// exact version marker are both read from the SHA-256-bound artifact bytes.
+pub fn inspect_windows_cli_candidate(
+    request: &WindowsCliCandidateInspectionRequest<'_>,
+) -> Result<InspectedWindowsCliCandidateArtifact, String> {
+    if request.unit_id.trim().is_empty() || !valid_git_object_id(request.source_commit)
+        || request.expected_binary_name.trim().is_empty() || request.expected_version.trim().is_empty() {
+        return Err("candidate Windows CLI requires unit, source commit, binary, and version".to_owned());
+    }
+    let artifact_name = request.artifact_path.file_name().and_then(|name| name.to_str())
+        .filter(|name| *name == request.expected_binary_name && name.ends_with(".exe"))
+        .ok_or("candidate Windows CLI filename does not match expected binary")?;
+    let bytes = fs::read(request.artifact_path).map_err(|error| format!("read candidate Windows CLI: {error}"))?;
+    if bytes.len() < 3 || &bytes[..2] != b"MZ" { return Err("candidate Windows CLI is not a PE executable".to_owned()); }
+    let marker = format!("{} {}", request.expected_binary_name.trim_end_matches(".exe"), request.expected_version);
+    if !bytes.windows(marker.len()).any(|window| window == marker.as_bytes()) { return Err("candidate Windows CLI does not contain its exact version marker".to_owned()); }
+    Ok(InspectedWindowsCliCandidateArtifact { artifact_name: artifact_name.to_owned(), sha256: sha256_hex(&bytes), size: bytes.len() as u64, source_commit: request.source_commit.to_owned(), unit_id: request.unit_id.to_owned(), version: request.expected_version.to_owned() })
 }
 
 fn candidate_tar<const N: usize>(
