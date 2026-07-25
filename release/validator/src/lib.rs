@@ -80,6 +80,58 @@ pub struct IsolatedCandidateWorkspace {
     pub path: PathBuf,
 }
 
+/// Exact npm tarball from an isolated candidate workspace. The inspector reads
+/// the archive itself, so its returned content inventory cannot be supplied
+/// independently from the SHA-256-bound artifact bytes.
+pub struct NpmCandidateArtifactInspectionRequest<'a> {
+    pub unit_id: &'a str,
+    pub source_commit: &'a str,
+    pub expected_package_name: &'a str,
+    pub expected_version: &'a str,
+    pub artifact_path: &'a Path,
+}
+
+/// Deterministic inspection evidence for one npm tarball. This is not a
+/// candidate bundle, attestation, publication request, or adapter input.
+#[derive(Debug, PartialEq, Eq)]
+pub struct InspectedNpmCandidateArtifact {
+    pub artifact_name: String,
+    pub package_name: String,
+    pub entries: BTreeMap<String, String>,
+    pub content_digest: String,
+    pub sha256: String,
+    pub size: u64,
+    pub source_commit: String,
+    pub unit_id: String,
+    pub version: String,
+}
+
+struct CandidateArtifactSnapshot {
+    path: PathBuf,
+}
+
+impl CandidateArtifactSnapshot {
+    fn create(bytes: &[u8]) -> Result<Self, String> {
+        let path = std::env::temp_dir().join(format!(
+            "vexil-npm-candidate-{}-{}.tgz",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|error| format!("read candidate snapshot clock: {error}"))?
+                .as_nanos()
+        ));
+        fs::write(&path, bytes)
+            .map_err(|error| format!("write candidate artifact snapshot: {error}"))?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for CandidateArtifactSnapshot {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
 /// One inert, normalized rehearsal fixture. Fixtures describe expected
 /// evidence only; they do not create a Run, decide recovery, or invoke an
 /// adapter or provider.
@@ -2055,6 +2107,150 @@ fn validate_isolated_candidate_workspace(path: &Path, source_commit: &str) -> Re
                 "isolated candidate checkout contains prohibited private path {private_path}"
             ));
         }
+    }
+    Ok(())
+}
+
+/// Reads and inspects an npm `.tgz` candidate without writing, publishing, or
+/// invoking an adapter. BSD tar is the checked Windows archive reader used by
+/// the target-specific contract; any unavailable or malformed archive fails.
+pub fn inspect_npm_tgz_candidate(
+    request: &NpmCandidateArtifactInspectionRequest<'_>,
+) -> Result<InspectedNpmCandidateArtifact, String> {
+    if request.unit_id.trim().is_empty()
+        || !valid_git_object_id(request.source_commit)
+        || request.expected_package_name.trim().is_empty()
+        || request.expected_version.trim().is_empty()
+    {
+        return Err(
+            "candidate npm artifact requires unit, source commit, package, and version".to_owned(),
+        );
+    }
+    let artifact_name = request
+        .artifact_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| name.ends_with(".tgz") && name.contains(request.expected_version))
+        .ok_or("candidate npm artifact must have a versioned .tgz filename")?;
+    let artifact_bytes = fs::read(request.artifact_path)
+        .map_err(|error| format!("read candidate npm artifact: {error}"))?;
+    if artifact_bytes.is_empty() {
+        return Err("candidate npm artifact bytes must not be empty".to_owned());
+    }
+    let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes)?;
+    let listing = candidate_tar(&snapshot.path, ["-tzf"], None)?;
+    let mut entries = BTreeMap::new();
+    for path in String::from_utf8(listing)
+        .map_err(|error| format!("candidate npm archive listing is not UTF-8: {error}"))?
+        .lines()
+        .filter(|path| !path.ends_with('/'))
+    {
+        let path = validate_npm_candidate_entry_path(path)?;
+        let bytes = candidate_tar(&snapshot.path, ["-xOzf"], Some(path.as_str()))?;
+        reject_candidate_credential_material(&path, &bytes)?;
+        if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() {
+            return Err(format!(
+                "candidate npm archive contains duplicate entry {path}"
+            ));
+        }
+    }
+    if entries.is_empty() || !entries.contains_key("package/package.json") {
+        return Err(
+            "candidate npm archive must contain package/package.json and content".to_owned(),
+        );
+    }
+    let package_json = candidate_tar(&snapshot.path, ["-xOzf"], Some("package/package.json"))?;
+    let package_json: Value = serde_json::from_slice(&package_json)
+        .map_err(|error| format!("parse candidate npm package.json: {error}"))?;
+    if package_json.get("name").and_then(Value::as_str) != Some(request.expected_package_name)
+        || package_json.get("version").and_then(Value::as_str) != Some(request.expected_version)
+    {
+        return Err(
+            "candidate npm package.json does not match expected package and version".to_owned(),
+        );
+    }
+    let mut frame = b"vexil-npm-candidate-contents-v1\n".to_vec();
+    for (path, digest) in &entries {
+        frame.extend_from_slice(path.len().to_string().as_bytes());
+        frame.extend_from_slice(b":");
+        frame.extend_from_slice(path.as_bytes());
+        frame.extend_from_slice(b"\n");
+        frame.extend_from_slice(digest.as_bytes());
+        frame.extend_from_slice(b"\n");
+    }
+    Ok(InspectedNpmCandidateArtifact {
+        artifact_name: artifact_name.to_owned(),
+        package_name: request.expected_package_name.to_owned(),
+        entries,
+        content_digest: sha256_hex(&frame),
+        sha256: sha256_hex(&artifact_bytes),
+        size: artifact_bytes.len() as u64,
+        source_commit: request.source_commit.to_owned(),
+        unit_id: request.unit_id.to_owned(),
+        version: request.expected_version.to_owned(),
+    })
+}
+
+fn candidate_tar<const N: usize>(
+    artifact: &Path,
+    args: [&str; N],
+    entry: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    let mut command = Command::new("tar");
+    command.args(args).arg(artifact);
+    if let Some(entry) = entry {
+        command.arg(entry);
+    }
+    let output = command
+        .output()
+        .map_err(|error| format!("invoke candidate archive reader: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "candidate archive reader rejected artifact: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(output.stdout)
+}
+
+fn validate_npm_candidate_entry_path(path: &str) -> Result<String, String> {
+    let normalized = path.replace('\\', "/");
+    if !normalized.starts_with("package/")
+        || path.trim().is_empty()
+        || Path::new(path).is_absolute()
+        || path.contains(':')
+        || normalized
+            .split('/')
+            .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
+    {
+        return Err(format!(
+            "candidate npm archive has prohibited entry path {path}"
+        ));
+    }
+    Ok(normalized)
+}
+
+fn reject_candidate_credential_material(path: &str, bytes: &[u8]) -> Result<(), String> {
+    if path.ends_with("/.npmrc") || path.ends_with("/.pypirc") || path.ends_with("/credentials") {
+        return Err(format!(
+            "candidate artifact entry {path} is credential-bearing configuration"
+        ));
+    }
+    let content = String::from_utf8_lossy(bytes).to_ascii_lowercase();
+    if [
+        "-----begin",
+        "aws_secret_access_key",
+        "github_pat_",
+        "ghp_",
+        ":_authtoken=",
+        "//registry.",
+    ]
+    .iter()
+    .any(|marker| content.contains(marker))
+    {
+        return Err(format!(
+            "candidate artifact entry {path} contains credential-like material"
+        ));
     }
     Ok(())
 }

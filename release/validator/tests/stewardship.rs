@@ -1941,6 +1941,77 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
 }
 
 #[test]
+fn npm_candidate_artifact_inspection_binds_archive_bytes_and_metadata() {
+    use vexil_release_governance_validator::{
+        inspect_npm_tgz_candidate, NpmCandidateArtifactInspectionRequest,
+    };
+
+    let fixture = std::env::temp_dir().join(format!(
+        "vexil-npm-candidate-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    let package = fixture.join("package");
+    fs::create_dir_all(package.join("dist")).expect("create npm candidate fixture");
+    fs::write(
+        package.join("package.json"),
+        "{\"name\":\"@vexil-lang/runtime\",\"version\":\"0.4.1\"}\n",
+    )
+    .expect("write npm package metadata");
+    fs::write(package.join("dist/index.js"), "export const value = 1;\n")
+        .expect("write npm package entry");
+    let artifact = fixture.join("vexil-lang-runtime-0.4.1.tgz");
+    let output = Command::new("tar")
+        .args(["-czf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .arg("package")
+        .output()
+        .expect("create npm candidate archive");
+    assert!(
+        output.status.success(),
+        "tar fixture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let source_commit = "a".repeat(40);
+    let request = NpmCandidateArtifactInspectionRequest {
+        unit_id: "vexil-runtime-ts",
+        source_commit: &source_commit,
+        expected_package_name: "@vexil-lang/runtime",
+        expected_version: "0.4.1",
+        artifact_path: &artifact,
+    };
+    let inspected = inspect_npm_tgz_candidate(&request).expect("inspect exact npm archive");
+    assert_eq!(inspected.entries.len(), 2);
+    assert_eq!(inspected.version, "0.4.1");
+    let wrong_version = NpmCandidateArtifactInspectionRequest {
+        expected_version: "0.4.2",
+        ..request
+    };
+    assert!(inspect_npm_tgz_candidate(&wrong_version).is_err());
+    fs::write(
+        package.join(".npmrc"),
+        "//registry.npmjs.org/:_authToken=fixture\n",
+    )
+    .expect("write credential fixture");
+    let output = Command::new("tar")
+        .args(["-czf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .arg("package")
+        .output()
+        .expect("recreate credential fixture archive");
+    assert!(output.status.success());
+    assert!(inspect_npm_tgz_candidate(&request).is_err());
+    fs::remove_dir_all(fixture).expect("remove npm candidate fixture");
+}
+
+#[test]
 fn canonical_contract_and_all_fixtures_have_the_expected_result() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_repository(&root)

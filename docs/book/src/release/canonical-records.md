@@ -98,6 +98,13 @@ committed Cargo, npm, and Python build lock inputs. It rejects mutable or missin
 inputs before any build; planning and workspace materialization never publish,
 tag, access credentials, create a Run, or establish candidate custody.
 
+For npm candidates, inspection reads the `.tgz` archive itself through the
+checked Windows archive reader. It verifies `package/package.json` against the
+expected package and version, rejects unsafe/private paths and credential-like
+content, then records the artifact SHA-256, size, and deterministic entry
+inventory. This transient inspection is not an attestation, custody record, or
+publication request.
+
 Before a future privileged job is dispatchable, its exact canonical
 authorization, asserted Coordinator principal, active Coordinator-owned lease,
 and sequenced Run context must all match. Authorization alone, or lease/Run
