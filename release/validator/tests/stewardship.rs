@@ -252,6 +252,32 @@ fn local_git_tag_adapter_is_immutable_and_has_no_remote_target() {
     };
     let plan = vexil_release_governance_validator::prepare_local_git_tag_fixture(&request)
         .expect("local bare tag fixture must prepare");
+    let prepared = vexil_release_governance_validator::normalize_local_git_tag_fixture_result(
+        &plan,
+        vexil_release_governance_validator::AdapterOperation::Prepare,
+        None,
+        None,
+    )
+    .expect("prepare result envelope");
+    assert_eq!(
+        prepared.outcome,
+        vexil_release_governance_validator::AdapterOutcome::Prepared
+    );
+    assert_eq!(
+        prepared.required_permission,
+        "contents:write:refs/tags/exact-approved-manifest-tag"
+    );
+    let absent = vexil_release_governance_validator::normalize_local_git_tag_fixture_result(
+        &plan,
+        vexil_release_governance_validator::AdapterOperation::Probe,
+        Some(&vexil_release_governance_validator::LocalGitTagFixtureProbe::Absent),
+        None,
+    )
+    .expect("probe result envelope");
+    assert_eq!(
+        absent.retry,
+        vexil_release_governance_validator::AdapterRetryClassification::SafeToRetry
+    );
     assert_eq!(
         vexil_release_governance_validator::probe_local_git_tag_fixture(&request, &plan),
         Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Absent)
@@ -264,6 +290,58 @@ fn local_git_tag_adapter_is_immutable_and_has_no_remote_target() {
         vexil_release_governance_validator::verify_local_git_tag_fixture(&request, &plan),
         Ok(vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching { .. })
     ));
+    let matching = vexil_release_governance_validator::normalize_local_git_tag_fixture_result(
+        &plan,
+        vexil_release_governance_validator::AdapterOperation::Publish,
+        Some(
+            &vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching {
+                tag_object: "b".repeat(40),
+                peeled_commit: head.clone(),
+            },
+        ),
+        None,
+    )
+    .expect("publish result envelope");
+    assert_eq!(
+        matching.outcome,
+        vexil_release_governance_validator::AdapterOutcome::Matching
+    );
+    let verified = vexil_release_governance_validator::normalize_local_git_tag_fixture_result(
+        &plan,
+        vexil_release_governance_validator::AdapterOperation::Verify,
+        Some(
+            &vexil_release_governance_validator::LocalGitTagFixtureProbe::Matching {
+                tag_object: "b".repeat(40),
+                peeled_commit: head.clone(),
+            },
+        ),
+        None,
+    )
+    .expect("verify result envelope");
+    assert_eq!(
+        verified.operation,
+        vexil_release_governance_validator::AdapterOperation::Verify
+    );
+    let classified = vexil_release_governance_validator::normalize_local_git_tag_fixture_result(
+        &plan,
+        vexil_release_governance_validator::AdapterOperation::ClassifyFailure,
+        None,
+        Some("git transport disconnected"),
+    )
+    .expect("failure result envelope");
+    assert_eq!(
+        classified.retry,
+        vexil_release_governance_validator::AdapterRetryClassification::Unknown
+    );
+    assert!(
+        vexil_release_governance_validator::normalize_local_git_tag_fixture_result(
+            &plan,
+            vexil_release_governance_validator::AdapterOperation::Prepare,
+            Some(&vexil_release_governance_validator::LocalGitTagFixtureProbe::Absent),
+            None,
+        )
+        .is_err()
+    );
     assert_eq!(
         vexil_release_governance_validator::classify_local_git_tag_fixture_failure(
             "tag fixture refuses to overwrite conflicting tag identity"

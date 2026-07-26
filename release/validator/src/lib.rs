@@ -348,6 +348,48 @@ pub enum LocalGitTagFixtureFailure {
     Unknown,
 }
 
+/// The fixed operation vocabulary every target adapter must expose. These
+/// envelopes report observed fixture state only; they do not establish Run
+/// completion, scope, recovery, or release authority.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdapterOperation {
+    Prepare,
+    Probe,
+    Publish,
+    Verify,
+    ClassifyFailure,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdapterOutcome {
+    Prepared,
+    Absent,
+    Matching,
+    Rejected,
+    TerminalConflict,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AdapterRetryClassification {
+    NotApplicable,
+    SafeToRetry,
+    DoNotRetry,
+    Unknown,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AdapterResultEnvelope {
+    pub adapter_id: String,
+    pub operation: AdapterOperation,
+    pub target: String,
+    pub immutable_key: String,
+    pub required_permission: String,
+    pub outcome: AdapterOutcome,
+    pub retry: AdapterRetryClassification,
+    pub evidence: BTreeMap<String, String>,
+}
+
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ManifestGenerationDiagnostic {
     pub requirement: &'static str,
@@ -3514,6 +3556,88 @@ pub fn classify_local_git_tag_fixture_failure(error: &str) -> LocalGitTagFixture
     } else {
         LocalGitTagFixtureFailure::Unknown
     }
+}
+
+/// Produces the shared, deterministic adapter result envelope for the local
+/// Git-tag conformance fixture. The target and permission are declarations of
+/// this fixture boundary, not credentials or permission to touch public refs.
+pub fn normalize_local_git_tag_fixture_result(
+    plan: &LocalGitTagFixturePlan,
+    operation: AdapterOperation,
+    probe: Option<&LocalGitTagFixtureProbe>,
+    failure: Option<&str>,
+) -> Result<AdapterResultEnvelope, String> {
+    let mut evidence = BTreeMap::from([
+        ("manifestDigest".to_owned(), plan.manifest_digest.clone()),
+        ("sourceCommit".to_owned(), plan.source_commit.clone()),
+        ("tagName".to_owned(), plan.tag_name.clone()),
+    ]);
+    let (outcome, retry) = match operation {
+        AdapterOperation::Prepare if probe.is_none() && failure.is_none() => (
+            AdapterOutcome::Prepared,
+            AdapterRetryClassification::NotApplicable,
+        ),
+        AdapterOperation::Probe | AdapterOperation::Publish | AdapterOperation::Verify => {
+            let probe = probe.ok_or("adapter result requires a normalized probe")?;
+            if failure.is_some() {
+                return Err("adapter probe result cannot also carry failure text".to_owned());
+            }
+            match probe {
+                LocalGitTagFixtureProbe::Absent => (
+                    AdapterOutcome::Absent,
+                    AdapterRetryClassification::SafeToRetry,
+                ),
+                LocalGitTagFixtureProbe::Matching {
+                    tag_object,
+                    peeled_commit,
+                } => {
+                    evidence.insert("tagObject".to_owned(), tag_object.clone());
+                    evidence.insert("peeledCommit".to_owned(), peeled_commit.clone());
+                    (
+                        AdapterOutcome::Matching,
+                        AdapterRetryClassification::NotApplicable,
+                    )
+                }
+                LocalGitTagFixtureProbe::Conflicting => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+            }
+        }
+        AdapterOperation::ClassifyFailure => {
+            if probe.is_some() {
+                return Err("adapter failure classification cannot carry a probe".to_owned());
+            }
+            match classify_local_git_tag_fixture_failure(
+                failure.ok_or("adapter failure classification requires failure text")?,
+            ) {
+                LocalGitTagFixtureFailure::Rejected => (
+                    AdapterOutcome::Rejected,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                LocalGitTagFixtureFailure::TerminalConflict => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                LocalGitTagFixtureFailure::Unknown => {
+                    (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown)
+                }
+            }
+        }
+        AdapterOperation::Prepare => {
+            return Err("adapter prepare result cannot carry a probe or failure text".to_owned())
+        }
+    };
+    Ok(AdapterResultEnvelope {
+        adapter_id: "local-git-tag-fixture@1".to_owned(),
+        operation,
+        target: "local-bare-git-tag".to_owned(),
+        immutable_key: plan.immutable_key.clone(),
+        required_permission: "contents:write:refs/tags/exact-approved-manifest-tag".to_owned(),
+        outcome,
+        retry,
+        evidence,
+    })
 }
 
 fn validate_local_bare_fixture_repository(repository: &Path) -> Result<(), String> {
