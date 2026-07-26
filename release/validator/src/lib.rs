@@ -6101,6 +6101,7 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_catalog_lifecycle_repository(root)?;
     validate_catalog_repository(root)?;
     validate_version_rationale_repository(root)?;
+    validate_release_set_selection_repository(root)?;
     if root.join(".git").exists() {
         validate_checkpoint_change_units_repository(root)?;
     }
@@ -8266,8 +8267,165 @@ fn validate_lifecycle_review(root: &Path, record: &Map<String, Value>) -> Result
     Ok(())
 }
 
-/// Validates public, per-unit version rationale records without selecting a
-/// Release Set, resolving evidence, or authorizing any release operation.
+pub fn validate_release_set_selection_repository(root: &Path) -> Result<(), String> {
+    let record =
+        read_json(&root.join("release/decisions/first-recovered-release-set-2026-07-26.json"))?;
+    validate_schema_instance(
+        root,
+        "release/schemas/release-set-selection-1.0.schema.json",
+        &record,
+        "Release Set selection",
+    )?;
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    validate_release_set_selection(root, &catalog, &record)?;
+    let documentation =
+        fs::read_to_string(root.join("docs/book/src/release/first-recovered-release-set.md"))
+            .map_err(|error| format!("read first recovered Release Set documentation: {error}"))?;
+    if documentation != render_release_set_selection_markdown(&record)? {
+        return Err(
+            "documentation parity failure: docs/book/src/release/first-recovered-release-set.md is stale"
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+/// Validates a structural Release Set selection. It cannot create a Manifest,
+/// approval, Run, tag, registry publication, deployment, or other effect.
+pub fn validate_release_set_selection(
+    root: &Path,
+    catalog: &Value,
+    record: &Value,
+) -> Result<(), String> {
+    ensure_no_private_leakage(&serde_json::to_string(&record).map_err(|error| error.to_string())?)?;
+    validate_catalog(root, catalog)?;
+    let selection = object(record, "Release Set selection")?;
+    let source_commit = text(selection.get("sourceCommit"), "Release Set source commit")?;
+    let mut selected = BTreeSet::new();
+    let mut covered = BTreeSet::new();
+    for item in array(selection.get("includedUnits"), "Release Set included units")? {
+        let item = object(item, "Release Set included unit")?;
+        let unit_id = text(item.get("unitId"), "Release Set included unit ID")?;
+        if !selected.insert(unit_id) || !covered.insert(unit_id) {
+            return Err("Release Set unit disposition is duplicated".to_owned());
+        }
+        if text(item.get("sourceCommit"), "Release Set unit source commit")? != source_commit {
+            return Err(
+                "every selected unit must bind the exact Release Set source commit".to_owned(),
+            );
+        }
+        let unit = array(catalog.get("units"), "release catalog units")?
+            .iter()
+            .find(|candidate| candidate.get("id").and_then(Value::as_str) == Some(unit_id))
+            .ok_or_else(|| format!("Release Set references unknown catalog unit: {unit_id}"))?;
+        let unit = object(unit, "Release Set catalog unit")?;
+        let version = object(
+            required_value(unit, "versionSource")?,
+            "Release Set catalog version source",
+        )?;
+        if item.get("proposedVersion") != version.get("observedDeclaration") {
+            return Err(
+                "Release Set proposed version must equal its catalog source declaration".to_owned(),
+            );
+        }
+        let expected_tag = text(
+            unit.get("canonicalTagNamespace"),
+            "Release Set canonical tag namespace",
+        )?
+        .replace(
+            "<semver>",
+            text(item.get("proposedVersion"), "Release Set proposed version")?,
+        );
+        if text(item.get("canonicalTag"), "Release Set canonical tag")? != expected_tag {
+            return Err(
+                "Release Set canonical tag must equal the catalog namespace and proposed version"
+                    .to_owned(),
+            );
+        }
+        let rationale_id = text(
+            item.get("versionRationaleId"),
+            "Release Set version rationale ID",
+        )?;
+        let rationale = read_json(
+            &root
+                .join("release/rationales")
+                .join(format!("{rationale_id}.json")),
+        )?;
+        validate_version_rationale(root, catalog, &rationale)?;
+        if rationale.get("unitId").and_then(Value::as_str) != Some(unit_id)
+            || rationale.get("proposedPackageVersion") != item.get("proposedVersion")
+        {
+            return Err(
+                "Release Set rationale must bind the selected unit and proposed version".to_owned(),
+            );
+        }
+    }
+    for item in array(selection.get("excludedUnits"), "Release Set excluded units")? {
+        let unit_id = text(
+            object(item, "Release Set excluded unit")?.get("unitId"),
+            "Release Set excluded unit ID",
+        )?;
+        if !covered.insert(unit_id) {
+            return Err("Release Set unit disposition is duplicated".to_owned());
+        }
+    }
+    for unit in array(catalog.get("units"), "catalog units")? {
+        let unit = object(unit, "catalog unit")?;
+        if object(required_value(unit, "publication")?, "catalog publication")?
+            .get("classification")
+            .and_then(Value::as_str)
+            != Some("non-publishable")
+            && !covered.contains(text(unit.get("id"), "catalog unit ID")?)
+        {
+            return Err(
+                "Release Set must explicitly include or exclude every publishable catalog unit"
+                    .to_owned(),
+            );
+        }
+    }
+    Ok(())
+}
+
+pub fn render_release_set_selection_markdown(record: &Value) -> Result<String, String> {
+    let selection = object(record, "Release Set selection")?;
+    let selection_id = text(selection.get("selectionId"), "Release Set selection ID")?;
+    let source_commit = text(selection.get("sourceCommit"), "Release Set source commit")?;
+    let status = text(selection.get("status"), "Release Set status")?;
+    let boundary = text(selection.get("releaseBoundary"), "Release Set boundary")?;
+    let mut markdown = String::from("# First Recovered Release Set\n\n> Generated view of [`release/decisions/first-recovered-release-set-2026-07-26.json`](../../../../release/decisions/first-recovered-release-set-2026-07-26.json). The JSON selection is canonical; this Markdown is non-authoritative and parity-checked.\n\n");
+    markdown.push_str(&format!("Selection `{selection_id}` is `{status}` at exact source commit `{source_commit}`. It is intentionally a small rehearsal selection, not a Release Manifest, approval, Run, tag, registry action, deployment, or publication assertion.\n\n"));
+    markdown.push_str("## Included unit\n\n| Unit | Source commit | Version | Canonical tag | Mandatory target | Clean-consumer plan |\n|---|---|---|---|---|---|\n");
+    for item in array(selection.get("includedUnits"), "Release Set included units")? {
+        let item = object(item, "Release Set included unit")?;
+        let target = object(required_value(item, "target")?, "Release Set target")?;
+        markdown.push_str(&format!(
+            "| `{}` | `{}` | `{}` | `{}` | `{}` `{}` | {} |\n",
+            text(item.get("unitId"), "Release Set included unit ID")?,
+            text(item.get("sourceCommit"), "Release Set unit source commit")?,
+            text(item.get("proposedVersion"), "Release Set proposed version")?,
+            text(item.get("canonicalTag"), "Release Set canonical tag")?,
+            text(target.get("kind"), "Release Set target kind")?,
+            text(target.get("name"), "Release Set target name")?,
+            text(
+                item.get("cleanConsumerPlan"),
+                "Release Set clean consumer plan"
+            )?,
+        ));
+    }
+    markdown.push_str("\n## Explicitly excluded publishable units\n\n| Unit | Reason | Next action |\n|---|---|---|\n");
+    for item in array(selection.get("excludedUnits"), "Release Set excluded units")? {
+        let item = object(item, "Release Set excluded unit")?;
+        markdown.push_str(&format!(
+            "| `{}` | {} | {} |\n",
+            text(item.get("unitId"), "Release Set excluded unit ID")?,
+            text(item.get("reason"), "Release Set exclusion reason")?,
+            text(item.get("nextAction"), "Release Set exclusion next action")?,
+        ));
+    }
+    markdown.push_str(&format!("\n## Effect boundary\n\n`{boundary}`\n\nOffline validation confirms structural bindings and this generated view only. It does not prove live external controls or authorize an effect.\n"));
+    Ok(markdown)
+}
+
 pub fn validate_version_rationale_repository(root: &Path) -> Result<(), String> {
     validate_schema_syntax(root)?;
     let catalog = read_json(&root.join("release/catalog.json"))?;

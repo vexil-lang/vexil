@@ -3815,6 +3815,31 @@ fn version_rationales_are_per_unit_and_fail_closed() {
 }
 
 #[test]
+fn first_recovered_release_set_is_complete_and_fail_closed() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    vexil_release_governance_validator::validate_release_set_selection_repository(&root)
+        .expect("the canonical first recovered Release Set must validate");
+
+    let catalog: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/catalog.json")).expect("read canonical catalog"),
+    )
+    .expect("parse canonical catalog");
+    let mut selection: Value = serde_json::from_str(
+        &fs::read_to_string(
+            root.join("release/decisions/first-recovered-release-set-2026-07-26.json"),
+        )
+        .expect("read canonical Release Set selection"),
+    )
+    .expect("parse canonical Release Set selection");
+    selection["excludedUnits"]
+        .as_array_mut()
+        .expect("excluded units array")
+        .pop();
+    vexil_release_governance_validator::validate_release_set_selection(&root, &catalog, &selection)
+        .expect_err("every publishable catalog unit must be explicitly included or excluded");
+}
+
+#[test]
 fn catalog_lifecycle_is_complete_and_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_catalog_lifecycle_repository(&root)
@@ -4837,6 +4862,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/schemas/catalog.schema.json",
         "release/schemas/catalog-lifecycle.schema.json",
         "release/schemas/version-rationale.schema.json",
+        "release/schemas/release-set-selection-1.0.schema.json",
         "release/schemas/release-manifest-1.0.schema.json",
         "release/schemas/release-manifest-1.1.schema.json",
         "release/schemas/security-scan-1.0.schema.json",
@@ -4851,8 +4877,10 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/catalog.json",
         "release/catalog-lifecycle.json",
         "release/rationales/vexil-runtime-ts-0-4-1.json",
+        "release/rationales/vexil-runtime-go-0-1-1.json",
         "release/decisions/runtime-go-version-2026-07-23.json",
         "release/decisions/runtime-go-version-2026-07-26.json",
+        "release/decisions/first-recovered-release-set-2026-07-26.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
         "release/advisory/automation-contract.json",
@@ -4897,6 +4925,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "docs/book/src/release/stewardship-exercises.md",
         "docs/book/src/release/catalog.md",
         "docs/book/src/release/canonical-records.md",
+        "docs/book/src/release/first-recovered-release-set.md",
         "docs/book/src/SUMMARY.md",
         "release/runbooks/advisory-automation.md",
         "release/runbooks/privileged-readiness-and-fail-closed.md",
