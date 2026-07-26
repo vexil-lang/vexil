@@ -11365,6 +11365,7 @@ pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> 
         }
     }
     validate_workflow_static_isolation(root)?;
+    validate_exact_manifest_go_release_workflow(root)?;
     Ok(())
 }
 
@@ -11638,6 +11639,46 @@ pub fn validate_workflow_static_isolation(root: &Path) -> Result<(), String> {
                 }
             }
         }
+    }
+    Ok(())
+}
+
+/// Checks the repository-owned Go release executor's fail-closed shape. The
+/// retained authorization records still decide whether any specific Run may
+/// proceed; this only prevents the workflow from silently becoming a general
+/// tag writer or a pull-request privilege path.
+pub fn validate_exact_manifest_go_release_workflow(root: &Path) -> Result<(), String> {
+    let path = root.join(".github/workflows/exact-manifest-go-release.yml");
+    let source = fs::read_to_string(&path).map_err(|error| {
+        format!(
+            "read exact-manifest Go executor {}: {error}",
+            path.display()
+        )
+    })?;
+    let required = [
+        "workflow_dispatch:",
+        "github.ref == 'refs/heads/main'",
+        "environment:\n      name: release-go-runtime",
+        "contents: write",
+        "persist-credentials: false",
+        "release/runs",
+        ".github/workflows/exact-manifest-go-release.yml",
+        "release-go-runtime",
+        "create-canonical-go-tag",
+        "refs/tags/$CANONICAL_TAG",
+    ];
+    for value in required {
+        if !source.contains(value) {
+            return Err(format!(
+                "exact-manifest Go executor is missing required fail-closed binding: {value}"
+            ));
+        }
+    }
+    let lower = source.to_ascii_lowercase();
+    if lower.contains("pull_request:") || lower.contains("pull_request_target") {
+        return Err(
+            "exact-manifest Go executor must not run from pull-request triggers".to_owned(),
+        );
     }
     Ok(())
 }

@@ -1319,6 +1319,16 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
     )
     .expect("copy current history observation schema into clean fixture repository");
     fs::copy(
+        source_root.join(".github/workflows/exact-manifest-go-release.yml"),
+        isolated.join(".github/workflows/exact-manifest-go-release.yml"),
+    )
+    .expect("copy exact-manifest Go executor into clean fixture repository");
+    commit_fixture_path(
+        &isolated,
+        ".github/workflows/exact-manifest-go-release.yml",
+        "test: retain exact-manifest Go executor",
+    );
+    fs::copy(
         source_root.join("release/schemas/checkpoint-change-unit-1.0.schema.json"),
         isolated.join("release/schemas/checkpoint-change-unit-1.0.schema.json"),
     )
@@ -4449,6 +4459,32 @@ fn external_control_records_and_workflows_fail_closed() {
         .expect_err("write-capable .yaml workflows must require immutable Action pins");
     fs::remove_dir_all(fixture_root).unwrap();
 
+    vexil_release_governance_validator::validate_exact_manifest_go_release_workflow(&root)
+        .expect("the Go executor must remain bound to its retained Run and protected environment");
+    let executor_fixture = std::env::temp_dir().join(format!(
+        "vexil-exact-manifest-go-executor-{}",
+        std::process::id()
+    ));
+    let executor_workflow_dir = executor_fixture.join(".github/workflows");
+    fs::create_dir_all(&executor_workflow_dir).unwrap();
+    let weakened_executor =
+        fs::read_to_string(root.join(".github/workflows/exact-manifest-go-release.yml"))
+            .unwrap()
+            .replace(
+                "name: release-go-runtime",
+                "name: unprotected-release-target",
+            );
+    fs::write(
+        executor_workflow_dir.join("exact-manifest-go-release.yml"),
+        weakened_executor,
+    )
+    .unwrap();
+    vexil_release_governance_validator::validate_exact_manifest_go_release_workflow(
+        &executor_fixture,
+    )
+    .expect_err("the executor must not drift from its exact protected environment");
+    fs::remove_dir_all(executor_fixture).unwrap();
+
     let plan: Value = serde_json::from_str(
         &fs::read_to_string(root.join("release/exercises/revocation-exercise-plan.json")).unwrap(),
     )
@@ -4936,6 +4972,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/runbooks/advisory-manual-fallback.md",
         "GOVERNANCE.md",
         ".github/workflows/release.yml",
+        ".github/workflows/exact-manifest-go-release.yml",
         ".github/workflows/npm-publish.yml",
         "crates/vexil-lang/Cargo.toml",
         "crates/vexilc/Cargo.toml",
