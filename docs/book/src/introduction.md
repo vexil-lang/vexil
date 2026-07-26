@@ -45,3 +45,5 @@ cargo install vexilc
 ```
 
 Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/vexil-lang/vexil/releases).
+
+Before adopting a target combination, read the [limitations and compatibility notes](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md). Rust and TypeScript have cross-language byte-vector coverage; Go and Python targets require target-specific verification.

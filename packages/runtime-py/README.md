@@ -2,11 +2,21 @@
 
 Vexil runtime for Python - binary serialization support for the Vexil language.
 
-## Installation
+## Source installation
 
-```bash
-pip install vexil_runtime
+From the repository root:
+
+```sh
+python -m pip install ./packages/runtime-py
 ```
+
+Or, from this `packages/runtime-py` directory:
+
+```sh
+python -m pip install .
+```
+
+This repository does not currently make a public PyPI publication claim for this runtime. Use a local source install until a versioned Python distribution is explicitly released.
 
 ## Usage
 

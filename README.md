@@ -19,7 +19,7 @@
 
 Vexil describes both the shape *and* the wire encoding of data crossing system boundaries. `u4` is 4 bits, no negotiation. `@varint` on a `u64` makes it unsigned LEB128. The schema is the wire contract, not a hint about the wire format.
 
-Each schema produces a deterministic BLAKE3 hash embedded in generated code at compile time. If two parties compile against different schemas, the mismatch is detectable before any data is read. No silent corruption, no "works on my machine."
+Each schema produces a deterministic BLAKE3 hash embedded in generated code at compile time. If two parties compile against different schemas, the mismatch is detectable before data is read. This helps make incompatible schema changes explicit instead of relying on environment-specific behavior.
 
 ## Quick look
 
@@ -255,7 +255,7 @@ Error: duplicate field name
 
 ```toml
 [dependencies]
-vexil-lang = "1.0"
+vexil-lang = "0.4"
 ```
 
 ```rust
@@ -298,7 +298,7 @@ crates/
 packages/
   runtime-ts/            # @vexil-lang/runtime -- TypeScript BitWriter/BitReader (npm)
   runtime-go/            # github.com/vexil-lang/vexil/packages/runtime-go -- Go runtime
-  runtime-py/            # vexil_runtime -- Python BitWriter/BitReader (PyPI)
+  runtime-py/            # vexil_runtime -- Python BitWriter/BitReader (source-only)
 examples/
   sensor-packet/         # Sub-byte types, encoding annotations, compact enums
   command-protocol/      # Unions, flags, limits -- RPC-style protocol
@@ -309,6 +309,7 @@ examples/
 
 ## Documentation
 
+- [Documentation book](docs/book/src/SUMMARY.md) -- installation, language guide, CLI reference, runtimes, and examples
 - [Language Specification](spec/vexil-spec.md)
 - [FAQ](FAQ.md)
 - [Examples](examples/)

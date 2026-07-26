@@ -39,3 +39,4 @@ The `--target` option (used by `codegen`, `build`, and `watch`) accepts:
 - `rust` (default)
 - `typescript`
 - `go`
+- `python`

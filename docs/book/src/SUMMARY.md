@@ -38,6 +38,7 @@
 - [Rust](./runtime/rust.md)
 - [TypeScript](./runtime/typescript.md)
 - [Go](./runtime/go.md)
+- [Python](./runtime/python.md)
 
 # Examples
 

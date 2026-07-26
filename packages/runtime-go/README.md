@@ -7,7 +7,7 @@ Zero dependencies. Go 1.22+.
 ## Install
 
 ```sh
-go get github.com/vexil-lang/vexil/packages/runtime-go
+go get github.com/vexil-lang/vexil/packages/runtime-go@v0.1.1
 ```
 
 ## API
