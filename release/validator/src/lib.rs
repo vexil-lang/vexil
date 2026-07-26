@@ -11645,8 +11645,9 @@ pub fn validate_workflow_static_isolation(root: &Path) -> Result<(), String> {
 
 /// Checks the repository-owned Go release executor's fail-closed shape. The
 /// retained authorization records still decide whether any specific Run may
-/// proceed; this only prevents the workflow from silently becoming a general
-/// tag writer or a pull-request privilege path.
+/// proceed; the privileged environment confirms the exact pre-effect inputs,
+/// while the Release Steward creates the protected tag through the separate
+/// human execution path.
 pub fn validate_exact_manifest_go_release_workflow(root: &Path) -> Result<(), String> {
     let path = root.join(".github/workflows/exact-manifest-go-release.yml");
     let source = fs::read_to_string(&path).map_err(|error| {
@@ -11659,13 +11660,13 @@ pub fn validate_exact_manifest_go_release_workflow(root: &Path) -> Result<(), St
         "workflow_dispatch:",
         "github.ref == 'refs/heads/main'",
         "environment:\n      name: release-go-runtime",
-        "contents: write",
+        "contents: read",
         "persist-credentials: false",
         "release/runs",
         ".github/workflows/exact-manifest-go-release.yml",
         "release-go-runtime",
         "create-canonical-go-tag",
-        "refs/tags/$CANONICAL_TAG",
+        "this workflow intentionally performs no tag effect",
     ];
     for value in required {
         if !source.contains(value) {
@@ -11678,6 +11679,11 @@ pub fn validate_exact_manifest_go_release_workflow(root: &Path) -> Result<(), St
     if lower.contains("pull_request:") || lower.contains("pull_request_target") {
         return Err(
             "exact-manifest Go executor must not run from pull-request triggers".to_owned(),
+        );
+    }
+    if lower.contains("git push") || lower.contains("git tag --annotate") {
+        return Err(
+            "exact-manifest Go executor must leave protected tag creation to the confirmed human execution path".to_owned(),
         );
     }
     Ok(())
