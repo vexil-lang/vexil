@@ -5288,6 +5288,10 @@ fn validate_canonical_record_location(
 
 fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &'static str)> {
     match (kind, version) {
+        ("release-security-exception", "1.0") => Some((
+            "release/schemas/security-exception-1.0.schema.json",
+            "https://vexil.dev/release/schemas/security-exception-1.0.schema.json",
+        )),
         ("candidate-custody", "1.0") => Some((
             "release/schemas/candidate-custody-1.0.schema.json",
             "https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",

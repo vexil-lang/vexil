@@ -31,6 +31,32 @@ fn security_inventory_covers_every_maintained_dependency_and_workflow_surface() 
 }
 
 #[test]
+fn security_exception_schema_requires_separate_steward_role_assertions() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let exception = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/security-exception-1.0.schema.json",
+        "recordKind":"release-security-exception","schemaVersion":"1.0","exceptionId":"exception-fixture",
+        "finding":{"scanId":"scan-fixture","scanDigest":"a".repeat(64),"findingId":"CVE-fixture"},
+        "scope":["npm-package:@vexil-lang/runtime"],"exploitability":"not reachable in the reviewed fixture",
+        "compensatingControls":["fixture control"],
+        "owner":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security-fixture"},
+        "securityApproval":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security-fixture"},
+        "releaseInclusion":{"manifestId":"manifest-fixture","manifestDigest":"b".repeat(64),"actor":"github:furkanmamuk","role":"release-steward","assignment":"release-fixture"},
+        "issuedAt":"2026-07-26T00:00:00Z","expiresAt":"2026-08-02T00:00:00Z","remediationIssue":"issue-fixture"
+    });
+    vexil_release_governance_validator::validate_canonical_release_record_schema(&root, &exception)
+        .expect("complete detached security exception schema");
+    let mut ambiguous = exception.clone();
+    ambiguous["releaseInclusion"]["role"] = Value::String("security-steward".to_owned());
+    assert!(
+        vexil_release_governance_validator::validate_canonical_release_record_schema(
+            &root, &ambiguous
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
     use vexil_release_governance_validator::{
         seal_candidate_custody, CandidateCustodyRequest, CandidateCustodySubject,
