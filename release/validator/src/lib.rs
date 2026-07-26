@@ -5663,15 +5663,24 @@ fn validate_manifest_security(
         "security scan scope",
     )?;
     let lockfile = text(scope.get("lockfile"), "security scan lockfile")?;
-    let expected = format!(
-        "sha256:{}",
-        sha256_hex(
-            &fs::read(root.join(lockfile))
-                .map_err(|error| format!("read security scan lockfile: {error}"))?
-        )
-    );
-    if scan.get("lockfileDigest").and_then(Value::as_str) != Some(expected.as_str()) {
-        return Err("security scan lockfile digest is stale".to_owned());
+    if lockfile.is_empty() {
+        if scan.get("lockfileDigest").and_then(Value::as_str) != Some("none") {
+            return Err(
+                "security scan without a lockfile must explicitly bind lockfileDigest none"
+                    .to_owned(),
+            );
+        }
+    } else {
+        let expected = format!(
+            "sha256:{}",
+            sha256_hex(
+                &fs::read(root.join(lockfile))
+                    .map_err(|error| format!("read security scan lockfile: {error}"))?
+            )
+        );
+        if scan.get("lockfileDigest").and_then(Value::as_str) != Some(expected.as_str()) {
+            return Err("security scan lockfile digest is stale".to_owned());
+        }
     }
     let exceptions_allowed = if manifest.get("schemaVersion").and_then(Value::as_str) == Some("1.2")
     {
