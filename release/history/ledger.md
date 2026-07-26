@@ -12,6 +12,7 @@
 
 - `observation-crates-io-2026-07-23` — observed from `crates-io` (`sha256:a3a3713fa28919cfb5389fc8e717220d9a79d1d2efa2ec3051170293d8b486c7`)
 - `observation-github-releases-2026-07-23` — observed from `github-releases` (`sha256:52e81d0faf16126cccc016fec656d00469e4ed237a63bd36f55bb315b71a1699`)
+- `observation-github-tags-2026-07-26` — observed from `git-remote-tags` (`sha256:a3658aa5c79d180770ea0ac1f7a2c7ef858c14807430e02eb46235ed106ac8f9`)
 - `observation-go-proxy-runtime-2026-07-23` — missing from `go-proxy` (`sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`)
 - `observation-go-proxy-runtime-v0-1-0-2026-07-26` — observed from `go-proxy` (`sha256:d0b4f9120ba026c00fa23cb84b4e1620a2e6436592e58155a5151653179572c0`)
 - `observation-npm-runtime-2026-07-23` — observed from `npm` (`sha256:39dac15bfe8eafa9602da3e5e56905f9c05b459469cd59ec77770acfd41bc07a`)

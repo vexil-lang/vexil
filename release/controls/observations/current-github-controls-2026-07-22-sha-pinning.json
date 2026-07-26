@@ -4,7 +4,7 @@
   "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
   "version": "1.0",
   "recordId": "ECO-2026-07-22-CURRENT-GITHUB-CONTROLS-SHA-PINNING",
-  "evidenceState": "current",
+  "evidenceState": "superseded",
   "provider": "github",
   "scope": "vexil-lang/vexil",
   "observedAtUtc": "2026-07-22T16:39:10Z",
