@@ -557,7 +557,7 @@ pub enum AdapterRetryClassification {
     Unknown,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AdapterResultEnvelope {
     pub adapter_id: String,
     pub operation: AdapterOperation,
@@ -567,6 +567,549 @@ pub struct AdapterResultEnvelope {
     pub outcome: AdapterOutcome,
     pub retry: AdapterRetryClassification,
     pub evidence: BTreeMap<String, String>,
+}
+
+/// Immutable identity frozen at the beginning of one fixture Run.  This is a
+/// local coordinator model only: it has no filesystem, credential, network,
+/// provider, or release effect.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseRunBinding {
+    pub run_id: String,
+    pub authorization_id: String,
+    pub authorization_digest: String,
+    pub manifest_id: String,
+    pub manifest_digest: String,
+    pub evidence_set_id: String,
+    pub evidence_set_digest: String,
+    pub state_schema_id: String,
+    pub state_schema_digest: String,
+    pub reducer_id: String,
+    pub reducer_digest: String,
+}
+
+/// The sole serialization lease for a fixture Run.  The type is deliberately
+/// in-memory: a production store must provide atomic persistence separately.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseRunLease {
+    pub run_id: String,
+    pub coordinator: String,
+    pub acquired_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseRunEvent {
+    pub event_id: String,
+    pub sequence_number: u64,
+    pub operation_id: String,
+    pub attempt: u64,
+    pub prior_event_digest: Option<String>,
+    pub payload_digest: String,
+    pub actor: String,
+    pub observed_at: String,
+    pub result: String,
+    pub event_digest: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReleaseRunAppend {
+    Appended(ReleaseRunEvent),
+    Duplicate(ReleaseRunEvent),
+}
+
+/// Coordinator-owned append-only Run fixture.  Adapter code has no access to
+/// its event collection; callers must present the lease-owning coordinator.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseRunCoordinator {
+    binding: ReleaseRunBinding,
+    lease: ReleaseRunLease,
+    events: Vec<ReleaseRunEvent>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReleaseRunState {
+    Prepared,
+    Publishing,
+    Published,
+    Verified,
+    Recovered,
+    Failed,
+    Aborted,
+    Unknown,
+    Superseded,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseRunChildState {
+    pub id: String,
+    pub mandatory: bool,
+    pub state: ReleaseRunState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReleaseRunProbeDecision {
+    ExecuteOnlyAfterFreshProbe,
+    ObserveMatching,
+    TerminalConflict,
+    ObserveUnknown,
+    Reject,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ReleaseRecoveryDisposition {
+    ResumeSameManifest,
+    SuccessorRequired,
+    NoRecoveryNeeded,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseUnitRecoveryInput {
+    pub unit_id: String,
+    pub mandatory_target_states: Vec<ReleaseRunState>,
+    pub successor_version: Option<String>,
+    pub successor_tag: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseUnitRecoveryPlan {
+    pub unit_id: String,
+    pub disposition: ReleaseRecoveryDisposition,
+    pub carried_forward: bool,
+    pub successor_version: Option<String>,
+    pub successor_tag: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReleaseRunCloseoutFixture {
+    pub run_id: String,
+    pub manifest_digest: String,
+    pub final_event_digest: String,
+    pub disposition: ReleaseRunState,
+    pub evidence_digests: BTreeSet<String>,
+    pub monitoring_owner: String,
+    pub known_limitations: Vec<String>,
+}
+
+/// Acquires the sole local lease and creates the required initial event.  The
+/// supplied authorization must already be canonical and valid at `observed_at`;
+/// this function does not substitute a newer schema, reducer, or authorization.
+pub fn begin_release_run_fixture(
+    active_lease: &mut Option<ReleaseRunLease>,
+    binding: ReleaseRunBinding,
+    coordinator: &str,
+    observed_at: &str,
+) -> Result<ReleaseRunCoordinator, String> {
+    validate_release_run_binding(&binding)?;
+    if coordinator.trim().is_empty() || !is_valid_utc_second(observed_at) {
+        return Err(
+            "fixture Run requires a Coordinator and UTC-second acquisition time".to_owned(),
+        );
+    }
+    if active_lease.is_some() {
+        return Err("fixture Run lease is already held; no event was accepted".to_owned());
+    }
+    let lease = ReleaseRunLease {
+        run_id: binding.run_id.clone(),
+        coordinator: coordinator.to_owned(),
+        acquired_at: observed_at.to_owned(),
+    };
+    let payload_digest = sha256_hex(
+        format!(
+            "vexil-release-run-start-v1\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n",
+            binding.authorization_digest,
+            binding.manifest_digest,
+            binding.evidence_set_digest,
+            binding.state_schema_id,
+            binding.state_schema_digest,
+            binding.reducer_id,
+            binding.reducer_digest,
+            coordinator,
+            observed_at,
+            binding.run_id,
+        )
+        .as_bytes(),
+    );
+    let initial = make_release_run_event(
+        &binding,
+        ReleaseRunEventDraft {
+            sequence_number: 1,
+            operation_id: "coordinator-start",
+            attempt: 1,
+            prior_event_digest: None,
+            payload_digest,
+            actor: coordinator,
+            observed_at,
+            result: "recorded",
+        },
+    );
+    *active_lease = Some(lease.clone());
+    Ok(ReleaseRunCoordinator {
+        binding,
+        lease,
+        events: vec![initial],
+    })
+}
+
+impl ReleaseRunCoordinator {
+    pub fn binding(&self) -> &ReleaseRunBinding {
+        &self.binding
+    }
+
+    pub fn lease(&self) -> &ReleaseRunLease {
+        &self.lease
+    }
+
+    pub fn events(&self) -> &[ReleaseRunEvent] {
+        &self.events
+    }
+
+    /// Sequences an immutable Epic 9 envelope.  The coordinator is the only
+    /// writer, timestamps never determine order, and a duplicate key cannot
+    /// append a second transition.
+    pub fn ingest_adapter_result(
+        &mut self,
+        coordinator: &str,
+        operation_id: &str,
+        attempt: u64,
+        envelope: &AdapterResultEnvelope,
+        observed_at: &str,
+    ) -> Result<ReleaseRunAppend, String> {
+        if coordinator != self.lease.coordinator {
+            return Err("only the lease-owning Coordinator may sequence Run events".to_owned());
+        }
+        if operation_id.trim().is_empty() || attempt == 0 || !is_valid_utc_second(observed_at) {
+            return Err(
+                "Run event requires operation, positive attempt, and UTC-second observation"
+                    .to_owned(),
+            );
+        }
+        let payload_digest = adapter_result_envelope_digest(envelope);
+        if let Some(existing) = self
+            .events
+            .iter()
+            .find(|event| event.operation_id == operation_id && event.attempt == attempt)
+        {
+            if existing.payload_digest == payload_digest {
+                return Ok(ReleaseRunAppend::Duplicate(existing.clone()));
+            }
+            return Err(
+                "conflicting Run event has the same operation and attempt; state is unchanged"
+                    .to_owned(),
+            );
+        }
+        let prior_event_digest = self.events.last().map(|event| event.event_digest.clone());
+        let event = make_release_run_event(
+            &self.binding,
+            ReleaseRunEventDraft {
+                sequence_number: self.events.len() as u64 + 1,
+                operation_id,
+                attempt,
+                prior_event_digest,
+                payload_digest,
+                actor: coordinator,
+                observed_at,
+                result: adapter_outcome_label(envelope.outcome),
+            },
+        );
+        self.events.push(event.clone());
+        Ok(ReleaseRunAppend::Appended(event))
+    }
+
+    /// Releases the lease only after a generated terminal closeout names the
+    /// exact Run and final digest.  No stale-lease clearing is modeled here.
+    pub fn release_after_closeout(
+        self,
+        active_lease: &mut Option<ReleaseRunLease>,
+        closeout: &ReleaseRunCloseoutFixture,
+    ) -> Result<(), String> {
+        let final_event = self.events.last().expect("Run has its start event");
+        if closeout.run_id != self.binding.run_id
+            || closeout.manifest_digest != self.binding.manifest_digest
+            || closeout.final_event_digest != final_event.event_digest
+        {
+            return Err("closeout does not bind the exact retained Run identity".to_owned());
+        }
+        if !is_terminal_release_run_state(closeout.disposition) {
+            return Err(
+                "only terminal fixture Run states may release the serialization lease".to_owned(),
+            );
+        }
+        if active_lease.as_ref() != Some(&self.lease) {
+            return Err("fixture Run no longer owns the active lease".to_owned());
+        }
+        *active_lease = None;
+        Ok(())
+    }
+}
+
+/// Derives a scope state deterministically.  Mandatory children govern; an
+/// optional failure remains visible but never makes mandatory scope complete.
+pub fn reduce_release_run_state(
+    children: &[ReleaseRunChildState],
+    had_prior_failure: bool,
+) -> Result<ReleaseRunState, String> {
+    let mandatory: Vec<_> = children.iter().filter(|child| child.mandatory).collect();
+    if mandatory.is_empty() || mandatory.iter().any(|child| child.id.trim().is_empty()) {
+        return Err("Run reduction requires identified mandatory children".to_owned());
+    }
+    for terminal in [
+        ReleaseRunState::Aborted,
+        ReleaseRunState::Failed,
+        ReleaseRunState::Unknown,
+        ReleaseRunState::Superseded,
+    ] {
+        if mandatory.iter().any(|child| child.state == terminal) {
+            return Ok(terminal);
+        }
+    }
+    if mandatory
+        .iter()
+        .all(|child| child.state == ReleaseRunState::Verified)
+    {
+        return Ok(if had_prior_failure {
+            ReleaseRunState::Recovered
+        } else {
+            ReleaseRunState::Verified
+        });
+    }
+    let least = mandatory
+        .iter()
+        .map(|child| child.state)
+        .min_by_key(|state| release_run_progress(*state))
+        .expect("mandatory children are non-empty");
+    Ok(least)
+}
+
+/// Determines the only safe action after a fresh immutable probe.  In
+/// particular, an unknown result never permits a blind retry or overwrite.
+pub fn decide_release_run_probe(envelope: &AdapterResultEnvelope) -> ReleaseRunProbeDecision {
+    match (envelope.outcome, envelope.retry) {
+        (AdapterOutcome::Absent, AdapterRetryClassification::SafeToRetry) => {
+            ReleaseRunProbeDecision::ExecuteOnlyAfterFreshProbe
+        }
+        (AdapterOutcome::Matching, _) => ReleaseRunProbeDecision::ObserveMatching,
+        (AdapterOutcome::TerminalConflict, _) => ReleaseRunProbeDecision::TerminalConflict,
+        (AdapterOutcome::Unknown, _) | (_, AdapterRetryClassification::Unknown) => {
+            ReleaseRunProbeDecision::ObserveUnknown
+        }
+        _ => ReleaseRunProbeDecision::Reject,
+    }
+}
+
+/// Plans additive recovery only.  A completely verified unit can be carried
+/// forward; any partial accepted/failed/unknown unit requires a new identity.
+pub fn plan_release_unit_recovery(
+    input: &ReleaseUnitRecoveryInput,
+) -> Result<ReleaseUnitRecoveryPlan, String> {
+    if input.unit_id.trim().is_empty() || input.mandatory_target_states.is_empty() {
+        return Err("recovery planning requires a unit and mandatory target states".to_owned());
+    }
+    let all_verified = input.mandatory_target_states.iter().all(|state| {
+        matches!(
+            state,
+            ReleaseRunState::Verified | ReleaseRunState::Recovered
+        )
+    });
+    if all_verified {
+        return Ok(ReleaseUnitRecoveryPlan {
+            unit_id: input.unit_id.clone(),
+            disposition: ReleaseRecoveryDisposition::NoRecoveryNeeded,
+            carried_forward: true,
+            successor_version: None,
+            successor_tag: None,
+        });
+    }
+    let safe_resume = input.mandatory_target_states.iter().all(|state| {
+        matches!(
+            state,
+            ReleaseRunState::Prepared | ReleaseRunState::Publishing | ReleaseRunState::Published
+        )
+    });
+    if safe_resume {
+        return Ok(ReleaseUnitRecoveryPlan {
+            unit_id: input.unit_id.clone(),
+            disposition: ReleaseRecoveryDisposition::ResumeSameManifest,
+            carried_forward: false,
+            successor_version: None,
+            successor_tag: None,
+        });
+    }
+    let (Some(version), Some(tag)) = (&input.successor_version, &input.successor_tag) else {
+        return Err(
+            "partially published recovery requires a new successor version and tag".to_owned(),
+        );
+    };
+    if version.trim().is_empty() || tag.trim().is_empty() {
+        return Err("successor version and tag must be non-empty".to_owned());
+    }
+    Ok(ReleaseUnitRecoveryPlan {
+        unit_id: input.unit_id.clone(),
+        disposition: ReleaseRecoveryDisposition::SuccessorRequired,
+        carried_forward: false,
+        successor_version: Some(version.clone()),
+        successor_tag: Some(tag.clone()),
+    })
+}
+
+pub fn generate_release_run_closeout_fixture(
+    coordinator: &ReleaseRunCoordinator,
+    disposition: ReleaseRunState,
+    evidence_digests: BTreeSet<String>,
+    monitoring_owner: &str,
+    known_limitations: Vec<String>,
+) -> Result<ReleaseRunCloseoutFixture, String> {
+    if !is_terminal_release_run_state(disposition) || monitoring_owner.trim().is_empty() {
+        return Err("fixture closeout requires a terminal state and monitoring owner".to_owned());
+    }
+    if evidence_digests.is_empty()
+        || evidence_digests
+            .iter()
+            .any(|digest| !valid_lowercase_sha256(digest))
+    {
+        return Err("fixture closeout requires exact SHA-256 evidence digests".to_owned());
+    }
+    Ok(ReleaseRunCloseoutFixture {
+        run_id: coordinator.binding.run_id.clone(),
+        manifest_digest: coordinator.binding.manifest_digest.clone(),
+        final_event_digest: coordinator
+            .events
+            .last()
+            .expect("Run has its start event")
+            .event_digest
+            .clone(),
+        disposition,
+        evidence_digests,
+        monitoring_owner: monitoring_owner.to_owned(),
+        known_limitations,
+    })
+}
+
+fn validate_release_run_binding(binding: &ReleaseRunBinding) -> Result<(), String> {
+    let ids = [
+        &binding.run_id,
+        &binding.authorization_id,
+        &binding.manifest_id,
+        &binding.evidence_set_id,
+        &binding.state_schema_id,
+        &binding.reducer_id,
+    ];
+    if ids.iter().any(|id| id.trim().is_empty())
+        || [
+            &binding.authorization_digest,
+            &binding.manifest_digest,
+            &binding.evidence_set_digest,
+            &binding.state_schema_digest,
+            &binding.reducer_digest,
+        ]
+        .iter()
+        .any(|digest| !valid_lowercase_sha256(digest))
+    {
+        return Err(
+            "fixture Run binding requires exact non-empty IDs and SHA-256 identities".to_owned(),
+        );
+    }
+    Ok(())
+}
+
+struct ReleaseRunEventDraft<'a> {
+    sequence_number: u64,
+    operation_id: &'a str,
+    attempt: u64,
+    prior_event_digest: Option<String>,
+    payload_digest: String,
+    actor: &'a str,
+    observed_at: &'a str,
+    result: &'a str,
+}
+
+fn make_release_run_event(
+    binding: &ReleaseRunBinding,
+    draft: ReleaseRunEventDraft<'_>,
+) -> ReleaseRunEvent {
+    let frame = format!(
+        "vexil-release-run-event-v1\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n{}\\n",
+        binding.run_id,
+        binding.authorization_digest,
+        binding.manifest_digest,
+        binding.evidence_set_digest,
+        binding.state_schema_digest,
+        binding.reducer_digest,
+        draft.sequence_number,
+        draft.operation_id,
+        draft.attempt,
+        draft.prior_event_digest.as_deref().unwrap_or(""),
+        draft.payload_digest,
+        draft.actor,
+        draft.observed_at,
+        draft.result,
+    );
+    let event_digest = sha256_hex(frame.as_bytes());
+    ReleaseRunEvent {
+        event_id: format!("{}-{}", binding.run_id, draft.sequence_number),
+        sequence_number: draft.sequence_number,
+        operation_id: draft.operation_id.to_owned(),
+        attempt: draft.attempt,
+        prior_event_digest: draft.prior_event_digest,
+        payload_digest: draft.payload_digest,
+        actor: draft.actor.to_owned(),
+        observed_at: draft.observed_at.to_owned(),
+        result: draft.result.to_owned(),
+        event_digest,
+    }
+}
+
+fn adapter_result_envelope_digest(envelope: &AdapterResultEnvelope) -> String {
+    let mut frame = format!(
+        "vexil-release-adapter-envelope-v1\\n{:?}\\n{:?}\\n{:?}\\n{}\\n{}\\n{}\\n{}\\n",
+        envelope.operation,
+        envelope.outcome,
+        envelope.retry,
+        envelope.adapter_id,
+        envelope.target,
+        envelope.immutable_key,
+        envelope.required_permission,
+    );
+    for (key, value) in &envelope.evidence {
+        frame.push_str(key);
+        frame.push('\n');
+        frame.push_str(value);
+        frame.push('\n');
+    }
+    sha256_hex(frame.as_bytes())
+}
+
+fn adapter_outcome_label(outcome: AdapterOutcome) -> &'static str {
+    match outcome {
+        AdapterOutcome::Prepared => "prepared",
+        AdapterOutcome::Absent => "absent",
+        AdapterOutcome::Matching => "matching",
+        AdapterOutcome::Rejected => "rejected",
+        AdapterOutcome::TerminalConflict => "terminal-conflict",
+        AdapterOutcome::Unknown => "unknown",
+    }
+}
+
+fn is_terminal_release_run_state(state: ReleaseRunState) -> bool {
+    matches!(
+        state,
+        ReleaseRunState::Verified
+            | ReleaseRunState::Recovered
+            | ReleaseRunState::Failed
+            | ReleaseRunState::Aborted
+            | ReleaseRunState::Superseded
+    )
+}
+
+fn release_run_progress(state: ReleaseRunState) -> u8 {
+    match state {
+        ReleaseRunState::Prepared => 0,
+        ReleaseRunState::Publishing => 1,
+        ReleaseRunState::Published => 2,
+        ReleaseRunState::Verified | ReleaseRunState::Recovered => 3,
+        ReleaseRunState::Failed
+        | ReleaseRunState::Aborted
+        | ReleaseRunState::Unknown
+        | ReleaseRunState::Superseded => 0,
+    }
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]

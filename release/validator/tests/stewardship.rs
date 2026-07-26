@@ -7,6 +7,192 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[test]
+fn release_run_fixture_sequences_idempotently_reduces_safely_and_closes() {
+    use vexil_release_governance_validator::{
+        begin_release_run_fixture, decide_release_run_probe, generate_release_run_closeout_fixture,
+        plan_release_unit_recovery, reduce_release_run_state, AdapterOperation, AdapterOutcome,
+        AdapterResultEnvelope, AdapterRetryClassification, ReleaseRecoveryDisposition,
+        ReleaseRunAppend, ReleaseRunBinding, ReleaseRunChildState, ReleaseRunProbeDecision,
+        ReleaseRunState, ReleaseUnitRecoveryInput,
+    };
+
+    let binding = ReleaseRunBinding {
+        run_id: "fixture-run".into(),
+        authorization_id: "fixture-authorization".into(),
+        authorization_digest: "a".repeat(64),
+        manifest_id: "fixture-manifest".into(),
+        manifest_digest: "b".repeat(64),
+        evidence_set_id: "fixture-evidence".into(),
+        evidence_set_digest: "c".repeat(64),
+        state_schema_id: "release/schemas/run-state-1.0.json".into(),
+        state_schema_digest: "d".repeat(64),
+        reducer_id: "release/reducers/run-state-1.0.wasm".into(),
+        reducer_digest: "e".repeat(64),
+    };
+    let mut lease = None;
+    let mut coordinator = begin_release_run_fixture(
+        &mut lease,
+        binding,
+        "github:fixture-coordinator",
+        "2026-07-26T00:00:00Z",
+    )
+    .expect("one valid Run acquires the sole lease and records its start event");
+    assert_eq!(coordinator.events().len(), 1);
+    assert!(begin_release_run_fixture(
+        &mut lease,
+        coordinator.binding().clone(),
+        "github:other-coordinator",
+        "2026-07-26T00:00:01Z",
+    )
+    .is_err());
+
+    let absent = AdapterResultEnvelope {
+        adapter_id: "local-fixture@1".into(),
+        operation: AdapterOperation::Probe,
+        target: "inert-local-target".into(),
+        immutable_key: "fixture@1.0.0#exact".into(),
+        required_permission: "fixture:write".into(),
+        outcome: AdapterOutcome::Absent,
+        retry: AdapterRetryClassification::SafeToRetry,
+        evidence: BTreeMap::from([("contentDigest".into(), "f".repeat(64))]),
+    };
+    assert_eq!(
+        decide_release_run_probe(&absent),
+        ReleaseRunProbeDecision::ExecuteOnlyAfterFreshProbe
+    );
+    let appended = coordinator
+        .ingest_adapter_result(
+            "github:fixture-coordinator",
+            "publish-fixture",
+            1,
+            &absent,
+            "2026-07-26T00:00:01Z",
+        )
+        .expect("Coordinator may sequence the fixture observation");
+    let appended = match appended {
+        ReleaseRunAppend::Appended(event) => event,
+        ReleaseRunAppend::Duplicate(_) => panic!("first event must append"),
+    };
+    assert_eq!(appended.sequence_number, 2);
+    assert_eq!(
+        appended.prior_event_digest.as_deref(),
+        Some(coordinator.events()[0].event_digest.as_str())
+    );
+    assert!(matches!(
+        coordinator
+            .ingest_adapter_result(
+                "github:fixture-coordinator",
+                "publish-fixture",
+                1,
+                &absent,
+                "2026-07-26T00:00:02Z",
+            )
+            .expect("identical operation/attempt is a no-op"),
+        ReleaseRunAppend::Duplicate(_)
+    ));
+    let mut conflict = absent.clone();
+    conflict
+        .evidence
+        .insert("contentDigest".into(), "0".repeat(64));
+    assert!(coordinator
+        .ingest_adapter_result(
+            "github:fixture-coordinator",
+            "publish-fixture",
+            1,
+            &conflict,
+            "2026-07-26T00:00:02Z",
+        )
+        .is_err());
+    assert!(coordinator
+        .ingest_adapter_result(
+            "github:not-the-coordinator",
+            "publish-fixture",
+            2,
+            &absent,
+            "2026-07-26T00:00:02Z",
+        )
+        .is_err());
+
+    let unknown = AdapterResultEnvelope {
+        outcome: AdapterOutcome::Unknown,
+        retry: AdapterRetryClassification::Unknown,
+        ..absent.clone()
+    };
+    assert_eq!(
+        decide_release_run_probe(&unknown),
+        ReleaseRunProbeDecision::ObserveUnknown
+    );
+    assert_eq!(
+        reduce_release_run_state(
+            &[
+                ReleaseRunChildState {
+                    id: "required-a".into(),
+                    mandatory: true,
+                    state: ReleaseRunState::Verified
+                },
+                ReleaseRunChildState {
+                    id: "required-b".into(),
+                    mandatory: true,
+                    state: ReleaseRunState::Verified
+                },
+                ReleaseRunChildState {
+                    id: "optional".into(),
+                    mandatory: false,
+                    state: ReleaseRunState::Failed
+                },
+            ],
+            true,
+        )
+        .unwrap(),
+        ReleaseRunState::Recovered
+    );
+    assert_eq!(
+        reduce_release_run_state(
+            &[ReleaseRunChildState {
+                id: "required".into(),
+                mandatory: true,
+                state: ReleaseRunState::Unknown
+            }],
+            false,
+        )
+        .unwrap(),
+        ReleaseRunState::Unknown
+    );
+    assert!(plan_release_unit_recovery(&ReleaseUnitRecoveryInput {
+        unit_id: "partial".into(),
+        mandatory_target_states: vec![ReleaseRunState::Verified, ReleaseRunState::Unknown],
+        successor_version: None,
+        successor_tag: None,
+    })
+    .is_err());
+    let successor = plan_release_unit_recovery(&ReleaseUnitRecoveryInput {
+        unit_id: "partial".into(),
+        mandatory_target_states: vec![ReleaseRunState::Verified, ReleaseRunState::Unknown],
+        successor_version: Some("1.0.1".into()),
+        successor_tag: Some("vpartial-1.0.1".into()),
+    })
+    .unwrap();
+    assert_eq!(
+        successor.disposition,
+        ReleaseRecoveryDisposition::SuccessorRequired
+    );
+    assert!(!successor.carried_forward);
+
+    let closeout = generate_release_run_closeout_fixture(
+        &coordinator,
+        ReleaseRunState::Recovered,
+        BTreeSet::from(["f".repeat(64)]),
+        "github:fixture-steward",
+        vec!["local-only conformance fixture".into()],
+    )
+    .expect("terminal fixture Run yields a durable closeout payload");
+    coordinator
+        .release_after_closeout(&mut lease, &closeout)
+        .expect("matching closeout releases only its own lease");
+    assert!(lease.is_none());
+}
+
+#[test]
 fn security_inventory_covers_every_maintained_dependency_and_workflow_surface() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let inventory = fs::read_to_string(root.join("release/security/inventory.toml"))
