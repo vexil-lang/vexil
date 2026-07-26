@@ -4319,6 +4319,7 @@ fn validate_manifest_security(
                 &exception_bytes,
                 text(manifest.get("manifestId"), "Manifest ID")?,
                 &bytes,
+                &manifest_security_scopes(manifest)?,
                 evaluation_time,
             )?;
         }
@@ -4350,11 +4351,34 @@ pub fn validate_security_exception_set(
     set_bytes: &[u8],
     manifest_id: &str,
     scan_bytes: &[u8],
+    manifest_scopes: &BTreeSet<String>,
     evaluation_time: &str,
 ) -> Result<(), String> {
     let set = parse_canonical_json_bytes(set_bytes, "security exception set")?;
     validate_canonical_release_record_schema(root, &set)?;
     let set = object(&set, "security exception set")?;
+    let set_version = text(set.get("schemaVersion"), "security exception set version")?;
+    if !matches!(set_version, "1.0" | "1.1") {
+        return Err("security exception set has an unsupported version".to_owned());
+    }
+    if set_version == "1.1" {
+        let status = text(set.get("status"), "security exception set status")?;
+        let withdrawal = set
+            .get("withdrawal")
+            .ok_or("security exception set lacks withdrawal")?;
+        if status == "withdrawn" {
+            if withdrawal.is_null() {
+                return Err(
+                    "withdrawn security exception set lacks retained withdrawal evidence"
+                        .to_owned(),
+                );
+            }
+            return Err("security exception set is withdrawn".to_owned());
+        }
+        if status != "active" || !withdrawal.is_null() {
+            return Err("active security exception set has invalid withdrawal state".to_owned());
+        }
+    }
     let scan: Value = parse_canonical_json_bytes(scan_bytes, "security exception scan")?;
     validate_schema_instance(
         root,
@@ -4431,8 +4455,35 @@ pub fn validate_security_exception_set(
                 "security exception {id} is not active at evaluation time"
             ));
         }
+        for scope in array(record.get("scope"), "security exception scope")? {
+            let scope = text(Some(scope), "security exception scope entry")?;
+            if !manifest_scopes.contains(scope) {
+                return Err(format!(
+                    "security exception {id} has scope outside Manifest targets: {scope}"
+                ));
+            }
+        }
     }
     Ok(())
+}
+
+fn manifest_security_scopes(manifest: &Map<String, Value>) -> Result<BTreeSet<String>, String> {
+    let mut scopes = BTreeSet::new();
+    for unit in array(manifest.get("releaseUnits"), "Manifest release units")? {
+        let unit = object(unit, "Manifest release unit")?;
+        for target in array(unit.get("targets"), "Manifest release unit targets")? {
+            let target = object(target, "Manifest release target")?;
+            scopes.insert(format!(
+                "{}:{}",
+                text(target.get("kind"), "Manifest release target kind")?,
+                text(target.get("name"), "Manifest release target name")?
+            ));
+        }
+    }
+    if scopes.is_empty() {
+        return Err("Manifest has no targets for security exception scope".to_owned());
+    }
+    Ok(scopes)
 }
 
 fn validate_manifest_id_is_unmaterialized(root: &Path, manifest: &Value) -> Result<(), String> {
@@ -5434,6 +5485,10 @@ fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &
         ("release-security-exception-set", "1.0") => Some((
             "release/schemas/security-exception-set-1.0.schema.json",
             "https://vexil.dev/release/schemas/security-exception-set-1.0.schema.json",
+        )),
+        ("release-security-exception-set", "1.1") => Some((
+            "release/schemas/security-exception-set-1.1.schema.json",
+            "https://vexil.dev/release/schemas/security-exception-set-1.1.schema.json",
         )),
         ("candidate-custody", "1.0") => Some((
             "release/schemas/candidate-custody-1.0.schema.json",

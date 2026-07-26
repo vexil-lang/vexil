@@ -90,6 +90,7 @@ fn security_exception_set_binds_exact_scan_manifest_and_expiry() {
         &set_bytes,
         "manifest-fixture",
         &scan_bytes,
+        &BTreeSet::from(["npm-package:@vexil-lang/runtime".to_owned()]),
         "2026-07-27T00:00:00Z",
     )
     .expect("exact active exception set");
@@ -99,6 +100,7 @@ fn security_exception_set_binds_exact_scan_manifest_and_expiry() {
             &set_bytes,
             "manifest-fixture",
             &scan_bytes,
+            &BTreeSet::from(["npm-package:@vexil-lang/runtime".to_owned()]),
             "2026-08-02T00:00:00Z"
         )
         .is_err()
@@ -1112,6 +1114,19 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
         isolated.join("release/schemas/release-manifest-1.1.schema.json"),
     )
     .expect("copy current generated Manifest schema into clean fixture repository");
+    for schema in [
+        "release-manifest-1.2.schema.json",
+        "security-exception-1.0.schema.json",
+        "security-exception-1.1.schema.json",
+        "security-exception-set-1.0.schema.json",
+        "security-exception-set-1.1.schema.json",
+    ] {
+        fs::copy(
+            source_root.join("release/schemas").join(schema),
+            isolated.join("release/schemas").join(schema),
+        )
+        .expect("copy current security exception schema into clean fixture repository");
+    }
     fs::copy(
         source_root.join("release/schemas/history-observation.schema.json"),
         isolated.join("release/schemas/history-observation.schema.json"),
@@ -1133,6 +1148,11 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
             "add",
             "release/schemas/release-manifest-1.0.schema.json",
             "release/schemas/release-manifest-1.1.schema.json",
+            "release/schemas/release-manifest-1.2.schema.json",
+            "release/schemas/security-exception-1.0.schema.json",
+            "release/schemas/security-exception-1.1.schema.json",
+            "release/schemas/security-exception-set-1.0.schema.json",
+            "release/schemas/security-exception-set-1.1.schema.json",
             "release/schemas/history-observation.schema.json",
             "release/schemas/checkpoint-change-unit-1.0.schema.json",
             "release/schemas/security-scan-1.0.schema.json",
@@ -1936,7 +1956,8 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         DetachedApprovalRequest, PrivilegedJobPreflight, PrivilegedRunStartRequest,
     };
 
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = clean_manifest_generation_root(&source);
     let evidence_source = fs::read(root.join("release/catalog.json")).unwrap();
     let evidence_set = serde_json::json!({
         "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
@@ -1948,16 +1969,46 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     let evidence_set_bytes = canonical_json(&evidence_set);
     let evidence_digest = digest(&evidence_set_bytes);
     let security_scan_path = "release/security/scans/npm-runtime-ts-2026-07-25.json";
-    let security_scan_digest = digest(&fs::read(root.join(security_scan_path)).unwrap());
+    let mut security_scan: Value =
+        serde_json::from_slice(&fs::read(root.join(security_scan_path)).unwrap()).unwrap();
+    security_scan["findings"][3]["status"] = Value::String("exception".into());
+    let security_scan_bytes = canonical_json(&security_scan);
+    fs::write(root.join(security_scan_path), &security_scan_bytes).unwrap();
+    let security_scan_digest = digest(&security_scan_bytes);
+    let exception_set_path = "release/security/exception-sets/authorization-exceptions.json";
+    fs::create_dir_all(root.join("release/security/exception-sets")).unwrap();
+    let exception = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/security-exception-1.1.schema.json",
+        "recordKind":"release-security-exception","schemaVersion":"1.1",
+        "exceptionId":"authorization-exception",
+        "finding":{"scanId":"npm-runtime-ts-2026-07-25","scanDigest":security_scan_digest,"findingId":"GHSA-6g55-p6wh-862q"},
+        "scope":["npm-package:@vexil-lang/runtime"],"exploitability":"fixture",
+        "compensatingControls":["fixture"],
+        "owner":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},
+        "securityApproval":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},
+        "releaseInclusion":{"manifestId":"authorization-manifest","actor":"github:furkanmamuk","role":"release-steward","assignment":"release"},
+        "issuedAt":"2026-07-25T00:00:00Z","expiresAt":"2026-07-26T00:00:00Z","remediationIssue":"fixture"
+    });
+    let exception_set = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/security-exception-set-1.1.schema.json",
+        "recordKind":"release-security-exception-set","schemaVersion":"1.1",
+        "setId":"authorization-exceptions","status":"active","exceptions":[exception],"withdrawal":null
+    });
+    let exception_set_bytes = canonical_json(&exception_set);
+    fs::write(root.join(exception_set_path), &exception_set_bytes).unwrap();
     let artifact =
         |id: &str, digest: String| serde_json::json!({"digest":digest,"id":id,"version":"1.0"});
-    let manifest = serde_json::json!({
+    let mut manifest = serde_json::json!({
         "$schema":"https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
         "approvalPolicy":artifact("release/policies/approval.json","a".repeat(64)),"baseCommit":"b".repeat(40),"candidate":artifact("release/candidates/candidate.json","1".repeat(64)),"closeoutRequirements":artifact("release/policies/closeout.json","c".repeat(64)),"compatibilityEvidence":artifact("release/evidence/compatibility.json","d".repeat(64)),
         "evidenceSetDigest":evidence_digest,"evidenceSetId":"authorization-evidence","failurePolicy":artifact("release/policies/failure.json","e".repeat(64)),"historicalTagSnapshot":artifact("release/history/observations/snapshot.json","f".repeat(64)),"manifestId":"authorization-manifest","publicationOrder":["vexil-runtime"],"recordKind":"release-manifest","recoveryPolicy":artifact("release/policies/recovery.json","0".repeat(64)),"registryCustody":artifact("release/identities/custody.json","2".repeat(64)),"rehearsal":artifact("release/rehearsals/rehearsal.json","3".repeat(64)),
         "reducer":{"digest":"c".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},"releaseUnits":[{"canonicalTag":"vexil-runtime-v0.5.1","changeUnits":[{"digest":"4".repeat(64),"id":"checkpoint-python-generator-fix"}],"previousVersion":null,"proposedVersion":"0.5.1","sourceCommit":"5".repeat(40),"targets":[{"kind":"npm-package","mandatory":true,"name":"@vexil-lang/runtime"}],"unitId":"vexil-runtime","versionRationale":{"digest":"6".repeat(64),"id":"runtime-rationale"},"versionSource":{"observedDeclaration":"0.5.1","path":"packages/runtime-ts/package.json"}}],
         "schemaVersion":"1.1","security":artifact(security_scan_path,security_scan_digest.clone()),"stateSchema":{"digest":"d".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"},"supersedes":null
     });
+    manifest["$schema"] =
+        Value::String("https://vexil.dev/release/schemas/release-manifest-1.2.schema.json".into());
+    manifest["schemaVersion"] = Value::String("1.2".into());
+    manifest["securityExceptions"] = artifact(exception_set_path, digest(&exception_set_bytes));
     let manifest_bytes = canonical_json(&manifest);
     let governance_digest = governance_revision_v1(&root).unwrap();
     let approval_bytes = construct_detached_approval(
@@ -2248,6 +2299,40 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         .blockers
         .iter()
         .any(|blocker| blocker.requirement == "authorization-window"));
+    let assert_exception_recheck_blocks = |set: Value| {
+        let set_bytes = canonical_json(&set);
+        fs::write(root.join(exception_set_path), &set_bytes)
+            .expect("rewrite exception fixture set");
+        let mut exception_manifest = manifest.clone();
+        exception_manifest["securityExceptions"]["digest"] = Value::String(digest(&set_bytes));
+        let exception_manifest_bytes = canonical_json(&exception_manifest);
+        let exception_request = PrivilegedRunStartRequest {
+            manifest_bytes: &exception_manifest_bytes,
+            ..request
+        };
+        let error = authorize_privileged_run_start(&root, &exception_request).unwrap_err();
+        assert!(
+            error
+                .blockers
+                .iter()
+                .any(|blocker| blocker.requirement == "manifest-and-evidence-binding"),
+            "exception recheck must block authorization: {error:?}"
+        );
+    };
+    let mut expired_exception_set = exception_set.clone();
+    expired_exception_set["exceptions"][0]["expiresAt"] =
+        Value::String("2026-07-25T11:00:00Z".into());
+    assert_exception_recheck_blocks(expired_exception_set);
+    let mut withdrawn_exception_set = exception_set.clone();
+    withdrawn_exception_set["status"] = Value::String("withdrawn".into());
+    withdrawn_exception_set["withdrawal"] = serde_json::json!({
+        "withdrawnAt":"2026-07-25T11:00:00Z","reason":"fixture containment",
+        "authority":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"}
+    });
+    assert_exception_recheck_blocks(withdrawn_exception_set);
+    let mut mis_scoped_exception_set = exception_set.clone();
+    mis_scoped_exception_set["exceptions"][0]["scope"] = serde_json::json!(["registry:crates-io"]);
+    assert_exception_recheck_blocks(mis_scoped_exception_set);
     let mut changed_manifest = manifest.clone();
     changed_manifest["manifestId"] = Value::String("authorization-manifest-successor".into());
     let changed_manifest_bytes = canonical_json(&changed_manifest);
@@ -2256,6 +2341,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         ..request
     };
     assert!(authorize_privileged_run_start(&root, &changed_manifest_request).is_err());
+    fs::remove_dir_all(root).expect("remove authorization fixture repository");
 }
 
 #[test]
