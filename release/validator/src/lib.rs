@@ -4300,6 +4300,98 @@ fn validate_manifest_security(root: &Path, manifest: &Value) -> Result<(), Strin
     Ok(())
 }
 
+/// Validates one immutable exception set against exact scan bytes and a draft
+/// Manifest identity. It is data-only and never grants publication authority.
+pub fn validate_security_exception_set(
+    root: &Path,
+    set_bytes: &[u8],
+    manifest_id: &str,
+    scan_bytes: &[u8],
+    evaluation_time: &str,
+) -> Result<(), String> {
+    let set = parse_canonical_json_bytes(set_bytes, "security exception set")?;
+    validate_canonical_release_record_schema(root, &set)?;
+    let set = object(&set, "security exception set")?;
+    let scan: Value = parse_canonical_json_bytes(scan_bytes, "security exception scan")?;
+    validate_schema_instance(
+        root,
+        "release/schemas/security-scan-1.0.schema.json",
+        &scan,
+        "security exception scan",
+    )?;
+    let scan = object(&scan, "security exception scan")?;
+    let scan_id = text(scan.get("scanId"), "security exception scan ID")?;
+    let scan_digest = sha256_hex(scan_bytes);
+    let findings = array(scan.get("findings"), "security exception scan findings")?;
+    let mut ids = BTreeSet::new();
+    for record in array(set.get("exceptions"), "security exception records")? {
+        validate_canonical_release_record_schema(root, record)?;
+        let record = object(record, "security exception record")?;
+        if text(record.get("schemaVersion"), "security exception version")? != "1.1" {
+            return Err(
+                "security exception set requires self-cycle-safe exception@1.1 records".to_owned(),
+            );
+        }
+        let id = text(record.get("exceptionId"), "security exception ID")?;
+        if !ids.insert(id.to_owned()) {
+            return Err(format!("security exception set repeats {id}"));
+        }
+        let inclusion = object(
+            record
+                .get("releaseInclusion")
+                .ok_or("security exception lacks release inclusion")?,
+            "security exception inclusion",
+        )?;
+        if text(
+            inclusion.get("manifestId"),
+            "security exception Manifest ID",
+        )? != manifest_id
+        {
+            return Err(format!(
+                "security exception {id} is not included by Manifest {manifest_id}"
+            ));
+        }
+        let finding = object(
+            record
+                .get("finding")
+                .ok_or("security exception lacks finding")?,
+            "security exception finding",
+        )?;
+        if text(finding.get("scanId"), "security exception scan ID")? != scan_id
+            || text(finding.get("scanDigest"), "security exception scan digest")? != scan_digest
+        {
+            return Err(format!(
+                "security exception {id} does not bind exact scan bytes"
+            ));
+        }
+        let finding_id = text(finding.get("findingId"), "security exception finding ID")?;
+        if !findings.iter().any(|item| {
+            object(item, "security scan finding")
+                .ok()
+                .is_some_and(|item| {
+                    item.get("id").and_then(Value::as_str) == Some(finding_id)
+                        && matches!(
+                            item.get("severity").and_then(Value::as_str),
+                            Some("high" | "critical")
+                        )
+                        && item.get("status").and_then(Value::as_str) == Some("exception")
+                })
+        }) {
+            return Err(format!(
+                "security exception {id} does not cover an unresolved high/critical scan finding"
+            ));
+        }
+        if text(record.get("issuedAt"), "security exception issued time")? > evaluation_time
+            || text(record.get("expiresAt"), "security exception expiry")? <= evaluation_time
+        {
+            return Err(format!(
+                "security exception {id} is not active at evaluation time"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_manifest_id_is_unmaterialized(root: &Path, manifest: &Value) -> Result<(), String> {
     let manifest = object(manifest, "Release Manifest")?;
     let manifest_id = text(manifest.get("manifestId"), "Manifest ID")?;
