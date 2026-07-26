@@ -6,7 +6,7 @@
     "build": "npm run codegen:ts && npm run bundle"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.1",
     "@vexil-lang/runtime": "file:../../packages/runtime-ts"
   }
 }
