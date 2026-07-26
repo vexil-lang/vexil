@@ -1408,6 +1408,7 @@ fn commit_fixture_path(root: &Path, path: &str, message: &str) {
             "-c",
             "user.email=fixture@invalid.example",
             "commit",
+            "--allow-empty",
             "--quiet",
             "-m",
             message,
@@ -3104,6 +3105,74 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
     assert!(output.status.success());
     assert!(inspect_go_module_zip_candidate(&request).is_err());
     fs::remove_dir_all(fixture).expect("remove Go module fixture");
+}
+
+#[test]
+fn deterministic_go_source_candidate_is_a_valid_proxy_zip() {
+    use vexil_release_governance_validator::{
+        build_deterministic_go_module_source_zip, inspect_go_module_zip_candidate,
+        GoModuleCandidateArtifactInspectionRequest,
+    };
+
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let source_commit = "99e2afef4d48ab35ec61e8b23a9c0d6c210e275f";
+    let archive = build_deterministic_go_module_source_zip(&source_root, source_commit)
+        .expect("build deterministic source candidate");
+    assert_eq!(
+        archive,
+        build_deterministic_go_module_source_zip(&source_root, source_commit)
+            .expect("rebuild deterministic source candidate")
+    );
+
+    let fixture = std::env::temp_dir().join(format!(
+        "vexil-deterministic-go-candidate-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    fs::create_dir_all(&fixture).expect("create deterministic Go fixture");
+    let artifact = fixture.join("runtime-go@v0.1.1.zip");
+    fs::write(&artifact, &archive).expect("write deterministic Go archive");
+
+    let listed = Command::new("git")
+        .current_dir(&source_root)
+        .args([
+            "ls-tree",
+            "-r",
+            "--name-only",
+            source_commit,
+            "--",
+            "packages/runtime-go",
+        ])
+        .output()
+        .expect("list reviewed Go source files");
+    assert!(listed.status.success());
+    let prefix = "github.com/vexil-lang/vexil/packages/runtime-go@v0.1.1/";
+    let declared_entries = String::from_utf8(listed.stdout)
+        .expect("reviewed Go source listing is UTF-8")
+        .lines()
+        .map(|path| {
+            format!(
+                "{prefix}{}",
+                path.strip_prefix("packages/runtime-go/")
+                    .expect("Go path prefix")
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    let inspected = inspect_go_module_zip_candidate(&GoModuleCandidateArtifactInspectionRequest {
+        unit_id: "vexil-runtime-go",
+        source_commit,
+        expected_module_path: "github.com/vexil-lang/vexil/packages/runtime-go",
+        expected_version: "0.1.1",
+        declared_entries: &declared_entries,
+        artifact_path: &artifact,
+    })
+    .expect("inspect deterministic Go source ZIP");
+    assert_eq!(inspected.entries.len(), declared_entries.len());
+    assert_eq!(inspected.sha256, digest(&archive));
+    fs::remove_dir_all(fixture).expect("remove deterministic Go fixture");
 }
 
 #[test]
