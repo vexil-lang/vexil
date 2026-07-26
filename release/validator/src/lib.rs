@@ -1973,9 +1973,9 @@ fn validate_candidate_toolchain_contract(root: &Path) -> Result<BTreeMap<String,
         .map(str::trim)
         .find_map(|line| line.strip_prefix("toolchain go"))
         .ok_or("candidate Go toolchain declaration lacks a toolchain directive")?;
-    if rust != "1.94.0" || node != "22.0.0" || python != "3.10.0" || go != "1.22.0" {
+    if rust != "1.94.0" || node != "22.12.0" || python != "3.10.0" || go != "1.22.0" {
         return Err(format!(
-            "candidate toolchains must pin Rust 1.94.0, Node 22.0.0, Python 3.10.0, and Go 1.22.0 (found Rust {rust}, Node {node}, Python {python}, Go {go})"
+            "candidate toolchains must pin Rust 1.94.0, Node 22.12.0, Python 3.10.0, and Go 1.22.0 (found Rust {rust}, Node {node}, Python {python}, Go {go})"
         ));
     }
     validate_candidate_locked_inputs(root)?;
@@ -2128,7 +2128,7 @@ fn candidate_toolchain_contract_rejects_mutable_or_missing_declarations() {
         "[toolchain]\nchannel = \"1.94.0\"\n",
     )
     .expect("write Rust fixture");
-    fs::write(root.join(".nvmrc"), "22.0.0\n").expect("write Node fixture");
+    fs::write(root.join(".nvmrc"), "22.12.0\n").expect("write Node fixture");
     fs::write(root.join("packages/runtime-py/.python-version"), "3.10.0\n")
         .expect("write Python fixture");
     fs::write(
@@ -2156,7 +2156,7 @@ fn candidate_toolchain_contract_rejects_mutable_or_missing_declarations() {
         validate_candidate_toolchain_contract(&root)
             .expect("fully pinned candidate toolchain contract")
             .get("node"),
-        Some(&"22.0.0".to_owned())
+        Some(&"22.12.0".to_owned())
     );
     fs::write(
         root.join("packages/runtime-py/pyproject.toml"),

@@ -1128,7 +1128,7 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
     );
     assert_eq!(
         candidate_plan.toolchains.get("node"),
-        Some(&"22.0.0".to_owned())
+        Some(&"22.12.0".to_owned())
     );
     assert_eq!(
         candidate_plan.toolchains.get("python"),

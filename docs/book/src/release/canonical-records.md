@@ -93,7 +93,7 @@ Those additional Coordinator-owned Run controls begin in Epic 10.
 
 An isolated candidate-build plan is also non-authoritative. Before it can create
 detached public worktrees, it requires clean exact Manifest commits, pinned Rust
-1.94.0, Node 22.0.0, Python 3.10.0, and Go 1.22.0 declarations, plus the
+1.94.0, Node 22.12.0, Python 3.10.0, and Go 1.22.0 declarations, plus the
 committed Cargo, npm, and Python build lock inputs. It rejects mutable or missing
 inputs before any build; planning and workspace materialization never publish,
 tag, access credentials, create a Run, or establish candidate custody.

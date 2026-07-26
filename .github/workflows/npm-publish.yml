@@ -27,7 +27,7 @@ jobs:
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
-          node-version: "22.0.0"
+          node-version: "22.12.0"
           registry-url: 'https://registry.npmjs.org'
 
       - run: npm ci
