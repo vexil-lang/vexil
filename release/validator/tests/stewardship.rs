@@ -60,6 +60,13 @@ fn security_exception_schema_requires_separate_steward_role_assertions() {
         &exception_1_1,
     )
     .expect("exception 1.1 binds Manifest ID without a self-digest cycle");
+    let set = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/security-exception-set-1.0.schema.json",
+        "recordKind":"release-security-exception-set","schemaVersion":"1.0","setId":"exceptions-fixture",
+        "exceptions":[exception_1_1]
+    });
+    vexil_release_governance_validator::validate_canonical_release_record_schema(&root, &set)
+        .expect("exception set schema");
     let mut ambiguous = exception.clone();
     ambiguous["releaseInclusion"]["role"] = Value::String("security-steward".to_owned());
     assert!(
