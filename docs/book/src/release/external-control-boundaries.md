@@ -25,7 +25,9 @@ The following are controlled by GitHub or a registry provider and cannot be prov
 - OIDC subject and audience restrictions or registry trusted-publishing bindings, plus revocation and emergency-stop ownership.
 - Immutable full-commit provenance for every third-party action in a privileged job. Mutable tags and branches are not accepted there.
 
-Provider environment approval is only an execution gate. It never substitutes for the required detached, Manifest-bound Release Steward approval, and the unresolved continuity gate remains a blocker.
+Provider environment approval is only an execution gate. It never substitutes for the required detached, Manifest-bound Release Steward approval, and the independent Manifest, registry, security, and external-control gates remain blockers.
+
+The [Release Unit Catalog](./catalog.md) is a source inventory, not provider evidence. A catalog target name or category does not prove registry identity, authorization, publication eligibility, release ordering, or that any unit has been published.
 
 ## No live writes
 

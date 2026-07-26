@@ -12,11 +12,11 @@
     "retiredConfigurationSource": ".vexilbot.toml",
     "nonAuthorityStatement": "The retired configuration is historical evidence only, not an order or Release Unit membership source.",
     "retiredConfiguredUnits": ["crates/vexil-codegen-go", "crates/vexil-codegen-rust", "crates/vexil-codegen-ts", "crates/vexil-lang", "crates/vexil-runtime", "crates/vexil-store", "crates/vexilc", "packages/runtime-ts"],
-    "publishableManifestUnits": ["crates/vexil-codegen-go", "crates/vexil-codegen-py", "crates/vexil-codegen-rust", "crates/vexil-codegen-ts", "crates/vexil-lang", "crates/vexil-runtime", "crates/vexil-store", "crates/vexilc", "packages/runtime-go", "packages/runtime-py", "packages/runtime-ts"],
+    "catalogedSourceUnits": ["crates/vexil-codegen-go", "crates/vexil-codegen-py", "crates/vexil-codegen-rust", "crates/vexil-codegen-ts", "crates/vexil-lang", "crates/vexil-runtime", "crates/vexil-store", "crates/vexilc", "packages/runtime-go", "packages/runtime-py", "packages/runtime-ts"],
     "mismatches": [
-      {"id": "RBR-MISMATCH-001", "unit": "crates/vexil-codegen-py", "kind": "missing-retired-release-entry", "observedBehavior": "The workspace manifest declares the publishable vexil-codegen-py crate, but .vexilbot.toml has no release.crates.vexil-codegen-py entry."},
-      {"id": "RBR-MISMATCH-002", "unit": "packages/runtime-go", "kind": "missing-retired-release-entry", "observedBehavior": "packages/runtime-go has a Go module manifest, but .vexilbot.toml has no package or dependency-order entry for it."},
-      {"id": "RBR-MISMATCH-003", "unit": "packages/runtime-py", "kind": "missing-retired-release-entry", "observedBehavior": "packages/runtime-py has a Python project manifest, but .vexilbot.toml has no package or dependency-order entry for it."}
+    {"id": "RBR-MISMATCH-001", "unit": "crates/vexil-codegen-py", "kind": "missing-retired-release-entry", "observedBehavior": "The workspace manifest declares the vexil-codegen-py crate, but .vexilbot.toml has no release.crates.vexil-codegen-py entry."},
+    {"id": "RBR-MISMATCH-002", "unit": "packages/runtime-go", "kind": "missing-retired-release-entry", "observedBehavior": "packages/runtime-go has a Go module manifest and a checked-in VERSION source, but .vexilbot.toml has no package or dependency-order entry."},
+    {"id": "RBR-MISMATCH-003", "unit": "packages/runtime-py", "kind": "missing-retired-release-entry", "observedBehavior": "packages/runtime-py has a Python project manifest, but .vexilbot.toml has no package or dependency-order entry; the catalog records it as candidate-unreleased rather than published."}
     ]
   },
   "responsibilities": [

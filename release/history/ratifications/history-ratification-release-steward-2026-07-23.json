@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/history/ratifications/history-ratification-release-steward-2026-07-23.json",
+  "version": "1.0",
+  "recordKind": "historical-tag-baseline-ratification",
+  "ratificationId": "history-ratification-release-steward-2026-07-23",
+  "roleId": "release-steward",
+  "actorId": "github:furkanmamuk",
+  "baselineDigest": "sha256:849049de8e752cbc037b5bb415541d339af260298c236b9384f61bd32df5b92f",
+  "observationScope": "https://github.com/vexil-lang/vexil.git | git ls-remote --tags | 2026-07-23T13:15:47Z",
+  "approvedAt": "2026-07-23T13:31:20Z"
+}

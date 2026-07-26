@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json",
+  "title": "Vexil Release Unit Catalog Lifecycle",
+  "description": "Public lifecycle governance for the source-led release catalog. It is not a Release Manifest, approval, Run, tag, provider query, registry assertion, or publication declaration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "$id", "lifecycleSchema", "version", "authorityBoundary", "catalogRevision", "records"],
+  "properties": {
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
+    "$id": {"const": "https://vexil.dev/release/catalog-lifecycle.json"},
+    "lifecycleSchema": {"const": "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json"},
+    "version": {"const": "1.0"},
+    "authorityBoundary": {"type": "string", "minLength": 1},
+    "catalogRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "records": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/record"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z$"},
+    "owner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["roleId", "assignmentId"],
+      "properties": {"roleId": {"enum": ["package-steward", "repository-administrator"]}, "assignmentId": {"type": "string", "minLength": 1}}
+    },
+    "target": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {"kind": {"enum": ["cargo-package", "cargo-binary", "npm-package", "python-project", "go-module", "internal-tool", "example"]}, "name": {"type": "string", "minLength": 1}}
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["classification", "targetCategory", "status"],
+      "properties": {"classification": {"enum": ["publishable-source-unit", "candidate-unreleased", "non-publishable"]}, "targetCategory": {"enum": ["future-registry-target", "non-release"]}, "status": {"enum": ["source-inventory-only", "candidate-unreleased", "non-publishable"]}}
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["decisionId", "state", "effectiveRevision"],
+      "properties": {"decisionId": {"$ref": "#/$defs/id"}, "state": {"enum": ["accepted-active-baseline", "approved-rename", "approved-retirement", "approved-exclusion", "approved-publishability-transition"]}, "effectiveRevision": {"$ref": "#/$defs/revision"}}
+    },
+    "proposal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["actorId", "roleId", "assignmentId", "proposedAt"],
+      "properties": {"actorId": {"type": "string", "pattern": "^github:[A-Za-z0-9-]+$"}, "roleId": {"enum": ["package-steward", "repository-administrator"]}, "assignmentId": {"type": "string", "minLength": 1}, "proposedAt": {"$ref": "#/$defs/timestamp"}}
+    },
+    "acceptance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["actorId", "roleId", "assignmentId", "acceptedAt", "roleAssertions"],
+      "properties": {"actorId": {"type": "string", "pattern": "^github:[A-Za-z0-9-]+$"}, "roleId": {"const": "release-steward"}, "assignmentId": {"type": "string", "minLength": 1}, "acceptedAt": {"$ref": "#/$defs/timestamp"}, "roleAssertions": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"enum": ["package-steward", "repository-administrator", "release-steward"]}}}
+    },
+    "compatibilityImpact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "rationaleReference", "decisionState"],
+      "properties": {"state": {"enum": ["not-applicable", "requires-rationale"]}, "rationaleReference": {"type": ["null", "string"], "pattern": "^[a-z0-9][a-z0-9-]*$"}, "decisionState": {"enum": ["not-applicable", "accepted"]}}
+    },
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lifecycleRecordId", "unitId", "state", "sourceRoot", "canonicalTagNamespace", "targetIdentities", "owner", "publication", "lifecycleDecision", "effectiveRevision", "stewardProposal", "releaseStewardAcceptance", "predecessorUnitId", "successorUnitId", "compatibilityImpact", "governanceBoundary"],
+      "properties": {
+        "lifecycleRecordId": {"$ref": "#/$defs/id"}, "unitId": {"$ref": "#/$defs/id"}, "state": {"enum": ["active", "renamed", "retired", "excluded"]},
+        "sourceRoot": {"type": "string", "pattern": "^(crates|packages|examples|release)/[A-Za-z0-9._/-]+$"},
+        "canonicalTagNamespace": {"type": "string", "oneOf": [{"const": "not-applicable"}, {"pattern": "^[a-z][a-z0-9-]*-v<semver>$"}, {"const": "packages/runtime-go/v<semver>"}]},
+        "targetIdentities": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/target"}}, "owner": {"$ref": "#/$defs/owner"}, "publication": {"$ref": "#/$defs/publication"},
+        "lifecycleDecision": {"$ref": "#/$defs/decision"}, "effectiveRevision": {"$ref": "#/$defs/revision"}, "stewardProposal": {"$ref": "#/$defs/proposal"}, "releaseStewardAcceptance": {"$ref": "#/$defs/acceptance"},
+        "predecessorUnitId": {"type": ["null", "string"], "pattern": "^[a-z0-9][a-z0-9-]*$"}, "successorUnitId": {"type": ["null", "string"], "pattern": "^[a-z0-9][a-z0-9-]*$"}, "compatibilityImpact": {"$ref": "#/$defs/compatibilityImpact"},
+        "governanceBoundary": {"const": "structural-lifecycle-only"}
+      }
+    }
+  }
+}
