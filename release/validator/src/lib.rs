@@ -6568,8 +6568,8 @@ fn is_iso_date(value: &str) -> bool {
 /// Validates the non-promoting checkpoint inventory against its retained Git slice.
 pub fn validate_checkpoint_change_units_repository(root: &Path) -> Result<(), String> {
     let directory = root.join("release/checkpoint-change-units");
-    let mut seen_paths = BTreeSet::new();
-    let mut records = 0usize;
+    let mut historic_seen_paths = BTreeSet::new();
+    let mut historic_records = 0usize;
     for entry in fs::read_dir(&directory)
         .map_err(|error| format!("read checkpoint Change Units: {error}"))?
     {
@@ -6592,12 +6592,26 @@ pub fn validate_checkpoint_change_units_repository(root: &Path) -> Result<(), St
         let record = object(&record, "checkpoint Change Unit")?;
         let base = text(record.get("baseCommit"), "checkpoint base commit")?;
         let checkpoint = text(record.get("checkpointCommit"), "checkpoint commit")?;
+        let historic = base == "11f315880415038ac6013d7ee4d378296cd51c5d"
+            && checkpoint == "d4099e8188f40603ebf52473d6543ce4a6054201";
+        if !historic {
+            let ancestry = Command::new("git")
+                .args(["merge-base", "--is-ancestor", base, checkpoint])
+                .current_dir(root)
+                .status()
+                .map_err(|error| format!("verify supplemental Change Unit ancestry: {error}"))?;
+            if !ancestry.success() {
+                return Err(
+                    "supplemental Change Unit must name an ordered base/checkpoint pair".to_owned(),
+                );
+            }
+        }
         let paths = array(record.get("paths"), "checkpoint Change Unit paths")?;
         let mut diff_paths = Vec::new();
         for change in paths {
             let change = object(change, "checkpoint Change Unit path")?;
             let before = text(change.get("beforePath"), "checkpoint before path")?;
-            if !seen_paths.insert(before.to_owned()) {
+            if historic && !historic_seen_paths.insert(before.to_owned()) {
                 return Err(format!(
                     "checkpoint path belongs to more than one Change Unit: {before}"
                 ));
@@ -6661,7 +6675,9 @@ pub fn validate_checkpoint_change_units_repository(root: &Path) -> Result<(), St
                 path.display()
             ));
         }
-        records += 1;
+        if historic {
+            historic_records += 1;
+        }
     }
     let expected = Command::new("git")
         .args([
@@ -6683,12 +6699,12 @@ pub fn validate_checkpoint_change_units_repository(root: &Path) -> Result<(), St
             Some(first.to_owned())
         })
         .collect::<BTreeSet<_>>();
-    if !expected.status.success() || expected_paths != seen_paths {
+    if !expected.status.success() || expected_paths != historic_seen_paths {
         return Err(
             "checkpoint Change Units do not exactly cover the retained checkpoint diff".to_owned(),
         );
     }
-    if records != 5 || seen_paths.len() != 28 {
+    if historic_records != 5 || historic_seen_paths.len() != 28 {
         return Err(
             "checkpoint Change Units must retain exactly five records covering 28 paths".to_owned(),
         );
