@@ -160,6 +160,46 @@ pub struct InspectedCargoCrateCandidateArtifact {
     pub version: String,
 }
 
+/// Exact, inert inputs for Cargo-registry adapter conformance. Preparation
+/// re-inspects the candidate archive and never contacts a registry.
+pub struct CargoRegistryFixtureRequest<'a> {
+    pub candidate: CargoCrateCandidateArtifactInspectionRequest<'a>,
+    pub required_dependencies: &'a BTreeMap<String, String>,
+}
+
+/// Immutable local-fixture plan derived from exact candidate archive bytes.
+/// It is not a publication request or authority grant.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CargoRegistryFixturePlan {
+    pub artifact_name: String,
+    pub artifact_sha256: String,
+    pub content_digest: String,
+    pub immutable_key: String,
+    pub package_name: String,
+    pub required_dependencies: BTreeMap<String, String>,
+    pub source_commit: String,
+    pub version: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CargoRegistryFixtureProbe {
+    Absent,
+    Matching {
+        artifact_sha256: String,
+        content_digest: String,
+        resolved_dependencies: BTreeMap<String, String>,
+    },
+    Conflicting,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CargoRegistryFixtureFailure {
+    Rejected,
+    TerminalConflict,
+    Unknown,
+}
+
 /// Exact Go module proxy zip from an isolated candidate workspace.
 pub struct GoModuleCandidateArtifactInspectionRequest<'a> {
     pub unit_id: &'a str,
@@ -2638,6 +2678,197 @@ pub fn inspect_cargo_crate_candidate(
         source_commit: request.source_commit.to_owned(),
         unit_id: request.unit_id.to_owned(),
         version: request.expected_version.to_owned(),
+    })
+}
+
+/// Re-inspects exact Cargo archive bytes before producing an inert registry
+/// fixture plan. Dependency versions are part of the plan so a dependent unit
+/// cannot become eligible from an unspecified or mutable resolution.
+pub fn prepare_cargo_registry_fixture(
+    request: &CargoRegistryFixtureRequest<'_>,
+) -> Result<CargoRegistryFixturePlan, String> {
+    let inspected = inspect_cargo_crate_candidate(&request.candidate)?;
+    for (package, version) in request.required_dependencies {
+        if package.trim().is_empty() || version.trim().is_empty() {
+            return Err(
+                "Cargo registry fixture dependency has empty package or version".to_owned(),
+            );
+        }
+        if package == &inspected.package_name {
+            return Err("Cargo registry fixture package cannot depend on itself".to_owned());
+        }
+    }
+    Ok(CargoRegistryFixturePlan {
+        immutable_key: format!(
+            "{}@{}#{}",
+            inspected.package_name, inspected.version, inspected.sha256
+        ),
+        artifact_name: inspected.artifact_name,
+        artifact_sha256: inspected.sha256,
+        content_digest: inspected.content_digest,
+        package_name: inspected.package_name,
+        required_dependencies: request.required_dependencies.clone(),
+        source_commit: inspected.source_commit,
+        version: inspected.version,
+    })
+}
+
+/// Confirms a local registry observation is exact. An absent dependency, a
+/// changed archive, conflict, or unknown response never becomes publishable by
+/// retrying this fixture-only contract.
+pub fn verify_cargo_registry_fixture(
+    plan: &CargoRegistryFixturePlan,
+    probe: &CargoRegistryFixtureProbe,
+) -> Result<(), String> {
+    match probe {
+        CargoRegistryFixtureProbe::Matching {
+            artifact_sha256,
+            content_digest,
+            resolved_dependencies,
+        } if artifact_sha256 == &plan.artifact_sha256
+            && content_digest == &plan.content_digest
+            && resolved_dependencies == &plan.required_dependencies =>
+        {
+            Ok(())
+        }
+        CargoRegistryFixtureProbe::Matching { .. } => Err(
+            "Cargo registry fixture matching package has changed content or dependency resolution"
+                .to_owned(),
+        ),
+        CargoRegistryFixtureProbe::Absent => {
+            Err("Cargo registry fixture has no exact package observation".to_owned())
+        }
+        CargoRegistryFixtureProbe::Conflicting => {
+            Err("Cargo registry fixture reports a terminal package conflict".to_owned())
+        }
+        CargoRegistryFixtureProbe::Unknown => {
+            Err("Cargo registry fixture response is unknown; probe only".to_owned())
+        }
+    }
+}
+
+/// Classifies fixture-local failures conservatively. Unknown transport or
+/// process outcomes remain unknown and never authorize a blind retry.
+pub fn classify_cargo_registry_fixture_failure(error: &str) -> CargoRegistryFixtureFailure {
+    if error.contains("conflict") || error.contains("overwrite") {
+        CargoRegistryFixtureFailure::TerminalConflict
+    } else if error.contains("reject") || error.contains("permission") || error.contains("invalid")
+    {
+        CargoRegistryFixtureFailure::Rejected
+    } else {
+        CargoRegistryFixtureFailure::Unknown
+    }
+}
+
+/// Emits the shared adapter envelope for an inert Cargo registry fixture. A
+/// `Publish` result reports a proposed fixture observation only; this function
+/// cannot submit an archive, create a version, or contact crates.io.
+pub fn normalize_cargo_registry_fixture_result(
+    plan: &CargoRegistryFixturePlan,
+    operation: AdapterOperation,
+    probe: Option<&CargoRegistryFixtureProbe>,
+    failure: Option<&str>,
+) -> Result<AdapterResultEnvelope, String> {
+    let mut evidence = BTreeMap::from([
+        ("artifactName".to_owned(), plan.artifact_name.clone()),
+        ("artifactSha256".to_owned(), plan.artifact_sha256.clone()),
+        ("contentDigest".to_owned(), plan.content_digest.clone()),
+        ("package".to_owned(), plan.package_name.clone()),
+        ("sourceCommit".to_owned(), plan.source_commit.clone()),
+        ("version".to_owned(), plan.version.clone()),
+    ]);
+    let (outcome, retry) = match operation {
+        AdapterOperation::Prepare if probe.is_none() && failure.is_none() => (
+            AdapterOutcome::Prepared,
+            AdapterRetryClassification::NotApplicable,
+        ),
+        AdapterOperation::Probe | AdapterOperation::Publish | AdapterOperation::Verify => {
+            let probe = probe.ok_or("Cargo registry fixture result requires a normalized probe")?;
+            if failure.is_some() {
+                return Err(
+                    "Cargo registry fixture probe result cannot carry failure text".to_owned(),
+                );
+            }
+            match probe {
+                CargoRegistryFixtureProbe::Absent => (
+                    AdapterOutcome::Absent,
+                    AdapterRetryClassification::SafeToRetry,
+                ),
+                CargoRegistryFixtureProbe::Matching {
+                    artifact_sha256,
+                    content_digest,
+                    resolved_dependencies,
+                } => {
+                    if artifact_sha256 != &plan.artifact_sha256
+                        || content_digest != &plan.content_digest
+                        || resolved_dependencies != &plan.required_dependencies
+                    {
+                        return Err(
+                            "Cargo registry fixture match does not reproduce the exact plan"
+                                .to_owned(),
+                        );
+                    }
+                    evidence.insert(
+                        "resolvedDependencies".to_owned(),
+                        resolved_dependencies
+                            .iter()
+                            .map(|(package, version)| format!("{package}@{version}"))
+                            .collect::<Vec<_>>()
+                            .join(","),
+                    );
+                    (
+                        AdapterOutcome::Matching,
+                        AdapterRetryClassification::NotApplicable,
+                    )
+                }
+                CargoRegistryFixtureProbe::Conflicting => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                CargoRegistryFixtureProbe::Unknown => {
+                    (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown)
+                }
+            }
+        }
+        AdapterOperation::ClassifyFailure => {
+            if probe.is_some() {
+                return Err(
+                    "Cargo registry fixture failure classification cannot carry a probe".to_owned(),
+                );
+            }
+            match classify_cargo_registry_fixture_failure(
+                failure
+                    .ok_or("Cargo registry fixture failure classification requires failure text")?,
+            ) {
+                CargoRegistryFixtureFailure::Rejected => (
+                    AdapterOutcome::Rejected,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                CargoRegistryFixtureFailure::TerminalConflict => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                CargoRegistryFixtureFailure::Unknown => {
+                    (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown)
+                }
+            }
+        }
+        AdapterOperation::Prepare => {
+            return Err(
+                "Cargo registry fixture prepare result cannot carry a probe or failure text"
+                    .to_owned(),
+            )
+        }
+    };
+    Ok(AdapterResultEnvelope {
+        adapter_id: "local-cargo-registry-fixture@1".to_owned(),
+        operation,
+        target: "inert-local-cargo-registry".to_owned(),
+        immutable_key: plan.immutable_key.clone(),
+        required_permission: "packages:write:fixture-registry/exact-package-version".to_owned(),
+        outcome,
+        retry,
+        evidence,
     })
 }
 

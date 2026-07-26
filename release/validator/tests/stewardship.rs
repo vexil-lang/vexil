@@ -2573,7 +2573,11 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
 #[test]
 fn cargo_crate_candidate_inspection_binds_archive_bytes_and_metadata() {
     use vexil_release_governance_validator::{
-        inspect_cargo_crate_candidate, CargoCrateCandidateArtifactInspectionRequest,
+        classify_cargo_registry_fixture_failure, inspect_cargo_crate_candidate,
+        normalize_cargo_registry_fixture_result, prepare_cargo_registry_fixture,
+        verify_cargo_registry_fixture, AdapterOperation, AdapterOutcome,
+        AdapterRetryClassification, CargoCrateCandidateArtifactInspectionRequest,
+        CargoRegistryFixtureFailure, CargoRegistryFixtureProbe, CargoRegistryFixtureRequest,
     };
 
     let fixture = std::env::temp_dir().join(format!(
@@ -2624,11 +2628,98 @@ fn cargo_crate_candidate_inspection_binds_archive_bytes_and_metadata() {
     assert_eq!(inspected.entries.len(), 2);
     assert_eq!(inspected.package_name, "vexil-example");
     assert_eq!(inspected.version, "0.4.3");
+    let dependencies =
+        BTreeMap::from([("vexil-fixture-dependency".to_owned(), "0.4.2".to_owned())]);
+    let fixture_request = CargoRegistryFixtureRequest {
+        candidate: CargoCrateCandidateArtifactInspectionRequest {
+            unit_id: "vexil-example",
+            source_commit: &source_commit,
+            expected_package_name: "vexil-example",
+            expected_version: "0.4.3",
+            declared_entries: &declared_entries,
+            artifact_path: &artifact,
+        },
+        required_dependencies: &dependencies,
+    };
+    let plan = prepare_cargo_registry_fixture(&fixture_request)
+        .expect("exact Cargo candidate must prepare an inert registry fixture");
+    let prepared =
+        normalize_cargo_registry_fixture_result(&plan, AdapterOperation::Prepare, None, None)
+            .expect("prepare result envelope");
+    assert_eq!(prepared.outcome, AdapterOutcome::Prepared);
+    assert_eq!(
+        prepared.required_permission,
+        "packages:write:fixture-registry/exact-package-version"
+    );
+    let absent = normalize_cargo_registry_fixture_result(
+        &plan,
+        AdapterOperation::Publish,
+        Some(&CargoRegistryFixtureProbe::Absent),
+        None,
+    )
+    .expect("absent fixture package is only a planned upload");
+    assert_eq!(absent.retry, AdapterRetryClassification::SafeToRetry);
+    let matching = CargoRegistryFixtureProbe::Matching {
+        artifact_sha256: plan.artifact_sha256.clone(),
+        content_digest: plan.content_digest.clone(),
+        resolved_dependencies: dependencies.clone(),
+    };
+    verify_cargo_registry_fixture(&plan, &matching)
+        .expect("matching fixture package and dependency resolution verify");
+    let verified = normalize_cargo_registry_fixture_result(
+        &plan,
+        AdapterOperation::Verify,
+        Some(&matching),
+        None,
+    )
+    .expect("matching fixture result envelope");
+    assert_eq!(verified.outcome, AdapterOutcome::Matching);
+    let unresolved_dependency = CargoRegistryFixtureProbe::Matching {
+        artifact_sha256: plan.artifact_sha256.clone(),
+        content_digest: plan.content_digest.clone(),
+        resolved_dependencies: BTreeMap::new(),
+    };
+    assert!(verify_cargo_registry_fixture(&plan, &unresolved_dependency).is_err());
+    let unknown = normalize_cargo_registry_fixture_result(
+        &plan,
+        AdapterOperation::Probe,
+        Some(&CargoRegistryFixtureProbe::Unknown),
+        None,
+    )
+    .expect("unknown fixture response is preserved");
+    assert_eq!(unknown.outcome, AdapterOutcome::Unknown);
+    assert_eq!(unknown.retry, AdapterRetryClassification::Unknown);
+    let classified = normalize_cargo_registry_fixture_result(
+        &plan,
+        AdapterOperation::ClassifyFailure,
+        None,
+        Some("fixture conflict"),
+    )
+    .expect("terminal fixture conflict classification");
+    assert_eq!(classified.outcome, AdapterOutcome::TerminalConflict);
+    assert_eq!(classified.retry, AdapterRetryClassification::DoNotRetry);
+    assert_eq!(
+        classify_cargo_registry_fixture_failure("fixture conflict"),
+        CargoRegistryFixtureFailure::TerminalConflict
+    );
     let wrong_version = CargoCrateCandidateArtifactInspectionRequest {
         expected_version: "0.4.4",
         ..request
     };
     assert!(inspect_cargo_crate_candidate(&wrong_version).is_err());
+    let self_dependencies = BTreeMap::from([("vexil-example".to_owned(), "0.4.3".to_owned())]);
+    let self_dependency_fixture = CargoRegistryFixtureRequest {
+        candidate: CargoCrateCandidateArtifactInspectionRequest {
+            unit_id: "vexil-example",
+            source_commit: &source_commit,
+            expected_package_name: "vexil-example",
+            expected_version: "0.4.3",
+            declared_entries: &declared_entries,
+            artifact_path: &artifact,
+        },
+        required_dependencies: &self_dependencies,
+    };
+    assert!(prepare_cargo_registry_fixture(&self_dependency_fixture).is_err());
     fs::create_dir_all(crate_root.join(".agents")).expect("create prohibited crate path");
     fs::write(crate_root.join(".agents/private.txt"), "private\n")
         .expect("write prohibited crate path");
