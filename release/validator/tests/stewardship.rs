@@ -46,6 +46,20 @@ fn security_exception_schema_requires_separate_steward_role_assertions() {
     });
     vexil_release_governance_validator::validate_canonical_release_record_schema(&root, &exception)
         .expect("complete detached security exception schema");
+    let mut exception_1_1 = exception.clone();
+    exception_1_1["$schema"] = Value::String(
+        "https://vexil.dev/release/schemas/security-exception-1.1.schema.json".to_owned(),
+    );
+    exception_1_1["schemaVersion"] = Value::String("1.1".to_owned());
+    exception_1_1["releaseInclusion"]
+        .as_object_mut()
+        .expect("inclusion object")
+        .remove("manifestDigest");
+    vexil_release_governance_validator::validate_canonical_release_record_schema(
+        &root,
+        &exception_1_1,
+    )
+    .expect("exception 1.1 binds Manifest ID without a self-digest cycle");
     let mut ambiguous = exception.clone();
     ambiguous["releaseInclusion"]["role"] = Value::String("security-steward".to_owned());
     assert!(

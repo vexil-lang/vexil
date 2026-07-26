@@ -5292,6 +5292,10 @@ fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &
             "release/schemas/security-exception-1.0.schema.json",
             "https://vexil.dev/release/schemas/security-exception-1.0.schema.json",
         )),
+        ("release-security-exception", "1.1") => Some((
+            "release/schemas/security-exception-1.1.schema.json",
+            "https://vexil.dev/release/schemas/security-exception-1.1.schema.json",
+        )),
         ("candidate-custody", "1.0") => Some((
             "release/schemas/candidate-custody-1.0.schema.json",
             "https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
