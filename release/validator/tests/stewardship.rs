@@ -78,6 +78,34 @@ fn security_exception_schema_requires_separate_steward_role_assertions() {
 }
 
 #[test]
+fn security_exception_set_binds_exact_scan_manifest_and_expiry() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let scan = serde_json::json!({"$schema":"https://vexil.dev/release/schemas/security-scan-1.0.schema.json","recordKind":"release-security-scan","schemaVersion":"1.0","scanId":"scan-fixture","observedAt":"2026-07-26T00:00:00Z","scanner":"npm-audit@2","scope":{"manifest":"packages/runtime-ts/package.json","lockfile":"packages/runtime-ts/package-lock.json","exposure":"build-test-release-chain"},"lockfileDigest":format!("sha256:{}","a".repeat(64)),"findings":[{"id":"finding-fixture","package":"fixture","severity":"high","status":"exception","releaseRelevant":true}]});
+    let scan_bytes = canonical_json(&scan);
+    let exception = serde_json::json!({"$schema":"https://vexil.dev/release/schemas/security-exception-1.1.schema.json","recordKind":"release-security-exception","schemaVersion":"1.1","exceptionId":"exception-fixture","finding":{"scanId":"scan-fixture","scanDigest":digest(&scan_bytes),"findingId":"finding-fixture"},"scope":["npm-package:@vexil-lang/runtime"],"exploitability":"fixture","compensatingControls":["fixture"],"owner":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},"securityApproval":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},"releaseInclusion":{"manifestId":"manifest-fixture","actor":"github:furkanmamuk","role":"release-steward","assignment":"release"},"issuedAt":"2026-07-26T00:00:00Z","expiresAt":"2026-08-02T00:00:00Z","remediationIssue":"issue-fixture"});
+    let set = serde_json::json!({"$schema":"https://vexil.dev/release/schemas/security-exception-set-1.0.schema.json","recordKind":"release-security-exception-set","schemaVersion":"1.0","setId":"set-fixture","exceptions":[exception]});
+    let set_bytes = canonical_json(&set);
+    vexil_release_governance_validator::validate_security_exception_set(
+        &root,
+        &set_bytes,
+        "manifest-fixture",
+        &scan_bytes,
+        "2026-07-27T00:00:00Z",
+    )
+    .expect("exact active exception set");
+    assert!(
+        vexil_release_governance_validator::validate_security_exception_set(
+            &root,
+            &set_bytes,
+            "manifest-fixture",
+            &scan_bytes,
+            "2026-08-02T00:00:00Z"
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
     use vexil_release_governance_validator::{
         seal_candidate_custody, CandidateCustodyRequest, CandidateCustodySubject,
