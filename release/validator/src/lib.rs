@@ -333,6 +333,61 @@ pub enum GithubReleaseFixtureProbe {
     Unknown,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct DocumentationSnapshotFixture {
+    pub version: String,
+    pub source_commit: String,
+    pub manifest_digest: String,
+    pub content_digest: String,
+}
+
+pub fn prepare_documentation_snapshot_fixture(
+    version: &str,
+    source_commit: &str,
+    manifest_digest: &str,
+    content: &[u8],
+) -> Result<DocumentationSnapshotFixture, String> {
+    if version.trim().is_empty()
+        || !valid_git_object_id(source_commit)
+        || !valid_lowercase_sha256(manifest_digest)
+        || content.is_empty()
+    {
+        return Err(
+            "documentation snapshot requires version, source commit, Manifest digest, and content"
+                .to_owned(),
+        );
+    }
+    Ok(DocumentationSnapshotFixture {
+        version: version.to_owned(),
+        source_commit: source_commit.to_owned(),
+        manifest_digest: manifest_digest.to_owned(),
+        content_digest: sha256_hex(content),
+    })
+}
+
+pub fn verify_documentation_snapshot_fixture(
+    snapshot: &DocumentationSnapshotFixture,
+    content: &[u8],
+) -> Result<(), String> {
+    if sha256_hex(content) == snapshot.content_digest {
+        Ok(())
+    } else {
+        Err("documentation snapshot content conflicts with immutable version identity".to_owned())
+    }
+}
+
+pub fn update_documentation_latest_fixture(
+    snapshot: &DocumentationSnapshotFixture,
+    latest_version: &str,
+    latest_digest: &str,
+) -> Result<(), String> {
+    if latest_version == snapshot.version && latest_digest == snapshot.content_digest {
+        Ok(())
+    } else {
+        Err("documentation latest pointer must target the verified immutable snapshot".to_owned())
+    }
+}
+
 pub struct CandidateCustodySubject<'a> {
     pub name: &'a str,
     pub sha256: &'a str,

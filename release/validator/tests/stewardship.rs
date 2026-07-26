@@ -2901,9 +2901,10 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
 fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
     use vexil_release_governance_validator::{
         inspect_windows_cli_candidate, normalize_github_release_fixture_result,
-        prepare_github_release_fixture_draft, AdapterOperation, AdapterOutcome,
-        GithubReleaseFixtureDraftRequest, GithubReleaseFixtureProbe,
-        WindowsCliCandidateInspectionRequest,
+        prepare_documentation_snapshot_fixture, prepare_github_release_fixture_draft,
+        update_documentation_latest_fixture, verify_documentation_snapshot_fixture,
+        AdapterOperation, AdapterOutcome, GithubReleaseFixtureDraftRequest,
+        GithubReleaseFixtureProbe, WindowsCliCandidateInspectionRequest,
     };
     let assets = BTreeMap::from([("vexilc.exe".to_owned(), "a".repeat(64))]);
     let required_assets = BTreeSet::from(["vexilc.exe".to_owned()]);
@@ -2936,6 +2937,17 @@ fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
         .outcome,
         AdapterOutcome::Rejected
     );
+    let docs = prepare_documentation_snapshot_fixture(
+        "vexilc-v0.5.1-docs",
+        &"c".repeat(40),
+        &"d".repeat(64),
+        b"fixture docs",
+    )
+    .expect("versioned documentation snapshot");
+    verify_documentation_snapshot_fixture(&docs, b"fixture docs").expect("matching snapshot");
+    update_documentation_latest_fixture(&docs, &docs.version, &docs.content_digest)
+        .expect("verified latest pointer");
+    assert!(verify_documentation_snapshot_fixture(&docs, b"changed docs").is_err());
     let fixture = std::env::temp_dir().join(format!("vexil-cli-candidate-{}", std::process::id()));
     fs::create_dir_all(&fixture).expect("create CLI fixture");
     let artifact = fixture.join("vexilc.exe");
