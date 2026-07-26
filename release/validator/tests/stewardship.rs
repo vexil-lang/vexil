@@ -2811,6 +2811,46 @@ fn selective_promotion_accepts_one_explicitly_approved_unit_path() {
         },
     )
     .expect("approved unit path passes");
+    fs::write(
+        root.join("README.md"),
+        "cross-unit fixture path must not be promotable\n",
+    )
+    .expect("write cross-unit fixture path");
+    commit_fixture_path(&root, "README.md", "test: cross-unit leakage");
+    let cross_unit = Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("read cross-unit proposed");
+    let cross_unit = String::from_utf8_lossy(&cross_unit.stdout)
+        .trim()
+        .to_owned();
+    assert!(validate_selective_promotion(
+        &root,
+        &SelectivePromotionRequest {
+            current_base: &base,
+            proposed_commit: &cross_unit,
+            approved_change_units: &units,
+        }
+    )
+    .is_err());
+    fs::remove_file(root.join("README.md")).expect("delete unapproved fixture path");
+    commit_fixture_path(&root, "README.md", "test: deletion leakage");
+    let deletion = Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("read deletion proposed");
+    let deletion = String::from_utf8_lossy(&deletion.stdout).trim().to_owned();
+    assert!(validate_selective_promotion(
+        &root,
+        &SelectivePromotionRequest {
+            current_base: &base,
+            proposed_commit: &deletion,
+            approved_change_units: &units,
+        }
+    )
+    .is_err());
     fs::create_dir_all(root.join("_bmad")).expect("create private fixture path");
     fs::write(root.join("_bmad/private.txt"), "private\n").expect("write private fixture path");
     commit_fixture_path(&root, "_bmad/private.txt", "test: private leakage");
