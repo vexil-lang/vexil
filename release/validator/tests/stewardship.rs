@@ -2900,8 +2900,42 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
 #[test]
 fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
     use vexil_release_governance_validator::{
-        inspect_windows_cli_candidate, WindowsCliCandidateInspectionRequest,
+        inspect_windows_cli_candidate, normalize_github_release_fixture_result,
+        prepare_github_release_fixture_draft, AdapterOperation, AdapterOutcome,
+        GithubReleaseFixtureDraftRequest, GithubReleaseFixtureProbe,
+        WindowsCliCandidateInspectionRequest,
     };
+    let assets = BTreeMap::from([("vexilc.exe".to_owned(), "a".repeat(64))]);
+    let required_assets = BTreeSet::from(["vexilc.exe".to_owned()]);
+    let draft = prepare_github_release_fixture_draft(&GithubReleaseFixtureDraftRequest {
+        tag: "vexilc-v0.5.1",
+        manifest_digest: &"b".repeat(64),
+        assets: &assets,
+        required_assets: &required_assets,
+        attestation: "fixture-attestation",
+        changelog: "fixture changelog",
+        instructions: "fixture install",
+        limitations: "fixture limitations",
+    })
+    .expect("complete immutable release draft fixture");
+    assert_eq!(
+        normalize_github_release_fixture_result(
+            &draft,
+            AdapterOperation::Verify,
+            GithubReleaseFixtureProbe::Matching
+        )
+        .outcome,
+        AdapterOutcome::Matching
+    );
+    assert_eq!(
+        normalize_github_release_fixture_result(
+            &draft,
+            AdapterOperation::Publish,
+            GithubReleaseFixtureProbe::Partial
+        )
+        .outcome,
+        AdapterOutcome::Rejected
+    );
     let fixture = std::env::temp_dir().join(format!("vexil-cli-candidate-{}", std::process::id()));
     fs::create_dir_all(&fixture).expect("create CLI fixture");
     let artifact = fixture.join("vexilc.exe");

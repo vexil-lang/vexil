@@ -306,6 +306,33 @@ pub struct InspectedWindowsCliCandidateArtifact {
     pub version: String,
 }
 
+pub struct GithubReleaseFixtureDraftRequest<'a> {
+    pub tag: &'a str,
+    pub manifest_digest: &'a str,
+    pub assets: &'a BTreeMap<String, String>,
+    pub required_assets: &'a BTreeSet<String>,
+    pub attestation: &'a str,
+    pub changelog: &'a str,
+    pub instructions: &'a str,
+    pub limitations: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct GithubReleaseFixtureDraft {
+    pub immutable_key: String,
+    pub assets: BTreeMap<String, String>,
+    pub manifest_digest: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GithubReleaseFixtureProbe {
+    Absent,
+    Matching,
+    Partial,
+    Conflicting,
+    Unknown,
+}
+
 pub struct CandidateCustodySubject<'a> {
     pub name: &'a str,
     pub sha256: &'a str,
@@ -3245,6 +3272,82 @@ pub fn inspect_go_module_zip_candidate(
         unit_id: request.unit_id.to_owned(),
         version: request.expected_version.to_owned(),
     })
+}
+
+/// Validates a complete immutable GitHub-release draft fixture. This models no
+/// API and cannot create releases, tags, or assets.
+pub fn prepare_github_release_fixture_draft(
+    request: &GithubReleaseFixtureDraftRequest<'_>,
+) -> Result<GithubReleaseFixtureDraft, String> {
+    if request.tag.trim().is_empty()
+        || !valid_lowercase_sha256(request.manifest_digest)
+        || request.assets.is_empty()
+        || request.assets.keys().collect::<BTreeSet<_>>()
+            != request.required_assets.iter().collect()
+        || [
+            request.attestation,
+            request.changelog,
+            request.instructions,
+            request.limitations,
+        ]
+        .iter()
+        .any(|value| value.trim().is_empty())
+        || request
+            .assets
+            .values()
+            .any(|digest| !valid_lowercase_sha256(digest))
+    {
+        return Err(
+            "GitHub release fixture draft is incomplete or has mismatched immutable assets"
+                .to_owned(),
+        );
+    }
+    Ok(GithubReleaseFixtureDraft {
+        immutable_key: format!("{}#{}", request.tag, request.manifest_digest),
+        assets: request.assets.clone(),
+        manifest_digest: request.manifest_digest.to_owned(),
+    })
+}
+
+pub fn normalize_github_release_fixture_result(
+    draft: &GithubReleaseFixtureDraft,
+    operation: AdapterOperation,
+    probe: GithubReleaseFixtureProbe,
+) -> AdapterResultEnvelope {
+    let (outcome, retry) = match probe {
+        GithubReleaseFixtureProbe::Absent => (
+            AdapterOutcome::Absent,
+            AdapterRetryClassification::SafeToRetry,
+        ),
+        GithubReleaseFixtureProbe::Matching => (
+            AdapterOutcome::Matching,
+            AdapterRetryClassification::NotApplicable,
+        ),
+        GithubReleaseFixtureProbe::Partial => (
+            AdapterOutcome::Rejected,
+            AdapterRetryClassification::DoNotRetry,
+        ),
+        GithubReleaseFixtureProbe::Conflicting => (
+            AdapterOutcome::TerminalConflict,
+            AdapterRetryClassification::DoNotRetry,
+        ),
+        GithubReleaseFixtureProbe::Unknown => {
+            (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown)
+        }
+    };
+    AdapterResultEnvelope {
+        adapter_id: "local-github-release-fixture@1".to_owned(),
+        operation,
+        target: "inert-local-github-release".to_owned(),
+        immutable_key: draft.immutable_key.clone(),
+        required_permission: "contents:write:fixture-release/exact-approved-assets".to_owned(),
+        outcome,
+        retry,
+        evidence: BTreeMap::from([
+            ("manifestDigest".to_owned(), draft.manifest_digest.clone()),
+            ("assetCount".to_owned(), draft.assets.len().to_string()),
+        ]),
+    }
 }
 
 /// Inspects a Windows CLI candidate without executing it. The PE signature and
