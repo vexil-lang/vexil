@@ -398,7 +398,7 @@ pub struct CandidateCustodyRequest<'a> {
     pub workflow: &'a str,
     pub reference: &'a str,
     pub source_commit: &'a str,
-    pub manifest_digest: &'a str,
+    pub manifest_id: &'a str,
     pub attestation_issuer: &'a str,
     pub attestation_identity: &'a str,
     pub attestation_digest: &'a str,
@@ -414,7 +414,7 @@ pub struct SealedCandidateCustody {
     pub workflow: String,
     pub reference: String,
     pub source_commit: String,
-    pub manifest_digest: String,
+    pub manifest_id: String,
     pub attestation_issuer: String,
     pub attestation_identity: String,
 }
@@ -2053,13 +2053,16 @@ fn validate_authorization_candidate_custody(
     {
         return Err("authorization candidate identities do not match sealed custody".to_owned());
     }
-    if custody.manifest_digest != sha256_hex(manifest_bytes) {
-        return Err(
-            "candidate custody Manifest digest does not match exact Manifest bytes".to_owned(),
-        );
-    }
     let manifest: Value = serde_json::from_slice(manifest_bytes)
         .map_err(|error| format!("parse custody-bound Manifest bytes: {error}"))?;
+    if custody.manifest_id
+        != text(
+            object(&manifest, "custody-bound Manifest")?.get("manifestId"),
+            "candidate custody-bound Manifest ID",
+        )?
+    {
+        return Err("candidate custody Manifest ID does not match the exact Manifest".to_owned());
+    }
     let release_units = array(
         object(&manifest, "custody-bound Manifest")?.get("releaseUnits"),
         "custody-bound Manifest release units",
@@ -4005,12 +4008,12 @@ pub fn seal_candidate_custody(
         || !valid_git_object_id(request.source_commit)
         || request.attestation_issuer.trim().is_empty()
         || request.attestation_identity.trim().is_empty()
-        || !valid_lowercase_sha256(request.manifest_digest)
+        || request.manifest_id.trim().is_empty()
         || !valid_lowercase_sha256(request.attestation_digest)
         || request.subjects.is_empty()
     {
         return Err(
-            "candidate custody requires immutable source, manifest, attestation, and subjects"
+            "candidate custody requires immutable source, Manifest ID, attestation, and subjects"
                 .to_owned(),
         );
     }
@@ -4037,7 +4040,7 @@ pub fn seal_candidate_custody(
         request.workflow,
         request.reference,
         request.source_commit,
-        request.manifest_digest,
+        request.manifest_id,
         request.attestation_issuer,
         request.attestation_identity,
         request.attestation_digest,
@@ -4056,7 +4059,7 @@ pub fn seal_candidate_custody(
         workflow: request.workflow.to_owned(),
         reference: request.reference.to_owned(),
         source_commit: request.source_commit.to_owned(),
-        manifest_digest: request.manifest_digest.to_owned(),
+        manifest_id: request.manifest_id.to_owned(),
         attestation_issuer: request.attestation_issuer.to_owned(),
         attestation_identity: request.attestation_identity.to_owned(),
     })
@@ -4097,9 +4100,9 @@ pub fn validate_candidate_custody_record(
             record_object.get("sourceCommit"),
             "candidate custody source commit",
         )?,
-        manifest_digest: text(
-            record_object.get("manifestDigest"),
-            "candidate custody Manifest digest",
+        manifest_id: text(
+            record_object.get("manifestId"),
+            "candidate custody Manifest ID",
         )?,
         attestation_issuer: text(
             record_object.get("attestationIssuer"),
@@ -4474,10 +4477,8 @@ pub fn prepare_non_publishing_rehearsal(
         return Err("rehearsal requires a canonical release-manifest@1.1".to_owned());
     }
     let (_, custody) = validate_candidate_custody_record(root, request.custody_record)?;
-    if custody.manifest_digest != sha256_hex(request.manifest_bytes) {
-        return Err(
-            "rehearsal candidate custody does not bind the exact Manifest bytes".to_owned(),
-        );
+    if custody.manifest_id != text(manifest.get("manifestId"), "rehearsal Manifest ID")? {
+        return Err("rehearsal candidate custody does not bind the exact Manifest ID".to_owned());
     }
     if !array(
         manifest.get("releaseUnits"),

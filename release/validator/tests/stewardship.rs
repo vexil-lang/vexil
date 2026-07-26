@@ -345,7 +345,7 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
         source_commit: manifest["releaseUnits"][0]["sourceCommit"]
             .as_str()
             .expect("fixture source commit"),
-        manifest_digest: &digest(&manifest_bytes),
+        manifest_id: "rehearsal-fixture",
         attestation_issuer: "fixture-issuer",
         attestation_identity: "fixture-identity",
         attestation_digest: &"c".repeat(64),
@@ -359,7 +359,7 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
         "attestationDigest":sealed_custody.attestation_digest,"repository":"vexil-lang/vexil",
         "workflow":"candidate-fixture","reference":"refs/heads/main",
         "sourceCommit":manifest["releaseUnits"][0]["sourceCommit"].clone(),
-        "manifestDigest":digest(&manifest_bytes),"attestationIssuer":"fixture-issuer",
+        "manifestId":"rehearsal-fixture","attestationIssuer":"fixture-issuer",
         "attestationIdentity":"fixture-identity","subjects":[{"name":"runtime.tgz","digest":"b".repeat(64)}]
     });
     let typed_graph_bytes = fs::read(root.join("release/catalog.json")).expect("read typed graph");
@@ -402,7 +402,7 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
             .expect("custody bundle digest")
     );
     let mut mutated_custody = custody.clone();
-    mutated_custody["manifestDigest"] = Value::String("d".repeat(64));
+    mutated_custody["manifestId"] = Value::String("different-manifest".into());
     let mutated_custody_request =
         vexil_release_governance_validator::NonPublishingRehearsalRequest {
             custody_record: &mutated_custody,
@@ -2236,7 +2236,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         source_commit: manifest["releaseUnits"][0]["sourceCommit"]
             .as_str()
             .expect("fixture source commit"),
-        manifest_digest: &digest(&manifest_bytes),
+        manifest_id: "authorization-manifest",
         attestation_issuer: "fixture-issuer",
         attestation_identity: "fixture-identity",
         attestation_digest: &"2".repeat(64),
@@ -2250,7 +2250,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "attestationDigest":sealed_custody.attestation_digest,"repository":"vexil-lang/vexil",
         "workflow":"candidate-fixture","reference":"refs/heads/main",
         "sourceCommit":manifest["releaseUnits"][0]["sourceCommit"].clone(),
-        "manifestDigest":digest(&manifest_bytes),"attestationIssuer":"fixture-issuer",
+        "manifestId":"authorization-manifest","attestationIssuer":"fixture-issuer",
         "attestationIdentity":"fixture-identity","subjects":[{"name":"vexil-runtime-0.4.1.tgz","digest":"1".repeat(64)}]
     });
     let authorization = serde_json::json!({
@@ -3171,7 +3171,7 @@ fn candidate_custody_seals_exact_subject_and_attestation_identities() {
         workflow: "candidate-build",
         reference: "refs/heads/main",
         source_commit: &"b".repeat(40),
-        manifest_digest: &"c".repeat(64),
+        manifest_id: "candidate-fixture",
         attestation_issuer: "fixture-issuer",
         attestation_identity: "fixture-identity",
         attestation_digest: &"d".repeat(64),
@@ -3214,7 +3214,7 @@ fn candidate_custody_record_recomputes_every_immutable_binding() {
         workflow: "candidate-build",
         reference: "refs/heads/main",
         source_commit: &"b".repeat(40),
-        manifest_digest: &"c".repeat(64),
+        manifest_id: "candidate-fixture",
         attestation_issuer: "fixture-issuer",
         attestation_identity: "fixture-identity",
         attestation_digest: &"d".repeat(64),
@@ -3227,7 +3227,7 @@ fn candidate_custody_record_recomputes_every_immutable_binding() {
         "bundleDigest":sealed.bundle_digest,"subjectDigest":sealed.subject_digest,
         "attestationDigest":sealed.attestation_digest,"repository":request.repository,
         "workflow":request.workflow,"reference":request.reference,"sourceCommit":request.source_commit,
-        "manifestDigest":request.manifest_digest,"attestationIssuer":request.attestation_issuer,
+        "manifestId":request.manifest_id,"attestationIssuer":request.attestation_issuer,
         "attestationIdentity":request.attestation_identity,
         "subjects":[{"name":subject.name,"digest":subject.sha256}]
     });
@@ -3242,7 +3242,7 @@ fn candidate_custody_record_recomputes_every_immutable_binding() {
         "workflow",
         "reference",
         "sourceCommit",
-        "manifestDigest",
+        "manifestId",
         "attestationIssuer",
         "attestationIdentity",
     ] {
