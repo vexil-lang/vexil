@@ -9,6 +9,7 @@ fn main() {
     let mut render_catalog = false;
     let mut candidate_tag = None;
     let mut source_candidate_digest = None;
+    let mut source_candidate_output = None;
     while let Some(argument) = args.next() {
         match argument.as_str() {
             "--root" => match args.next() {
@@ -32,6 +33,14 @@ fn main() {
                 Some(value) if !value.starts_with("--") => source_candidate_digest = Some(value),
                 _ => usage_and_exit(),
             },
+            "--runtime-go-source-candidate-output" => match (args.next(), args.next()) {
+                (Some(source_commit), Some(path))
+                    if !source_commit.starts_with("--") && !path.starts_with("--") =>
+                {
+                    source_candidate_output = Some((source_commit, PathBuf::from(path)));
+                }
+                _ => usage_and_exit(),
+            },
             _ => {
                 usage_and_exit();
             }
@@ -43,6 +52,7 @@ fn main() {
             || render_catalog
             || candidate_tag.is_some()
             || source_candidate_digest.is_some()
+            || source_candidate_output.is_some()
         {
             eprintln!("--collect-history-tags is a standalone read-only collector");
             std::process::exit(2);
@@ -79,6 +89,39 @@ fn main() {
     let Some(root) = root else {
         usage_and_exit();
     };
+    if source_candidate_digest.is_some() && source_candidate_output.is_some() {
+        usage_and_exit();
+    }
+    if let Some((source_commit, output_path)) = source_candidate_output {
+        if observe.is_some() || render_catalog || candidate_tag.is_some() || output_path.exists() {
+            usage_and_exit();
+        }
+        match vexil_release_governance_validator::build_deterministic_go_module_source_zip(
+            &root,
+            &source_commit,
+        ) {
+            Ok(bytes) => {
+                if let Err(error) = std::fs::write(&output_path, &bytes) {
+                    eprintln!(
+                        "Go source-candidate archive write rejected for {}: {error}",
+                        output_path.display()
+                    );
+                    std::process::exit(1);
+                }
+                println!(
+                    "wrote {} sha256:{} size:{}",
+                    output_path.display(),
+                    vexil_release_governance_validator::sha256_hex(&bytes),
+                    bytes.len()
+                );
+            }
+            Err(error) => {
+                eprintln!("Go source-candidate archive rejected: {error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if let Some(source_commit) = source_candidate_digest {
         if observe.is_some() || render_catalog || candidate_tag.is_some() {
             usage_and_exit();
@@ -183,7 +226,7 @@ fn main() {
 }
 
 fn usage_and_exit() -> ! {
-    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root> | --candidate-tag <tag> --root <repository-root> | --runtime-go-source-candidate-digest <commit> --root <repository-root>");
+    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root> | --candidate-tag <tag> --root <repository-root> | --runtime-go-source-candidate-digest <commit> --root <repository-root> | --runtime-go-source-candidate-output <commit> <new-output.zip> --root <repository-root>");
     std::process::exit(2);
 }
 
