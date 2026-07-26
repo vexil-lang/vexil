@@ -1687,9 +1687,9 @@ fn detached_approval_constructor_binds_exact_inputs_and_revalidates_governance()
 fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     use vexil_release_governance_validator::{
         authorize_privileged_run_start, construct_detached_approval, governance_revision_v1,
-        validate_privileged_job_preflight, ApprovalMergeEvidence, DetachedApprovalPreflight,
-        CandidateCustodyRequest, CandidateCustodySubject, DetachedApprovalRequest,
-        PrivilegedJobPreflight, PrivilegedRunStartRequest, seal_candidate_custody,
+        seal_candidate_custody, validate_privileged_job_preflight, ApprovalMergeEvidence,
+        CandidateCustodyRequest, CandidateCustodySubject, DetachedApprovalPreflight,
+        DetachedApprovalRequest, PrivilegedJobPreflight, PrivilegedRunStartRequest,
     };
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -1867,11 +1867,13 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         custody: &changed_subject_custody,
         ..request
     };
-    assert!(authorize_privileged_run_start(&root, &changed_subject_request)
-        .unwrap_err()
-        .blockers
-        .iter()
-        .any(|blocker| blocker.requirement == "immutable-candidate-custody"));
+    assert!(
+        authorize_privileged_run_start(&root, &changed_subject_request)
+            .unwrap_err()
+            .blockers
+            .iter()
+            .any(|blocker| blocker.requirement == "immutable-candidate-custody")
+    );
     let mut tag_authorization = authorization.clone();
     tag_authorization["allowedOperations"] = serde_json::json!(["privileged-operation-rbr-003"]);
     tag_authorization["allowedPermissions"] =
@@ -2103,7 +2105,8 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
             .as_nanos()
     ));
     fn urlsafe_base64(bytes: &[u8]) -> String {
-        const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        const ALPHABET: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
         let digest = Sha256::digest(bytes);
         let mut encoded = String::with_capacity(43);
         let mut chunks = digest.chunks_exact(3);
@@ -2132,17 +2135,9 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
     let metadata = fixture.join("vexil_runtime-0.1.0.dist-info");
     fs::create_dir_all(&metadata).expect("create Python wheel metadata fixture");
     let metadata_contents = "Metadata-Version: 2.4\nName: vexil_runtime\nVersion: 0.1.0\n";
-    fs::write(
-        metadata.join("METADATA"),
-        metadata_contents,
-    )
-    .expect("write Python wheel metadata");
+    fs::write(metadata.join("METADATA"), metadata_contents).expect("write Python wheel metadata");
     let wheel_contents = "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n";
-    fs::write(
-        metadata.join("WHEEL"),
-        wheel_contents,
-    )
-    .expect("write Python wheel metadata");
+    fs::write(metadata.join("WHEEL"), wheel_contents).expect("write Python wheel metadata");
     let module_contents = "VALUE = 1\n";
     fs::write(fixture.join("vexil_runtime.py"), module_contents)
         .expect("write Python wheel content");
@@ -2156,17 +2151,10 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
     let record_contents = format!(
         "{}{}{}vexil_runtime-0.1.0.dist-info/RECORD,,\n",
         wheel_record_entry("vexil_runtime.py", module_contents),
-        wheel_record_entry(
-            "vexil_runtime-0.1.0.dist-info/METADATA",
-            metadata_contents
-        ),
+        wheel_record_entry("vexil_runtime-0.1.0.dist-info/METADATA", metadata_contents),
         wheel_record_entry("vexil_runtime-0.1.0.dist-info/WHEEL", wheel_contents),
     );
-    fs::write(
-        metadata.join("RECORD"),
-        &record_contents,
-    )
-    .expect("write Python wheel record");
+    fs::write(metadata.join("RECORD"), &record_contents).expect("write Python wheel record");
     let artifact = fixture.join("vexil_runtime-0.1.0-py3-none-any.whl");
     let output = Command::new("tar")
         .args(["-a", "-cf"])
@@ -2220,10 +2208,8 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
         .expect("recreate tampered Python wheel fixture");
     assert!(output.status.success());
     assert!(inspect_python_wheel_candidate(&request).is_err());
-    fs::write(metadata.join("RECORD"), &record_contents)
-        .expect("restore Python wheel record");
-    fs::write(fixture.join("backdoor.py"), "VALUE = 2\n")
-        .expect("write undeclared wheel content");
+    fs::write(metadata.join("RECORD"), &record_contents).expect("restore Python wheel record");
+    fs::write(fixture.join("backdoor.py"), "VALUE = 2\n").expect("write undeclared wheel content");
     let output = Command::new("tar")
         .args(["-a", "-cf"])
         .arg(&artifact)
@@ -2240,18 +2226,13 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
     assert!(inspect_python_wheel_candidate(&request).is_err());
     fs::remove_file(fixture.join("backdoor.py")).expect("remove undeclared wheel content");
     fs::create_dir_all(fixture.join("_bmad")).expect("create prohibited wheel path");
-    fs::write(fixture.join("_bmad/private.txt"), "private\n")
-        .expect("write prohibited wheel path");
+    fs::write(fixture.join("_bmad/private.txt"), "private\n").expect("write prohibited wheel path");
     let output = Command::new("tar")
         .args(["-a", "-cf"])
         .arg(&artifact)
         .args(["-C"])
         .arg(&fixture)
-        .args([
-            "vexil_runtime.py",
-            "vexil_runtime-0.1.0.dist-info",
-            "_bmad",
-        ])
+        .args(["vexil_runtime.py", "vexil_runtime-0.1.0.dist-info", "_bmad"])
         .output()
         .expect("recreate prohibited Python wheel fixture");
     assert!(output.status.success());
@@ -2342,23 +2323,50 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
     let fixture = std::env::temp_dir().join(format!("vexil-go-candidate-{}", std::process::id()));
     let root = fixture.join("github.com/vexil-lang/vexil/packages/runtime-go@v0.1.0");
     fs::create_dir_all(&root).expect("create Go module fixture");
-    fs::write(root.join("go.mod"), "module github.com/vexil-lang/vexil/packages/runtime-go\n\ngo 1.22\n").expect("write go.mod");
+    fs::write(
+        root.join("go.mod"),
+        "module github.com/vexil-lang/vexil/packages/runtime-go\n\ngo 1.22\n",
+    )
+    .expect("write go.mod");
     fs::write(root.join("VERSION"), "0.1.0\n").expect("write VERSION");
     fs::write(root.join("runtime.go"), "package runtime\n").expect("write Go content");
     let artifact = fixture.join("runtime-go@v0.1.0.zip");
-    let output = Command::new("tar").args(["-a", "-cf"]).arg(&artifact).args(["-C"]).arg(&fixture).arg("github.com").output().expect("create Go proxy zip");
+    let output = Command::new("tar")
+        .args(["-a", "-cf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .arg("github.com")
+        .output()
+        .expect("create Go proxy zip");
     assert!(output.status.success());
     let prefix = "github.com/vexil-lang/vexil/packages/runtime-go@v0.1.0";
     let declared_entries = BTreeSet::from([
-        format!("{prefix}/go.mod"), format!("{prefix}/VERSION"), format!("{prefix}/runtime.go"),
+        format!("{prefix}/go.mod"),
+        format!("{prefix}/VERSION"),
+        format!("{prefix}/runtime.go"),
     ]);
     let commit = "d".repeat(40);
-    let request = GoModuleCandidateArtifactInspectionRequest { unit_id: "vexil-runtime-go", source_commit: &commit, expected_module_path: "github.com/vexil-lang/vexil/packages/runtime-go", expected_version: "0.1.0", declared_entries: &declared_entries, artifact_path: &artifact };
+    let request = GoModuleCandidateArtifactInspectionRequest {
+        unit_id: "vexil-runtime-go",
+        source_commit: &commit,
+        expected_module_path: "github.com/vexil-lang/vexil/packages/runtime-go",
+        expected_version: "0.1.0",
+        declared_entries: &declared_entries,
+        artifact_path: &artifact,
+    };
     let inspected = inspect_go_module_zip_candidate(&request).expect("inspect Go module proxy zip");
     assert_eq!(inspected.entries.len(), 3);
     fs::create_dir_all(root.join("_bmad")).expect("create private fixture path");
     fs::write(root.join("_bmad/private.txt"), "private\n").expect("write private fixture path");
-    let output = Command::new("tar").args(["-a", "-cf"]).arg(&artifact).args(["-C"]).arg(&fixture).arg("github.com").output().expect("recreate Go proxy zip");
+    let output = Command::new("tar")
+        .args(["-a", "-cf"])
+        .arg(&artifact)
+        .args(["-C"])
+        .arg(&fixture)
+        .arg("github.com")
+        .output()
+        .expect("recreate Go proxy zip");
     assert!(output.status.success());
     assert!(inspect_go_module_zip_candidate(&request).is_err());
     fs::remove_dir_all(fixture).expect("remove Go module fixture");
@@ -2366,14 +2374,27 @@ fn go_module_candidate_inspection_binds_proxy_zip_bytes_and_metadata() {
 
 #[test]
 fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
-    use vexil_release_governance_validator::{inspect_windows_cli_candidate, WindowsCliCandidateInspectionRequest};
+    use vexil_release_governance_validator::{
+        inspect_windows_cli_candidate, WindowsCliCandidateInspectionRequest,
+    };
     let fixture = std::env::temp_dir().join(format!("vexil-cli-candidate-{}", std::process::id()));
     fs::create_dir_all(&fixture).expect("create CLI fixture");
     let artifact = fixture.join("vexilc.exe");
     fs::write(&artifact, b"MZfixture bytes vexilc 0.5.1\0").expect("write CLI fixture");
     let commit = "e".repeat(40);
-    let request = WindowsCliCandidateInspectionRequest { unit_id: "vexilc", source_commit: &commit, expected_binary_name: "vexilc.exe", expected_version: "0.5.1", artifact_path: &artifact };
-    assert_eq!(inspect_windows_cli_candidate(&request).expect("inspect CLI fixture").version, "0.5.1");
+    let request = WindowsCliCandidateInspectionRequest {
+        unit_id: "vexilc",
+        source_commit: &commit,
+        expected_binary_name: "vexilc.exe",
+        expected_version: "0.5.1",
+        artifact_path: &artifact,
+    };
+    assert_eq!(
+        inspect_windows_cli_candidate(&request)
+            .expect("inspect CLI fixture")
+            .version,
+        "0.5.1"
+    );
     fs::write(&artifact, b"not-a-pe").expect("replace invalid CLI fixture");
     assert!(inspect_windows_cli_candidate(&request).is_err());
     fs::remove_dir_all(fixture).expect("remove CLI fixture");
@@ -2381,14 +2402,43 @@ fn windows_cli_candidate_inspection_binds_binary_bytes_and_version_marker() {
 
 #[test]
 fn candidate_custody_seals_exact_subject_and_attestation_identities() {
-    use vexil_release_governance_validator::{seal_candidate_custody, CandidateCustodyRequest, CandidateCustodySubject};
-    let subject = CandidateCustodySubject { name: "vexilc.exe", sha256: &"a".repeat(64) };
-    let request = CandidateCustodyRequest { repository: "vexil-lang/vexil", workflow: "candidate-build", reference: "refs/heads/main", source_commit: &"b".repeat(40), manifest_digest: &"c".repeat(64), attestation_issuer: "fixture-issuer", attestation_identity: "fixture-identity", attestation_digest: &"d".repeat(64), subjects: &[subject] };
+    use vexil_release_governance_validator::{
+        seal_candidate_custody, CandidateCustodyRequest, CandidateCustodySubject,
+    };
+    let subject = CandidateCustodySubject {
+        name: "vexilc.exe",
+        sha256: &"a".repeat(64),
+    };
+    let request = CandidateCustodyRequest {
+        repository: "vexil-lang/vexil",
+        workflow: "candidate-build",
+        reference: "refs/heads/main",
+        source_commit: &"b".repeat(40),
+        manifest_digest: &"c".repeat(64),
+        attestation_issuer: "fixture-issuer",
+        attestation_identity: "fixture-identity",
+        attestation_digest: &"d".repeat(64),
+        subjects: &[subject],
+    };
     let first = seal_candidate_custody(&request).expect("seal custody");
-    assert_eq!(first, seal_candidate_custody(&request).expect("seal custody deterministically"));
-    let substituted = CandidateCustodySubject { name: "vexilc.exe", sha256: &"e".repeat(64) };
-    let changed = CandidateCustodyRequest { subjects: &[substituted], ..request };
-    assert_ne!(first.bundle_digest, seal_candidate_custody(&changed).expect("seal changed custody").bundle_digest);
+    assert_eq!(
+        first,
+        seal_candidate_custody(&request).expect("seal custody deterministically")
+    );
+    let substituted = CandidateCustodySubject {
+        name: "vexilc.exe",
+        sha256: &"e".repeat(64),
+    };
+    let changed = CandidateCustodyRequest {
+        subjects: &[substituted],
+        ..request
+    };
+    assert_ne!(
+        first.bundle_digest,
+        seal_candidate_custody(&changed)
+            .expect("seal changed custody")
+            .bundle_digest
+    );
 }
 
 #[test]
@@ -2398,12 +2448,20 @@ fn candidate_custody_record_recomputes_every_immutable_binding() {
         CandidateCustodySubject,
     };
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let subject = CandidateCustodySubject { name: "vexil-runtime-0.4.1.tgz", sha256: &"a".repeat(64) };
+    let subject = CandidateCustodySubject {
+        name: "vexil-runtime-0.4.1.tgz",
+        sha256: &"a".repeat(64),
+    };
     let request = CandidateCustodyRequest {
-        repository: "vexil-lang/vexil", workflow: "candidate-build", reference: "refs/heads/main",
-        source_commit: &"b".repeat(40), manifest_digest: &"c".repeat(64),
-        attestation_issuer: "fixture-issuer", attestation_identity: "fixture-identity",
-        attestation_digest: &"d".repeat(64), subjects: std::slice::from_ref(&subject),
+        repository: "vexil-lang/vexil",
+        workflow: "candidate-build",
+        reference: "refs/heads/main",
+        source_commit: &"b".repeat(40),
+        manifest_digest: &"c".repeat(64),
+        attestation_issuer: "fixture-issuer",
+        attestation_identity: "fixture-identity",
+        attestation_digest: &"d".repeat(64),
+        subjects: std::slice::from_ref(&subject),
     };
     let sealed = seal_candidate_custody(&request).expect("seal custody");
     let record = serde_json::json!({
@@ -2423,12 +2481,24 @@ fn candidate_custody_record_recomputes_every_immutable_binding() {
         "candidate-fixture"
     );
     for field in [
-        "repository", "workflow", "reference", "sourceCommit", "manifestDigest",
-        "attestationIssuer", "attestationIdentity",
+        "repository",
+        "workflow",
+        "reference",
+        "sourceCommit",
+        "manifestDigest",
+        "attestationIssuer",
+        "attestationIdentity",
     ] {
         let mut mutated = record.clone();
-        mutated[field] = Value::String(if field == "sourceCommit" { "e".repeat(40) } else { format!("changed-{field}") });
-        assert!(validate_candidate_custody_record(&root, &mutated).is_err(), "{field} mutation must fail");
+        mutated[field] = Value::String(if field == "sourceCommit" {
+            "e".repeat(40)
+        } else {
+            format!("changed-{field}")
+        });
+        assert!(
+            validate_candidate_custody_record(&root, &mutated).is_err(),
+            "{field} mutation must fail"
+        );
     }
     let mut changed_subject = record.clone();
     changed_subject["subjects"][0]["digest"] = Value::String("f".repeat(64));
@@ -2452,29 +2522,69 @@ fn selective_promotion_rejects_the_wholesale_checkpoint_identity() {
 
 #[test]
 fn selective_promotion_accepts_one_explicitly_approved_unit_path() {
-    use vexil_release_governance_validator::{validate_selective_promotion, SelectivePromotionRequest};
+    use vexil_release_governance_validator::{
+        validate_selective_promotion, SelectivePromotionRequest,
+    };
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let root = clean_manifest_generation_root(&source);
     let record = root.join("release/checkpoint-change-units/checkpoint-python-generator-fix.json");
-    let mut value: Value = serde_json::from_slice(&fs::read(&record).expect("read change unit")).expect("parse change unit");
+    let mut value: Value = serde_json::from_slice(&fs::read(&record).expect("read change unit"))
+        .expect("parse change unit");
     value["disposition"] = Value::String("approved".into());
     fs::write(&record, canonical_json(&value)).expect("approve fixture unit");
-    commit_fixture_path(&root, "release/checkpoint-change-units/checkpoint-python-generator-fix.json", "test: approve fixture unit");
-    let base = Command::new("git").current_dir(&root).args(["rev-parse", "HEAD"]).output().expect("read base");
+    commit_fixture_path(
+        &root,
+        "release/checkpoint-change-units/checkpoint-python-generator-fix.json",
+        "test: approve fixture unit",
+    );
+    let base = Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("read base");
     let base = String::from_utf8_lossy(&base.stdout).trim().to_owned();
     let path = "crates/vexil-codegen-py/src/message.rs";
-    fs::OpenOptions::new().append(true).open(root.join(path)).expect("open approved path").write_all(b"\n// fixture promotion\n").expect("write approved path");
+    fs::OpenOptions::new()
+        .append(true)
+        .open(root.join(path))
+        .expect("open approved path")
+        .write_all(b"\n// fixture promotion\n")
+        .expect("write approved path");
     commit_fixture_path(&root, path, "test: selective promotion");
-    let proposed = Command::new("git").current_dir(&root).args(["rev-parse", "HEAD"]).output().expect("read proposed");
+    let proposed = Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("read proposed");
     let proposed = String::from_utf8_lossy(&proposed.stdout).trim().to_owned();
     let units = BTreeSet::from(["checkpoint-python-generator-fix".to_owned()]);
-    validate_selective_promotion(&root, &SelectivePromotionRequest { current_base: &base, proposed_commit: &proposed, approved_change_units: &units }).expect("approved unit path passes");
+    validate_selective_promotion(
+        &root,
+        &SelectivePromotionRequest {
+            current_base: &base,
+            proposed_commit: &proposed,
+            approved_change_units: &units,
+        },
+    )
+    .expect("approved unit path passes");
     fs::create_dir_all(root.join("_bmad")).expect("create private fixture path");
     fs::write(root.join("_bmad/private.txt"), "private\n").expect("write private fixture path");
     commit_fixture_path(&root, "_bmad/private.txt", "test: private leakage");
-    let leaked = Command::new("git").current_dir(&root).args(["rev-parse", "HEAD"]).output().expect("read leaked proposed");
+    let leaked = Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .expect("read leaked proposed");
     let leaked = String::from_utf8_lossy(&leaked.stdout).trim().to_owned();
-    assert!(validate_selective_promotion(&root, &SelectivePromotionRequest { current_base: &base, proposed_commit: &leaked, approved_change_units: &units }).is_err());
+    assert!(validate_selective_promotion(
+        &root,
+        &SelectivePromotionRequest {
+            current_base: &base,
+            proposed_commit: &leaked,
+            approved_change_units: &units
+        }
+    )
+    .is_err());
     fs::remove_dir_all(root).expect("remove promotion fixture");
 }
 

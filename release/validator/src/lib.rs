@@ -1263,15 +1263,33 @@ fn validate_authorization_candidate_custody(
     manifest_bytes: &[u8],
 ) -> Result<(), String> {
     let (bundle_id, custody) = validate_candidate_custody_record(root, custody_record)?;
-    let candidate = object(required_value(authorization, "candidate")?, "authorization candidate")?;
-    if text(candidate.get("bundleId"), "authorization candidate bundle ID")? != bundle_id
-        || text(candidate.get("bundleDigest"), "authorization candidate bundle digest")? != custody.bundle_digest
-        || text(candidate.get("subjectDigest"), "authorization candidate subject digest")? != custody.subject_digest
-        || text(candidate.get("attestationDigest"), "authorization candidate attestation digest")? != custody.attestation_digest {
+    let candidate = object(
+        required_value(authorization, "candidate")?,
+        "authorization candidate",
+    )?;
+    if text(
+        candidate.get("bundleId"),
+        "authorization candidate bundle ID",
+    )? != bundle_id
+        || text(
+            candidate.get("bundleDigest"),
+            "authorization candidate bundle digest",
+        )? != custody.bundle_digest
+        || text(
+            candidate.get("subjectDigest"),
+            "authorization candidate subject digest",
+        )? != custody.subject_digest
+        || text(
+            candidate.get("attestationDigest"),
+            "authorization candidate attestation digest",
+        )? != custody.attestation_digest
+    {
         return Err("authorization candidate identities do not match sealed custody".to_owned());
     }
     if custody.manifest_digest != sha256_hex(manifest_bytes) {
-        return Err("candidate custody Manifest digest does not match exact Manifest bytes".to_owned());
+        return Err(
+            "candidate custody Manifest digest does not match exact Manifest bytes".to_owned(),
+        );
     }
     let manifest: Value = serde_json::from_slice(manifest_bytes)
         .map_err(|error| format!("parse custody-bound Manifest bytes: {error}"))?;
@@ -2384,7 +2402,13 @@ pub fn inspect_python_wheel_candidate(
         .artifact_path
         .file_name()
         .and_then(|name| name.to_str())
-        .filter(|name| valid_python_wheel_filename(name, request.expected_project_name, request.expected_version))
+        .filter(|name| {
+            valid_python_wheel_filename(
+                name,
+                request.expected_project_name,
+                request.expected_version,
+            )
+        })
         .ok_or("candidate Python wheel must have a matching distribution-version .whl filename")?;
     let artifact_bytes = fs::read(request.artifact_path)
         .map_err(|error| format!("read candidate Python wheel: {error}"))?;
@@ -2417,22 +2441,31 @@ pub fn inspect_python_wheel_candidate(
     }
     let distribution = normalize_python_wheel_distribution(request.expected_project_name)?;
     let dist_info_root = format!("{distribution}-{}.dist-info", request.expected_version);
-    let metadata_path = metadata_path.ok_or("candidate Python wheel must contain one .dist-info/METADATA entry")?;
+    let metadata_path =
+        metadata_path.ok_or("candidate Python wheel must contain one .dist-info/METADATA entry")?;
     let required_wheel_entries = BTreeSet::from([
         format!("{dist_info_root}/METADATA"),
         format!("{dist_info_root}/WHEEL"),
         format!("{dist_info_root}/RECORD"),
     ]);
     if metadata_path != format!("{dist_info_root}/METADATA")
-        || !required_wheel_entries.iter().all(|path| entries.contains_key(path))
+        || !required_wheel_entries
+            .iter()
+            .all(|path| entries.contains_key(path))
     {
-        return Err("candidate Python wheel must contain one matching .dist-info METADATA/WHEEL/RECORD set".to_owned());
+        return Err(
+            "candidate Python wheel must contain one matching .dist-info METADATA/WHEEL/RECORD set"
+                .to_owned(),
+        );
     }
     require_declared_candidate_entries(&entries, request.declared_entries, "Python wheel")?;
     let metadata = candidate_tar(&snapshot.path, ["-xOf"], Some(metadata_path.as_str()))?;
     let (project_name, version) = parse_python_wheel_metadata(&metadata)?;
     if project_name != request.expected_project_name || version != request.expected_version {
-        return Err("candidate Python wheel metadata does not match expected project and version".to_owned());
+        return Err(
+            "candidate Python wheel metadata does not match expected project and version"
+                .to_owned(),
+        );
     }
     let wheel_metadata = candidate_tar(
         &snapshot.path,
@@ -2451,7 +2484,8 @@ pub fn inspect_python_wheel_candidate(
         &entries,
         format!("{dist_info_root}/RECORD").as_str(),
     )?;
-    let content_digest = candidate_content_digest(b"vexil-python-wheel-candidate-contents-v1\n", &entries);
+    let content_digest =
+        candidate_content_digest(b"vexil-python-wheel-candidate-contents-v1\n", &entries);
     Ok(InspectedPythonWheelCandidateArtifact {
         artifact_name: artifact_name.to_owned(),
         content_digest,
@@ -2516,7 +2550,9 @@ pub fn inspect_cargo_crate_candidate(
         let bytes = candidate_tar(&snapshot.path, ["-xOzf"], Some(path.as_str()))?;
         reject_candidate_credential_material(&path, &bytes)?;
         if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() {
-            return Err(format!("candidate Cargo crate contains duplicate entry {path}"));
+            return Err(format!(
+                "candidate Cargo crate contains duplicate entry {path}"
+            ));
         }
     }
     let cargo_toml_path = format!("{archive_root}Cargo.toml");
@@ -2540,9 +2576,13 @@ pub fn inspect_cargo_crate_candidate(
             .and_then(toml::Value::as_str)
             != Some(request.expected_version)
     {
-        return Err("candidate Cargo crate Cargo.toml does not match expected package and version".to_owned());
+        return Err(
+            "candidate Cargo crate Cargo.toml does not match expected package and version"
+                .to_owned(),
+        );
     }
-    let content_digest = candidate_content_digest(b"vexil-cargo-crate-candidate-contents-v1\n", &entries);
+    let content_digest =
+        candidate_content_digest(b"vexil-cargo-crate-candidate-contents-v1\n", &entries);
     Ok(InspectedCargoCrateCandidateArtifact {
         artifact_name: artifact_name.to_owned(),
         content_digest,
@@ -2560,40 +2600,89 @@ pub fn inspect_cargo_crate_candidate(
 pub fn inspect_go_module_zip_candidate(
     request: &GoModuleCandidateArtifactInspectionRequest<'_>,
 ) -> Result<InspectedGoModuleCandidateArtifact, String> {
-    if request.unit_id.trim().is_empty() || !valid_git_object_id(request.source_commit)
-        || request.expected_module_path.trim().is_empty() || request.expected_version.trim().is_empty()
-        || request.declared_entries.is_empty() {
+    if request.unit_id.trim().is_empty()
+        || !valid_git_object_id(request.source_commit)
+        || request.expected_module_path.trim().is_empty()
+        || request.expected_version.trim().is_empty()
+        || request.declared_entries.is_empty()
+    {
         return Err("candidate Go module zip requires unit, source commit, module, version, and declared entries".to_owned());
     }
-    let artifact_name = request.artifact_path.file_name().and_then(|name| name.to_str())
-        .filter(|name| name.ends_with(".zip") && name.contains(&format!("@v{}", request.expected_version)))
+    let artifact_name = request
+        .artifact_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| {
+            name.ends_with(".zip") && name.contains(&format!("@v{}", request.expected_version))
+        })
         .ok_or("candidate Go module zip must have a versioned .zip filename")?;
-    let artifact_bytes = fs::read(request.artifact_path).map_err(|error| format!("read candidate Go module zip: {error}"))?;
-    if artifact_bytes.is_empty() { return Err("candidate Go module zip bytes must not be empty".to_owned()); }
+    let artifact_bytes = fs::read(request.artifact_path)
+        .map_err(|error| format!("read candidate Go module zip: {error}"))?;
+    if artifact_bytes.is_empty() {
+        return Err("candidate Go module zip bytes must not be empty".to_owned());
+    }
     let snapshot = CandidateArtifactSnapshot::create(&artifact_bytes, ".zip")?;
     validate_candidate_archive_entry_types(&snapshot.path, ["-tvf"])?;
-    let archive_root = format!("{}@v{}/", request.expected_module_path, request.expected_version);
+    let archive_root = format!(
+        "{}@v{}/",
+        request.expected_module_path, request.expected_version
+    );
     let listing = candidate_tar(&snapshot.path, ["-tf"], None)?;
     let mut entries = BTreeMap::new();
-    for path in String::from_utf8(listing).map_err(|error| format!("candidate Go module zip listing is not UTF-8: {error}"))?.lines() {
+    for path in String::from_utf8(listing)
+        .map_err(|error| format!("candidate Go module zip listing is not UTF-8: {error}"))?
+        .lines()
+    {
         let path = validate_go_module_candidate_entry_path(path, &archive_root)?;
-        if path.ends_with('/') { continue; }
+        if path.ends_with('/') {
+            continue;
+        }
         let bytes = candidate_tar(&snapshot.path, ["-xOf"], Some(path.as_str()))?;
         reject_candidate_credential_material(&path, &bytes)?;
-        if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() { return Err(format!("candidate Go module zip contains duplicate entry {path}")); }
+        if entries.insert(path.clone(), sha256_hex(&bytes)).is_some() {
+            return Err(format!(
+                "candidate Go module zip contains duplicate entry {path}"
+            ));
+        }
     }
     let go_mod = format!("{archive_root}go.mod");
     let version_file = format!("{archive_root}VERSION");
-    if entries.len() < 3 || !entries.contains_key(&go_mod) || !entries.contains_key(&version_file) { return Err("candidate Go module zip must contain go.mod, VERSION, and content".to_owned()); }
+    if entries.len() < 3 || !entries.contains_key(&go_mod) || !entries.contains_key(&version_file) {
+        return Err("candidate Go module zip must contain go.mod, VERSION, and content".to_owned());
+    }
     require_declared_candidate_entries(&entries, request.declared_entries, "Go module zip")?;
     let go_mod_bytes = candidate_tar(&snapshot.path, ["-xOf"], Some(go_mod.as_str()))?;
-    let declared_module = std::str::from_utf8(&go_mod_bytes).map_err(|error| format!("candidate Go go.mod is not UTF-8: {error}"))?
-        .lines().find_map(|line| line.strip_prefix("module ")).map(str::trim);
-    if declared_module != Some(request.expected_module_path) { return Err("candidate Go go.mod does not match expected module path".to_owned()); }
-    let version = String::from_utf8(candidate_tar(&snapshot.path, ["-xOf"], Some(version_file.as_str()))?)
-        .map_err(|error| format!("candidate Go VERSION is not UTF-8: {error}"))?;
-    if version.trim() != request.expected_version { return Err("candidate Go VERSION does not match expected version".to_owned()); }
-    Ok(InspectedGoModuleCandidateArtifact { artifact_name: artifact_name.to_owned(), content_digest: candidate_content_digest(b"vexil-go-module-candidate-contents-v1\n", &entries), entries, module_path: request.expected_module_path.to_owned(), sha256: sha256_hex(&artifact_bytes), size: artifact_bytes.len() as u64, source_commit: request.source_commit.to_owned(), unit_id: request.unit_id.to_owned(), version: request.expected_version.to_owned() })
+    let declared_module = std::str::from_utf8(&go_mod_bytes)
+        .map_err(|error| format!("candidate Go go.mod is not UTF-8: {error}"))?
+        .lines()
+        .find_map(|line| line.strip_prefix("module "))
+        .map(str::trim);
+    if declared_module != Some(request.expected_module_path) {
+        return Err("candidate Go go.mod does not match expected module path".to_owned());
+    }
+    let version = String::from_utf8(candidate_tar(
+        &snapshot.path,
+        ["-xOf"],
+        Some(version_file.as_str()),
+    )?)
+    .map_err(|error| format!("candidate Go VERSION is not UTF-8: {error}"))?;
+    if version.trim() != request.expected_version {
+        return Err("candidate Go VERSION does not match expected version".to_owned());
+    }
+    Ok(InspectedGoModuleCandidateArtifact {
+        artifact_name: artifact_name.to_owned(),
+        content_digest: candidate_content_digest(
+            b"vexil-go-module-candidate-contents-v1\n",
+            &entries,
+        ),
+        entries,
+        module_path: request.expected_module_path.to_owned(),
+        sha256: sha256_hex(&artifact_bytes),
+        size: artifact_bytes.len() as u64,
+        source_commit: request.source_commit.to_owned(),
+        unit_id: request.unit_id.to_owned(),
+        version: request.expected_version.to_owned(),
+    })
 }
 
 /// Inspects a Windows CLI candidate without executing it. The PE signature and
@@ -2601,18 +2690,45 @@ pub fn inspect_go_module_zip_candidate(
 pub fn inspect_windows_cli_candidate(
     request: &WindowsCliCandidateInspectionRequest<'_>,
 ) -> Result<InspectedWindowsCliCandidateArtifact, String> {
-    if request.unit_id.trim().is_empty() || !valid_git_object_id(request.source_commit)
-        || request.expected_binary_name.trim().is_empty() || request.expected_version.trim().is_empty() {
-        return Err("candidate Windows CLI requires unit, source commit, binary, and version".to_owned());
+    if request.unit_id.trim().is_empty()
+        || !valid_git_object_id(request.source_commit)
+        || request.expected_binary_name.trim().is_empty()
+        || request.expected_version.trim().is_empty()
+    {
+        return Err(
+            "candidate Windows CLI requires unit, source commit, binary, and version".to_owned(),
+        );
     }
-    let artifact_name = request.artifact_path.file_name().and_then(|name| name.to_str())
+    let artifact_name = request
+        .artifact_path
+        .file_name()
+        .and_then(|name| name.to_str())
         .filter(|name| *name == request.expected_binary_name && name.ends_with(".exe"))
         .ok_or("candidate Windows CLI filename does not match expected binary")?;
-    let bytes = fs::read(request.artifact_path).map_err(|error| format!("read candidate Windows CLI: {error}"))?;
-    if bytes.len() < 3 || &bytes[..2] != b"MZ" { return Err("candidate Windows CLI is not a PE executable".to_owned()); }
-    let marker = format!("{} {}", request.expected_binary_name.trim_end_matches(".exe"), request.expected_version);
-    if !bytes.windows(marker.len()).any(|window| window == marker.as_bytes()) { return Err("candidate Windows CLI does not contain its exact version marker".to_owned()); }
-    Ok(InspectedWindowsCliCandidateArtifact { artifact_name: artifact_name.to_owned(), sha256: sha256_hex(&bytes), size: bytes.len() as u64, source_commit: request.source_commit.to_owned(), unit_id: request.unit_id.to_owned(), version: request.expected_version.to_owned() })
+    let bytes = fs::read(request.artifact_path)
+        .map_err(|error| format!("read candidate Windows CLI: {error}"))?;
+    if bytes.len() < 3 || &bytes[..2] != b"MZ" {
+        return Err("candidate Windows CLI is not a PE executable".to_owned());
+    }
+    let marker = format!(
+        "{} {}",
+        request.expected_binary_name.trim_end_matches(".exe"),
+        request.expected_version
+    );
+    if !bytes
+        .windows(marker.len())
+        .any(|window| window == marker.as_bytes())
+    {
+        return Err("candidate Windows CLI does not contain its exact version marker".to_owned());
+    }
+    Ok(InspectedWindowsCliCandidateArtifact {
+        artifact_name: artifact_name.to_owned(),
+        sha256: sha256_hex(&bytes),
+        size: bytes.len() as u64,
+        source_commit: request.source_commit.to_owned(),
+        unit_id: request.unit_id.to_owned(),
+        version: request.expected_version.to_owned(),
+    })
 }
 
 /// Seals local candidate identities into a deterministic, non-authoritative
@@ -2620,20 +2736,67 @@ pub fn inspect_windows_cli_candidate(
 pub fn seal_candidate_custody(
     request: &CandidateCustodyRequest<'_>,
 ) -> Result<SealedCandidateCustody, String> {
-    if request.repository.trim().is_empty() || request.workflow.trim().is_empty()
-        || request.reference.trim().is_empty() || !valid_git_object_id(request.source_commit)
-        || request.attestation_issuer.trim().is_empty() || request.attestation_identity.trim().is_empty()
-        || !valid_lowercase_sha256(request.manifest_digest) || !valid_lowercase_sha256(request.attestation_digest)
-        || request.subjects.is_empty() { return Err("candidate custody requires immutable source, manifest, attestation, and subjects".to_owned()); }
+    if request.repository.trim().is_empty()
+        || request.workflow.trim().is_empty()
+        || request.reference.trim().is_empty()
+        || !valid_git_object_id(request.source_commit)
+        || request.attestation_issuer.trim().is_empty()
+        || request.attestation_identity.trim().is_empty()
+        || !valid_lowercase_sha256(request.manifest_digest)
+        || !valid_lowercase_sha256(request.attestation_digest)
+        || request.subjects.is_empty()
+    {
+        return Err(
+            "candidate custody requires immutable source, manifest, attestation, and subjects"
+                .to_owned(),
+        );
+    }
     let mut subjects = BTreeMap::new();
     for subject in request.subjects {
-        if subject.name.trim().is_empty() || subject.name.contains([':', '/', '\\']) || !valid_lowercase_sha256(subject.sha256)
-            || subjects.insert(subject.name, subject.sha256).is_some() { return Err("candidate custody subjects must be unique immutable digests".to_owned()); }
+        if subject.name.trim().is_empty()
+            || subject.name.contains([':', '/', '\\'])
+            || !valid_lowercase_sha256(subject.sha256)
+            || subjects.insert(subject.name, subject.sha256).is_some()
+        {
+            return Err("candidate custody subjects must be unique immutable digests".to_owned());
+        }
     }
-    let subject_digest = candidate_content_digest(b"vexil-candidate-subjects-v1\n", &subjects.into_iter().map(|(name, digest)| (name.to_owned(), digest.to_owned())).collect());
+    let subject_digest = candidate_content_digest(
+        b"vexil-candidate-subjects-v1\n",
+        &subjects
+            .into_iter()
+            .map(|(name, digest)| (name.to_owned(), digest.to_owned()))
+            .collect(),
+    );
     let mut frame = b"vexil-candidate-custody-v1\n".to_vec();
-    for value in [request.repository, request.workflow, request.reference, request.source_commit, request.manifest_digest, request.attestation_issuer, request.attestation_identity, request.attestation_digest, &subject_digest] { frame.extend_from_slice(value.len().to_string().as_bytes()); frame.extend_from_slice(b":"); frame.extend_from_slice(value.as_bytes()); frame.extend_from_slice(b"\n"); }
-    Ok(SealedCandidateCustody { bundle_digest: sha256_hex(&frame), subject_digest, attestation_digest: request.attestation_digest.to_owned(), repository: request.repository.to_owned(), workflow: request.workflow.to_owned(), reference: request.reference.to_owned(), source_commit: request.source_commit.to_owned(), manifest_digest: request.manifest_digest.to_owned(), attestation_issuer: request.attestation_issuer.to_owned(), attestation_identity: request.attestation_identity.to_owned() })
+    for value in [
+        request.repository,
+        request.workflow,
+        request.reference,
+        request.source_commit,
+        request.manifest_digest,
+        request.attestation_issuer,
+        request.attestation_identity,
+        request.attestation_digest,
+        &subject_digest,
+    ] {
+        frame.extend_from_slice(value.len().to_string().as_bytes());
+        frame.extend_from_slice(b":");
+        frame.extend_from_slice(value.as_bytes());
+        frame.extend_from_slice(b"\n");
+    }
+    Ok(SealedCandidateCustody {
+        bundle_digest: sha256_hex(&frame),
+        subject_digest,
+        attestation_digest: request.attestation_digest.to_owned(),
+        repository: request.repository.to_owned(),
+        workflow: request.workflow.to_owned(),
+        reference: request.reference.to_owned(),
+        source_commit: request.source_commit.to_owned(),
+        manifest_digest: request.manifest_digest.to_owned(),
+        attestation_issuer: request.attestation_issuer.to_owned(),
+        attestation_identity: request.attestation_identity.to_owned(),
+    })
 }
 
 /// Validates a public candidate-custody record by reconstructing its complete
@@ -2658,22 +2821,53 @@ pub fn validate_candidate_custody_record(
         })
         .collect::<Result<Vec<_>, String>>()?;
     let sealed = seal_candidate_custody(&CandidateCustodyRequest {
-        repository: text(record_object.get("repository"), "candidate custody repository")?,
+        repository: text(
+            record_object.get("repository"),
+            "candidate custody repository",
+        )?,
         workflow: text(record_object.get("workflow"), "candidate custody workflow")?,
-        reference: text(record_object.get("reference"), "candidate custody reference")?,
-        source_commit: text(record_object.get("sourceCommit"), "candidate custody source commit")?,
-        manifest_digest: text(record_object.get("manifestDigest"), "candidate custody Manifest digest")?,
-        attestation_issuer: text(record_object.get("attestationIssuer"), "candidate custody attestation issuer")?,
-        attestation_identity: text(record_object.get("attestationIdentity"), "candidate custody attestation identity")?,
-        attestation_digest: text(record_object.get("attestationDigest"), "candidate custody attestation digest")?,
+        reference: text(
+            record_object.get("reference"),
+            "candidate custody reference",
+        )?,
+        source_commit: text(
+            record_object.get("sourceCommit"),
+            "candidate custody source commit",
+        )?,
+        manifest_digest: text(
+            record_object.get("manifestDigest"),
+            "candidate custody Manifest digest",
+        )?,
+        attestation_issuer: text(
+            record_object.get("attestationIssuer"),
+            "candidate custody attestation issuer",
+        )?,
+        attestation_identity: text(
+            record_object.get("attestationIdentity"),
+            "candidate custody attestation identity",
+        )?,
+        attestation_digest: text(
+            record_object.get("attestationDigest"),
+            "candidate custody attestation digest",
+        )?,
         subjects: &subjects,
     })?;
-    if text(record_object.get("bundleDigest"), "candidate custody bundle digest")? != sealed.bundle_digest
-        || text(record_object.get("subjectDigest"), "candidate custody subject digest")? != sealed.subject_digest
-        || text(record_object.get("attestationDigest"), "candidate custody attestation digest")?
-            != sealed.attestation_digest
+    if text(
+        record_object.get("bundleDigest"),
+        "candidate custody bundle digest",
+    )? != sealed.bundle_digest
+        || text(
+            record_object.get("subjectDigest"),
+            "candidate custody subject digest",
+        )? != sealed.subject_digest
+        || text(
+            record_object.get("attestationDigest"),
+            "candidate custody attestation digest",
+        )? != sealed.attestation_digest
     {
-        return Err("candidate custody record digests do not match its immutable contents".to_owned());
+        return Err(
+            "candidate custody record digests do not match its immutable contents".to_owned(),
+        );
     }
     Ok((bundle_id, sealed))
 }
@@ -2707,12 +2901,11 @@ fn validate_candidate_archive_entry_types<const N: usize>(
     let listing = candidate_tar(artifact, args, None)?;
     let listing = String::from_utf8(listing)
         .map_err(|error| format!("candidate archive detail listing is not UTF-8: {error}"))?;
-    if listing.lines().any(|line| {
-        !matches!(line.as_bytes().first(), Some(b'-' | b'd'))
-    }) {
-        return Err(
-            "candidate artifact archive contains a non-regular or link entry".to_owned(),
-        );
+    if listing
+        .lines()
+        .any(|line| !matches!(line.as_bytes().first(), Some(b'-' | b'd')))
+    {
+        return Err("candidate artifact archive contains a non-regular or link entry".to_owned());
     }
     Ok(())
 }
@@ -2792,7 +2985,9 @@ fn valid_python_wheel_filename(name: &str, project_name: &str, version: &str) ->
     matches!(fields.len(), 5 | 6)
         && fields.first() == Some(&distribution.as_str())
         && fields.get(1) == Some(&version)
-        && fields[fields.len() - 3..].iter().all(|field| !field.is_empty())
+        && fields[fields.len() - 3..]
+            .iter()
+            .all(|field| !field.is_empty())
 }
 
 fn validate_cargo_crate_candidate_entry_path(
@@ -2810,21 +3005,34 @@ fn validate_cargo_crate_candidate_entry_path(
             .split('/')
             .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
     {
-        return Err(format!("candidate Cargo crate has prohibited entry path {path}"));
+        return Err(format!(
+            "candidate Cargo crate has prohibited entry path {path}"
+        ));
     }
     Ok(normalized)
 }
 
-fn validate_go_module_candidate_entry_path(path: &str, archive_root: &str) -> Result<String, String> {
+fn validate_go_module_candidate_entry_path(
+    path: &str,
+    archive_root: &str,
+) -> Result<String, String> {
     let normalized = path.replace('\\', "/");
     let segments = normalized.trim_end_matches('/');
     if normalized.ends_with('/') && archive_root.starts_with(&normalized) {
         return Ok(normalized);
     }
-    if !normalized.starts_with(archive_root) || path.trim().is_empty() || normalized.starts_with('-')
-        || Path::new(path).is_absolute() || path.contains(':')
-        || segments.split('/').any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output")) {
-        return Err(format!("candidate Go module zip has prohibited entry path {path}"));
+    if !normalized.starts_with(archive_root)
+        || path.trim().is_empty()
+        || normalized.starts_with('-')
+        || Path::new(path).is_absolute()
+        || path.contains(':')
+        || segments
+            .split('/')
+            .any(|part| matches!(part, "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"))
+    {
+        return Err(format!(
+            "candidate Go module zip has prohibited entry path {path}"
+        ));
     }
     Ok(normalized)
 }
@@ -2864,7 +3072,9 @@ fn validate_python_wheel_metadata(bytes: &[u8]) -> Result<(), String> {
             .any(|line| line.starts_with("Root-Is-Purelib: "))
         || !metadata.lines().any(|line| line.starts_with("Tag: "))
     {
-        return Err("candidate Python wheel WHEEL metadata is incomplete or unsupported".to_owned());
+        return Err(
+            "candidate Python wheel WHEEL metadata is incomplete or unsupported".to_owned(),
+        );
     }
     Ok(())
 }
@@ -2900,7 +3110,10 @@ fn validate_python_wheel_record(
         let entry_bytes = candidate_tar(artifact, ["-xOf"], Some(path))?;
         let expected_hash = format!("sha256={}", sha256_urlsafe_base64(&entry_bytes));
         if fields[1] != expected_hash || fields[2] != entry_bytes.len().to_string() {
-            return Err("candidate Python wheel RECORD digest or size does not match archive entry".to_owned());
+            return Err(
+                "candidate Python wheel RECORD digest or size does not match archive entry"
+                    .to_owned(),
+            );
         }
     }
     let actual_paths: BTreeSet<_> = entries.keys().cloned().collect();
@@ -4639,28 +4852,68 @@ pub fn validate_selective_promotion(
     root: &Path,
     request: &SelectivePromotionRequest<'_>,
 ) -> Result<(), String> {
-    if !valid_git_object_id(request.current_base) || !valid_git_object_id(request.proposed_commit)
-        || request.approved_change_units.is_empty() || request.proposed_commit == "d4099e8188f40603ebf52473d6543ce4a6054201" {
+    if !valid_git_object_id(request.current_base)
+        || !valid_git_object_id(request.proposed_commit)
+        || request.approved_change_units.is_empty()
+        || request.proposed_commit == "d4099e8188f40603ebf52473d6543ce4a6054201"
+    {
         return Err("selective promotion has invalid or prohibited commit inputs".to_owned());
     }
     let mut allowed = BTreeSet::new();
-    for entry in fs::read_dir(root.join("release/checkpoint-change-units")).map_err(|error| format!("read checkpoint Change Units: {error}"))? {
-        let record = read_json(&entry.map_err(|error| format!("read checkpoint Change Unit: {error}"))?.path())?;
+    for entry in fs::read_dir(root.join("release/checkpoint-change-units"))
+        .map_err(|error| format!("read checkpoint Change Units: {error}"))?
+    {
+        let record = read_json(
+            &entry
+                .map_err(|error| format!("read checkpoint Change Unit: {error}"))?
+                .path(),
+        )?;
         let record = object(&record, "checkpoint Change Unit")?;
         let id = text(record.get("changeUnitId"), "checkpoint Change Unit ID")?;
         if request.approved_change_units.contains(id) {
-            if text(record.get("disposition"), "checkpoint Change Unit disposition")? != "approved" { return Err(format!("selected Change Unit is not approved: {id}")); }
+            if text(
+                record.get("disposition"),
+                "checkpoint Change Unit disposition",
+            )? != "approved"
+            {
+                return Err(format!("selected Change Unit is not approved: {id}"));
+            }
             for change in array(record.get("paths"), "checkpoint Change Unit paths")? {
                 let change = object(change, "checkpoint Change Unit path")?;
-                allowed.insert(text(change.get("beforePath"), "checkpoint before path")?.to_owned());
-                if let Some(after) = change.get("afterPath").and_then(Value::as_str) { allowed.insert(after.to_owned()); }
+                allowed
+                    .insert(text(change.get("beforePath"), "checkpoint before path")?.to_owned());
+                if let Some(after) = change.get("afterPath").and_then(Value::as_str) {
+                    allowed.insert(after.to_owned());
+                }
             }
         }
     }
-    let output = Command::new("git").args(["diff", "--name-only", request.current_base, request.proposed_commit, "--"]).current_dir(root).output().map_err(|error| format!("read proposed promotion diff: {error}"))?;
-    if !output.status.success() { return Err("read proposed promotion diff failed".to_owned()); }
-    let paths: BTreeSet<_> = String::from_utf8_lossy(&output.stdout).lines().map(str::to_owned).collect();
-    if paths.is_empty() || paths.iter().any(|path| path.starts_with("_bmad/") || path.starts_with(".agents/") || path.starts_with("_bmad-output/") || !allowed.contains(path)) {
+    let output = Command::new("git")
+        .args([
+            "diff",
+            "--name-only",
+            request.current_base,
+            request.proposed_commit,
+            "--",
+        ])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("read proposed promotion diff: {error}"))?;
+    if !output.status.success() {
+        return Err("read proposed promotion diff failed".to_owned());
+    }
+    let paths: BTreeSet<_> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    if paths.is_empty()
+        || paths.iter().any(|path| {
+            path.starts_with("_bmad/")
+                || path.starts_with(".agents/")
+                || path.starts_with("_bmad-output/")
+                || !allowed.contains(path)
+        })
+    {
         return Err("proposed promotion includes private or unapproved paths".to_owned());
     }
     Ok(())
