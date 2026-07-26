@@ -52,9 +52,8 @@ update_path = "go get -u and go mod tidy"
 cadence = "per-change-and-weekly"
 owner = "assignment-security-steward-2026-07-14"
 exposure = "shipped-runtime"
-evidence = "release/security/scan-coverage.md"
-status = "blocking-unknown"
-review_by = "2026-08-01"
+evidence = "release/security/scans/go-runtime-go-2026-07-26.md"
+status = "scanned"
 
 [[surface]]
 id = "github-actions"
