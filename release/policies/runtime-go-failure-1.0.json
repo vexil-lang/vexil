@@ -1,0 +1,1 @@
+{"policyId":"runtime-go-failure","releaseBoundary":"On any unknown, conflicting, or failed tag/proxy result, stop. Do not retry a write, change a tag, or infer success; record the observation and require a successor Manifest or explicit recovery decision.","schemaVersion":"1.0"}
