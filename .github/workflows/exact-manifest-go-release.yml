@@ -75,14 +75,14 @@ jobs:
               output.write(f"source_commit={source_commit}\n")
           PY
 
-  create-canonical-tag:
-    name: Create exactly authorized Go tag
+  release-steward-gate:
+    name: Confirm exact Go tag for human execution
     needs: preflight
     runs-on: ubuntu-22.04
     environment:
       name: release-go-runtime
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -91,10 +91,9 @@ jobs:
           submodules: false
       - name: Revalidate retained public release records
         run: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
-      - name: Create the exact immutable Canonical Tag
+      - name: Confirm the exact immutable Canonical Tag
         env:
           CANONICAL_TAG: ${{ needs.preflight.outputs.canonical_tag }}
-          GITHUB_TOKEN: ${{ github.token }}
           SOURCE_COMMIT: ${{ needs.preflight.outputs.source_commit }}
         run: |
           set -euo pipefail
@@ -109,7 +108,4 @@ jobs:
             status=$?
             [[ "$status" -eq 2 ]] || exit "$status"
           fi
-          git config user.name "vexil release executor"
-          git config user.email "release-executor@vexil.dev"
-          git tag --annotate "$CANONICAL_TAG" "$SOURCE_COMMIT" --message "Manifest-authorized Go runtime release"
-          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$CANONICAL_TAG"
+          echo "Release Steward confirmation complete. Create exactly $CANONICAL_TAG at $SOURCE_COMMIT through the protected human tag path; this workflow intentionally performs no tag effect."
