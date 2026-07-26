@@ -1688,7 +1688,8 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     use vexil_release_governance_validator::{
         authorize_privileged_run_start, construct_detached_approval, governance_revision_v1,
         validate_privileged_job_preflight, ApprovalMergeEvidence, DetachedApprovalPreflight,
-        DetachedApprovalRequest, PrivilegedJobPreflight, PrivilegedRunStartRequest,
+        CandidateCustodyRequest, CandidateCustodySubject, DetachedApprovalRequest,
+        PrivilegedJobPreflight, PrivilegedRunStartRequest, seal_candidate_custody,
     };
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -1743,9 +1744,37 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         .unwrap()
         .strip_prefix("sha256:")
         .unwrap();
+    let custody_subject = CandidateCustodySubject {
+        name: "vexil-runtime-0.4.1.tgz",
+        sha256: &"1".repeat(64),
+    };
+    let sealed_custody = seal_candidate_custody(&CandidateCustodyRequest {
+        repository: "vexil-lang/vexil",
+        workflow: "candidate-fixture",
+        reference: "refs/heads/main",
+        source_commit: manifest["releaseUnits"][0]["sourceCommit"]
+            .as_str()
+            .expect("fixture source commit"),
+        manifest_digest: &digest(&manifest_bytes),
+        attestation_issuer: "fixture-issuer",
+        attestation_identity: "fixture-identity",
+        attestation_digest: &"2".repeat(64),
+        subjects: &[custody_subject],
+    })
+    .expect("seal fixture custody");
+    let custody = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+        "recordKind":"candidate-custody","schemaVersion":"1.0","bundleId":"candidate-fixture",
+        "bundleDigest":sealed_custody.bundle_digest,"subjectDigest":sealed_custody.subject_digest,
+        "attestationDigest":sealed_custody.attestation_digest,"repository":"vexil-lang/vexil",
+        "workflow":"candidate-fixture","reference":"refs/heads/main",
+        "sourceCommit":manifest["releaseUnits"][0]["sourceCommit"].clone(),
+        "manifestDigest":digest(&manifest_bytes),"attestationIssuer":"fixture-issuer",
+        "attestationIdentity":"fixture-identity","subjects":[{"name":"vexil-runtime-0.4.1.tgz","digest":"1".repeat(64)}]
+    });
     let authorization = serde_json::json!({
         "$schema":"https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
-        "authorizationId":"authorization-preflight","candidate":{"attestationDigest":"0".repeat(64),"bundleDigest":"1".repeat(64),"bundleId":"candidate-fixture","subjectDigest":"2".repeat(64)},
+        "authorizationId":"authorization-preflight","candidate":{"attestationDigest":custody["attestationDigest"].clone(),"bundleDigest":custody["bundleDigest"].clone(),"bundleId":"candidate-fixture","subjectDigest":custody["subjectDigest"].clone()},
         "evidenceSetDigest":evidence_digest,"evidenceSetId":"authorization-evidence",
         "executionPrincipal":{"actor":"github:furkanmamuk","assignment":"assignment-release-run-coordinator-2026-07-14","role":"release-run-coordinator"},
         "expiresAt":"2026-07-26T00:00:00Z","governanceRevision":{"digest":governance_digest,"id":"governance-revision-v1"},
@@ -1780,13 +1809,6 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         approval_bytes: &approval_bytes,
         merge,
     }];
-    let candidate = authorization["candidate"].as_object().expect("fixture candidate");
-    let custody = vexil_release_governance_validator::SealedCandidateCustody {
-        bundle_digest: candidate["bundleDigest"].as_str().expect("bundle digest").to_owned(),
-        subject_digest: candidate["subjectDigest"].as_str().expect("subject digest").to_owned(),
-        attestation_digest: candidate["attestationDigest"].as_str().expect("attestation digest").to_owned(),
-        repository: "fixture/repository".into(), workflow: "fixture-workflow".into(), reference: "refs/heads/main".into(), source_commit: "0".repeat(40), manifest_digest: "0".repeat(64), attestation_issuer: "fixture-issuer".into(), attestation_identity: "fixture-identity".into(),
-    };
     let request = PrivilegedRunStartRequest {
         authorization: &authorization,
         manifest_bytes: &manifest_bytes,
@@ -1809,6 +1831,47 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         !run_path.exists(),
         "authorization preflight must not materialize a Run, lease, or event"
     );
+    for field in [
+        "repository",
+        "workflow",
+        "reference",
+        "sourceCommit",
+        "manifestDigest",
+        "attestationIssuer",
+        "attestationIdentity",
+    ] {
+        let mut changed_custody = custody.clone();
+        changed_custody[field] = Value::String(if field == "sourceCommit" {
+            "e".repeat(40)
+        } else if field == "manifestDigest" {
+            "f".repeat(64)
+        } else {
+            format!("changed-{field}")
+        });
+        let changed_custody_request = PrivilegedRunStartRequest {
+            custody: &changed_custody,
+            ..request
+        };
+        let error = authorize_privileged_run_start(&root, &changed_custody_request).unwrap_err();
+        assert!(
+            error
+                .blockers
+                .iter()
+                .any(|blocker| blocker.requirement == "immutable-candidate-custody"),
+            "{field} custody mutation must block preflight"
+        );
+    }
+    let mut changed_subject_custody = custody.clone();
+    changed_subject_custody["subjects"][0]["digest"] = Value::String("f".repeat(64));
+    let changed_subject_request = PrivilegedRunStartRequest {
+        custody: &changed_subject_custody,
+        ..request
+    };
+    assert!(authorize_privileged_run_start(&root, &changed_subject_request)
+        .unwrap_err()
+        .blockers
+        .iter()
+        .any(|blocker| blocker.requirement == "immutable-candidate-custody"));
     let mut tag_authorization = authorization.clone();
     tag_authorization["allowedOperations"] = serde_json::json!(["privileged-operation-rbr-003"]);
     tag_authorization["allowedPermissions"] =
@@ -1908,7 +1971,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     assert!(error
         .blockers
         .iter()
-        .any(|blocker| blocker.requirement == "manifest-and-evidence-binding"));
+        .any(|blocker| blocker.requirement == "immutable-candidate-custody"));
     let stale_snapshot = serde_json::json!({"tags":[]});
     let stale_snapshot_request = PrivilegedRunStartRequest {
         historical_tag_snapshot: &stale_snapshot,
@@ -2326,6 +2389,50 @@ fn candidate_custody_seals_exact_subject_and_attestation_identities() {
     let substituted = CandidateCustodySubject { name: "vexilc.exe", sha256: &"e".repeat(64) };
     let changed = CandidateCustodyRequest { subjects: &[substituted], ..request };
     assert_ne!(first.bundle_digest, seal_candidate_custody(&changed).expect("seal changed custody").bundle_digest);
+}
+
+#[test]
+fn candidate_custody_record_recomputes_every_immutable_binding() {
+    use vexil_release_governance_validator::{
+        seal_candidate_custody, validate_candidate_custody_record, CandidateCustodyRequest,
+        CandidateCustodySubject,
+    };
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let subject = CandidateCustodySubject { name: "vexil-runtime-0.4.1.tgz", sha256: &"a".repeat(64) };
+    let request = CandidateCustodyRequest {
+        repository: "vexil-lang/vexil", workflow: "candidate-build", reference: "refs/heads/main",
+        source_commit: &"b".repeat(40), manifest_digest: &"c".repeat(64),
+        attestation_issuer: "fixture-issuer", attestation_identity: "fixture-identity",
+        attestation_digest: &"d".repeat(64), subjects: std::slice::from_ref(&subject),
+    };
+    let sealed = seal_candidate_custody(&request).expect("seal custody");
+    let record = serde_json::json!({
+        "$schema":"https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+        "recordKind":"candidate-custody","schemaVersion":"1.0","bundleId":"candidate-fixture",
+        "bundleDigest":sealed.bundle_digest,"subjectDigest":sealed.subject_digest,
+        "attestationDigest":sealed.attestation_digest,"repository":request.repository,
+        "workflow":request.workflow,"reference":request.reference,"sourceCommit":request.source_commit,
+        "manifestDigest":request.manifest_digest,"attestationIssuer":request.attestation_issuer,
+        "attestationIdentity":request.attestation_identity,
+        "subjects":[{"name":subject.name,"digest":subject.sha256}]
+    });
+    assert_eq!(
+        validate_candidate_custody_record(&root, &record)
+            .expect("complete immutable custody record")
+            .0,
+        "candidate-fixture"
+    );
+    for field in [
+        "repository", "workflow", "reference", "sourceCommit", "manifestDigest",
+        "attestationIssuer", "attestationIdentity",
+    ] {
+        let mut mutated = record.clone();
+        mutated[field] = Value::String(if field == "sourceCommit" { "e".repeat(40) } else { format!("changed-{field}") });
+        assert!(validate_candidate_custody_record(&root, &mutated).is_err(), "{field} mutation must fail");
+    }
+    let mut changed_subject = record.clone();
+    changed_subject["subjects"][0]["digest"] = Value::String("f".repeat(64));
+    assert!(validate_candidate_custody_record(&root, &changed_subject).is_err());
 }
 
 #[test]

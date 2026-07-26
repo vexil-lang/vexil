@@ -114,6 +114,17 @@ reject non-regular entries, unsafe/private paths, and credential-like material.
 These checks are still transient local evidence, not a tag, publication, custody
 record, or release decision.
 
+A future `candidate-custody@1.0` record is separate from the Manifest's
+candidate artifact reference, so no record is required to digest itself. Its
+bundle digest is recomputed from the exact repository, workflow, reference,
+full source commit, Manifest-byte digest, attestation issuer, attestation
+identity and digest, and uniquely named subject digests. Run-start preflight
+schema-validates and recomputes that complete record, requires it to bind the
+exact Manifest bytes and a Manifest-selected source commit, then compares its
+bundle, subject, and attestation identities with the authorization. This is
+still an inert validation contract: the repository has no claimed current
+candidate custody, provider attestation verification, or publication authority.
+
 Before a future privileged job is dispatchable, its exact canonical
 authorization, asserted Coordinator principal, active Coordinator-owned lease,
 and sequenced Run context must all match. Authorization alone, or lease/Run

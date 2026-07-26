@@ -449,7 +449,7 @@ pub struct PrivilegedRunStartRequest<'a> {
     pub approvals: &'a [DetachedApprovalPreflight<'a>],
     pub historical_tag_baseline: &'a Value,
     pub historical_tag_snapshot: &'a Value,
-    pub custody: &'a SealedCandidateCustody,
+    pub custody: &'a Value,
     pub evaluation_time: &'a str,
 }
 
@@ -988,7 +988,12 @@ pub fn authorize_privileged_run_start(
             error,
         );
     }
-    if let Err(error) = validate_authorization_candidate_custody(record, request.custody) {
+    if let Err(error) = validate_authorization_candidate_custody(
+        root,
+        record,
+        request.custody,
+        request.manifest_bytes,
+    ) {
         push_authorization_blocker(
             &mut blockers,
             "immutable-candidate-custody",
@@ -1225,29 +1230,6 @@ fn validate_authorization_manifest_and_evidence(
             ));
         }
     }
-    let candidate = object(
-        record
-            .get("candidate")
-            .ok_or("authorization lacks candidate binding")?,
-        "authorization candidate binding",
-    )?;
-    let manifest_candidate = object(
-        manifest
-            .get("candidate")
-            .ok_or("Manifest lacks candidate custody artifact")?,
-        "Manifest candidate custody artifact",
-    )?;
-    if text(
-        candidate.get("bundleDigest"),
-        "authorization candidate bundle digest",
-    )? != text(
-        manifest_candidate.get("digest"),
-        "Manifest candidate custody digest",
-    )? {
-        return Err(
-            "authorization candidate bundle does not bind the Manifest custody artifact".to_owned(),
-        );
-    }
     let security = object(
         record
             .get("security")
@@ -1275,14 +1257,35 @@ fn validate_authorization_manifest_and_evidence(
 }
 
 fn validate_authorization_candidate_custody(
+    root: &Path,
     authorization: &Map<String, Value>,
-    custody: &SealedCandidateCustody,
+    custody_record: &Value,
+    manifest_bytes: &[u8],
 ) -> Result<(), String> {
+    let (bundle_id, custody) = validate_candidate_custody_record(root, custody_record)?;
     let candidate = object(required_value(authorization, "candidate")?, "authorization candidate")?;
-    if text(candidate.get("bundleDigest"), "authorization candidate bundle digest")? != custody.bundle_digest
+    if text(candidate.get("bundleId"), "authorization candidate bundle ID")? != bundle_id
+        || text(candidate.get("bundleDigest"), "authorization candidate bundle digest")? != custody.bundle_digest
         || text(candidate.get("subjectDigest"), "authorization candidate subject digest")? != custody.subject_digest
         || text(candidate.get("attestationDigest"), "authorization candidate attestation digest")? != custody.attestation_digest {
         return Err("authorization candidate identities do not match sealed custody".to_owned());
+    }
+    if custody.manifest_digest != sha256_hex(manifest_bytes) {
+        return Err("candidate custody Manifest digest does not match exact Manifest bytes".to_owned());
+    }
+    let manifest: Value = serde_json::from_slice(manifest_bytes)
+        .map_err(|error| format!("parse custody-bound Manifest bytes: {error}"))?;
+    let release_units = array(
+        object(&manifest, "custody-bound Manifest")?.get("releaseUnits"),
+        "custody-bound Manifest release units",
+    )?;
+    if !release_units.iter().any(|unit| {
+        object(unit, "custody-bound Manifest release unit")
+            .ok()
+            .and_then(|unit| text(unit.get("sourceCommit"), "Manifest source commit").ok())
+            == Some(custody.source_commit.as_str())
+    }) {
+        return Err("candidate custody source commit is not selected by the Manifest".to_owned());
     }
     Ok(())
 }
@@ -2631,6 +2634,48 @@ pub fn seal_candidate_custody(
     let mut frame = b"vexil-candidate-custody-v1\n".to_vec();
     for value in [request.repository, request.workflow, request.reference, request.source_commit, request.manifest_digest, request.attestation_issuer, request.attestation_identity, request.attestation_digest, &subject_digest] { frame.extend_from_slice(value.len().to_string().as_bytes()); frame.extend_from_slice(b":"); frame.extend_from_slice(value.as_bytes()); frame.extend_from_slice(b"\n"); }
     Ok(SealedCandidateCustody { bundle_digest: sha256_hex(&frame), subject_digest, attestation_digest: request.attestation_digest.to_owned(), repository: request.repository.to_owned(), workflow: request.workflow.to_owned(), reference: request.reference.to_owned(), source_commit: request.source_commit.to_owned(), manifest_digest: request.manifest_digest.to_owned(), attestation_issuer: request.attestation_issuer.to_owned(), attestation_identity: request.attestation_identity.to_owned() })
+}
+
+/// Validates a public candidate-custody record by reconstructing its complete
+/// immutable bundle. The result remains data-only; this does not materialize a
+/// candidate, verify a provider attestation, or grant publication authority.
+pub fn validate_candidate_custody_record(
+    root: &Path,
+    record: &Value,
+) -> Result<(String, SealedCandidateCustody), String> {
+    validate_canonical_release_record_schema(root, record)?;
+    ensure_no_private_leakage(&record.to_string())?;
+    let record_object = object(record, "candidate custody record")?;
+    let bundle_id = text(record_object.get("bundleId"), "candidate custody bundle ID")?.to_owned();
+    let subjects = array(record_object.get("subjects"), "candidate custody subjects")?
+        .iter()
+        .map(|subject| {
+            let subject = object(subject, "candidate custody subject")?;
+            Ok(CandidateCustodySubject {
+                name: text(subject.get("name"), "candidate custody subject name")?,
+                sha256: text(subject.get("digest"), "candidate custody subject digest")?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let sealed = seal_candidate_custody(&CandidateCustodyRequest {
+        repository: text(record_object.get("repository"), "candidate custody repository")?,
+        workflow: text(record_object.get("workflow"), "candidate custody workflow")?,
+        reference: text(record_object.get("reference"), "candidate custody reference")?,
+        source_commit: text(record_object.get("sourceCommit"), "candidate custody source commit")?,
+        manifest_digest: text(record_object.get("manifestDigest"), "candidate custody Manifest digest")?,
+        attestation_issuer: text(record_object.get("attestationIssuer"), "candidate custody attestation issuer")?,
+        attestation_identity: text(record_object.get("attestationIdentity"), "candidate custody attestation identity")?,
+        attestation_digest: text(record_object.get("attestationDigest"), "candidate custody attestation digest")?,
+        subjects: &subjects,
+    })?;
+    if text(record_object.get("bundleDigest"), "candidate custody bundle digest")? != sealed.bundle_digest
+        || text(record_object.get("subjectDigest"), "candidate custody subject digest")? != sealed.subject_digest
+        || text(record_object.get("attestationDigest"), "candidate custody attestation digest")?
+            != sealed.attestation_digest
+    {
+        return Err("candidate custody record digests do not match its immutable contents".to_owned());
+    }
+    Ok((bundle_id, sealed))
 }
 
 fn candidate_tar<const N: usize>(
@@ -4831,6 +4876,10 @@ fn validate_canonical_record_location(
 
 fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &'static str)> {
     match (kind, version) {
+        ("candidate-custody", "1.0") => Some((
+            "release/schemas/candidate-custody-1.0.schema.json",
+            "https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+        )),
         ("release-manifest", "1.0") => Some((
             "release/schemas/release-manifest-1.0.schema.json",
             "https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
