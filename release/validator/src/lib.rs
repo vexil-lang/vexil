@@ -164,6 +164,33 @@ pub struct InspectedPythonWheelCandidateArtifact {
     pub version: String,
 }
 
+pub struct PythonRegistryFixtureRequest<'a> {
+    pub candidate: PythonWheelCandidateArtifactInspectionRequest<'a>,
+    pub attestation: &'a str,
+    pub target_project: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct PythonRegistryFixturePlan {
+    pub artifact_sha256: String,
+    pub attestation: String,
+    pub content_digest: String,
+    pub immutable_key: String,
+    pub project_name: String,
+    pub version: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PythonRegistryFixtureProbe {
+    Absent,
+    Matching {
+        artifact_sha256: String,
+        attestation: String,
+    },
+    Conflicting,
+    Unknown,
+}
+
 /// Exact Cargo crate archive from an isolated candidate workspace. Its contents
 /// are inspected from a private snapshot of the archive bytes.
 pub struct CargoCrateCandidateArtifactInspectionRequest<'a> {
@@ -2736,6 +2763,110 @@ pub fn inspect_python_wheel_candidate(
         source_commit: request.source_commit.to_owned(),
         unit_id: request.unit_id.to_owned(),
         version,
+    })
+}
+
+/// Re-inspects exact wheel bytes before forming a PyPI-compatible fixture plan.
+/// The target project and attestation are explicit; this never contacts PyPI.
+pub fn prepare_python_registry_fixture(
+    request: &PythonRegistryFixtureRequest<'_>,
+) -> Result<PythonRegistryFixturePlan, String> {
+    let inspected = inspect_python_wheel_candidate(&request.candidate)?;
+    if request.target_project != inspected.project_name || request.attestation.trim().is_empty() {
+        return Err("Python fixture requires exact target project and attestation".to_owned());
+    }
+    Ok(PythonRegistryFixturePlan {
+        immutable_key: format!(
+            "{}@{}#{}",
+            inspected.project_name, inspected.version, inspected.sha256
+        ),
+        artifact_sha256: inspected.sha256,
+        attestation: request.attestation.to_owned(),
+        content_digest: inspected.content_digest,
+        project_name: inspected.project_name,
+        version: inspected.version,
+    })
+}
+
+pub fn verify_python_registry_fixture(
+    plan: &PythonRegistryFixturePlan,
+    probe: &PythonRegistryFixtureProbe,
+) -> Result<(), String> {
+    match probe {
+        PythonRegistryFixtureProbe::Matching {
+            artifact_sha256,
+            attestation,
+        } if artifact_sha256 == &plan.artifact_sha256 && attestation == &plan.attestation => Ok(()),
+        PythonRegistryFixtureProbe::Matching { .. } => {
+            Err("Python fixture artifact or attestation does not match the exact plan".to_owned())
+        }
+        PythonRegistryFixtureProbe::Absent => {
+            Err("Python fixture has no exact file observation".to_owned())
+        }
+        PythonRegistryFixtureProbe::Conflicting => {
+            Err("Python fixture reports a terminal file conflict".to_owned())
+        }
+        PythonRegistryFixtureProbe::Unknown => {
+            Err("Python fixture response is unknown; probe only".to_owned())
+        }
+    }
+}
+
+pub fn normalize_python_registry_fixture_result(
+    plan: &PythonRegistryFixturePlan,
+    operation: AdapterOperation,
+    probe: Option<&PythonRegistryFixtureProbe>,
+) -> Result<AdapterResultEnvelope, String> {
+    let (outcome, retry) = match operation {
+        AdapterOperation::Prepare if probe.is_none() => (
+            AdapterOutcome::Prepared,
+            AdapterRetryClassification::NotApplicable,
+        ),
+        AdapterOperation::Probe | AdapterOperation::Publish | AdapterOperation::Verify => {
+            match probe.ok_or("Python fixture result requires a probe")? {
+                PythonRegistryFixtureProbe::Absent => (
+                    AdapterOutcome::Absent,
+                    AdapterRetryClassification::SafeToRetry,
+                ),
+                matching @ PythonRegistryFixtureProbe::Matching { .. } => {
+                    verify_python_registry_fixture(plan, matching)?;
+                    (
+                        AdapterOutcome::Matching,
+                        AdapterRetryClassification::NotApplicable,
+                    )
+                }
+                PythonRegistryFixtureProbe::Conflicting => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                PythonRegistryFixtureProbe::Unknown => {
+                    (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown)
+                }
+            }
+        }
+        AdapterOperation::ClassifyFailure => {
+            return Err(
+                "Python fixture failure classification requires an adapter-specific error"
+                    .to_owned(),
+            )
+        }
+        AdapterOperation::Prepare => {
+            return Err("Python fixture prepare result cannot carry a probe".to_owned())
+        }
+    };
+    Ok(AdapterResultEnvelope {
+        adapter_id: "local-python-registry-fixture@1".to_owned(),
+        operation,
+        target: "inert-local-pypi-fixture".to_owned(),
+        immutable_key: plan.immutable_key.clone(),
+        required_permission: "packages:write:fixture-project/exact-artifact".to_owned(),
+        outcome,
+        retry,
+        evidence: BTreeMap::from([
+            ("artifactSha256".to_owned(), plan.artifact_sha256.clone()),
+            ("attestation".to_owned(), plan.attestation.clone()),
+            ("contentDigest".to_owned(), plan.content_digest.clone()),
+        ]),
     })
 }
 

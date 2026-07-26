@@ -2493,7 +2493,10 @@ fn npm_candidate_artifact_inspection_binds_archive_bytes_and_metadata() {
 #[test]
 fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
     use vexil_release_governance_validator::{
-        inspect_python_wheel_candidate, PythonWheelCandidateArtifactInspectionRequest,
+        inspect_python_wheel_candidate, normalize_python_registry_fixture_result,
+        prepare_python_registry_fixture, verify_python_registry_fixture, AdapterOperation,
+        AdapterOutcome, PythonRegistryFixtureProbe, PythonRegistryFixtureRequest,
+        PythonWheelCandidateArtifactInspectionRequest,
     };
 
     let fixture = std::env::temp_dir().join(format!(
@@ -2588,6 +2591,37 @@ fn python_wheel_candidate_inspection_binds_wheel_bytes_and_metadata() {
     assert_eq!(inspected.entries.len(), 4);
     assert_eq!(inspected.project_name, "vexil_runtime");
     assert_eq!(inspected.version, "0.1.0");
+    let fixture_request = PythonRegistryFixtureRequest {
+        candidate: PythonWheelCandidateArtifactInspectionRequest {
+            unit_id: "vexil-runtime-py",
+            source_commit: &source_commit,
+            expected_project_name: "vexil_runtime",
+            expected_version: "0.1.0",
+            declared_entries: &declared_entries,
+            artifact_path: &artifact,
+        },
+        attestation: "fixture-attestation",
+        target_project: "vexil_runtime",
+    };
+    let plan = prepare_python_registry_fixture(&fixture_request).expect("exact wheel prepares");
+    assert_eq!(
+        normalize_python_registry_fixture_result(&plan, AdapterOperation::Prepare, None)
+            .unwrap()
+            .outcome,
+        AdapterOutcome::Prepared
+    );
+    let matching = PythonRegistryFixtureProbe::Matching {
+        artifact_sha256: plan.artifact_sha256.clone(),
+        attestation: plan.attestation.clone(),
+    };
+    verify_python_registry_fixture(&plan, &matching).expect("matching wheel fixture verifies");
+    assert_eq!(
+        normalize_python_registry_fixture_result(&plan, AdapterOperation::Verify, Some(&matching))
+            .unwrap()
+            .outcome,
+        AdapterOutcome::Matching
+    );
+    assert!(verify_python_registry_fixture(&plan, &PythonRegistryFixtureProbe::Unknown).is_err());
     let wrong_project = PythonWheelCandidateArtifactInspectionRequest {
         expected_project_name: "another_project",
         ..request
