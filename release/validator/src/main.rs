@@ -8,6 +8,7 @@ fn main() {
     let mut collect_history_tags = None;
     let mut render_catalog = false;
     let mut candidate_tag = None;
+    let mut source_candidate_digest = None;
     while let Some(argument) = args.next() {
         match argument.as_str() {
             "--root" => match args.next() {
@@ -27,13 +28,22 @@ fn main() {
                 Some(value) if !value.starts_with("--") => candidate_tag = Some(value),
                 _ => usage_and_exit(),
             },
+            "--runtime-go-source-candidate-digest" => match args.next() {
+                Some(value) if !value.starts_with("--") => source_candidate_digest = Some(value),
+                _ => usage_and_exit(),
+            },
             _ => {
                 usage_and_exit();
             }
         }
     }
     if let Some(remote) = collect_history_tags {
-        if root.is_some() || observe.is_some() || render_catalog || candidate_tag.is_some() {
+        if root.is_some()
+            || observe.is_some()
+            || render_catalog
+            || candidate_tag.is_some()
+            || source_candidate_digest.is_some()
+        {
             eprintln!("--collect-history-tags is a standalone read-only collector");
             std::process::exit(2);
         }
@@ -69,6 +79,26 @@ fn main() {
     let Some(root) = root else {
         usage_and_exit();
     };
+    if let Some(source_commit) = source_candidate_digest {
+        if observe.is_some() || render_catalog || candidate_tag.is_some() {
+            usage_and_exit();
+        }
+        match vexil_release_governance_validator::build_deterministic_go_module_source_zip(
+            &root,
+            &source_commit,
+        ) {
+            Ok(bytes) => println!(
+                "sha256:{} size:{}",
+                vexil_release_governance_validator::sha256_hex(&bytes),
+                bytes.len()
+            ),
+            Err(error) => {
+                eprintln!("Go source-candidate digest rejected: {error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if render_catalog || candidate_tag.is_some() {
         if observe.is_some() || (render_catalog && candidate_tag.is_some()) {
             eprintln!("--render-catalog, --candidate-tag, and --observe cannot be combined");
@@ -153,7 +183,7 @@ fn main() {
 }
 
 fn usage_and_exit() -> ! {
-    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root> | --candidate-tag <tag> --root <repository-root>");
+    eprintln!("Usage: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root <repository-root> [--observe <assertion-id>] | --collect-history-tags <remote> | --render-catalog --root <repository-root> | --candidate-tag <tag> --root <repository-root> | --runtime-go-source-candidate-digest <commit> --root <repository-root>");
     std::process::exit(2);
 }
 

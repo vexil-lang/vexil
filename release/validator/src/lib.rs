@@ -3875,6 +3875,166 @@ pub fn inspect_go_module_zip_candidate(
     })
 }
 
+/// Builds a byte-stable Go-module source archive from one reviewed commit.
+/// ZIP timestamps, attributes, ordering, and compression are fixed here so
+/// the candidate identity does not depend on the host clock or archive tool.
+pub fn build_deterministic_go_module_source_zip(
+    root: &Path,
+    source_commit: &str,
+) -> Result<Vec<u8>, String> {
+    validate_reviewed_commit(root, source_commit, "Go source-candidate sourceCommit")?;
+    let listing = Command::new("git")
+        .args([
+            "ls-tree",
+            "-r",
+            "--name-only",
+            source_commit,
+            "--",
+            "packages/runtime-go",
+        ])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("list Go source-candidate files: {error}"))?;
+    if !listing.status.success() {
+        return Err(format!(
+            "list Go source-candidate files: {}",
+            String::from_utf8_lossy(&listing.stderr).trim()
+        ));
+    }
+    let prefix = "github.com/vexil-lang/vexil/packages/runtime-go@v0.1.1/";
+    let mut entries = BTreeMap::new();
+    for path in String::from_utf8(listing.stdout)
+        .map_err(|error| format!("decode Go source-candidate file list: {error}"))?
+        .lines()
+    {
+        let relative = path
+            .strip_prefix("packages/runtime-go/")
+            .filter(|relative| !relative.is_empty())
+            .ok_or_else(|| format!("Go source-candidate contains an unexpected path {path}"))?;
+        if relative.split('/').any(|segment| {
+            matches!(
+                segment,
+                "" | "." | ".." | "_bmad" | ".agents" | "_bmad-output"
+            )
+        }) {
+            return Err(format!(
+                "Go source-candidate contains a prohibited path {path}"
+            ));
+        }
+        let output = Command::new("git")
+            .args(["show", &format!("{source_commit}:{path}")])
+            .current_dir(root)
+            .output()
+            .map_err(|error| format!("read Go source-candidate file {path}: {error}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "read Go source-candidate file {path}: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        entries.insert(format!("{prefix}{relative}"), output.stdout);
+    }
+    if entries.len() < 3
+        || !entries.contains_key(&format!("{prefix}go.mod"))
+        || !entries.contains_key(&format!("{prefix}VERSION"))
+    {
+        return Err("Go source-candidate lacks required module source files".to_owned());
+    }
+    deterministic_stored_zip(&entries)
+}
+
+fn deterministic_stored_zip(entries: &BTreeMap<String, Vec<u8>>) -> Result<Vec<u8>, String> {
+    let mut output = Vec::new();
+    let mut central = Vec::new();
+    for (name, bytes) in entries {
+        let name = name.as_bytes();
+        let length = u32::try_from(bytes.len())
+            .map_err(|_| "Go source-candidate entry exceeds ZIP size limits".to_owned())?;
+        let offset = u32::try_from(output.len())
+            .map_err(|_| "Go source-candidate ZIP exceeds size limits".to_owned())?;
+        let crc = crc32(bytes);
+        write_u32(&mut output, 0x0403_4b50);
+        write_u16(&mut output, 20);
+        write_u16(&mut output, 0x0800);
+        write_u16(&mut output, 0);
+        write_u16(&mut output, 0);
+        write_u16(&mut output, 0x0021);
+        write_u32(&mut output, crc);
+        write_u32(&mut output, length);
+        write_u32(&mut output, length);
+        write_u16(
+            &mut output,
+            u16::try_from(name.len())
+                .map_err(|_| "Go source-candidate ZIP entry name is too long".to_owned())?,
+        );
+        write_u16(&mut output, 0);
+        output.extend_from_slice(name);
+        output.extend_from_slice(bytes);
+
+        write_u32(&mut central, 0x0201_4b50);
+        write_u16(&mut central, 20);
+        write_u16(&mut central, 20);
+        write_u16(&mut central, 0x0800);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0x0021);
+        write_u32(&mut central, crc);
+        write_u32(&mut central, length);
+        write_u32(&mut central, length);
+        write_u16(
+            &mut central,
+            u16::try_from(name.len())
+                .map_err(|_| "Go source-candidate ZIP entry name is too long".to_owned())?,
+        );
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u16(&mut central, 0);
+        write_u32(&mut central, 0);
+        write_u32(&mut central, offset);
+        central.extend_from_slice(name);
+    }
+    let central_offset = u32::try_from(output.len())
+        .map_err(|_| "Go source-candidate ZIP exceeds size limits".to_owned())?;
+    let central_size = u32::try_from(central.len())
+        .map_err(|_| "Go source-candidate ZIP exceeds size limits".to_owned())?;
+    let count = u16::try_from(entries.len())
+        .map_err(|_| "Go source-candidate has too many ZIP entries".to_owned())?;
+    output.extend_from_slice(&central);
+    write_u32(&mut output, 0x0605_4b50);
+    write_u16(&mut output, 0);
+    write_u16(&mut output, 0);
+    write_u16(&mut output, count);
+    write_u16(&mut output, count);
+    write_u32(&mut output, central_size);
+    write_u32(&mut output, central_offset);
+    write_u16(&mut output, 0);
+    Ok(output)
+}
+
+fn write_u16(output: &mut Vec<u8>, value: u16) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn write_u32(output: &mut Vec<u8>, value: u32) {
+    output.extend_from_slice(&value.to_le_bytes());
+}
+
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = 0xffff_ffffu32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = if crc & 1 == 1 {
+                (crc >> 1) ^ 0xedb8_8320
+            } else {
+                crc >> 1
+            };
+        }
+    }
+    !crc
+}
+
 /// Validates a complete immutable GitHub-release draft fixture. This models no
 /// API and cannot create releases, tags, or assets.
 pub fn prepare_github_release_fixture_draft(
@@ -6077,7 +6237,7 @@ fn validate_manifest_supersession(root: &Path, manifest: &Value) -> Result<(), S
     Ok(())
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
@@ -6102,11 +6262,127 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_catalog_repository(root)?;
     validate_version_rationale_repository(root)?;
     validate_release_set_selection_repository(root)?;
+    validate_runtime_go_source_candidate_repository(root)?;
     if root.join(".git").exists() {
         validate_checkpoint_change_units_repository(root)?;
     }
     validate_canonical_release_records_repository(root)?;
     validate_public_boundary(root)?;
+    Ok(())
+}
+
+/// Rebuilds the selected nested Go module candidate directly from its reviewed
+/// source commit.  This is an offline source-candidate check only: it neither
+/// contacts the Go proxy nor creates a tag, custody record, approval, or Run.
+pub fn validate_runtime_go_source_candidate_repository(root: &Path) -> Result<(), String> {
+    let path = root.join("release/candidates/runtime-go-0.1.1-source-candidate-2026-07-26.json");
+    if !path.exists() {
+        return Ok(());
+    }
+    let record = read_json(&path)?;
+    ensure_no_private_leakage(&record.to_string())?;
+    let record = object(&record, "Go source-candidate record")?;
+    if text(record.get("recordKind"), "Go source-candidate kind")? != "go-source-candidate"
+        || text(record.get("schemaVersion"), "Go source-candidate version")? != "1.0"
+        || text(record.get("candidateId"), "Go source-candidate ID")?
+            != "runtime-go-0.1.1-source-candidate-2026-07-26"
+        || text(record.get("unitId"), "Go source-candidate unit")? != "vexil-runtime-go"
+        || text(record.get("version"), "Go source-candidate version value")? != "0.1.1"
+        || text(record.get("module"), "Go source-candidate module")?
+            != "github.com/vexil-lang/vexil/packages/runtime-go"
+        || text(
+            record.get("canonicalTag"),
+            "Go source-candidate Canonical Tag",
+        )? != "packages/runtime-go/v0.1.1"
+    {
+        return Err(
+            "Go source-candidate identity does not match the selected runtime-go release"
+                .to_owned(),
+        );
+    }
+    let source_commit = text(
+        record.get("sourceCommit"),
+        "Go source-candidate source commit",
+    )?;
+    validate_reviewed_commit(root, source_commit, "Go source-candidate sourceCommit")?;
+    let tree = Command::new("git")
+        .args(["rev-parse", &format!("{source_commit}^{{tree}}")])
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("resolve Go source-candidate tree: {error}"))?;
+    if !tree.status.success()
+        || String::from_utf8_lossy(&tree.stdout).trim()
+            != text(record.get("sourceTree"), "Go source-candidate source tree")?
+    {
+        return Err("Go source-candidate tree does not match its exact source commit".to_owned());
+    }
+    let archive = build_deterministic_go_module_source_zip(root, source_commit)?;
+    let repeated = build_deterministic_go_module_source_zip(root, source_commit)?;
+    if archive != repeated {
+        return Err("Go source-candidate rebuild is not byte-identical".to_owned());
+    }
+    let archive_record = object(
+        required_value(record, "archive")?,
+        "Go source-candidate archive",
+    )?;
+    if text(
+        archive_record.get("sha256"),
+        "Go source-candidate archive digest",
+    )? != sha256_hex(&archive)
+        || archive_record.get("size").and_then(Value::as_u64) != Some(archive.len() as u64)
+        || archive_record
+            .get("byteIdenticalRebuild")
+            .and_then(Value::as_bool)
+            != Some(true)
+    {
+        return Err(
+            "Go source-candidate archive does not bind its deterministic rebuild".to_owned(),
+        );
+    }
+    let builder = object(
+        required_value(record, "builder")?,
+        "Go source-candidate builder",
+    )?;
+    if text(builder.get("kind"), "Go source-candidate builder kind")?
+        != "validator-deterministic-go-module-zip"
+        || builder.get("rebuildCount").and_then(Value::as_u64) != Some(2)
+        || !text(
+            builder.get("command"),
+            "Go source-candidate builder command",
+        )?
+        .contains(source_commit)
+    {
+        return Err("Go source-candidate builder evidence is incomplete".to_owned());
+    }
+    let test = object(required_value(record, "test")?, "Go source-candidate test")?;
+    if text(test.get("command"), "Go source-candidate test command")? != "go test -count=1 ./..."
+        || text(test.get("result"), "Go source-candidate test result")? != "passed"
+        || text(test.get("goVersion"), "Go source-candidate Go version")?
+            .trim()
+            .is_empty()
+    {
+        return Err("Go source-candidate test evidence is incomplete".to_owned());
+    }
+    let verification = object(
+        required_value(record, "commitVerification")?,
+        "Go source-candidate commit verification",
+    )?;
+    if text(
+        verification.get("issuer"),
+        "Go source-candidate verification issuer",
+    )? != "github.com"
+        || verification.get("verified").and_then(Value::as_bool) != Some(true)
+        || !valid_lowercase_sha256(text(
+            verification.get("apiPayloadSha256"),
+            "Go source-candidate verification digest",
+        )?)
+        || !is_valid_utc_second(text(
+            verification.get("observedAt"),
+            "Go source-candidate verification time",
+        )?)
+    {
+        return Err("Go source-candidate commit verification is incomplete".to_owned());
+    }
     Ok(())
 }
 
