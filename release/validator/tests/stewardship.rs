@@ -83,6 +83,19 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
         "historicalTagSnapshot":{"id":"release/history","version":"1.0","digest":"9".repeat(64)},
         "compatibilityEvidence":{"id":"release/compatibility","version":"1.0","digest":"0".repeat(64)},"supersedes":null
     });
+    let mut manifest_1_2 = manifest.clone();
+    manifest_1_2["$schema"] = Value::String(
+        "https://vexil.dev/release/schemas/release-manifest-1.2.schema.json".to_owned(),
+    );
+    manifest_1_2["schemaVersion"] = Value::String("1.2".to_owned());
+    manifest_1_2["securityExceptions"] = serde_json::json!({
+        "id":"release/security/exceptions.json","version":"1.0","digest":"a".repeat(64)
+    });
+    vexil_release_governance_validator::validate_canonical_release_record_schema(
+        &root,
+        &manifest_1_2,
+    )
+    .expect("Manifest 1.2 must retain the 1.1 contract plus security-exception binding");
     let manifest_bytes = canonical_json(&manifest);
     let custody_subject = CandidateCustodySubject {
         name: "runtime.tgz",

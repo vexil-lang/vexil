@@ -5304,6 +5304,10 @@ fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &
             "release/schemas/release-manifest-1.1.schema.json",
             "https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
         )),
+        ("release-manifest", "1.2") => Some((
+            "release/schemas/release-manifest-1.2.schema.json",
+            "https://vexil.dev/release/schemas/release-manifest-1.2.schema.json",
+        )),
         ("release-evidence-set", "1.0") => Some((
             "release/schemas/release-evidence-set-1.0.schema.json",
             "https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
