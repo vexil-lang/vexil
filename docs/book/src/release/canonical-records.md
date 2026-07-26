@@ -125,6 +125,15 @@ bundle, subject, and attestation identities with the authorization. This is
 still an inert validation contract: the repository has no claimed current
 candidate custody, provider attestation verification, or publication authority.
 
+The non-publishing rehearsal contract consumes that same schema-valid custody
+record rather than caller-supplied candidate digests. It recomputes the custody
+bundle, requires its exact Manifest-byte digest and selected source commit, and
+validates the supplied typed catalog graph before retaining the exact catalog
+byte digest and exact Manifest target plan in the inert rehearsal plan. Each
+fixture must name one of those targets. This prepares only read/build/test/
+package/attest fixtures; it still does not create a Run, access a provider,
+obtain credentials, tag, or publish.
+
 Before a future privileged job is dispatchable, its exact canonical
 authorization, asserted Coordinator principal, active Coordinator-owned lease,
 and sequenced Run context must all match. Authorization alone, or lease/Run

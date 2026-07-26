@@ -296,10 +296,8 @@ pub struct NonPublishingRehearsalFixture<'a> {
 /// Exact, non-authoritative inputs for a target-neutral rehearsal harness.
 pub struct NonPublishingRehearsalRequest<'a> {
     pub manifest_bytes: &'a [u8],
-    pub candidate_bundle_digest: &'a str,
-    pub candidate_subject_digest: &'a str,
-    pub candidate_attestation_digest: &'a str,
-    pub typed_graph_digest: &'a str,
+    pub custody_record: &'a Value,
+    pub typed_graph_bytes: &'a [u8],
     pub requested_capabilities: &'a [&'a str],
     pub fixtures: &'a [NonPublishingRehearsalFixture<'a>],
 }
@@ -310,6 +308,7 @@ pub struct NonPublishingRehearsalPlan {
     pub manifest_digest: String,
     pub candidate_bundle_digest: String,
     pub typed_graph_digest: String,
+    pub expected_targets: BTreeSet<String>,
     pub fixture_evidence: BTreeMap<String, String>,
 }
 
@@ -3210,20 +3209,52 @@ pub fn prepare_non_publishing_rehearsal(
     {
         return Err("rehearsal requires a canonical release-manifest@1.1".to_owned());
     }
-    for (label, digest) in [
-        ("candidate bundle", request.candidate_bundle_digest),
-        ("candidate subject", request.candidate_subject_digest),
-        (
-            "candidate attestation",
-            request.candidate_attestation_digest,
-        ),
-        ("typed graph", request.typed_graph_digest),
-    ] {
-        if !valid_lowercase_sha256(digest) {
-            return Err(format!(
-                "rehearsal {label} digest must be a full lowercase SHA-256"
-            ));
+    let (_, custody) = validate_candidate_custody_record(root, request.custody_record)?;
+    if custody.manifest_digest != sha256_hex(request.manifest_bytes) {
+        return Err(
+            "rehearsal candidate custody does not bind the exact Manifest bytes".to_owned(),
+        );
+    }
+    if !array(
+        manifest.get("releaseUnits"),
+        "rehearsal Manifest release units",
+    )?
+    .iter()
+    .any(|unit| {
+        object(unit, "rehearsal Manifest release unit")
+            .ok()
+            .and_then(|unit| {
+                text(unit.get("sourceCommit"), "rehearsal Manifest source commit").ok()
+            })
+            == Some(custody.source_commit.as_str())
+    }) {
+        return Err(
+            "rehearsal candidate custody source commit is not selected by the Manifest".to_owned(),
+        );
+    }
+    let typed_graph: Value = serde_json::from_slice(request.typed_graph_bytes)
+        .map_err(|error| format!("parse rehearsal typed graph bytes: {error}"))?;
+    validate_catalog_schema(root, &typed_graph)?;
+    validate_catalog(root, &typed_graph)?;
+    let mut expected_targets = BTreeSet::new();
+    for unit in array(
+        manifest.get("releaseUnits"),
+        "rehearsal Manifest release units",
+    )? {
+        let unit = object(unit, "rehearsal Manifest release unit")?;
+        for target in array(
+            unit.get("targets"),
+            "rehearsal Manifest release-unit targets",
+        )? {
+            let target = object(target, "rehearsal Manifest target")?;
+            expected_targets.insert(manifest_target_identity(
+                text(target.get("kind"), "rehearsal Manifest target kind")?,
+                text(target.get("name"), "rehearsal Manifest target name")?,
+            )?);
         }
+    }
+    if expected_targets.is_empty() {
+        return Err("rehearsal Manifest must select at least one target".to_owned());
     }
     for capability in request.requested_capabilities {
         if !matches!(
@@ -3246,9 +3277,12 @@ pub fn prepare_non_publishing_rehearsal(
     ]);
     let mut fixture_evidence = BTreeMap::new();
     for fixture in request.fixtures {
-        if fixture.target.trim().is_empty() || !valid_lowercase_sha256(fixture.evidence_digest) {
+        if !expected_targets.contains(fixture.target)
+            || !valid_lowercase_sha256(fixture.evidence_digest)
+        {
             return Err(
-                "rehearsal fixture needs a target and full lowercase evidence digest".to_owned(),
+                "rehearsal fixture must bind a Manifest target and full lowercase evidence digest"
+                    .to_owned(),
             );
         }
         if !required_scenarios.contains(fixture.scenario) {
@@ -3280,8 +3314,9 @@ pub fn prepare_non_publishing_rehearsal(
     Ok(NonPublishingRehearsalPlan {
         manifest_id: text(manifest.get("manifestId"), "rehearsal Manifest ID")?.to_owned(),
         manifest_digest: sha256_hex(request.manifest_bytes),
-        candidate_bundle_digest: request.candidate_bundle_digest.to_owned(),
-        typed_graph_digest: request.typed_graph_digest.to_owned(),
+        candidate_bundle_digest: custody.bundle_digest,
+        typed_graph_digest: sha256_hex(request.typed_graph_bytes),
+        expected_targets,
         fixture_evidence,
     })
 }
