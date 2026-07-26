@@ -108,6 +108,36 @@ pub struct InspectedNpmCandidateArtifact {
     pub version: String,
 }
 
+pub struct NpmRegistryFixtureRequest<'a> {
+    pub candidate: NpmCandidateArtifactInspectionRequest<'a>,
+    pub provenance: &'a str,
+    pub canonical_tag: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct NpmRegistryFixturePlan {
+    pub artifact_name: String,
+    pub artifact_sha256: String,
+    pub canonical_tag: String,
+    pub content_digest: String,
+    pub immutable_key: String,
+    pub package_name: String,
+    pub provenance: String,
+    pub source_commit: String,
+    pub version: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NpmRegistryFixtureProbe {
+    Absent,
+    Matching {
+        artifact_sha256: String,
+        provenance: String,
+    },
+    Conflicting,
+    Unknown,
+}
+
 /// Exact Python wheel from an isolated candidate workspace. The inspector
 /// reads the wheel itself, binding the reported inventory to its bytes.
 pub struct PythonWheelCandidateArtifactInspectionRequest<'a> {
@@ -2464,6 +2494,131 @@ pub fn inspect_npm_tgz_candidate(
         source_commit: request.source_commit.to_owned(),
         unit_id: request.unit_id.to_owned(),
         version: request.expected_version.to_owned(),
+    })
+}
+
+/// Re-inspects exact tarball bytes before producing an inert npm fixture plan.
+/// Mutable npm dist-tags are deliberately excluded from the identity.
+pub fn prepare_npm_registry_fixture(
+    request: &NpmRegistryFixtureRequest<'_>,
+) -> Result<NpmRegistryFixturePlan, String> {
+    let inspected = inspect_npm_tgz_candidate(&request.candidate)?;
+    if request.canonical_tag != format!("vexil-runtime-ts-v{}", inspected.version)
+        || request.provenance.trim().is_empty()
+    {
+        return Err(
+            "npm fixture requires canonical runtime-ts tag and provenance evidence".to_owned(),
+        );
+    }
+    Ok(NpmRegistryFixturePlan {
+        immutable_key: format!(
+            "{}@{}#{}",
+            inspected.package_name, inspected.version, inspected.sha256
+        ),
+        artifact_name: inspected.artifact_name,
+        artifact_sha256: inspected.sha256,
+        canonical_tag: request.canonical_tag.to_owned(),
+        content_digest: inspected.content_digest,
+        package_name: inspected.package_name,
+        provenance: request.provenance.to_owned(),
+        source_commit: inspected.source_commit,
+        version: inspected.version,
+    })
+}
+
+pub fn verify_npm_registry_fixture(
+    plan: &NpmRegistryFixturePlan,
+    probe: &NpmRegistryFixtureProbe,
+) -> Result<(), String> {
+    match probe {
+        NpmRegistryFixtureProbe::Matching {
+            artifact_sha256,
+            provenance,
+        } if artifact_sha256 == &plan.artifact_sha256 && provenance == &plan.provenance => Ok(()),
+        NpmRegistryFixtureProbe::Matching { .. } => {
+            Err("npm fixture integrity or provenance does not match the exact plan".to_owned())
+        }
+        NpmRegistryFixtureProbe::Absent => {
+            Err("npm fixture has no exact package observation".to_owned())
+        }
+        NpmRegistryFixtureProbe::Conflicting => {
+            Err("npm fixture reports a terminal package conflict".to_owned())
+        }
+        NpmRegistryFixtureProbe::Unknown => {
+            Err("npm fixture response is unknown; probe only".to_owned())
+        }
+    }
+}
+
+/// Normalizes inert fixture observations only; it cannot upload a tarball or
+/// modify a public package or dist-tag.
+pub fn normalize_npm_registry_fixture_result(
+    plan: &NpmRegistryFixturePlan,
+    operation: AdapterOperation,
+    probe: Option<&NpmRegistryFixtureProbe>,
+    failure: Option<&str>,
+) -> Result<AdapterResultEnvelope, String> {
+    let evidence = BTreeMap::from([
+        ("artifactSha256".to_owned(), plan.artifact_sha256.clone()),
+        ("canonicalTag".to_owned(), plan.canonical_tag.clone()),
+        ("contentDigest".to_owned(), plan.content_digest.clone()),
+        ("provenance".to_owned(), plan.provenance.clone()),
+    ]);
+    let (outcome, retry) = match operation {
+        AdapterOperation::Prepare if probe.is_none() && failure.is_none() => (
+            AdapterOutcome::Prepared,
+            AdapterRetryClassification::NotApplicable,
+        ),
+        AdapterOperation::Probe | AdapterOperation::Publish | AdapterOperation::Verify => {
+            match probe.ok_or("npm fixture result requires a probe")? {
+                NpmRegistryFixtureProbe::Absent => (
+                    AdapterOutcome::Absent,
+                    AdapterRetryClassification::SafeToRetry,
+                ),
+                matching @ NpmRegistryFixtureProbe::Matching { .. } => {
+                    verify_npm_registry_fixture(plan, matching)?;
+                    (
+                        AdapterOutcome::Matching,
+                        AdapterRetryClassification::NotApplicable,
+                    )
+                }
+                NpmRegistryFixtureProbe::Conflicting => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                NpmRegistryFixtureProbe::Unknown => {
+                    (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown)
+                }
+            }
+        }
+        AdapterOperation::ClassifyFailure => {
+            match failure.ok_or("npm fixture failure classification requires failure text")? {
+                value if value.contains("conflict") || value.contains("overwrite") => (
+                    AdapterOutcome::TerminalConflict,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                value if value.contains("reject") || value.contains("permission") => (
+                    AdapterOutcome::Rejected,
+                    AdapterRetryClassification::DoNotRetry,
+                ),
+                _ => (AdapterOutcome::Unknown, AdapterRetryClassification::Unknown),
+            }
+        }
+        AdapterOperation::Prepare => {
+            return Err(
+                "npm fixture prepare result cannot carry a probe or failure text".to_owned(),
+            )
+        }
+    };
+    Ok(AdapterResultEnvelope {
+        adapter_id: "local-npm-registry-fixture@1".to_owned(),
+        operation,
+        target: "inert-local-npm-registry".to_owned(),
+        immutable_key: plan.immutable_key.clone(),
+        required_permission: "packages:write:fixture-registry/exact-package-version".to_owned(),
+        outcome,
+        retry,
+        evidence,
     })
 }
 

@@ -2347,7 +2347,10 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
 #[test]
 fn npm_candidate_artifact_inspection_binds_archive_bytes_and_metadata() {
     use vexil_release_governance_validator::{
-        inspect_npm_tgz_candidate, NpmCandidateArtifactInspectionRequest,
+        inspect_npm_tgz_candidate, normalize_npm_registry_fixture_result,
+        prepare_npm_registry_fixture, verify_npm_registry_fixture, AdapterOperation,
+        AdapterOutcome, AdapterRetryClassification, NpmCandidateArtifactInspectionRequest,
+        NpmRegistryFixtureProbe, NpmRegistryFixtureRequest,
     };
 
     let fixture = std::env::temp_dir().join(format!(
@@ -2397,6 +2400,73 @@ fn npm_candidate_artifact_inspection_binds_archive_bytes_and_metadata() {
     let inspected = inspect_npm_tgz_candidate(&request).expect("inspect exact npm archive");
     assert_eq!(inspected.entries.len(), 2);
     assert_eq!(inspected.version, "0.4.1");
+    let fixture_request = NpmRegistryFixtureRequest {
+        candidate: NpmCandidateArtifactInspectionRequest {
+            unit_id: "vexil-runtime-ts",
+            source_commit: &source_commit,
+            expected_package_name: "@vexil-lang/runtime",
+            expected_version: "0.4.1",
+            declared_entries: &declared_entries,
+            artifact_path: &artifact,
+        },
+        provenance: "fixture-attestation",
+        canonical_tag: "vexil-runtime-ts-v0.4.1",
+    };
+    let plan =
+        prepare_npm_registry_fixture(&fixture_request).expect("exact npm candidate prepares");
+    assert_eq!(
+        normalize_npm_registry_fixture_result(&plan, AdapterOperation::Prepare, None, None)
+            .unwrap()
+            .outcome,
+        AdapterOutcome::Prepared
+    );
+    assert_eq!(
+        normalize_npm_registry_fixture_result(
+            &plan,
+            AdapterOperation::Publish,
+            Some(&NpmRegistryFixtureProbe::Absent),
+            None
+        )
+        .unwrap()
+        .retry,
+        AdapterRetryClassification::SafeToRetry
+    );
+    let matching = NpmRegistryFixtureProbe::Matching {
+        artifact_sha256: plan.artifact_sha256.clone(),
+        provenance: plan.provenance.clone(),
+    };
+    verify_npm_registry_fixture(&plan, &matching)
+        .expect("matching integrity and provenance verify");
+    assert_eq!(
+        normalize_npm_registry_fixture_result(
+            &plan,
+            AdapterOperation::Verify,
+            Some(&matching),
+            None
+        )
+        .unwrap()
+        .outcome,
+        AdapterOutcome::Matching
+    );
+    assert!(verify_npm_registry_fixture(
+        &plan,
+        &NpmRegistryFixtureProbe::Matching {
+            artifact_sha256: "0".repeat(64),
+            provenance: plan.provenance.clone()
+        }
+    )
+    .is_err());
+    assert_eq!(
+        normalize_npm_registry_fixture_result(
+            &plan,
+            AdapterOperation::Probe,
+            Some(&NpmRegistryFixtureProbe::Unknown),
+            None
+        )
+        .unwrap()
+        .outcome,
+        AdapterOutcome::Unknown
+    );
     let wrong_version = NpmCandidateArtifactInspectionRequest {
         expected_version: "0.4.2",
         ..request
