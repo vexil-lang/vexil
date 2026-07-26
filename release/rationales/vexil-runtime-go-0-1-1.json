@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vexil.dev/release/rationales/vexil-runtime-go-0-1-1.json",
+  "schemaVersion": "1.0",
+  "recordKind": "release-unit-version-rationale",
+  "rationaleId": "vexil-runtime-go-0-1-1",
+  "unitId": "vexil-runtime-go",
+  "previousPackageVersion": {
+    "kind": "observed-publication-baseline",
+    "version": "0.1.0",
+    "observationIds": ["observation-go-proxy-runtime-v0-1-0-2026-07-26"],
+    "reason": "The Go module proxy observation establishes public availability of v0.1.0 only. It is retained as an observed prior package version, never as retrospective Release Manifest, approval, Run, or publication evidence."
+  },
+  "proposedPackageVersion": "0.1.1",
+  "changeClass": "patch-compatible",
+  "affectedSurfaces": [
+    {"namespace":"language-spec","surface":"Vexil language grammar and semantics","authorityPath":"spec/vexil-spec.md","authorityRevision":"24a4d906d36e75c86e7d556ff07a093aa807b96c","compatibility":"compatible","assertion":"source-compatibility-assessment","languageStatus":"draft"},
+    {"namespace":"package-api","surface":"Go runtime package API","authorityPath":"packages/runtime-go/go.mod","authorityRevision":"24a4d906d36e75c86e7d556ff07a093aa807b96c","compatibility":"compatible","assertion":"source-compatibility-assessment","languageStatus":"not-applicable"},
+    {"namespace":"wire-format","surface":"Vexil wire schema","authorityPath":"schemas/vexil/schema.vexil","authorityRevision":"24a4d906d36e75c86e7d556ff07a093aa807b96c","compatibility":"compatible","assertion":"source-compatibility-assessment","languageStatus":"not-applicable"}
+  ],
+  "compatibilityEvidenceIdentity": "sha256:a0eb4923c0db384958c2933a9ba45949cf9143008c9f82f4ee926f9b6a06a2c6",
+  "dependencyImpact": {"classification":"none","affectedUnitIds":[],"rationale":"The Go runtime has no typed publish-before dependency edge. This rationale does not select a Release Set or establish publication order."},
+  "supportMatrix": {"claims":[{"platform":"Go","languageVersion":"1.22+","compatibility":"supported","evidenceIdentity":"sha256:a0eb4923c0db384958c2933a9ba45949cf9143008c9f82f4ee926f9b6a06a2c6"}],"boundary":"each supported claim requires its own evidence identity"},
+  "packageStewardReview": {"actorId":"github:furkanmamuk","roleId":"package-steward","assignmentId":"assignment-package-steward-runtime-go-2026-07-14","reviewedAt":"2026-07-26T19:00:00Z"},
+  "publicCompatibilityDecision": null,
+  "releaseBoundary": "structural-rationale-only"
+}

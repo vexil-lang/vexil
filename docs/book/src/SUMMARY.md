@@ -62,3 +62,4 @@
 - [Release History and Additive Repair](./release/history.md)
 - [Release Unit Catalog](./release/catalog.md)
 - [Canonical Release Records](./release/canonical-records.md)
+- [First Recovered Release Set](./release/first-recovered-release-set.md)
