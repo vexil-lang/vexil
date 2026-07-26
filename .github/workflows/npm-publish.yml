@@ -29,6 +29,9 @@ jobs:
         with:
           node-version: "22.12.0"
           registry-url: 'https://registry.npmjs.org'
+          # This advisory workflow has no reason to share runtime caches with
+          # a future privileged executor.
+          package-manager-cache: false
 
       - run: npm ci
       - run: npm run build
