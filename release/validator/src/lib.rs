@@ -1021,6 +1021,7 @@ pub fn authorize_privileged_run_start(
         record,
         request.manifest_bytes,
         request.evidence_set_bytes,
+        request.evaluation_time,
     ) {
         push_authorization_blocker(
             &mut blockers,
@@ -1216,6 +1217,7 @@ fn validate_authorization_manifest_and_evidence(
     record: &Map<String, Value>,
     manifest_bytes: &[u8],
     evidence_set_bytes: &[u8],
+    evaluation_time: &str,
 ) -> Result<(), String> {
     let manifest_value = parse_canonical_json_bytes(manifest_bytes, "authorization Manifest")?;
     validate_canonical_release_record_schema(root, &manifest_value)?;
@@ -1223,14 +1225,16 @@ fn validate_authorization_manifest_and_evidence(
     if text(manifest.get("recordKind"), "authorization Manifest kind")? != "release-manifest" {
         return Err("authorization input is not a Release Manifest".to_owned());
     }
-    if text(
-        manifest.get("schemaVersion"),
-        "authorization Manifest schema version",
-    )? != "1.1"
-    {
-        return Err("authorization requires the retained release-manifest@1.1 contract".to_owned());
+    if !matches!(
+        text(
+            manifest.get("schemaVersion"),
+            "authorization Manifest schema version",
+        )?,
+        "1.1" | "1.2"
+    ) {
+        return Err("authorization requires release-manifest@1.1 or @1.2".to_owned());
     }
-    validate_manifest_security(root, &manifest_value)?;
+    validate_manifest_security(root, &manifest_value, Some(evaluation_time))?;
     let evidence_set =
         parse_canonical_json_bytes(evidence_set_bytes, "authorization evidence set")?;
     validate_canonical_release_record_schema(root, &evidence_set)?;
@@ -3847,7 +3851,7 @@ pub fn generate_release_manifest(
             error,
         );
     }
-    if let Err(error) = validate_manifest_security(root, manifest) {
+    if let Err(error) = validate_manifest_security(root, manifest, None) {
         push_manifest_diagnostic(
             &mut diagnostics,
             "manifest-bound-security-gate",
@@ -4248,7 +4252,11 @@ fn validate_manifest_change_units(root: &Path, manifest: &Value) -> Result<(), S
     }
 }
 
-fn validate_manifest_security(root: &Path, manifest: &Value) -> Result<(), String> {
+fn validate_manifest_security(
+    root: &Path,
+    manifest: &Value,
+    evaluation_time: Option<&str>,
+) -> Result<(), String> {
     let manifest = object(manifest, "Release Manifest")?;
     let security = object(
         required_value(manifest, "security")?,
@@ -4286,11 +4294,46 @@ fn validate_manifest_security(root: &Path, manifest: &Value) -> Result<(), Strin
     if scan.get("lockfileDigest").and_then(Value::as_str) != Some(expected.as_str()) {
         return Err("security scan lockfile digest is stale".to_owned());
     }
+    let exceptions_allowed = if manifest.get("schemaVersion").and_then(Value::as_str) == Some("1.2")
+    {
+        let exceptions = object(
+            required_value(manifest, "securityExceptions")?,
+            "Manifest security exceptions",
+        )?;
+        let exception_path = text(exceptions.get("id"), "Manifest security exception set path")?;
+        let exception_bytes = fs::read(root.join(exception_path))
+            .map_err(|error| format!("read Manifest security exception set: {error}"))?;
+        if sha256_hex(&exception_bytes)
+            != text(
+                exceptions.get("digest"),
+                "Manifest security exception set digest",
+            )?
+        {
+            return Err(
+                "Manifest security exception set digest does not match exact bytes".to_owned(),
+            );
+        }
+        if let Some(evaluation_time) = evaluation_time {
+            validate_security_exception_set(
+                root,
+                &exception_bytes,
+                text(manifest.get("manifestId"), "Manifest ID")?,
+                &bytes,
+                evaluation_time,
+            )?;
+        }
+        evaluation_time.is_some()
+    } else {
+        false
+    };
     for finding in array(scan.get("findings"), "security scan findings")? {
         let finding = object(finding, "security finding")?;
         let severity = text(finding.get("severity"), "security finding severity")?;
         let status = text(finding.get("status"), "security finding status")?;
-        if matches!(severity, "high" | "critical") && status != "remediated" {
+        if matches!(severity, "high" | "critical")
+            && status != "remediated"
+            && !(exceptions_allowed && status == "exception")
+        {
             return Err(format!(
                 "unresolved {severity} security finding blocks Manifest: {}",
                 text(finding.get("id"), "security finding ID")?
