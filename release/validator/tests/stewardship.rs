@@ -4164,19 +4164,29 @@ fn typed_release_dependency_graph_is_manifest_led_and_deterministic() {
 }
 
 #[test]
-fn go_runtime_version_decision_establishes_one_checked_in_source() {
+fn go_runtime_version_decision_establishes_one_current_checked_in_source() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let decision: Value = serde_json::from_str(
+    let prior_decision: Value = serde_json::from_str(
         &fs::read_to_string(root.join("release/decisions/runtime-go-version-2026-07-23.json"))
-            .expect("the approved Go version decision must be public and checked in"),
+            .expect("the prior Go version decision must be public and checked in"),
     )
-    .expect("the approved Go version decision must be JSON");
+    .expect("the prior Go version decision must be JSON");
+    assert_eq!(prior_decision["status"], "superseded");
+    assert_eq!(
+        prior_decision["supersededBy"],
+        "runtime-go-version-2026-07-26"
+    );
+    let decision: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/decisions/runtime-go-version-2026-07-26.json"))
+            .expect("the current Go version decision must be public and checked in"),
+    )
+    .expect("the current Go version decision must be JSON");
     assert_eq!(decision["status"], "approved");
-    assert_eq!(decision["selectedVersion"], "0.1.0");
+    assert_eq!(decision["selectedVersion"], "0.1.1");
     assert_eq!(
         fs::read_to_string(root.join("packages/runtime-go/VERSION"))
             .expect("the approved Go version must have one checked-in source"),
-        "0.1.0\n"
+        "0.1.1\n"
     );
 
     let catalog: Value = serde_json::from_str(
@@ -4191,12 +4201,12 @@ fn go_runtime_version_decision_establishes_one_checked_in_source() {
         .expect("Go runtime catalog unit");
     assert_eq!(go["publication"]["status"], "source-inventory-only");
     assert_eq!(go["versionSource"]["format"], "go-version-file");
-    assert_eq!(go["versionSource"]["observedDeclaration"], "0.1.0");
+    assert_eq!(go["versionSource"]["observedDeclaration"], "0.1.1");
 
     vexil_release_governance_validator::validate_candidate_tag(
         &root,
         &catalog,
-        "packages/runtime-go/v0.1.0",
+        "packages/runtime-go/v0.1.1",
     )
     .expect("a canonical, new Go candidate tag must remain a pure structural check");
     vexil_release_governance_validator::validate_candidate_tag(
@@ -4206,7 +4216,7 @@ fn go_runtime_version_decision_establishes_one_checked_in_source() {
     )
     .expect("a TypeScript candidate must match its checked-in source version");
     for candidate in [
-        "v0.1.0",
+        "v0.1.1",
         "vexil-codegen-go-v0.4.3",
         "vexil-runtime-ts-v0.4.2",
     ] {
@@ -4263,7 +4273,7 @@ fn go_runtime_version_decision_establishes_one_checked_in_source() {
         .expect("Go runtime")
         .get_mut("versionSource")
         .expect("Go version source");
-    go_version_source["observedDeclaration"] = Value::String("0.1.1".into());
+    go_version_source["observedDeclaration"] = Value::String("0.1.0".into());
     vexil_release_governance_validator::validate_catalog(&root, &stale_go_version)
         .expect_err("a stale Go VERSION observation must fail closed");
 
@@ -4842,6 +4852,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/catalog-lifecycle.json",
         "release/rationales/vexil-runtime-ts-0-4-1.json",
         "release/decisions/runtime-go-version-2026-07-23.json",
+        "release/decisions/runtime-go-version-2026-07-26.json",
         "release/stewardship/assignments.json",
         "release/stewardship/responsibilities.json",
         "release/advisory/automation-contract.json",

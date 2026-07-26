@@ -21,7 +21,7 @@ This is a source-led inventory and typed structural dependency graph, not a Rele
 | `vexil-lang` | `crates/vexil-lang` | cargo-package `vexil-lang` | `source-inventory-only` | `0.4.3` in `crates/vexil-lang/Cargo.toml` | `vexil-lang-v<semver>` |
 | `vexil-release-governance-validator` | `release/validator` | internal-tool `vexil-release-governance-validator` | `non-publishable` | `0.1.0` in `release/validator/Cargo.toml` | `not applicable (non-publishable)` |
 | `vexil-runtime` | `crates/vexil-runtime` | cargo-package `vexil-runtime` | `source-inventory-only` | `0.5.1` in `crates/vexil-runtime/Cargo.toml` | `vexil-runtime-v<semver>` |
-| `vexil-runtime-go` | `packages/runtime-go` | go-module `github.com/vexil-lang/vexil/packages/runtime-go` | `source-inventory-only` | `0.1.0` in `packages/runtime-go/VERSION` | `packages/runtime-go/v<semver>` |
+| `vexil-runtime-go` | `packages/runtime-go` | go-module `github.com/vexil-lang/vexil/packages/runtime-go` | `source-inventory-only` | `0.1.1` in `packages/runtime-go/VERSION` | `packages/runtime-go/v<semver>` |
 | `vexil-runtime-py` | `packages/runtime-py` | python-project `vexil_runtime` | `candidate-unreleased` | `0.1.0` in `packages/runtime-py/pyproject.toml` | `vexil-runtime-py-v<semver>` |
 | `vexil-runtime-ts` | `packages/runtime-ts` | npm-package `@vexil-lang/runtime` | `source-inventory-only` | `0.4.1` in `packages/runtime-ts/package.json` | `vexil-runtime-ts-v<semver>` |
 | `vexil-store` | `crates/vexil-store` | cargo-package `vexil-store` | `source-inventory-only` | `0.4.2` in `crates/vexil-store/Cargo.toml` | `vexil-store-v<semver>` |

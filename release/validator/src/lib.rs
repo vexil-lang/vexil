@@ -10065,45 +10065,85 @@ fn version_declaration_from_source(content: &str, format: &str) -> Result<String
 }
 
 fn validate_go_version_decision(root: &Path, selected_version: &str) -> Result<(), String> {
-    let decision = read_json(&root.join("release/decisions/runtime-go-version-2026-07-23.json"))?;
-    let decision = object(&decision, "Go runtime version decision")?;
-    require_string(
-        decision,
-        "$id",
-        "https://vexil.dev/release/decisions/runtime-go-version-2026-07-23.json",
-    )?;
-    require_string(decision, "recordKind", "package-maintenance-decision")?;
-    require_string(decision, "decisionId", "runtime-go-version-2026-07-23")?;
-    require_string(decision, "status", "approved")?;
-    require_string(decision, "unitId", "vexil-runtime-go")?;
-    require_string(decision, "versionSource", "packages/runtime-go/VERSION")?;
-    require_string(
-        decision,
-        "canonicalTagNamespace",
-        "packages/runtime-go/v<semver>",
-    )?;
-    if text(
-        decision.get("selectedVersion"),
-        "Go decision selected version",
-    )? != selected_version
+    let decisions = root.join("release/decisions");
+    let mut approved_versions = Vec::new();
+    for entry in fs::read_dir(&decisions)
+        .map_err(|error| format!("read Go version decisions {}: {error}", decisions.display()))?
     {
+        let path = entry
+            .map_err(|error| format!("read Go version decision entry: {error}"))?
+            .path();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        if !name.starts_with("runtime-go-version-") || !name.ends_with(".json") {
+            continue;
+        }
+        let decision = read_json(&path)?;
+        let decision = object(&decision, "Go runtime version decision")?;
+        let decision_id = text(decision.get("decisionId"), "Go version decision ID")?;
+        let expected_id = format!("https://vexil.dev/release/decisions/{name}");
+        require_string(decision, "$id", &expected_id)?;
+        require_string(decision, "recordKind", "package-maintenance-decision")?;
+        require_string(decision, "unitId", "vexil-runtime-go")?;
+        require_string(decision, "versionSource", "packages/runtime-go/VERSION")?;
+        require_string(
+            decision,
+            "canonicalTagNamespace",
+            "packages/runtime-go/v<semver>",
+        )?;
+        validate_strict_semver(text(
+            decision.get("selectedVersion"),
+            "Go decision selected version",
+        )?)?;
+        let approval = object(
+            required_value(decision, "approval")?,
+            "Go version decision approval",
+        )?;
+        require_string(approval, "actorId", "github:furkanmamuk")?;
+        if text(approval.get("approvedAt"), "Go decision approval timestamp")?.is_empty()
+            || text(approval.get("decision"), "Go decision approval text")?.is_empty()
+        {
+            return Err(
+                "Go version decision approval must retain timestamp and decision text".to_owned(),
+            );
+        }
+        match text(decision.get("status"), "Go version decision status")? {
+            "approved" => {
+                let _ = decision_id;
+                approved_versions.push(
+                    text(
+                        decision.get("selectedVersion"),
+                        "approved Go decision selected version",
+                    )?
+                    .to_owned(),
+                );
+            }
+            "superseded" => {
+                if text(
+                    decision.get("supersededBy"),
+                    "Go superseded decision successor",
+                )?
+                .is_empty()
+                {
+                    return Err(
+                        "a superseded Go version decision must name its successor".to_owned()
+                    );
+                }
+            }
+            _ => return Err("Go version decision status must be approved or superseded".to_owned()),
+        }
+    }
+    if approved_versions.len() != 1 {
+        return Err("exactly one approved Go version decision is required".to_owned());
+    }
+    if approved_versions[0] != selected_version {
         return Err(
             "Go VERSION must agree with the approved public maintenance decision".to_owned(),
         );
     }
     validate_strict_semver(selected_version)?;
-    let approval = object(
-        required_value(decision, "approval")?,
-        "Go version decision approval",
-    )?;
-    require_string(approval, "actorId", "github:furkanmamuk")?;
-    if text(approval.get("approvedAt"), "Go decision approval timestamp")?.is_empty()
-        || text(approval.get("decision"), "Go decision approval text")?.is_empty()
-    {
-        return Err(
-            "Go version decision approval must retain timestamp and decision text".to_owned(),
-        );
-    }
     Ok(())
 }
 
