@@ -1,0 +1,115 @@
+name: Exact Manifest Go Runtime Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Canonical Release Run ID retained under release/runs/
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: Validate exact Go release authorization
+    if: github.repository == 'vexil-lang/vexil' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      canonical_tag: ${{ steps.authorization.outputs.canonical_tag }}
+      source_commit: ${{ steps.authorization.outputs.source_commit }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+      - name: Validate retained public release records
+        run: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
+      - id: authorization
+        name: Bind exactly one authorized Go target
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RUN_ID" =~ ^[a-z0-9][a-z0-9._-]*$ ]]
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          run_id = os.environ["RUN_ID"]
+          authorization_path = Path("release/runs") / run_id / "start-authorization.json"
+          authorization = json.loads(authorization_path.read_text(encoding="utf-8"))
+          assert authorization["recordKind"] == "privileged-run-start-authorization"
+          assert authorization["runId"] == run_id
+          assert authorization["materializationPath"] == authorization_path.as_posix()
+          assert authorization["workload"] == ".github/workflows/exact-manifest-go-release.yml"
+          assert authorization["protectedEnvironment"] == "release-go-runtime"
+          assert authorization["allowedUnits"] == ["vexil-runtime-go"]
+          assert authorization["allowedTargets"] == ["github.com/vexil-lang/vexil/packages/runtime-go"]
+          assert authorization["allowedOperations"] == ["create-canonical-go-tag"]
+          assert authorization["allowedPermissions"] == ["contents:write:refs/tags/exact-approved-manifest-tag"]
+
+          manifest_path = Path("release/manifests") / authorization["manifestId"] / "manifest.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          assert manifest["recordKind"] == "release-manifest"
+          assert manifest["manifestId"] == authorization["manifestId"]
+          units = manifest["releaseUnits"]
+          assert len(units) == 1
+          unit = units[0]
+          assert unit["unitId"] == "vexil-runtime-go"
+          assert unit["targets"] == [{"kind": "go-module", "name": "github.com/vexil-lang/vexil/packages/runtime-go", "mandatory": True}]
+          tag = unit["canonicalTag"]
+          assert re.fullmatch(r"packages/runtime-go/v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", tag)
+          assert tag == f"packages/runtime-go/v{unit['proposedVersion']}"
+          source_commit = unit["sourceCommit"]
+          assert re.fullmatch(r"[0-9a-f]{40}", source_commit)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"canonical_tag={tag}\n")
+              output.write(f"source_commit={source_commit}\n")
+          PY
+
+  create-canonical-tag:
+    name: Create exactly authorized Go tag
+    needs: preflight
+    runs-on: ubuntu-22.04
+    environment:
+      name: release-go-runtime
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+      - name: Revalidate retained public release records
+        run: cargo run --manifest-path release/validator/Cargo.toml --offline -- --root .
+      - name: Create the exact immutable Canonical Tag
+        env:
+          CANONICAL_TAG: ${{ needs.preflight.outputs.canonical_tag }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ needs.preflight.outputs.source_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$CANONICAL_TAG" =~ ^packages/runtime-go/v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "${SOURCE_COMMIT}^{commit}"
+          git merge-base --is-ancestor "$SOURCE_COMMIT" "$GITHUB_SHA"
+          if git ls-remote --exit-code --tags origin "refs/tags/$CANONICAL_TAG"; then
+            echo "refusing to overwrite an existing Canonical Tag: $CANONICAL_TAG" >&2
+            exit 1
+          else
+            status=$?
+            [[ "$status" -eq 2 ]] || exit "$status"
+          fi
+          git config user.name "vexil release executor"
+          git config user.email "release-executor@vexil.dev"
+          git tag --annotate "$CANONICAL_TAG" "$SOURCE_COMMIT" --message "Manifest-authorized Go runtime release"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$CANONICAL_TAG"
