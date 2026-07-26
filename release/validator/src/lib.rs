@@ -8382,14 +8382,98 @@ pub fn validate_version_rationale(
         "version rationale previous package version",
     )?;
     let previous_kind = text(previous.get("kind"), "previous package version kind")?;
-    if previous_kind != "initial-non-release-baseline"
-        || !previous.get("version").unwrap_or(&Value::Null).is_null()
-        || change_class != "initial-source-version"
-    {
-        return Err(
-            "until a dedicated public provenance contract exists, rationales must use an explicit initial non-release baseline and initial-source-version change class"
-                .to_owned(),
-        );
+    match previous_kind {
+        "initial-non-release-baseline" => {
+            if !previous.get("version").unwrap_or(&Value::Null).is_null()
+                || change_class != "initial-source-version"
+            {
+                return Err(
+                    "an initial non-release baseline requires a null version and initial-source-version change class"
+                        .to_owned(),
+                );
+            }
+        }
+        "observed-publication-baseline" => {
+            let previous_version = text(
+                previous.get("version"),
+                "observed publication baseline version",
+            )?;
+            validate_strict_semver(previous_version)?;
+            if previous_version == proposed {
+                return Err(
+                    "an observed publication baseline must not equal the proposed package version"
+                        .to_owned(),
+                );
+            }
+            if change_class == "initial-source-version" {
+                return Err(
+                    "an observed publication baseline cannot use initial-source-version".to_owned(),
+                );
+            }
+
+            validate_history_repository(root)?;
+            let mut prior_observation_id = "";
+            let mut observation_ids = BTreeSet::new();
+            for observation_id in array(
+                previous.get("observationIds"),
+                "observed publication baseline observation IDs",
+            )? {
+                let observation_id = text(
+                    Some(observation_id),
+                    "observed publication baseline observation ID",
+                )?;
+                if observation_id <= prior_observation_id
+                    || !observation_ids.insert(observation_id.to_owned())
+                {
+                    return Err(
+                        "observed publication baseline observation IDs must be unique and sorted"
+                            .to_owned(),
+                    );
+                }
+                prior_observation_id = observation_id;
+            }
+
+            let observations = read_history_records(root, "observations")?;
+            for observation_id in &observation_ids {
+                let observation = observations
+                    .iter()
+                    .find(|observation| {
+                        observation.get("observationId").and_then(Value::as_str)
+                            == Some(observation_id.as_str())
+                    })
+                    .ok_or_else(|| {
+                        format!(
+                            "observed publication baseline references an unknown history observation: {observation_id}"
+                        )
+                    })?;
+                let observation = object(observation, "observed publication baseline observation")?;
+                if text(observation.get("state"), "observed publication state")? != "observed" {
+                    return Err(
+                        "an observed publication baseline requires an observed history observation"
+                            .to_owned(),
+                    );
+                }
+                let claim = object(
+                    required_value(observation, "claim")?,
+                    "observed publication baseline claim",
+                )?;
+                if text(claim.get("kind"), "observed publication claim kind")?
+                    != "observed-package-version"
+                    || claim.get("unitId").and_then(Value::as_str) != Some(unit_id)
+                    || claim.get("version").and_then(Value::as_str) != Some(previous_version)
+                {
+                    return Err(
+                        "observed publication baseline evidence must bind the same catalog unit and previous version"
+                            .to_owned(),
+                    );
+                }
+            }
+        }
+        _ => {
+            return Err(
+                "version rationale has an unsupported previous package version kind".to_owned(),
+            )
+        }
     }
 
     let surfaces = array(rationale.get("affectedSurfaces"), "affected surfaces")?;

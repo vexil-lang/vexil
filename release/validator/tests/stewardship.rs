@@ -1328,6 +1328,11 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
         isolated.join("release/schemas/security-scan-1.0.schema.json"),
     )
     .expect("copy current security scan schema into clean fixture repository");
+    fs::copy(
+        source_root.join("release/security/scans/npm-runtime-ts-2026-07-26.json"),
+        isolated.join("release/security/scans/npm-runtime-ts-2026-07-26.json"),
+    )
+    .expect("copy current npm security scan into clean fixture repository");
     let output = Command::new("git")
         .current_dir(&isolated)
         .args([
@@ -1342,6 +1347,7 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
             "release/schemas/history-observation.schema.json",
             "release/schemas/checkpoint-change-unit-1.0.schema.json",
             "release/schemas/security-scan-1.0.schema.json",
+            "release/security/scans/npm-runtime-ts-2026-07-26.json",
         ])
         .output()
         .expect("stage fixture Manifest schema");
@@ -2154,10 +2160,17 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     });
     let evidence_set_bytes = canonical_json(&evidence_set);
     let evidence_digest = digest(&evidence_set_bytes);
-    let security_scan_path = "release/security/scans/npm-runtime-ts-2026-07-25.json";
+    let security_scan_path = "release/security/scans/npm-runtime-ts-2026-07-26.json";
     let mut security_scan: Value =
         serde_json::from_slice(&fs::read(root.join(security_scan_path)).unwrap()).unwrap();
-    security_scan["findings"][3]["status"] = Value::String("exception".into());
+    security_scan["findings"] = serde_json::json!([{
+        "id": "GHSA-fixture",
+        "package": "fixture-package",
+        "releaseRelevant": true,
+        "severity": "high",
+        "status": "exception"
+    }]);
+    security_scan["scanId"] = Value::String("npm-runtime-ts-fixture".into());
     let security_scan_bytes = canonical_json(&security_scan);
     fs::write(root.join(security_scan_path), &security_scan_bytes).unwrap();
     let security_scan_digest = digest(&security_scan_bytes);
@@ -2167,7 +2180,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "$schema":"https://vexil.dev/release/schemas/security-exception-1.1.schema.json",
         "recordKind":"release-security-exception","schemaVersion":"1.1",
         "exceptionId":"authorization-exception",
-        "finding":{"scanId":"npm-runtime-ts-2026-07-25","scanDigest":security_scan_digest,"findingId":"GHSA-6g55-p6wh-862q"},
+        "finding":{"scanId":"npm-runtime-ts-fixture","scanDigest":security_scan_digest,"findingId":"GHSA-fixture"},
         "scope":["npm-package:@vexil-lang/runtime"],"exploitability":"fixture",
         "compensatingControls":["fixture"],
         "owner":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},
@@ -3641,6 +3654,21 @@ fn version_rationales_are_per_unit_and_fail_closed() {
     vexil_release_governance_validator::validate_version_rationale(&root, &catalog, &prior_published)
         .expect_err("prior published versions remain blocked until an explicit public provenance contract exists");
 
+    let mut unbound_observed_publication = rationale.clone();
+    unbound_observed_publication["previousPackageVersion"] = serde_json::json!({
+        "kind": "observed-publication-baseline",
+        "version": "0.4.0",
+        "observationIds": ["observation-does-not-exist"],
+        "reason": "A prior provider observation must be explicit and source-attributed."
+    });
+    unbound_observed_publication["changeClass"] = Value::String("patch-compatible".into());
+    vexil_release_governance_validator::validate_version_rationale(
+        &root,
+        &catalog,
+        &unbound_observed_publication,
+    )
+    .expect_err("observed publication baselines must bind an exact public history observation");
+
     let mut unordered_assessments = rationale.clone();
     unordered_assessments["affectedSurfaces"]
         .as_array_mut()
@@ -4828,6 +4856,9 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/security/inventory.toml",
         "release/security/scan-coverage.md",
         "release/security/scans/npm-runtime-ts-2026-07-25.json",
+        "release/security/scans/npm-runtime-ts-2026-07-26.json",
+        "release/security/scans/go-runtime-go-2026-07-26.md",
+        "release/security/scans/github-actions-2026-07-26.md",
         "release/history/baseline-tags.json",
         "release/history/ratifications/history-ratification-release-steward-2026-07-23.json",
         "release/history/ratifications/history-ratification-repository-administrator-2026-07-23.json",
@@ -4839,8 +4870,10 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/history/observations/observation-package-manifests-2026-07-23.json",
         "release/history/observations/observation-pypi-vexil-runtime-2026-07-23.json",
         "release/history/observations/observation-go-proxy-runtime-2026-07-23.json",
+        "release/history/observations/observation-go-proxy-runtime-v0-1-0-2026-07-26.json",
         "release/history/entries/entry-root-v1-0-0-changelog-anomaly-2026-07-23.json",
         "release/history/entries/entry-release-surface-observations-2026-07-23.json",
+        "release/history/entries/entry-go-runtime-observed-publication-2026-07-26.json",
         "release/history/observation-sources.json",
         "release/history/additive-repair-policy.json",
         "release/history/reconciliation-decision.json",
