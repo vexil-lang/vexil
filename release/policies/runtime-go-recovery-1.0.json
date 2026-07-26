@@ -1,0 +1,1 @@
+{"policyId":"runtime-go-recovery","releaseBoundary":"A verified matching protected tag may continue to clean-consumer verification. A mismatched, unknown, or incomplete public state is terminal for this Manifest and must be handled only by an additive successor record.","schemaVersion":"1.0"}
