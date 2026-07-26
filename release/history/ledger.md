@@ -15,7 +15,7 @@
 - `observation-github-tags-2026-07-26` — observed from `git-remote-tags` (`sha256:a3658aa5c79d180770ea0ac1f7a2c7ef858c14807430e02eb46235ed106ac8f9`)
 - `observation-go-proxy-runtime-2026-07-23` — missing from `go-proxy` (`sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`)
 - `observation-go-proxy-runtime-v0-1-0-2026-07-26` — observed from `go-proxy` (`sha256:d0b4f9120ba026c00fa23cb84b4e1620a2e6436592e58155a5151653179572c0`)
-- `observation-go-runtime-v0-1-1-publication-2026-07-26` — observed from `github-tag-and-go-proxy` (`sha256:72dc34c1b8af8130f2dcf1cd0001482dfd986946eb1c18599bf248790f61bd64`)
+- `observation-go-runtime-v0-1-1-publication-2026-07-26` — observed from `go-proxy` (`sha256:72dc34c1b8af8130f2dcf1cd0001482dfd986946eb1c18599bf248790f61bd64`)
 - `observation-npm-runtime-2026-07-23` — observed from `npm` (`sha256:39dac15bfe8eafa9602da3e5e56905f9c05b459469cd59ec77770acfd41bc07a`)
 - `observation-package-manifests-2026-07-23` — observed from `package-manifests` (`sha256:7bcf1d1440d64f3ed570ca87f9f87628e9e91a2dd7618c7af77cb5c30923214d`)
 - `observation-pypi-vexil-runtime-2026-07-23` — missing from `pypi` (`sha256:52fcad3d2db7c4a4d1270fef3e3bb21a9bf9e8014569bb23629aface5853c2ea`)
