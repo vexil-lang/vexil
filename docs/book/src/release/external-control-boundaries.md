@@ -2,6 +2,15 @@
 
 > Public operational guidance for repository workflows. This page describes committed boundaries and required provider evidence; it is not provider configuration, a Release Manifest, or approval to perform an external effect.
 
+## Current scope
+
+Vexil has completed a manually protected tag for
+[`vexil-runtime-go` `v0.1.1`](../../../../release/closeouts/runtime-go-0-1-1-manual-protected-tag-2026-07-26.json),
+with a matching [public Go proxy observation](../../../../release/history/observations/observation-go-runtime-v0-1-1-publication-2026-07-26.json).
+That retained outcome is scoped to the exact Go module tag. It does not claim a
+GitHub Release, registry upload, deployment, bot action, workflow Run, or
+provider readiness for another target.
+
 ## Committed workflow boundary
 
 The release and registry workflows are advisory or rehearsal-only. The documentation workflow is a narrowly scoped exception: it builds every documented change, while only a `main` push may deploy the rendered book through the protected `github-pages` environment. That documentation deployment path has no release, registry, tag, or package-publication authority.
@@ -29,9 +38,15 @@ Provider environment approval is only an execution gate. It never substitutes fo
 
 The [Release Unit Catalog](./catalog.md) is a source inventory, not provider evidence. A catalog target name or category does not prove registry identity, authorization, publication eligibility, release ordering, or that any unit has been published.
 
-## Live-write boundary
+## Reusable workflow boundary
 
-This repository state intentionally performs no live release, registry, protected-branch, tag, credential, or provider-configuration write. The sole committed live-write path is the main-only Pages artifact deployment described above. It remains distinct from release publication and does not prove provider configuration: missing, inaccessible, stale, broader-than-expected, or ambiguous provider evidence is `unknown` or `noncompliant` and keeps every release path blocked.
+The reusable release and registry workflows intentionally perform no live
+release, registry, protected-branch, tag, credential, or provider-configuration
+write. The sole committed workflow live-write path is the main-only Pages
+artifact deployment described above. It remains distinct from release
+publication and does not prove provider configuration. For a future target,
+missing, inaccessible, stale, broader-than-expected, or ambiguous provider
+evidence is `unknown` or `noncompliant` and keeps that target's path blocked.
 
 For the canonical fail-closed procedure, see [Privileged and Policy Operations](./privileged-operations.md). For advisory fallbacks, see [Advisory Automation and Manual Fallbacks](./advisory-automation.md).
 ## Owner-authorized credential exception

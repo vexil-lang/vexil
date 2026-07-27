@@ -6271,6 +6271,7 @@ pub fn validate_repository(root: &Path) -> Result<(), String> {
     validate_catalog_repository(root)?;
     validate_version_rationale_repository(root)?;
     validate_release_set_selection_repository(root)?;
+    validate_current_status_documentation(root)?;
     validate_runtime_go_source_candidate_repository(root)?;
     if root.join(".git").exists() {
         validate_checkpoint_change_units_repository(root)?;
@@ -7848,7 +7849,9 @@ fn validate_evidence_set_entries(root: &Path, record: &Map<String, Value>) -> Re
                 format!("read reviewed evidence-set entry {}: {error}", key.2)
             })?)
         );
-        if actual_digest != key.3 {
+        if actual_digest != key.3
+            && !evidence_entry_matches_selected_historical_source(root, record, &key.2, &key.3)?
+        {
             return Err(format!(
                 "reviewed evidence-set entry digest does not match public path: {}",
                 key.2
@@ -7863,6 +7866,76 @@ fn validate_evidence_set_entries(root: &Path, record: &Map<String, Value>) -> Re
         previous = Some(key);
     }
     Ok(())
+}
+
+/// A reviewed compatibility input may be a source file that legitimately
+/// changed after the selected release commit. In that case, validate the
+/// retained digest against the source commit named by the evidence set's own
+/// Release Set selection, rather than rewriting the historical evidence.
+fn evidence_entry_matches_selected_historical_source(
+    root: &Path,
+    record: &Map<String, Value>,
+    entry_path: &str,
+    expected_digest: &str,
+) -> Result<bool, String> {
+    let entries = array(record.get("entries"), "reviewed evidence-set entries")?;
+    let Some(selection_path) = entries.iter().find_map(|entry| {
+        let entry = entry.as_object()?;
+        (entry.get("id")?.as_str()? == "release-selection")
+            .then(|| entry.get("path")?.as_str().map(str::to_owned))
+            .flatten()
+    }) else {
+        return Ok(false);
+    };
+    let selection = read_json(&root.join(&selection_path))?;
+    let selection = object(&selection, "evidence-set Release Set selection")?;
+    let source_commit = text(
+        selection.get("sourceCommit"),
+        "evidence-set Release Set source commit",
+    )?;
+    if !is_full_object_id(source_commit) || entry_path.contains(':') {
+        return Ok(false);
+    }
+    let included_units = array(
+        selection.get("includedUnits"),
+        "evidence-set Release Set included units",
+    )?
+    .iter()
+    .map(|unit| {
+        let unit = object(unit, "evidence-set included unit")?;
+        Ok(text(unit.get("unitId"), "evidence-set included unit ID")?.to_owned())
+    })
+    .collect::<Result<BTreeSet<_>, String>>()?;
+    let catalog = read_json(&root.join("release/catalog.json"))?;
+    let catalog = object(&catalog, "release catalog")?;
+    let source_roots = array(catalog.get("units"), "release catalog units")?
+        .iter()
+        .filter_map(|unit| unit.as_object())
+        .filter_map(|unit| {
+            let unit_id = unit.get("id")?.as_str()?;
+            included_units
+                .contains(unit_id)
+                .then(|| unit.get("sourceRoot")?.as_str().map(str::to_owned))
+                .flatten()
+        })
+        .collect::<Vec<_>>();
+    if !source_roots
+        .iter()
+        .any(|source_root| entry_path.starts_with(&format!("{source_root}/")))
+    {
+        return Ok(false);
+    }
+    let output = Command::new("git")
+        .args(["show", &format!("{source_commit}:{entry_path}")])
+        .current_dir(root)
+        .output();
+    let Ok(output) = output else {
+        return Ok(false);
+    };
+    if !output.status.success() {
+        return Ok(false);
+    }
+    Ok(format!("{:x}", Sha256::digest(output.stdout)) == expected_digest)
 }
 
 fn validate_manifest_and_evidence_references(
@@ -8591,6 +8664,40 @@ pub fn validate_release_set_selection_repository(root: &Path) -> Result<(), Stri
     Ok(())
 }
 
+/// Ensures the hand-authored current-status synthesis links the retained Go
+/// outcome without turning it into a project-wide publication claim.
+pub fn validate_current_status_documentation(root: &Path) -> Result<(), String> {
+    let documentation = fs::read_to_string(root.join("docs/book/src/release/current-status.md"))
+        .map_err(|error| format!("read current release status documentation: {error}"))?;
+    for required in [
+        "vexil-runtime-go",
+        "v0.1.1",
+        "](../../../../release/closeouts/runtime-go-0-1-1-manual-protected-tag-2026-07-26.json)",
+        "](../../../../release/manifests/runtime-go-0-1-1-release-2026-07-26/manifest.json)",
+        "](../../../../release/history/observations/observation-go-runtime-v0-1-1-publication-2026-07-26.json)",
+        "does **not** claim a GitHub Release, registry upload credential,",
+        "readiness for any other Vexil target",
+        "Not selected",
+        "Intentionally effect-disabled",
+        "| crates.io units | Not selected for this completed Go release. |",
+        "| npm runtime | Not selected. |",
+        "| Python runtime | Not selected. |",
+        "| GitHub Releases, deployments, and documentation deployment | Not part of the Go closeout. |",
+    ] {
+        if !documentation.contains(required) {
+            return Err(format!(
+                "current release status must retain scoped Go completion and target limits: missing {required:?}"
+            ));
+        }
+    }
+    for overclaim in ["project-wide publication readiness", "all release targets are ready"] {
+        if documentation.to_ascii_lowercase().contains(overclaim) {
+            return Err("current release status must not overclaim target-scoped completion".to_owned());
+        }
+    }
+    ensure_no_private_leakage(&documentation)
+}
+
 /// Validates a structural Release Set selection. It cannot create a Manifest,
 /// approval, Run, tag, registry publication, deployment, or other effect.
 pub fn validate_release_set_selection(
@@ -8693,8 +8800,8 @@ pub fn render_release_set_selection_markdown(record: &Value) -> Result<String, S
     let source_commit = text(selection.get("sourceCommit"), "Release Set source commit")?;
     let status = text(selection.get("status"), "Release Set status")?;
     let boundary = text(selection.get("releaseBoundary"), "Release Set boundary")?;
-    let mut markdown = String::from("# First Recovered Release Set\n\n> Generated view of [`release/decisions/first-recovered-release-set-2026-07-26.json`](../../../../release/decisions/first-recovered-release-set-2026-07-26.json). The JSON selection is canonical; this Markdown is non-authoritative and parity-checked.\n\n");
-    markdown.push_str(&format!("Selection `{selection_id}` is `{status}` at exact source commit `{source_commit}`. It is intentionally a small rehearsal selection, not a Release Manifest, approval, Run, tag, registry action, deployment, or publication assertion.\n\n"));
+    let mut markdown = String::from("# First Recovered Release Set\n\n> Generated view of [`release/decisions/first-recovered-release-set-2026-07-26.json`](../../../../release/decisions/first-recovered-release-set-2026-07-26.json). The JSON selection is canonical; this Markdown is non-authoritative and parity-checked.\n\n## Preserved pre-effect decision\n\n");
+    markdown.push_str(&format!("Selection `{selection_id}` is `{status}` at exact source commit `{source_commit}`. It records the small rehearsal selection that preceded the separately retained Go closeout; it is not rewritten to claim that later outcome. The selection itself is not a Release Manifest, approval, Run, tag, registry action, deployment, or publication assertion.\n\n"));
     markdown.push_str("## Included unit\n\n| Unit | Source commit | Version | Canonical tag | Mandatory target | Clean-consumer plan |\n|---|---|---|---|---|---|\n");
     for item in array(selection.get("includedUnits"), "Release Set included units")? {
         let item = object(item, "Release Set included unit")?;
@@ -8723,7 +8830,7 @@ pub fn render_release_set_selection_markdown(record: &Value) -> Result<String, S
             text(item.get("nextAction"), "Release Set exclusion next action")?,
         ));
     }
-    markdown.push_str(&format!("\n## Effect boundary\n\n`{boundary}`\n\nOffline validation confirms structural bindings and this generated view only. It does not prove live external controls or authorize an effect.\n"));
+    markdown.push_str(&format!("\n## Effect boundary\n\n`{boundary}`\n\nOffline validation confirms structural bindings and this generated view only. It does not prove live external controls or authorize an effect. For the later, target-scoped outcome, see [Current Release Status](./current-status.md).\n"));
     Ok(markdown)
 }
 
@@ -10780,7 +10887,7 @@ pub fn render_catalog_markdown(root: &Path, catalog: &Value) -> Result<String, S
     validate_catalog_schema(root, catalog)?;
     validate_catalog(root, catalog)?;
     let catalog = object(catalog, "release catalog")?;
-    let mut markdown = String::from("# Release Unit Catalog\n\n> Generated view of [`release/catalog.json`](../../../../release/catalog.json). The JSON catalog is canonical; this Markdown is non-authoritative and parity-checked.\n\nThis is a source-led inventory and typed structural dependency graph, not a Release Manifest, publication assertion, provider-identity claim, Release Set decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md).\n\n## Units\n\n| Unit | Source root | Targets | Status | Source version observation | Canonical tag policy |\n|---|---|---|---|---|---|\n");
+    let mut markdown = String::from("# Release Unit Catalog\n\n> Generated view of [`release/catalog.json`](../../../../release/catalog.json). The JSON catalog is canonical; this Markdown is non-authoritative and parity-checked.\n\nThis is a source-led inventory and typed structural dependency graph, not a Release Manifest, publication assertion, provider-identity claim, Release Set decision, or version-selection decision. Formal specifications and documentation govern semantics; pinned code and tests establish the executable baseline. Historical tags, changelog headings, and registry observations remain evidence in [Release History](./history.md). The catalog's source status is not a substitute for [Current Release Status](./current-status.md), which links retained target-specific outcomes.\n\n## Units\n\n| Unit | Source root | Targets | Status | Source version observation | Canonical tag policy |\n|---|---|---|---|---|---|\n");
     for unit in array(catalog.get("units"), "release catalog units")? {
         let unit = object(unit, "release catalog unit")?;
         let version = object(
@@ -12524,7 +12631,7 @@ pub fn validate_exercise_runbook_content(
 pub fn render_stewardship_exercises_markdown(exercise: &Value) -> Result<String, String> {
     validate_exercise_shape_for_render(exercise)?;
     let root = object(exercise, "exercise")?;
-    let mut markdown = String::from("# Stewardship Continuity Tabletop Exercises\n\n> Generated public view of [`release/exercises/tabletop-stewardship-continuity-2026-07-14.json`](../../../../release/exercises/tabletop-stewardship-continuity-2026-07-14.json). The JSON record is canonical; this page is parity-checked and non-authoritative.\n\nThese are tabletop-only, non-mutating exercises, not Release Runs. They retain the historical absence of a distinct custodian; the current sole-maintainer policy does not make that absence a release gate. Independent external-control and release-evidence gates remain blocked.\n\n## Record\n\n");
+    let mut markdown = String::from("# Stewardship Continuity Tabletop Exercises\n\n> Generated public view of [`release/exercises/tabletop-stewardship-continuity-2026-07-14.json`](../../../../release/exercises/tabletop-stewardship-continuity-2026-07-14.json). The JSON record is canonical; this page is parity-checked and non-authoritative.\n\nThese tabletop exercises let Vexil practice continuity without changing provider state. They preserve the historical absence of a distinct custodian; the sole-maintainer policy does not turn that absence into a release gate. Any future target still needs its own external-control and release evidence.\n\n## Record\n\n");
     markdown.push_str(&format!("Record `{}` was exercised at `{}`. Evidence is retained as a version-controlled public record with no secrets.\n\n", text(root.get("recordId"), "record id")?, text(root.get("exercisedAtUtc"), "exercise time")?));
     markdown.push_str("## Scenarios\n\n| Scenario | Procedure | Allowed boundary | Disposition |\n|---|---|---|---|\n");
     for scenario in array(root.get("scenarios"), "scenarios")? {
@@ -12537,7 +12644,7 @@ pub fn render_stewardship_exercises_markdown(exercise: &Value) -> Result<String,
             text(scenario.get("disposition"), "disposition")?
         ));
     }
-    markdown.push_str("\n## Public runbooks\n\n- [Stewardship succession](../../../../release/runbooks/stewardship-succession.md)\n- [Unavailable owner](../../../../release/runbooks/unavailable-owner.md)\n- [Emergency stop](../../../../release/runbooks/emergency-stop.md)\n- [Trust revocation](../../../../release/runbooks/trust-revocation.md)\n- [Advisory manual fallback](../../../../release/runbooks/advisory-manual-fallback.md)\n\nEvery provider-specific action is an **unverified external-control blocker**. This evidence identifies future control categories; it does not test, configure, revoke, stop, publish, deploy, approve, or mutate any provider state.\n\n## Offline validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks canonical assignment linkage, action boundaries, explicit external-control blockers, public persistence, no secrets, required decision fields, and runbook safety. It does not invoke provider controls.\n");
+    markdown.push_str("\n## Public runbooks\n\n- [Stewardship succession](../../../../release/runbooks/stewardship-succession.md)\n- [Unavailable owner](../../../../release/runbooks/unavailable-owner.md)\n- [Emergency stop](../../../../release/runbooks/emergency-stop.md)\n- [Trust revocation](../../../../release/runbooks/trust-revocation.md)\n- [Advisory manual fallback](../../../../release/runbooks/advisory-manual-fallback.md)\n\nA provider-specific action remains an **unverified external-control blocker** until Vexil records the required target evidence. These exercises identify what to establish next; they do not test, configure, revoke, stop, publish, deploy, approve, or mutate provider state.\n\n## Offline validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks canonical assignment linkage, action boundaries, explicit external-control blockers, public persistence, no secrets, required decision fields, and runbook safety. It does not invoke provider controls.\n");
     Ok(markdown)
 }
 
@@ -14777,7 +14884,7 @@ pub fn render_responsibility_markdown(record: &Value) -> Result<String, String> 
         required_value(root, "manifestComparison")?,
         "manifest comparison",
     )?;
-    let mut markdown = String::from("# Retired-Bot Responsibility Inventory\n\n> Generated view of [`release/stewardship/responsibilities.json`](../../../../release/stewardship/responsibilities.json). The JSON inventory is canonical; this Markdown is non-authoritative and parity-checked.\n\nThe retired [`.vexilbot.toml`](../../../../.vexilbot.toml) is historical evidence only: it is **not an order or Release Unit membership source**. Advisory responsibilities have exactly one public disposition; privileged and policy responsibilities have exactly one owned fail-closed procedure and remain blocked pending later controls.\n\n## Inventory\n\n| ID | Responsibility | Privilege class | Failure impact | Decision owner | Status |\n|---|---|---|---|---|---|\n");
+    let mut markdown = String::from("# Retired-Bot Responsibility Inventory\n\n> Generated view of [`release/stewardship/responsibilities.json`](../../../../release/stewardship/responsibilities.json). The JSON inventory is canonical; this Markdown is non-authoritative and parity-checked.\n\nThe retired [`.vexilbot.toml`](../../../../.vexilbot.toml) is historical evidence only: it is **not an order or Release Unit membership source**. Advisory responsibilities have exactly one public disposition; privileged and policy responsibilities have exactly one owned fail-closed procedure for future work. Those reusable procedures remain blocked pending their named controls and do not erase a separately retained scoped outcome.\n\n## Inventory\n\n| ID | Responsibility | Privilege class | Failure impact | Decision owner | Status |\n|---|---|---|---|---|---|\n");
     for responsibility in responsibilities {
         let responsibility = object(responsibility, "responsibility")?;
         markdown.push_str(&format!(
@@ -14819,7 +14926,7 @@ pub fn validate_responsibility_documentation_parity(
 
 pub fn render_advisory_runbook_markdown(record: &Value) -> Result<String, String> {
     let responsibilities = array(record.get("responsibilities"), "responsibilities")?;
-    let mut markdown = String::from("# Advisory Automation and Manual Fallbacks\n\nThis runbook is generated from [`release/stewardship/responsibilities.json`](../stewardship/responsibilities.json). It is public guidance, not an approval, Manifest, release control plane, or provider configuration. All entries are offline declarations with no deployed automation and no live effects.\n\n## Operating boundary\n\nAdvice may identify, triage, label, comment, or report. It cannot select scope or version, accept risk, approve a Manifest, satisfy a privileged gate, trigger publication, change protected branches, access environments or credentials, or create release authority. If an advisory mechanism is unavailable, its named owner must perform the stated manual fallback or defer and record evidence; the fallback has no privileged access.\n\n## Advisory dispositions\n\n| ID | Disposition | Owner role assertion | Minimum permissions | Failure behavior | Manual fallback |\n|---|---|---|---|---|---|\n");
+    let mut markdown = String::from("# Advisory Automation and Manual Fallbacks\n\nThis runbook records how Vexil uses advisory automation and human fallback. It is public guidance rather than a release decision or provider configuration; every entry is an offline declaration with no live release effect.\n\n## Operating boundary\n\nAdvice may identify, triage, label, comment, or report. Release scope, risk acceptance, Manifest approval, protected changes, credentials, and publication remain deliberate maintainer decisions with their own records. If an advisory mechanism is unavailable, its named owner follows the stated manual fallback or defers and records the result.\n\n## Advisory dispositions\n\n| ID | Disposition | Owner role assertion | Minimum permissions | Failure behavior | Manual fallback |\n|---|---|---|---|---|---|\n");
     for responsibility in responsibilities {
         let responsibility = object(responsibility, "responsibility")?;
         markdown.push_str(&format!(
@@ -14921,7 +15028,7 @@ pub fn render_privileged_runbook_markdown(
     operations: &Value,
     responsibilities: &Value,
 ) -> Result<String, String> {
-    let mut markdown = String::from("# Privileged Readiness and Fail-Closed Procedures\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n");
+    let mut markdown = String::from("# Privileged Readiness and Fail-Closed Procedures\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records Vexil's reusable procedures for future privileged and policy work; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded reusable procedure is currently **blocked** for its own named prerequisites. That does not erase the separately retained, target-scoped Go protected-tag closeout.\n\n");
     markdown.push_str(&render_privileged_operations_body(
         operations,
         responsibilities,
@@ -14972,7 +15079,7 @@ fn render_privileged_operations_body(
             text(operation.get("fallback"), "fallback")?,
         ));
     }
-    markdown.push_str(&format!("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization, registry identity, and candidate evidence remain explicit blockers. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow {governance_reference}; this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n"));
+    markdown.push_str(&format!("\n## Procedure boundary\n\nEach row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. It does not make a future procedure operationally ready: external controls, authorization, registry identity, and candidate evidence remain named prerequisites for that procedure. A green test or workflow cannot complete a blocked operation.\n\nFor compatibility and policy decisions, follow {governance_reference}; this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.\n\n## Validation\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe command validates this public contract offline and fails closed. It does not change a workflow, environment, credential, tag, registry, provider, or release.\n"));
     Ok(markdown)
 }
 
@@ -14980,7 +15087,7 @@ pub fn render_privileged_mdbook_markdown(
     operations: &Value,
     responsibilities: &Value,
 ) -> Result<String, String> {
-    let mut markdown = String::from("# Privileged and Policy Operations\n\n> Generated public view of the fail-closed privileged operations contract. The canonical record is [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json); this Markdown is parity-checked and non-authoritative.\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.\n\n");
+    let mut markdown = String::from("# Privileged and Policy Operations\n\n> Generated public view of Vexil's reusable privileged operations contract. The canonical record is [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json); this Markdown is parity-checked and non-authoritative.\n\nThis runbook is generated from [`release/privileged/operations-contract.json`](../../../../release/privileged/operations-contract.json). It records Vexil's reusable procedures for future privileged and policy work; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded reusable procedure is currently **blocked** for its own named prerequisites. That does not erase the separately retained, target-scoped Go protected-tag closeout; see [Current Release Status](./current-status.md).\n\n");
     markdown.push_str(&render_privileged_operations_body(
         operations,
         responsibilities,
@@ -15021,7 +15128,7 @@ pub fn render_markdown(record: &Value) -> Result<String, String> {
             strings(role.get("permittedActions"), "permittedActions")?.join(", ")
         ));
     }
-    markdown.push_str("\n## Boundaries and continuity\n\nAdvisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.\n\nRoles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. The reviewed sole-maintainer policy does not prove readiness; publication remains blocked until independent Manifest, registry identity, external-control, security, rehearsal, and closeout gates are verified.\n\n## Offline validation\n\nFrom the repository root, run the repository-local validator without network access:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nIt validates schema syntax, the canonical record, semantic authority invariants, documentation parity, and the public/private boundary.\n\n## Compatibility governance\n\nThis contract does not replace the BDFL, RFC, public-review, or breaking-change rules in [the governance policy](../../../../GOVERNANCE.md). Language, wire-format, compiler, generator, runtime, corpus/conformance, and public API changes continue through that existing route.\n");
+    markdown.push_str("\n## Boundaries and continuity\n\nAdvisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.\n\nRoles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. The reviewed sole-maintainer policy does not make a future target ready. The retained Go protected-tag closeout is target-scoped; every other target still needs its own Manifest, registry identity, external-control, security, rehearsal, and closeout evidence. See [Current Release Status](./current-status.md) for the retained outcome and its limits.\n\n## Offline validation\n\nFrom the repository root, run the repository-local validator without network access:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nIt validates schema syntax, the canonical record, semantic authority invariants, documentation parity, and the public/private boundary.\n\n## Compatibility governance\n\nThis contract does not replace the BDFL, RFC, public-review, or breaking-change rules in [the governance policy](../../../../GOVERNANCE.md). Language, wire-format, compiler, generator, runtime, corpus/conformance, and public API changes continue through that existing route.\n");
     Ok(markdown)
 }
 
@@ -15103,7 +15210,7 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
         text(recovery.get("publicRoute"), "recovery contact route")?
     ));
     markdown.push_str(&format!(
-        "**Manifest approval: {}. Privileged publication: {}.** {}\n\n",
+        "## Future target readiness\n\n**Manifest approval: {}. Privileged publication: {}.** {}\n\n",
         text(readiness.get("manifestApproval"), "manifest approval")?,
         text(
             readiness.get("privilegedPublication"),
@@ -15111,7 +15218,7 @@ pub fn render_assignment_markdown(record: &Value) -> Result<String, String> {
         )?,
         text(readiness.get("reason"), "publication reason")?
     ));
-    markdown.push_str("If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.\n\n## Future runbook\n\nThe stable identifier `release-continuity-runbook` is reserved for the public unavailable-owner and succession runbook. It does not create a custodian or authorize a release.\n\n## Validation\n\nFrom a clean public checkout, run:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the remaining fail-closed publication gates. It does not change provider settings or create a release.\n\nThis decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).\n");
+    markdown.push_str("These statuses describe future targets and reusable privileged procedures, not the retained Go closeout; see [Current Release Status](./current-status.md). If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.\n\n## Future runbook\n\nThe stable identifier `release-continuity-runbook` is reserved for the public unavailable-owner and succession runbook. It does not create a custodian or authorize a release.\n\n## Validation\n\nFrom a clean public checkout, run:\n\n```sh\ncargo run --manifest-path release/validator/Cargo.toml --offline -- --root .\n```\n\nThe validator checks the authority contract, public role assignments, every currently maintained Package Steward root, documentation parity, and the remaining fail-closed publication gates. It does not change provider settings or create a release.\n\nThis decision preserves the BDFL, RFC, and breaking-change rules in [GOVERNANCE.md](../../../../GOVERNANCE.md).\n");
     Ok(markdown)
 }
 

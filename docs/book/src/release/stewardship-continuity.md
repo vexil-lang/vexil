@@ -36,9 +36,11 @@ No distinct recovery custodian is designated by the reviewed sole-maintainer pol
 
 No successor is currently designated. Record containment and request a reviewed successor through [the public decision route](https://github.com/vexil-lang/vexil/issues/new/choose); this route grants no recovery, Manifest, or publication authority.
 
-**Manifest approval: blocked. Privileged publication: blocked.** External controls, registry identity and custody, Release Set selection, security disposition, rehearsal, and closeout evidence remain unresolved; the sole-maintainer policy is not a release gate.
+## Future target readiness
 
-If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.
+**Manifest approval: blocked. Privileged publication: blocked.** Vexil has completed a separately retained, target-scoped runtime-go v0.1.1 protected-tag release. For other targets and future privileged operations, external controls, registry identity and custody, Release Set selection, security disposition, rehearsal, and closeout evidence remain unresolved; the sole-maintainer policy is not a release gate.
+
+These statuses describe future targets and reusable privileged procedures, not the retained Go closeout; see [Current Release Status](./current-status.md). If a second qualified Release Steward is recorded, detached approval by an identity distinct from the Manifest approver becomes mandatory; provider self-review settings alone are not evidence. A future [release-continuity-runbook](#future-runbook) is reserved for the unavailable-owner and succession procedure.
 
 ## Future runbook
 

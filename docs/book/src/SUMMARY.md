@@ -54,6 +54,7 @@
 
 # Release Governance
 
+- [Current Release Status](./release/current-status.md)
 - [Stewardship Authority Model](./release/stewardship.md)
 - [Named Stewardship Continuity](./release/stewardship-continuity.md)
 - [Retired-Bot Responsibility Inventory](./release/retired-bot-responsibilities.md)
