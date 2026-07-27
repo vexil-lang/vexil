@@ -4,16 +4,16 @@
 
 ## Committed workflow boundary
 
-The current workflows are advisory or rehearsal-only. They use repository-read permission, do not reference a protected environment, and do not receive registry credentials, OIDC tokens, deployment authority, release tokens, or write-capable GitHub tokens.
+The release and registry workflows are advisory or rehearsal-only. The documentation workflow is a narrowly scoped exception: it builds every documented change, while only a `main` push may deploy the rendered book through the protected `github-pages` environment. That documentation deployment path has no release, registry, tag, or package-publication authority.
 
 | Workflow | Classification | Committed boundary |
 |---|---|---|
 | `ci.yml` | advisory | Build and test only; each job is restricted to `contents: read`. |
-| `docs.yml` | advisory | Builds the book only; GitHub Pages deployment is disabled. |
+| `docs.yml` | documentation deployment | Pull requests build only with `contents: read`; a successful `main` build may deploy its artifact through `github-pages` with `pages: write` and `id-token: write`. |
 | `npm-publish.yml` | rehearsal | Performs the npm build and tests only; publication and trusted-publishing access are disabled. |
 | `release.yml` | rehearsal | Records a blocked release boundary only; it cannot create a tag, release, artifact, or package publication. |
 
-Untrusted pull-request and fork code must remain outside protected environments and must not receive secrets, OIDC tokens, registry identities, or release permissions before it runs. An advisory workflow cannot hand authority to a later job through an environment name, inherited token default, artifact, or reusable-workflow input.
+Untrusted pull-request and fork code must remain outside protected environments and must not receive secrets, OIDC tokens, registry identities, release permissions, or Pages deployment authority before it runs. The documentation workflow grants Pages authority only to its `main`-push deployment job after a separate build job succeeds.
 
 ## Provider-only controls and evidence
 
@@ -29,9 +29,9 @@ Provider environment approval is only an execution gate. It never substitutes fo
 
 The [Release Unit Catalog](./catalog.md) is a source inventory, not provider evidence. A catalog target name or category does not prove registry identity, authorization, publication eligibility, release ordering, or that any unit has been published.
 
-## No live writes
+## Live-write boundary
 
-This repository state intentionally performs no live release, registry, Pages, deployment, protected-branch, tag, credential, or provider-configuration write. Missing, inaccessible, stale, broader-than-expected, or ambiguous provider evidence is `unknown` or `noncompliant` and keeps every release path blocked.
+This repository state intentionally performs no live release, registry, protected-branch, tag, credential, or provider-configuration write. The sole committed live-write path is the main-only Pages artifact deployment described above. It remains distinct from release publication and does not prove provider configuration: missing, inaccessible, stale, broader-than-expected, or ambiguous provider evidence is `unknown` or `noncompliant` and keeps every release path blocked.
 
 For the canonical fail-closed procedure, see [Privileged and Policy Operations](./privileged-operations.md). For advisory fallbacks, see [Advisory Automation and Manual Fallbacks](./advisory-automation.md).
 ## Owner-authorized credential exception
