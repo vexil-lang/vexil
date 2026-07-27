@@ -18,7 +18,7 @@ Only an explicit **Release Steward** role assertion bound to an approved Release
 
 Advisory automation may validate, triage, label, advise on dependencies, and rehearse only. It has no release, package, deployment, protected-branch, environment, credential, version-selection, Release Set scope-selection, or risk-acceptance authority. A Repository Administrator may only stop, revoke, contain, and activate succession in an emergency; it may not move tags, overwrite artifacts, rewrite evidence, accept security risk, approve publication, or declare completion.
 
-Roles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. The reviewed sole-maintainer policy does not prove readiness; publication remains blocked until independent Manifest, registry identity, external-control, security, rehearsal, and closeout gates are verified.
+Roles may be combined, but permissions never union implicitly: each action requires an explicit asserted role. Role assignments are deliberately absent from this contract and are recorded separately. Contract validation does not prove live workflow or provider enforcement. The reviewed sole-maintainer policy does not make a future target ready. The retained Go protected-tag closeout is target-scoped; every other target still needs its own Manifest, registry identity, external-control, security, rehearsal, and closeout evidence. See [Current Release Status](./current-status.md) for the retained outcome and its limits.
 
 ## Offline validation
 

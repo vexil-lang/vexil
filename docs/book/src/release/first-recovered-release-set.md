@@ -2,7 +2,9 @@
 
 > Generated view of [`release/decisions/first-recovered-release-set-2026-07-26.json`](../../../../release/decisions/first-recovered-release-set-2026-07-26.json). The JSON selection is canonical; this Markdown is non-authoritative and parity-checked.
 
-Selection `first-recovered-release-set-2026-07-26` is `rehearsal-selected` at exact source commit `99e2afef4d48ab35ec61e8b23a9c0d6c210e275f`. It is intentionally a small rehearsal selection, not a Release Manifest, approval, Run, tag, registry action, deployment, or publication assertion.
+## Preserved pre-effect decision
+
+Selection `first-recovered-release-set-2026-07-26` is `rehearsal-selected` at exact source commit `99e2afef4d48ab35ec61e8b23a9c0d6c210e275f`. It records the small rehearsal selection that preceded the separately retained Go closeout; it is not rewritten to claim that later outcome. The selection itself is not a Release Manifest, approval, Run, tag, registry action, deployment, or publication assertion.
 
 ## Included unit
 
@@ -29,4 +31,4 @@ Selection `first-recovered-release-set-2026-07-26` is `rehearsal-selected` at ex
 
 `selection-only; no Manifest, approval, Run, tag, registry, deployment, or publication authority`
 
-Offline validation confirms structural bindings and this generated view only. It does not prove live external controls or authorize an effect.
+Offline validation confirms structural bindings and this generated view only. It does not prove live external controls or authorize an effect. For the later, target-scoped outcome, see [Current Release Status](./current-status.md).

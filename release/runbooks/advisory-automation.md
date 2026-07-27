@@ -1,10 +1,10 @@
 # Advisory Automation and Manual Fallbacks
 
-This runbook is generated from [`release/stewardship/responsibilities.json`](../stewardship/responsibilities.json). It is public guidance, not an approval, Manifest, release control plane, or provider configuration. All entries are offline declarations with no deployed automation and no live effects.
+This runbook records how Vexil uses advisory automation and human fallback. It is public guidance rather than a release decision or provider configuration; every entry is an offline declaration with no live release effect.
 
 ## Operating boundary
 
-Advice may identify, triage, label, comment, or report. It cannot select scope or version, accept risk, approve a Manifest, satisfy a privileged gate, trigger publication, change protected branches, access environments or credentials, or create release authority. If an advisory mechanism is unavailable, its named owner must perform the stated manual fallback or defer and record evidence; the fallback has no privileged access.
+Advice may identify, triage, label, comment, or report. Release scope, risk acceptance, Manifest approval, protected changes, credentials, and publication remain deliberate maintainer decisions with their own records. If an advisory mechanism is unavailable, its named owner follows the stated manual fallback or defers and records the result.
 
 ## Advisory dispositions
 

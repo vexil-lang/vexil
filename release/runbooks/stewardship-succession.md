@@ -1,7 +1,7 @@
 # Stewardship Succession Tabletop Runbook
 
 **Procedure ID:** `release-continuity-runbook`
-**Mode:** tabletop-only, non-mutating. This procedure is not a Release Run and never grants Manifest approval or publication permission.
+**Mode:** tabletop-only, non-mutating. This procedure helps Vexil rehearse continuity; it does not change a Release Run or provider state.
 
 ## Canonical records
 
@@ -12,7 +12,7 @@
 
 ## Recovery contact route
 
-No successor is designated under the sole-maintainer policy. Record containment and request a reviewed successor through the [public decision route](https://github.com/vexil-lang/vexil/issues/new/choose). This route grants no recovery, Manifest, or publication authority.
+No successor is currently designated under the sole-maintainer policy. Record containment and request a reviewed successor through the [public decision route](https://github.com/vexil-lang/vexil/issues/new/choose). That route records a future decision; it does not alter an existing release record.
 
 | Decision point | Asserted role | Allowed action | Prohibited action | Evidence destination | Prerequisite | Stop condition | Follow-up owner | Tabletop-only |
 |---|---|---|---|---|---|---|---|---|
@@ -20,4 +20,4 @@ No successor is designated under the sole-maintainer policy. Record containment 
 | Freeze new privileged work and record the continuity gap | `repository-administrator` | stop, contain | publish, deploy, accept risk, declare completion | same public exercise record | Explicit role assertion | A provider-side stop would be required; do not perform it | `repository-administrator` | yes |
 | Start reviewed succession | `repository-administrator` | activate-succession | create a Release Steward, approve a Manifest, grant publication authority | same public exercise record | Public governance review under `GOVERNANCE.md` | No reviewed successor exists | `repository-administrator` | yes |
 
-The current sole-maintainer policy has no designated successor and creates no release authority. Provider-side administrator recovery is an **unverified external-control blocker**, not an exercised control. Manifest approval and privileged publication remain blocked by their independent evidence gates.
+The current sole-maintainer policy has no designated successor. Provider-side administrator recovery is an **unverified external-control blocker**, not an exercised control. Future Manifest approval and privileged publication each retain their independent evidence gates.

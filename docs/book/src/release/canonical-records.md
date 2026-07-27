@@ -6,6 +6,16 @@ closeout are distinct retained record families. Their Draft 2020-12 contracts
 are physically version-addressed under `release/schemas/`; a new dotted
 version is a new retained schema file and never replaces an old one.
 
+## Retained scoped outcome
+
+These record families include Vexil's completed
+[`vexil-runtime-go` `v0.1.1` protected-tag closeout](../../../../release/closeouts/runtime-go-0-1-1-manual-protected-tag-2026-07-26.json)
+and matching [public Go proxy observation](../../../../release/history/observations/observation-go-runtime-v0-1-1-publication-2026-07-26.json).
+The evidence binds that exact module tag and source commit. It does not claim a
+GitHub Release, registry upload, deployment, bot action, workflow Run, or
+readiness for any other target. See [Current Release Status](./current-status.md)
+for the maintained summary.
+
 ## Deterministic Manifest generation
 
 A Release Manifest is constructed from explicitly reviewed inputs through the
@@ -47,7 +57,8 @@ Canonical materializations are public: evidence sets live at
 `release/evidence-sets/<evidence-set-id>/evidence-set.json`; Manifests and
 their detached approvals/dispositions live under `release/manifests/`; Run
 start authorization, events, adapter results, other evidence, and closeout
-live under `release/runs/`; History remains independently retained under
+live under `release/runs/` or an explicitly versioned target-scoped closeout;
+History remains independently retained under
 `release/history/entries/`. Human Markdown is generated and non-authoritative.
 
 A draft Manifest can be replaced before first approval. From first approval,

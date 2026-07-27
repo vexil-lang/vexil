@@ -1323,6 +1323,17 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
         isolated.join(".github/workflows/exact-manifest-go-release.yml"),
     )
     .expect("copy exact-manifest Go executor into clean fixture repository");
+    for relative in [
+        "release/stewardship.json",
+        "release/stewardship/assignments.json",
+        "release/runbooks/privileged-readiness-and-fail-closed.md",
+        "docs/book/src/release/stewardship.md",
+        "docs/book/src/release/stewardship-continuity.md",
+        "docs/book/src/release/privileged-operations.md",
+    ] {
+        fs::copy(source_root.join(relative), isolated.join(relative))
+            .expect("copy current generated release-governance view into clean fixture repository");
+    }
     commit_fixture_path(
         &isolated,
         ".github/workflows/exact-manifest-go-release.yml",
@@ -1358,6 +1369,12 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
             "release/schemas/checkpoint-change-unit-1.0.schema.json",
             "release/schemas/security-scan-1.0.schema.json",
             "release/security/scans/npm-runtime-ts-2026-07-26.json",
+            "release/stewardship.json",
+            "release/stewardship/assignments.json",
+            "release/runbooks/privileged-readiness-and-fail-closed.md",
+            "docs/book/src/release/stewardship.md",
+            "docs/book/src/release/stewardship-continuity.md",
+            "docs/book/src/release/privileged-operations.md",
         ])
         .output()
         .expect("stage fixture Manifest schema");
@@ -3919,6 +3936,63 @@ fn first_recovered_release_set_is_complete_and_fail_closed() {
 }
 
 #[test]
+fn current_release_status_keeps_go_completion_scoped() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    vexil_release_governance_validator::validate_current_status_documentation(&root)
+        .expect("current release status must retain the completed Go outcome and its limits");
+
+    let fixture = std::env::temp_dir().join(format!(
+        "vexil-current-release-status-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
+    ));
+    let status_path = fixture.join("docs/book/src/release/current-status.md");
+    fs::create_dir_all(status_path.parent().expect("status page parent"))
+        .expect("create scoped-status fixture");
+    fs::copy(
+        root.join("docs/book/src/release/current-status.md"),
+        &status_path,
+    )
+    .expect("copy current release status into fixture");
+    let original = fs::read_to_string(&status_path).expect("read fixture current release status");
+    fs::write(
+        &status_path,
+        original.replace("Not selected", "Project-wide ready"),
+    )
+    .expect("write scoped-status negative fixture");
+    let error = vexil_release_governance_validator::validate_current_status_documentation(&fixture)
+        .expect_err("status page must retain unresolved-target language");
+    fs::remove_dir_all(&fixture).expect("remove scoped-status fixture");
+    assert!(error.contains("missing \"Not selected\""));
+}
+
+#[test]
+fn privileged_runbook_stays_in_renderer_parity() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let operations: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/privileged/operations-contract.json"))
+            .expect("read privileged operations"),
+    )
+    .expect("parse privileged operations");
+    let responsibilities: Value = serde_json::from_str(
+        &fs::read_to_string(root.join("release/stewardship/responsibilities.json"))
+            .expect("read responsibilities"),
+    )
+    .expect("parse responsibilities");
+    let expected = vexil_release_governance_validator::render_privileged_runbook_markdown(
+        &operations,
+        &responsibilities,
+    )
+    .expect("render privileged runbook");
+    let actual = fs::read_to_string(root.join("release/runbooks/privileged-readiness-and-fail-closed.md"))
+        .expect("read privileged runbook");
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn catalog_lifecycle_is_complete_and_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     vexil_release_governance_validator::validate_catalog_lifecycle_repository(&root)
@@ -4466,7 +4540,7 @@ fn external_control_records_and_workflows_fail_closed() {
         .expect("canonical external-control records must validate");
 
     let current_path = root
-        .join("release/controls/observations/current-github-controls-2026-07-22-sha-pinning.json");
+        .join("release/controls/observations/current-go-runtime-release-controls-2026-07-26.json");
     let current: Value = serde_json::from_str(&fs::read_to_string(current_path).unwrap()).unwrap();
     vexil_release_governance_validator::validate_current_observation_record(&root, &current)
         .expect("current observations must bind to exact expected controls");
@@ -5015,6 +5089,8 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "release/history/observations/observation-pypi-vexil-runtime-2026-07-23.json",
         "release/history/observations/observation-go-proxy-runtime-2026-07-23.json",
         "release/history/observations/observation-go-proxy-runtime-v0-1-0-2026-07-26.json",
+        "release/history/observations/observation-go-runtime-v0-1-1-publication-2026-07-26.json",
+        "release/history/observations/observation-github-tags-2026-07-26.json",
         "release/history/entries/entry-root-v1-0-0-changelog-anomaly-2026-07-23.json",
         "release/history/entries/entry-release-surface-observations-2026-07-23.json",
         "release/history/entries/entry-go-runtime-observed-publication-2026-07-26.json",
@@ -5031,6 +5107,7 @@ fn isolated_public_copy_needs_no_non_public_workspace_directory() {
         "docs/book/src/release/catalog.md",
         "docs/book/src/release/canonical-records.md",
         "docs/book/src/release/first-recovered-release-set.md",
+        "docs/book/src/release/current-status.md",
         "docs/book/src/SUMMARY.md",
         "release/runbooks/advisory-automation.md",
         "release/runbooks/privileged-readiness-and-fail-closed.md",
