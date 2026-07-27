@@ -2,7 +2,7 @@
 
 > Generated public view of [`release/exercises/tabletop-stewardship-continuity-2026-07-14.json`](../../../../release/exercises/tabletop-stewardship-continuity-2026-07-14.json). The JSON record is canonical; this page is parity-checked and non-authoritative.
 
-These are tabletop-only, non-mutating exercises, not Release Runs. They retain the historical absence of a distinct custodian; the current sole-maintainer policy does not make that absence a release gate. Independent external-control and release-evidence gates remain blocked.
+These tabletop exercises let Vexil practice continuity without changing provider state. They preserve the historical absence of a distinct custodian; the sole-maintainer policy does not turn that absence into a release gate. Any future target still needs its own external-control and release evidence.
 
 ## Record
 
@@ -25,7 +25,7 @@ Record `STE-2026-07-14-01` was exercised at `2026-07-14T18:00:00Z`. Evidence is 
 - [Trust revocation](../../../../release/runbooks/trust-revocation.md)
 - [Advisory manual fallback](../../../../release/runbooks/advisory-manual-fallback.md)
 
-Every provider-specific action is an **unverified external-control blocker**. This evidence identifies future control categories; it does not test, configure, revoke, stop, publish, deploy, approve, or mutate any provider state.
+A provider-specific action remains an **unverified external-control blocker** until Vexil records the required target evidence. These exercises identify what to establish next; they do not test, configure, revoke, stop, publish, deploy, approve, or mutate provider state.
 
 ## Offline validation
 

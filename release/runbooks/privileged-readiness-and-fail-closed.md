@@ -1,6 +1,6 @@
 # Privileged Readiness and Fail-Closed Procedures
 
-This runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records controlled replacement procedures for privileged and policy responsibilities; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded operation is currently **blocked**.
+This runbook is generated from [`release/privileged/operations-contract.json`](../privileged/operations-contract.json). It records Vexil's reusable procedures for future privileged and policy work; it is not a Manifest, approval, credential, workflow, release, or provider configuration. Every recorded reusable procedure is currently **blocked** for its own named prerequisites. That does not erase the separately retained, target-scoped Go protected-tag closeout.
 
 ## Non-authority rule
 
@@ -27,7 +27,7 @@ Advisory stages receive no privileged environment or credential. A separately sc
 
 ## Procedure boundary
 
-Each row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. The runbook does not make any procedure operationally ready: external controls, authorization, registry identity, and candidate evidence remain explicit blockers. A green test or workflow cannot complete a blocked operation.
+Each row is an owned fail-closed procedure with exactly one responsibility ID. It requires the current Manifest and typed catalog edges rather than `.vexilbot.toml` or historical behavior. It does not make a future procedure operationally ready: external controls, authorization, registry identity, and candidate evidence remain named prerequisites for that procedure. A green test or workflow cannot complete a blocked operation.
 
 For compatibility and policy decisions, follow [GOVERNANCE.md](../../GOVERNANCE.md); this runbook neither changes nor bypasses its BDFL, RFC, or breaking-change commitments.
 

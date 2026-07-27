@@ -9,4 +9,4 @@
 | Perform or defer the manual fallback | `repository-administrator` | perform-manually, defer | access credentials, change protected branches, accept risk, create release authority | same public evidence destination | Explicit role assertion and minimum advisory permissions only | The task needs privileged access or provider control | `repository-administrator` | yes |
 | Consider retirement | `repository-administrator` | defer | retire a responsibility through this fallback | separately reviewed public retirement decision required by `advisory-automation.md` | accepted retirement path | No separately reviewed and approved retirement decision | `repository-administrator` | yes |
 
-This fallback never becomes a privileged path. Advisory identity and permission verification remain an **unverified external-control blocker**; retirement is outside this exercise and requires a separate public decision.
+This fallback remains advisory. Advisory identity and permission verification are an **unverified external-control blocker** when a task would need privileged access; retirement is outside this exercise and requires a separate public decision.
