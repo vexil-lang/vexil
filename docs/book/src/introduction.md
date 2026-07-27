@@ -2,6 +2,14 @@
 
 Vexil (Validated Exchange Language) is a typed schema language where the wire encoding is part of the type system. It describes the shape, constraints, and wire encoding of data crossing system boundaries.
 
+<div class="vexil-start">
+  <a href="getting-started/installation.html">Install the CLI</a>
+  <a href="getting-started/first-schema.html">Write a first schema</a>
+  <a href="https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md">Review compatibility limits</a>
+</div>
+
+> **Choose a verified path.** Rust and TypeScript have cross-language byte-vector coverage. Verify generated Go or Python output for the schemas and runtime versions you intend to ship.
+
 ## What makes Vexil different?
 
 **Encoding is part of the type system.** `u4` means exactly 4 bits on the wire. `@varint` on a `u64` switches to unsigned LEB128. The schema IS the wire contract, not a hint about the wire format.

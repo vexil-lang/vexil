@@ -45,3 +45,5 @@ The binary will be at `target/release/vexilc`.
 ```sh
 vexilc --version
 ```
+
+For runtime-specific installation and compatibility notes, continue to [Generating Code](./generating-code.md) and review the [limitations](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md) before using a cross-language target combination.

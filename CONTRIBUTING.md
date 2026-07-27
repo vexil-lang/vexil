@@ -15,7 +15,9 @@ This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By partic
 
 ## Development Setup
 
-You need Rust 1.94 or later. Install via [rustup](https://rustup.rs).
+You need Rust 1.94 or later. Install via [rustup](https://rustup.rs). To run the
+optional runtime suites, use Node.js 22.12+ for TypeScript, Go 1.22+ for Go,
+and Python 3.10+ for Python.
 
 ```sh
 git clone https://github.com/vexil-lang/vexil
@@ -30,7 +32,7 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-There are 560+ tests across 37 test suites. All 43 valid corpus schemas must compile and all 65 invalid schemas must produce errors. If you add a corpus file, update `corpus/MANIFEST.md`.
+All 43 valid corpus schemas must compile and all 65 invalid schemas must produce errors. If you add a corpus file, update `corpus/MANIFEST.md`.
 
 ### Lint & Format
 
@@ -39,7 +41,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
 ```
 
-Both are enforced in CI. Run them before you push. CI failures for formatting are annoying for everyone.
+Both are enforced in CI. Run them before you push.
 
 ## Making Changes
 
@@ -54,10 +56,10 @@ Both are enforced in CI. Run them before you push. CI failures for formatting ar
 
 ## Submitting a Pull Request
 
-- **One concern per PR.** A PR that changes the parser AND adds a new type AND updates the spec is too much. Reviewers can't evaluate three things at once and end up approving nothing.
+- **One concern per PR.** Keep parser changes, new language features, and specification updates independently reviewable whenever practical.
 - **Add tests.** For compiler changes, add corpus files where possible -- they're self-documenting and the easiest tests to maintain long-term.
 - **Update `corpus/MANIFEST.md`** if you add corpus entries -- the manifest is what the test runner reads.
-- For language features, wire format changes, or anything architectural: go through the RFC process in [GOVERNANCE.md](./GOVERNANCE.md). Don't show up with a 2000-line PR changing the wire format -- we will close it and point you to the RFC process.
+- For language features, wire-format changes, or architectural changes: follow the RFC process in [GOVERNANCE.md](./GOVERNANCE.md) before opening the implementation PR.
 
 ## Commit Messages
 
@@ -77,8 +79,8 @@ Scope is optional but useful: `vexil-lang`, `vexilc`, `spec`, `corpus`.
 
 ## Code Style
 
-- Formatted with `cargo fmt`. Enforced in CI, so don't bother arguing about it.
-- Clippy lints are errors in CI (`-D warnings`). Warnings become tech debt. We don't take tech debt.
+- Formatted with `cargo fmt` and enforced in CI.
+- Clippy lints are errors in CI (`-D warnings`); address warnings before opening a PR.
 - No `unwrap()` or `expect()` in non-test code. Use `?` or explicit error handling. If you reach for `expect`, you're probably not thinking about the error case hard enough.
 - All `unsafe` blocks need a `// SAFETY:` comment explaining the invariant. `unsafe` is not an excuse to skip the explanation.
 - Public API items in `vexil-lang` need doc comments. If someone can't understand your API from `cargo doc`, the docs need work.

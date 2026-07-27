@@ -3,8 +3,9 @@
 ## Prerequisites
 
 - Rust 1.94 or later
-- Node.js 18+ (for TypeScript runtime tests)
-- Go 1.21+ (for Go runtime tests)
+- Node.js 22.12+ (for TypeScript runtime tests)
+- Go 1.22+ (for Go runtime tests)
+- Python 3.10+ (for Python runtime work)
 
 ## Clone and build
 
@@ -31,6 +32,12 @@ cargo test -p vexil-codegen-ts
 
 # TypeScript runtime tests (120)
 cd packages/runtime-ts && npx vitest run
+
+# Go runtime tests
+cd ../runtime-go && go test ./...
+
+# Python runtime tests (after installing pytest)
+cd ../runtime-py && python -m pytest vexil_runtime/tests
 ```
 
 ## Linting and formatting

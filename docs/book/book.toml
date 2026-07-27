@@ -11,5 +11,6 @@ build-dir = "../../target/book"
 [output.html]
 default-theme = "navy"
 preferred-dark-theme = "navy"
+additional-css = ["theme/vexil.css"]
 git-repository-url = "https://github.com/vexil-lang/vexil"
-edit-url-template = "https://github.com/vexil-lang/vexil/edit/main/docs/book/src/{path}"
+edit-url-template = "https://github.com/vexil-lang/vexil/edit/main/docs/book/{path}"

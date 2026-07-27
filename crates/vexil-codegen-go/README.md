@@ -39,7 +39,7 @@ vexilc build root.vexil --include ./schemas --output ./generated --target go
 
 ## Wire compatibility
 
-Generated Go produces byte-identical output to the Rust and TypeScript backends. This is verified by the [compliance vector suite](../../compliance/vectors/).
+The Go runtime exercises the shared [compliance vectors](../../compliance/vectors/). Verify generated Go output for your schemas before shipping a cross-language protocol.
 
 ## License
 

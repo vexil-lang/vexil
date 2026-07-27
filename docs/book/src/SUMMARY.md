@@ -7,6 +7,7 @@
 - [Installation](./getting-started/installation.md)
 - [Your First Schema](./getting-started/first-schema.md)
 - [Generating Code](./getting-started/generating-code.md)
+- [Compatibility and limitations](./getting-started/compatibility.md)
 
 # Language Guide
 
@@ -38,6 +39,7 @@
 - [Rust](./runtime/rust.md)
 - [TypeScript](./runtime/typescript.md)
 - [Go](./runtime/go.md)
+- [Python](./runtime/python.md)
 
 # Examples
 
