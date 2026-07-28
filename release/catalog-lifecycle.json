@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/catalog-lifecycle.json",
-  "lifecycleSchema": "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json",
+  "$id": "https://vexil-lang.org/release/catalog-lifecycle.json",
+  "lifecycleSchema": "https://vexil-lang.org/release/schemas/catalog-lifecycle.schema.json",
   "version": "1.0",
   "authorityBoundary": "This is structural lifecycle governance for the active source-led catalog. It does not establish publication eligibility, registry custody, a Release Set, a Manifest, approval, tag, provider state, or release declaration.",
   "catalogRevision": "24a4d906d36e75c86e7d556ff07a093aa807b96c",

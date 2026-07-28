@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/history/reconciliation-decision.json",
+  "$id": "https://vexil-lang.org/release/history/reconciliation-decision.json",
   "version": "1.0",
   "recordKind": "release-history-reconciliation-decision",
   "decisionId": "release-history-reconciliation-2026-07-23",

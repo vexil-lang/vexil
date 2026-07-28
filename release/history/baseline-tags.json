@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/history/baseline-tags.json",
+  "$id": "https://vexil-lang.org/release/history/baseline-tags.json",
   "version": "1.0",
   "recordKind": "historical-tag-baseline",
   "status": "ratified",
   "remote": {"name": "origin", "url": "https://github.com/vexil-lang/vexil.git", "query": "git ls-remote --tags"},
   "observedAt": "2026-07-23T13:15:47Z",
-  "baselineDigest": "sha256:849049de8e752cbc037b5bb415541d339af260298c236b9384f61bd32df5b92f",
+  "baselineDigest": "sha256:efe729a7e80b70e13cf1996657e547b38f513955437f4cd8af9aafb9cdf698d8",
   "tags": [
     {"kind": "lightweight", "name": "v0.1.0", "peeledCommit": "c50676f99b2984f414c36036db0d0b44d5b4a355", "refTarget": "c50676f99b2984f414c36036db0d0b44d5b4a355"},
     {"annotatedTag": "2c218f893a013a1ddc93f13bb800bb75d293c927", "kind": "annotated", "name": "v0.2.0", "peeledCommit": "15e847f50b7372c7d993b343482c3a62db5d8e35", "refTarget": "2c218f893a013a1ddc93f13bb800bb75d293c927"},

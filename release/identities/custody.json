@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/identities/custody.json",
-  "custodySchema": "https://vexil.dev/release/schemas/identity-custody.schema.json",
+  "$id": "https://vexil-lang.org/release/identities/custody.json",
+  "custodySchema": "https://vexil-lang.org/release/schemas/identity-custody.schema.json",
   "version": "1.0",
   "continuity": "sole-maintainer-no-designated-successor",
   "identities": [

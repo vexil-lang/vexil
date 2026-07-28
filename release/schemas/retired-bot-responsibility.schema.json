@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/retired-bot-responsibility.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/retired-bot-responsibility.schema.json",
   "title": "Vexil Retired-Bot Responsibility Inventory",
   "description": "Canonical, source-attributed public inventory of responsibilities formerly represented by retired bot configuration.",
   "type": "object",
@@ -8,8 +8,8 @@
   "required": ["$schema", "$id", "inventorySchema", "version", "historicalConfiguration", "manifestComparison", "responsibilities", "normalization"],
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
-    "$id": {"const": "https://vexil.dev/release/stewardship/responsibilities.json"},
-    "inventorySchema": {"const": "https://vexil.dev/release/schemas/retired-bot-responsibility.schema.json"},
+    "$id": {"const": "https://vexil-lang.org/release/stewardship/responsibilities.json"},
+    "inventorySchema": {"const": "https://vexil-lang.org/release/schemas/retired-bot-responsibility.schema.json"},
     "version": {"const": "1.0"},
     "historicalConfiguration": {"$ref": "#/$defs/historicalConfiguration"},
     "manifestComparison": {"$ref": "#/$defs/manifestComparison"},

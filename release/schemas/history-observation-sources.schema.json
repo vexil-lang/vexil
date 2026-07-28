@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/history-observation-sources.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/history-observation-sources.schema.json",
   "title": "Vexil Release History Observation Sources",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "version", "sources"],
-  "properties": {"$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"const": "https://vexil.dev/release/history/observation-sources.json"}, "version": {"const": "1.0"}, "sources": {"type": "array", "minItems": 8, "items": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "readOnlyQuery"], "properties": {"id": {"type": "string", "minLength": 1}, "kind": {"enum": ["git", "repository-file", "github-release", "manifest", "artifact", "registry", "go-proxy"]}, "readOnlyQuery": {"type": "string", "minLength": 1}}}}}
+  "properties": {"$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"const": "https://vexil-lang.org/release/history/observation-sources.json"}, "version": {"const": "1.0"}, "sources": {"type": "array", "minItems": 8, "items": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "readOnlyQuery"], "properties": {"id": {"type": "string", "minLength": 1}, "kind": {"enum": ["git", "repository-file", "github-release", "manifest", "artifact", "registry", "go-proxy"]}, "readOnlyQuery": {"type": "string", "minLength": 1}}}}}
 }

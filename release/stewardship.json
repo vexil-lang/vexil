@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/stewardship.json",
-  "contractSchema": "https://vexil.dev/release/schemas/stewardship.schema.json",
+  "$id": "https://vexil-lang.org/release/stewardship.json",
+  "contractSchema": "https://vexil-lang.org/release/schemas/stewardship.schema.json",
   "version": "1.0",
   "roles": [
     {"id":"release-steward","label":"Release Steward","decisionScope":"Release Manifest lifecycle and closeout.","permittedActions":["approve-release-manifest","authorize-privileged-release","close-release-manifest"],"prohibitedActions":["accept-security-risk","move-tag","change-protected-branch"],"approvalDuties":["Approve an eligible Release Manifest before privileged effects."],"auditSurface":["Approved Release Manifest identity and digest","role assertion"],"continuityRequirement":"A reviewed sole-maintainer policy may have no distinct custodian; all independent release gates remain required.","roleCombinationConstraints":"Roles may be combined, but each action requires an explicit asserted role."},

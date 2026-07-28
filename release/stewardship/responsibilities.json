@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/stewardship/responsibilities.json",
-  "inventorySchema": "https://vexil.dev/release/schemas/retired-bot-responsibility.schema.json",
+  "$id": "https://vexil-lang.org/release/stewardship/responsibilities.json",
+  "inventorySchema": "https://vexil-lang.org/release/schemas/retired-bot-responsibility.schema.json",
   "version": "1.0",
   "historicalConfiguration": {
     "source": ".vexilbot.toml",

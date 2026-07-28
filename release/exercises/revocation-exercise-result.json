@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/exercises/revocation-exercise-result.json",
-  "exerciseSchema": "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
+  "$id": "https://vexil-lang.org/release/exercises/revocation-exercise-result.json",
+  "exerciseSchema": "https://vexil-lang.org/release/schemas/revocation-exercise.schema.json",
   "version": "1.0",
   "recordId": "REV-2026-07-22-RESULT-SUCCESS",
   "recordKind": "revocation-exercise-result",

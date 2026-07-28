@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/version-rationale.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/version-rationale.schema.json",
   "title": "Vexil Release Unit Version Rationale",
   "description": "A structural, per-unit version rationale. It is not a Release Manifest, approval, Run, tag, registry operation, or publication assertion.",
   "type": "object",
@@ -8,7 +8,7 @@
   "required": ["$schema", "$id", "schemaVersion", "recordKind", "rationaleId", "unitId", "previousPackageVersion", "proposedPackageVersion", "changeClass", "affectedSurfaces", "compatibilityEvidenceIdentity", "dependencyImpact", "supportMatrix", "packageStewardReview", "publicCompatibilityDecision", "releaseBoundary"],
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
-    "$id": {"type": "string", "pattern": "^https://vexil.dev/release/rationales/[a-z0-9][a-z0-9-]*[.]json$"},
+    "$id": {"type": "string", "pattern": "^https://vexil-lang.org/release/rationales/[a-z0-9][a-z0-9-]*[.]json$"},
     "schemaVersion": {"const": "1.0"},
     "recordKind": {"const": "release-unit-version-rationale"},
     "rationaleId": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},

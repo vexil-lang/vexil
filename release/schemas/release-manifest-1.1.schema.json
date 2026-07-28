@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/release-manifest-1.1.schema.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "recordKind", "schemaVersion", "manifestId", "baseCommit", "evidenceSetId", "evidenceSetDigest", "stateSchema", "reducer", "releaseUnits", "publicationOrder", "approvalPolicy", "failurePolicy", "recoveryPolicy", "closeoutRequirements", "security", "candidate", "rehearsal", "registryCustody", "historicalTagSnapshot", "compatibilityEvidence"],
   "properties": {
-    "$schema": {"const": "https://vexil.dev/release/schemas/release-manifest-1.1.schema.json"},
+    "$schema": {"const": "https://vexil-lang.org/release/schemas/release-manifest-1.1.schema.json"},
     "recordKind": {"const": "release-manifest"},
     "schemaVersion": {"const": "1.1"},
     "manifestId": {"$ref": "#/$defs/id"}, "baseCommit": {"$ref": "#/$defs/commit"},

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/privileged-operation.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/privileged-operation.schema.json",
   "title": "Vexil Privileged and Policy Fail-Closed Operation",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "version", "inventorySource", "nonAuthorityStatement", "operations"],
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
-    "$id": {"const": "https://vexil.dev/release/privileged/operations-contract.json"},
+    "$id": {"const": "https://vexil-lang.org/release/privileged/operations-contract.json"},
     "version": {"const": "1.0"},
     "inventorySource": {"const": "release/stewardship/responsibilities.json"},
     "nonAuthorityStatement": {"type": "string", "minLength": 1},

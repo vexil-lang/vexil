@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/history/additive-repair-policy.json",
+  "$id": "https://vexil-lang.org/release/history/additive-repair-policy.json",
   "version": "1.0",
   "recordKind": "additive-repair-policy",
   "allowedActions": ["document", "supersede", "publish-new-immutable-identity"],

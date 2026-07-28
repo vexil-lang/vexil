@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/external-remediation.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/external-remediation.schema.json",
   "title": "Vexil Reviewed External-Control Remediation Plan",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "remediationSchema", "version", "recordId", "status", "baselineObservation", "owner", "review", "changes", "nonEffects", "postChangeObservation", "publicationReadiness"],
   "properties": {
-    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string"}, "remediationSchema": {"const": "https://vexil.dev/release/schemas/external-remediation.schema.json"}, "version": {"const": "1.0"}, "recordId": {"type": "string", "pattern": "^ECR-"}, "status": {"const": "reviewed-not-executed"}, "baselineObservation": {"$ref": "#/$defs/evidence"}, "owner": {"$ref": "#/$defs/owner"}, "review": {"$ref": "#/$defs/review"}, "changes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/change"}}, "nonEffects": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "postChangeObservation": {"const": "required-fresh-independent-read-only-observation"}, "publicationReadiness": {"const": "blocked"}
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string"}, "remediationSchema": {"const": "https://vexil-lang.org/release/schemas/external-remediation.schema.json"}, "version": {"const": "1.0"}, "recordId": {"type": "string", "pattern": "^ECR-"}, "status": {"const": "reviewed-not-executed"}, "baselineObservation": {"$ref": "#/$defs/evidence"}, "owner": {"$ref": "#/$defs/owner"}, "review": {"$ref": "#/$defs/review"}, "changes": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/change"}}, "nonEffects": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "postChangeObservation": {"const": "required-fresh-independent-read-only-observation"}, "publicationReadiness": {"const": "blocked"}
   },
   "$defs": {
     "evidence": {"type": "object", "additionalProperties": false, "required": ["recordId", "path", "normalizedStateDigest"], "properties": {"recordId": {"type": "string"}, "path": {"type": "string"}, "normalizedStateDigest": {"type": "string", "pattern": "^sha256:"}}},

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/catalog.json",
-  "catalogSchema": "https://vexil.dev/release/schemas/catalog.schema.json",
+  "$id": "https://vexil-lang.org/release/catalog.json",
+  "catalogSchema": "https://vexil-lang.org/release/schemas/catalog.schema.json",
   "version": "1.0",
   "authorityBoundary": "This catalog records direct source declarations, typed structural dependency edges, and release-unit status. Formal specifications and documentation govern semantics; source code and tests establish the executable baseline. Historical tags, changelog headings, registry observations, lockfiles, generated metadata, workflow variables, and retired bot configuration are evidence, not graph or version authority.",
   "units": [
