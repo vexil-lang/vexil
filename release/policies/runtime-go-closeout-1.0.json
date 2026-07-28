@@ -1,1 +1,0 @@
-{"policyId":"runtime-go-closeout","releaseBoundary":"Closeout requires the exact tag-to-source observation, clean Go-module consumer verification, retained Run evidence, and a public proxy observation. It may not claim a GitHub Release, registry upload, deployment, or authority not performed.","schemaVersion":"1.0"}

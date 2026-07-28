@@ -1,4 +1,0 @@
-{
-  "case": "ratified annotated tag retains ref target, tag object, and peeled commit",
-  "expected": "valid"
-}

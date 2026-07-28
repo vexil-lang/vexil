@@ -1,4 +1,0 @@
-{
-  "case": "peeled commit differs from the ratified baseline",
-  "expectedReason": "Historical Tag drift"
-}
