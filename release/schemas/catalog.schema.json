@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/catalog.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/catalog.schema.json",
   "title": "Vexil Release Unit Catalog",
   "description": "Canonical source-led inventory and typed dependency graph of Vexil release units. It is not a Release Manifest, publication assertion, or version-selection decision.",
   "type": "object",
@@ -8,8 +8,8 @@
   "required": ["$schema", "$id", "catalogSchema", "version", "authorityBoundary", "units", "normalization"],
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
-    "$id": {"const": "https://vexil.dev/release/catalog.json"},
-    "catalogSchema": {"const": "https://vexil.dev/release/schemas/catalog.schema.json"},
+    "$id": {"const": "https://vexil-lang.org/release/catalog.json"},
+    "catalogSchema": {"const": "https://vexil-lang.org/release/schemas/catalog.schema.json"},
     "version": {"const": "1.0"},
     "authorityBoundary": {"type": "string", "minLength": 1},
     "units": {"type": "array", "minItems": 18, "items": {"$ref": "#/$defs/unit"}},

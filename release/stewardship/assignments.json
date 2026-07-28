@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/stewardship/assignments.json",
-  "assignmentSchema": "https://vexil.dev/release/schemas/stewardship-assignment.schema.json",
+  "$id": "https://vexil-lang.org/release/stewardship/assignments.json",
+  "assignmentSchema": "https://vexil-lang.org/release/schemas/stewardship-assignment.schema.json",
   "version": "1.0",
   "decision": {
     "id": "sole-maintainer-governance-2026-07-23",

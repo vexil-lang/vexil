@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/history-observation.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/history-observation.schema.json",
   "title": "Vexil Immutable Release History Observation",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "version", "recordKind", "observationId", "contentId", "sourceId", "query", "state", "observedAt", "collectorVersion", "claim"],
-  "properties": {"$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string", "pattern": "^https://vexil.dev/release/history/observations/.+[.]json$"}, "version": {"const": "1.0"}, "recordKind": {"const": "release-history-observation"}, "observationId": {"type": "string", "minLength": 1}, "contentId": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "sourceId": {"type": "string", "minLength": 1}, "query": {"type": "string", "minLength": 1}, "state": {"enum": ["observed", "unknown", "missing", "conflicting", "unavailable", "unauthorized", "ambiguous"]}, "observedAt": {"type": "string", "minLength": 20}, "validUntil": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"}, "collectorVersion": {"type": "string", "minLength": 1}, "claim": {"type": "object"}, "failureEvidence": {"type": "string", "minLength": 1}}
+  "properties": {"$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string", "pattern": "^https://vexil-lang.org/release/history/observations/.+[.]json$"}, "version": {"const": "1.0"}, "recordKind": {"const": "release-history-observation"}, "observationId": {"type": "string", "minLength": 1}, "contentId": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "sourceId": {"type": "string", "minLength": 1}, "query": {"type": "string", "minLength": 1}, "state": {"enum": ["observed", "unknown", "missing", "conflicting", "unavailable", "unauthorized", "ambiguous"]}, "observedAt": {"type": "string", "minLength": 20}, "validUntil": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"}, "collectorVersion": {"type": "string", "minLength": 1}, "claim": {"type": "object"}, "failureEvidence": {"type": "string", "minLength": 1}}
 }

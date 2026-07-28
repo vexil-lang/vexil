@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/revocation-exercise.schema.json",
   "title": "Vexil Safe Revocation Exercise Record",
   "type": "object",
   "additionalProperties": false,
@@ -8,7 +8,7 @@
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
     "$id": {"type": "string"},
-    "exerciseSchema": {"const": "https://vexil.dev/release/schemas/revocation-exercise.schema.json"},
+    "exerciseSchema": {"const": "https://vexil-lang.org/release/schemas/revocation-exercise.schema.json"},
     "version": {"const": "1.0"},
     "recordId": {"type": "string", "pattern": "^REV-"},
     "recordKind": {"enum": ["revocation-exercise-plan", "revocation-exercise-result"]},

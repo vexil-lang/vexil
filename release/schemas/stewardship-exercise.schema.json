@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/stewardship-exercise.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/stewardship-exercise.schema.json",
   "title": "Vexil Tabletop Stewardship Exercise Record",
   "description": "A public, non-Run record of a non-mutating stewardship tabletop exercise.",
   "type": "object",
@@ -9,7 +9,7 @@
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
     "$id": {"type": "string"},
-    "exerciseSchema": {"const": "https://vexil.dev/release/schemas/stewardship-exercise.schema.json"},
+    "exerciseSchema": {"const": "https://vexil-lang.org/release/schemas/stewardship-exercise.schema.json"},
     "version": {"const": "1.0"},
     "recordId": {"type": "string"},
     "kind": {"const": "tabletop-stewardship-continuity"},

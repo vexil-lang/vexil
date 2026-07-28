@@ -1539,7 +1539,7 @@ pub fn construct_detached_approval(
         return Err("detached approval must have approvedAt before expiresAt".to_owned());
     }
     let mut approval = serde_json::json!({
-        "$schema": "https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+        "$schema": "https://vexil-lang.org/release/schemas/release-detached-approval-1.0.schema.json",
         "approvalId": request.approval_id,
         "approvedAt": request.approved_at,
         "approver": {"actor": request.actor, "assignment": request.assignment_id, "role": request.role},
@@ -1594,7 +1594,7 @@ pub fn construct_approval_disposition(
         return Err("approval disposition predates the approval".to_owned());
     }
     let record = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-approval-disposition-1.0.schema.json",
         "approvalDigest":sha256_hex(approval_bytes),
         "approvalId":text(approval.get("approvalId"), "approval ID")?,
         "authority":{"actor":request.actor,"assignment":request.assignment_id,"role":request.role},
@@ -6998,67 +6998,67 @@ fn canonical_record_schema(kind: &str, version: &str) -> Option<(&'static str, &
     match (kind, version) {
         ("release-security-exception", "1.0") => Some((
             "release/schemas/security-exception-1.0.schema.json",
-            "https://vexil.dev/release/schemas/security-exception-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/security-exception-1.0.schema.json",
         )),
         ("release-security-exception", "1.1") => Some((
             "release/schemas/security-exception-1.1.schema.json",
-            "https://vexil.dev/release/schemas/security-exception-1.1.schema.json",
+            "https://vexil-lang.org/release/schemas/security-exception-1.1.schema.json",
         )),
         ("release-security-exception-set", "1.0") => Some((
             "release/schemas/security-exception-set-1.0.schema.json",
-            "https://vexil.dev/release/schemas/security-exception-set-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/security-exception-set-1.0.schema.json",
         )),
         ("release-security-exception-set", "1.1") => Some((
             "release/schemas/security-exception-set-1.1.schema.json",
-            "https://vexil.dev/release/schemas/security-exception-set-1.1.schema.json",
+            "https://vexil-lang.org/release/schemas/security-exception-set-1.1.schema.json",
         )),
         ("candidate-custody", "1.0") => Some((
             "release/schemas/candidate-custody-1.0.schema.json",
-            "https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/candidate-custody-1.0.schema.json",
         )),
         ("release-manifest", "1.0") => Some((
             "release/schemas/release-manifest-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-manifest-1.0.schema.json",
         )),
         ("release-manifest", "1.1") => Some((
             "release/schemas/release-manifest-1.1.schema.json",
-            "https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+            "https://vexil-lang.org/release/schemas/release-manifest-1.1.schema.json",
         )),
         ("release-manifest", "1.2") => Some((
             "release/schemas/release-manifest-1.2.schema.json",
-            "https://vexil.dev/release/schemas/release-manifest-1.2.schema.json",
+            "https://vexil-lang.org/release/schemas/release-manifest-1.2.schema.json",
         )),
         ("release-evidence-set", "1.0") => Some((
             "release/schemas/release-evidence-set-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-evidence-set-1.0.schema.json",
         )),
         ("release-detached-approval", "1.0") => Some((
             "release/schemas/release-detached-approval-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-detached-approval-1.0.schema.json",
         )),
         ("release-approval-disposition", "1.0") => Some((
             "release/schemas/release-approval-disposition-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-approval-disposition-1.0.schema.json",
         )),
         ("privileged-run-start-authorization", "1.0") => Some((
             "release/schemas/privileged-run-start-authorization-1.0.schema.json",
-            "https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/privileged-run-start-authorization-1.0.schema.json",
         )),
         ("release-adapter-result-envelope", "1.0") => Some((
             "release/schemas/release-adapter-result-envelope-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-adapter-result-envelope-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-adapter-result-envelope-1.0.schema.json",
         )),
         ("release-run-event", "1.0") => Some((
             "release/schemas/release-run-event-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-run-event-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-run-event-1.0.schema.json",
         )),
         ("release-run-evidence", "1.0") => Some((
             "release/schemas/release-run-evidence-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-run-evidence-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-run-evidence-1.0.schema.json",
         )),
         ("release-closeout", "1.0") => Some((
             "release/schemas/release-closeout-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-closeout-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-closeout-1.0.schema.json",
         )),
         _ => None,
     }
@@ -8900,7 +8900,7 @@ pub fn validate_version_rationale(
 
     let rationale = object(record, "version rationale")?;
     let rationale_id = text(rationale.get("rationaleId"), "version rationale ID")?;
-    let expected_record_id = format!("https://vexil.dev/release/rationales/{rationale_id}.json");
+    let expected_record_id = format!("https://vexil-lang.org/release/rationales/{rationale_id}.json");
     if text(rationale.get("$id"), "version rationale public ID")? != expected_record_id {
         return Err("version rationale public ID must match its rationale ID".to_owned());
     }
@@ -10649,7 +10649,7 @@ fn validate_go_version_decision(root: &Path, selected_version: &str) -> Result<(
         let decision = read_json(&path)?;
         let decision = object(&decision, "Go runtime version decision")?;
         let decision_id = text(decision.get("decisionId"), "Go version decision ID")?;
-        let expected_id = format!("https://vexil.dev/release/decisions/{name}");
+        let expected_id = format!("https://vexil-lang.org/release/decisions/{name}");
         require_string(decision, "$id", &expected_id)?;
         require_string(decision, "recordKind", "package-maintenance-decision")?;
         require_string(decision, "unitId", "vexil-runtime-go")?;
@@ -11490,7 +11490,7 @@ fn validate_additive_repair_policy(policy: &Value) -> Result<(), String> {
     require_string(
         policy,
         "$id",
-        "https://vexil.dev/release/history/additive-repair-policy.json",
+        "https://vexil-lang.org/release/history/additive-repair-policy.json",
     )?;
     require_string(policy, "recordKind", "additive-repair-policy")?;
     for action in [
@@ -11677,8 +11677,8 @@ pub fn validate_external_controls_repository(root: &Path) -> Result<(), String> 
             ));
         }
         let id = text(object.get("$id"), "public record id")?;
-        if !id.starts_with("https://vexil.dev/release/") {
-            return Err(format!("{label} must use a public vexil.dev identifier"));
+        if !id.starts_with("https://vexil-lang.org/release/") {
+            return Err(format!("{label} must use a public vexil-lang.org identifier"));
         }
     }
 
@@ -12202,13 +12202,13 @@ pub fn validate_stewardship_exercise(exercise: &Value, assignments: &Value) -> R
     require_string(
         root,
         "exerciseSchema",
-        "https://vexil.dev/release/schemas/stewardship-exercise.schema.json",
+        "https://vexil-lang.org/release/schemas/stewardship-exercise.schema.json",
     )?;
     require_string(root, "version", "1.0")?;
     require_string(root, "kind", "tabletop-stewardship-continuity")?;
     require_string(root, "mode", "tabletop-only-non-mutating")?;
     let id = text(root.get("$id"), "exercise id")?;
-    if !id.starts_with("https://vexil.dev/release/exercises/") {
+    if !id.starts_with("https://vexil-lang.org/release/exercises/") {
         return Err("exercise record must use a public canonical identifier".to_owned());
     }
     require_utc_timestamp(root.get("exercisedAtUtc"), "exercise UTC time")?;
@@ -12670,11 +12670,11 @@ pub fn validate_contract(record: &Value) -> Result<(), String> {
         "$schema",
         "https://json-schema.org/draft/2020-12/schema",
     )?;
-    require_string(root, "$id", "https://vexil.dev/release/stewardship.json")?;
+    require_string(root, "$id", "https://vexil-lang.org/release/stewardship.json")?;
     require_string(
         root,
         "contractSchema",
-        "https://vexil.dev/release/schemas/stewardship.schema.json",
+        "https://vexil-lang.org/release/schemas/stewardship.schema.json",
     )?;
     require_string(root, "version", "1.0")?;
 
@@ -12991,12 +12991,12 @@ pub fn validate_assignments(record: &Value) -> Result<(), String> {
     require_string(
         root,
         "$id",
-        "https://vexil.dev/release/stewardship/assignments.json",
+        "https://vexil-lang.org/release/stewardship/assignments.json",
     )?;
     require_string(
         root,
         "assignmentSchema",
-        "https://vexil.dev/release/schemas/stewardship-assignment.schema.json",
+        "https://vexil-lang.org/release/schemas/stewardship-assignment.schema.json",
     )?;
     require_string(root, "version", "1.0")?;
 
@@ -13576,12 +13576,12 @@ pub fn validate_responsibilities(record: &Value) -> Result<(), String> {
     require_string(
         root,
         "$id",
-        "https://vexil.dev/release/stewardship/responsibilities.json",
+        "https://vexil-lang.org/release/stewardship/responsibilities.json",
     )?;
     require_string(
         root,
         "inventorySchema",
-        "https://vexil.dev/release/schemas/retired-bot-responsibility.schema.json",
+        "https://vexil-lang.org/release/schemas/retired-bot-responsibility.schema.json",
     )?;
     require_string(root, "version", "1.0")?;
 
@@ -14453,7 +14453,7 @@ pub fn validate_privileged_operations(
     require_string(
         root,
         "$id",
-        "https://vexil.dev/release/privileged/operations-contract.json",
+        "https://vexil-lang.org/release/privileged/operations-contract.json",
     )?;
     require_string(root, "version", "1.0")?;
     require_string(
@@ -15631,119 +15631,119 @@ fn validate_schema_syntax(root: &Path) -> Result<(), String> {
     for (relative, id) in [
         (
             "release/schemas/stewardship.schema.json",
-            "https://vexil.dev/release/schemas/stewardship.schema.json",
+            "https://vexil-lang.org/release/schemas/stewardship.schema.json",
         ),
         (
             "release/schemas/stewardship-assignment.schema.json",
-            "https://vexil.dev/release/schemas/stewardship-assignment.schema.json",
+            "https://vexil-lang.org/release/schemas/stewardship-assignment.schema.json",
         ),
         (
             "release/schemas/retired-bot-responsibility.schema.json",
-            "https://vexil.dev/release/schemas/retired-bot-responsibility.schema.json",
+            "https://vexil-lang.org/release/schemas/retired-bot-responsibility.schema.json",
         ),
         (
             "release/schemas/privileged-operation.schema.json",
-            "https://vexil.dev/release/schemas/privileged-operation.schema.json",
+            "https://vexil-lang.org/release/schemas/privileged-operation.schema.json",
         ),
         (
             "release/schemas/stewardship-exercise.schema.json",
-            "https://vexil.dev/release/schemas/stewardship-exercise.schema.json",
+            "https://vexil-lang.org/release/schemas/stewardship-exercise.schema.json",
         ),
         (
             "release/schemas/external-control.schema.json",
-            "https://vexil.dev/release/schemas/external-control.schema.json",
+            "https://vexil-lang.org/release/schemas/external-control.schema.json",
         ),
         (
             "release/schemas/external-observation.schema.json",
-            "https://vexil.dev/release/schemas/external-observation.schema.json",
+            "https://vexil-lang.org/release/schemas/external-observation.schema.json",
         ),
         (
             "release/schemas/external-remediation.schema.json",
-            "https://vexil.dev/release/schemas/external-remediation.schema.json",
+            "https://vexil-lang.org/release/schemas/external-remediation.schema.json",
         ),
         (
             "release/schemas/identity-custody.schema.json",
-            "https://vexil.dev/release/schemas/identity-custody.schema.json",
+            "https://vexil-lang.org/release/schemas/identity-custody.schema.json",
         ),
         (
             "release/schemas/revocation-exercise.schema.json",
-            "https://vexil.dev/release/schemas/revocation-exercise.schema.json",
+            "https://vexil-lang.org/release/schemas/revocation-exercise.schema.json",
         ),
         (
             "release/schemas/history-baseline.schema.json",
-            "https://vexil.dev/release/schemas/history-baseline.schema.json",
+            "https://vexil-lang.org/release/schemas/history-baseline.schema.json",
         ),
         (
             "release/schemas/history-ratification.schema.json",
-            "https://vexil.dev/release/schemas/history-ratification.schema.json",
+            "https://vexil-lang.org/release/schemas/history-ratification.schema.json",
         ),
         (
             "release/schemas/history-observation-sources.schema.json",
-            "https://vexil.dev/release/schemas/history-observation-sources.schema.json",
+            "https://vexil-lang.org/release/schemas/history-observation-sources.schema.json",
         ),
         (
             "release/schemas/history-observation.schema.json",
-            "https://vexil.dev/release/schemas/history-observation.schema.json",
+            "https://vexil-lang.org/release/schemas/history-observation.schema.json",
         ),
         (
             "release/schemas/history-ledger-entry.schema.json",
-            "https://vexil.dev/release/schemas/history-ledger-entry.schema.json",
+            "https://vexil-lang.org/release/schemas/history-ledger-entry.schema.json",
         ),
         (
             "release/schemas/additive-repair-proposal.schema.json",
-            "https://vexil.dev/release/schemas/additive-repair-proposal.schema.json",
+            "https://vexil-lang.org/release/schemas/additive-repair-proposal.schema.json",
         ),
         (
             "release/schemas/history-reconciliation-decision.schema.json",
-            "https://vexil.dev/release/schemas/history-reconciliation-decision.schema.json",
+            "https://vexil-lang.org/release/schemas/history-reconciliation-decision.schema.json",
         ),
         (
             "release/schemas/catalog.schema.json",
-            "https://vexil.dev/release/schemas/catalog.schema.json",
+            "https://vexil-lang.org/release/schemas/catalog.schema.json",
         ),
         (
             "release/schemas/catalog-lifecycle.schema.json",
-            "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json",
+            "https://vexil-lang.org/release/schemas/catalog-lifecycle.schema.json",
         ),
         (
             "release/schemas/version-rationale.schema.json",
-            "https://vexil.dev/release/schemas/version-rationale.schema.json",
+            "https://vexil-lang.org/release/schemas/version-rationale.schema.json",
         ),
         (
             "release/schemas/release-manifest-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-manifest-1.0.schema.json",
         ),
         (
             "release/schemas/release-evidence-set-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-evidence-set-1.0.schema.json",
         ),
         (
             "release/schemas/release-detached-approval-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-detached-approval-1.0.schema.json",
         ),
         (
             "release/schemas/release-approval-disposition-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-approval-disposition-1.0.schema.json",
         ),
         (
             "release/schemas/privileged-run-start-authorization-1.0.schema.json",
-            "https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/privileged-run-start-authorization-1.0.schema.json",
         ),
         (
             "release/schemas/release-adapter-result-envelope-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-adapter-result-envelope-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-adapter-result-envelope-1.0.schema.json",
         ),
         (
             "release/schemas/release-run-event-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-run-event-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-run-event-1.0.schema.json",
         ),
         (
             "release/schemas/release-run-evidence-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-run-evidence-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-run-evidence-1.0.schema.json",
         ),
         (
             "release/schemas/release-closeout-1.0.schema.json",
-            "https://vexil.dev/release/schemas/release-closeout-1.0.schema.json",
+            "https://vexil-lang.org/release/schemas/release-closeout-1.0.schema.json",
         ),
     ] {
         let schema_value = read_json(&root.join(relative))?;

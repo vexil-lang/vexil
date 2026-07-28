@@ -220,7 +220,7 @@ fn security_inventory_covers_every_maintained_dependency_and_workflow_surface() 
 fn security_exception_schema_requires_separate_steward_role_assertions() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let exception = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/security-exception-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/security-exception-1.0.schema.json",
         "recordKind":"release-security-exception","schemaVersion":"1.0","exceptionId":"exception-fixture",
         "finding":{"scanId":"scan-fixture","scanDigest":"a".repeat(64),"findingId":"CVE-fixture"},
         "scope":["npm-package:@vexil-lang/runtime"],"exploitability":"not reachable in the reviewed fixture",
@@ -234,7 +234,7 @@ fn security_exception_schema_requires_separate_steward_role_assertions() {
         .expect("complete detached security exception schema");
     let mut exception_1_1 = exception.clone();
     exception_1_1["$schema"] = Value::String(
-        "https://vexil.dev/release/schemas/security-exception-1.1.schema.json".to_owned(),
+        "https://vexil-lang.org/release/schemas/security-exception-1.1.schema.json".to_owned(),
     );
     exception_1_1["schemaVersion"] = Value::String("1.1".to_owned());
     exception_1_1["releaseInclusion"]
@@ -247,7 +247,7 @@ fn security_exception_schema_requires_separate_steward_role_assertions() {
     )
     .expect("exception 1.1 binds Manifest ID without a self-digest cycle");
     let set = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/security-exception-set-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/security-exception-set-1.0.schema.json",
         "recordKind":"release-security-exception-set","schemaVersion":"1.0","setId":"exceptions-fixture",
         "exceptions":[exception_1_1]
     });
@@ -266,10 +266,10 @@ fn security_exception_schema_requires_separate_steward_role_assertions() {
 #[test]
 fn security_exception_set_binds_exact_scan_manifest_and_expiry() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let scan = serde_json::json!({"$schema":"https://vexil.dev/release/schemas/security-scan-1.0.schema.json","recordKind":"release-security-scan","schemaVersion":"1.0","scanId":"scan-fixture","observedAt":"2026-07-26T00:00:00Z","scanner":"npm-audit@2","scope":{"manifest":"packages/runtime-ts/package.json","lockfile":"packages/runtime-ts/package-lock.json","exposure":"build-test-release-chain"},"lockfileDigest":format!("sha256:{}","a".repeat(64)),"findings":[{"id":"finding-fixture","package":"fixture","severity":"high","status":"exception","releaseRelevant":true}]});
+    let scan = serde_json::json!({"$schema":"https://vexil-lang.org/release/schemas/security-scan-1.0.schema.json","recordKind":"release-security-scan","schemaVersion":"1.0","scanId":"scan-fixture","observedAt":"2026-07-26T00:00:00Z","scanner":"npm-audit@2","scope":{"manifest":"packages/runtime-ts/package.json","lockfile":"packages/runtime-ts/package-lock.json","exposure":"build-test-release-chain"},"lockfileDigest":format!("sha256:{}","a".repeat(64)),"findings":[{"id":"finding-fixture","package":"fixture","severity":"high","status":"exception","releaseRelevant":true}]});
     let scan_bytes = canonical_json(&scan);
-    let exception = serde_json::json!({"$schema":"https://vexil.dev/release/schemas/security-exception-1.1.schema.json","recordKind":"release-security-exception","schemaVersion":"1.1","exceptionId":"exception-fixture","finding":{"scanId":"scan-fixture","scanDigest":digest(&scan_bytes),"findingId":"finding-fixture"},"scope":["npm-package:@vexil-lang/runtime"],"exploitability":"fixture","compensatingControls":["fixture"],"owner":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},"securityApproval":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},"releaseInclusion":{"manifestId":"manifest-fixture","actor":"github:furkanmamuk","role":"release-steward","assignment":"release"},"issuedAt":"2026-07-26T00:00:00Z","expiresAt":"2026-08-02T00:00:00Z","remediationIssue":"issue-fixture"});
-    let set = serde_json::json!({"$schema":"https://vexil.dev/release/schemas/security-exception-set-1.0.schema.json","recordKind":"release-security-exception-set","schemaVersion":"1.0","setId":"set-fixture","exceptions":[exception]});
+    let exception = serde_json::json!({"$schema":"https://vexil-lang.org/release/schemas/security-exception-1.1.schema.json","recordKind":"release-security-exception","schemaVersion":"1.1","exceptionId":"exception-fixture","finding":{"scanId":"scan-fixture","scanDigest":digest(&scan_bytes),"findingId":"finding-fixture"},"scope":["npm-package:@vexil-lang/runtime"],"exploitability":"fixture","compensatingControls":["fixture"],"owner":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},"securityApproval":{"actor":"github:furkanmamuk","role":"security-steward","assignment":"security"},"releaseInclusion":{"manifestId":"manifest-fixture","actor":"github:furkanmamuk","role":"release-steward","assignment":"release"},"issuedAt":"2026-07-26T00:00:00Z","expiresAt":"2026-08-02T00:00:00Z","remediationIssue":"issue-fixture"});
+    let set = serde_json::json!({"$schema":"https://vexil-lang.org/release/schemas/security-exception-set-1.0.schema.json","recordKind":"release-security-exception-set","schemaVersion":"1.0","setId":"set-fixture","exceptions":[exception]});
     let set_bytes = canonical_json(&set);
     vexil_release_governance_validator::validate_security_exception_set(
         &root,
@@ -302,7 +302,7 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let evidence_digest = "a".repeat(64);
     let manifest = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-manifest-1.1.schema.json",
         "recordKind":"release-manifest", "schemaVersion":"1.1", "manifestId":"rehearsal-fixture",
         "baseCommit":"b".repeat(40), "evidenceSetId":"rehearsal-evidence", "evidenceSetDigest":evidence_digest,
         "stateSchema":{"id":"release/state","version":"1.0","digest":"c".repeat(64)},
@@ -322,7 +322,7 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
     });
     let mut manifest_1_2 = manifest.clone();
     manifest_1_2["$schema"] = Value::String(
-        "https://vexil.dev/release/schemas/release-manifest-1.2.schema.json".to_owned(),
+        "https://vexil-lang.org/release/schemas/release-manifest-1.2.schema.json".to_owned(),
     );
     manifest_1_2["schemaVersion"] = Value::String("1.2".to_owned());
     manifest_1_2["securityExceptions"] = serde_json::json!({
@@ -353,7 +353,7 @@ fn non_publishing_rehearsal_contract_rejects_authority_and_unexplained_drift() {
     })
     .expect("seal rehearsal custody");
     let custody = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/candidate-custody-1.0.schema.json",
         "recordKind":"candidate-custody","schemaVersion":"1.0","bundleId":"rehearsal-candidate",
         "bundleDigest":sealed_custody.bundle_digest,"subjectDigest":sealed_custody.subject_digest,
         "attestationDigest":sealed_custody.attestation_digest,"repository":"vexil-lang/vexil",
@@ -692,7 +692,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     let state_schema = serde_json::json!({"digest":digest(state_schema_source),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"});
     let reducer = serde_json::json!({"digest":digest(reducer_source),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"});
     let evidence_set = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-evidence-set-1.0.schema.json",
         "entries":[{"contentDigest":digest(evidence_source),"id":"catalog","kind":"release-catalog","path":"release/catalog.json"}],"reviewedAt":"2026-07-25T00:00:00Z",
         "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
         "evidenceSetId":"evidence-fixture","recordKind":"release-evidence-set","schemaVersion":"1.0"
@@ -705,7 +705,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let manifest = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-manifest-1.0.schema.json",
         "evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestId":"manifest-fixture",
         "recordKind":"release-manifest","reducer":reducer,"schemaVersion":"1.0","stateSchema":state_schema
     });
@@ -717,7 +717,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let approval = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-detached-approval-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-detached-approval-1.0.schema.json",
         "approvalId":"approval-fixture","approvedAt":"2026-07-25T00:00:00Z",
         "approver":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
         "evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","expiresAt":"2026-07-26T00:00:00Z",
@@ -731,7 +731,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let disposition = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-approval-disposition-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-approval-disposition-1.0.schema.json",
         "approvalDigest":approval_digest,"approvalId":"approval-fixture","disposition":"withdrawn",
         "dispositionId":"withdrawal-fixture","effectiveAt":"2026-07-25T00:01:00Z","authority":{"actor":"github:furkanmamuk","assignment":"assignment-repository-administrator-2026-07-14","role":"repository-administrator"},"reason":"fixture withdrawal","sourceEvidence":{"collector":"fixture","observedAt":"2026-07-25T00:01:00Z","source":"https://example.invalid/evidence/withdrawal-fixture"},
         "recordKind":"release-approval-disposition","schemaVersion":"1.0"
@@ -744,7 +744,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let authorization = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/privileged-run-start-authorization-1.0.schema.json",
         "authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture",
         "executionPrincipal":{"actor":"github:furkanmamuk","assignment":"assignment-release-run-coordinator-2026-07-14","role":"release-run-coordinator"},
         "expiresAt":"2026-07-26T00:00:00Z","issuedAt":"2026-07-25T00:00:00Z",
@@ -762,7 +762,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let event = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-run-event-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-run-event-1.0.schema.json",
         "actor":"github:furkanmamuk","attempt":1,"observedAt":"2026-07-25T00:00:00Z",
         "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","executionPrincipal":{"actor":"github:furkanmamuk","assignment":"assignment-release-run-coordinator-2026-07-14","role":"release-run-coordinator"},"manifestDigest":manifest_digest,"manifestId":"manifest-fixture","operationId":"publish-runtime","priorEventDigest":null,
         "payloadDigest":"d".repeat(64),"recordKind":"release-run-event","reducer":reducer,"result":"recorded","runId":"run-fixture","schemaVersion":"1.0","sequenceNumber":1,
@@ -772,7 +772,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     let stream = isolated.join("release/runs/run-fixture/events.jsonl");
     fs::write(&stream, &canonical).unwrap();
     let adapter_result = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-adapter-result-envelope-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-adapter-result-envelope-1.0.schema.json",
         "adapter":{"id":"registry-adapter","version":"1.0"},"adapterResultId":"adapter-result-fixture",
         "observedAt":"2026-07-25T00:00:00Z","observedDigest":"e".repeat(64),"observedIdentity":"package-fixture",
         "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestDigest":manifest_digest,"manifestId":"manifest-fixture","operationId":"publish-runtime","outcome":"unknown","recordKind":"release-adapter-result-envelope",
@@ -787,7 +787,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let run_evidence = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-run-evidence-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-run-evidence-1.0.schema.json",
         "contentDigest":"f".repeat(64),"evidenceId":"run-evidence-fixture","kind":"adapter-log","operationId":"publish-runtime",
         "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestDigest":manifest_digest,"manifestId":"manifest-fixture","recordKind":"release-run-evidence","runId":"run-fixture","schemaVersion":"1.0"
     });
@@ -799,7 +799,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
     )
     .unwrap();
     let closeout = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-closeout-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-closeout-1.0.schema.json",
         "authorizationDigest":authorization_digest,"authorizationId":"authorization-fixture","closeoutId":"closeout-fixture","closedAt":"2026-07-25T00:02:00Z","disposition":"aborted","evidenceSetDigest":evidence_set_digest,"evidenceSetId":"evidence-fixture","manifestDigest":manifest_digest,"manifestId":"manifest-fixture",
         "evidence":[{"digest":adapter_result_digest,"id":"adapter-result-fixture","kind":"release-adapter-result-envelope"},{"digest":run_evidence_digest,"id":"run-evidence-fixture","kind":"release-run-evidence"}],"recordKind":"release-closeout","runId":"run-fixture","schemaVersion":"1.0",
         "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"}
@@ -1194,7 +1194,7 @@ fn canonical_release_records_bind_the_retained_record_graph_and_reject_boundary_
 fn canonical_record_initial_contract_uses_external_manifest_identity_and_full_start_preflight() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let manifest = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-manifest-1.0.schema.json",
         "evidenceSetDigest":"a".repeat(64),"evidenceSetId":"evidence-fixture","manifestId":"manifest-fixture",
         "recordKind":"release-manifest","reducer":{"digest":"b".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},
         "schemaVersion":"1.0","stateSchema":{"digest":"c".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"}
@@ -1212,7 +1212,7 @@ fn canonical_record_initial_contract_uses_external_manifest_identity_and_full_st
     .expect_err("a Manifest must reject a self-digest field");
 
     let authorization = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/privileged-run-start-authorization-1.0.schema.json",
         "allowedOperations":["publish-runtime"],"allowedPermissions":["packages:write"],"allowedTargets":["registry:crates-io"],"allowedUnits":["vexil-runtime"],
         "authorizationId":"authorization-fixture","candidate":{"attestationDigest":"e".repeat(64),"bundleDigest":"f".repeat(64),"bundleId":"candidate-bundle","subjectDigest":"0".repeat(64)},
         "evidenceSetDigest":"a".repeat(64),"evidenceSetId":"evidence-fixture",
@@ -1269,6 +1269,20 @@ fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn synchronize_fixture_tree(source: &Path, destination: &Path) {
+    fs::create_dir_all(destination).expect("create clean fixture directory");
+    for entry in fs::read_dir(source).expect("read clean fixture source directory") {
+        let entry = entry.expect("read clean fixture source entry");
+        let source = entry.path();
+        let destination = destination.join(entry.file_name());
+        if source.is_dir() {
+            synchronize_fixture_tree(&source, &destination);
+        } else if source.is_file() {
+            fs::copy(&source, &destination).expect("synchronize clean fixture file");
+        }
+    }
+}
+
 fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
     let isolated = std::env::temp_dir().join(format!(
         "vexil-manifest-generation-{}-{}",
@@ -1313,6 +1327,36 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
         )
         .expect("copy current security exception schema into clean fixture repository");
     }
+    for relative in [
+        "release/schemas/release-evidence-set-1.0.schema.json",
+        "release/schemas/catalog.schema.json",
+        "release/schemas/stewardship.schema.json",
+        "release/schemas/stewardship-assignment.schema.json",
+        "release/schemas/candidate-custody-1.0.schema.json",
+        "release/schemas/version-rationale.schema.json",
+        "release/schemas/release-detached-approval-1.0.schema.json",
+        "release/schemas/release-approval-disposition-1.0.schema.json",
+        "release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "release/catalog.json",
+        "release/catalog-lifecycle.json",
+        "release/decisions/runtime-go-version-2026-07-23.json",
+        "release/decisions/runtime-go-version-2026-07-26.json",
+        "release/rationales/vexil-runtime-ts-0-4-1.json",
+        "release/stewardship/responsibilities.json",
+        "release/privileged/operations-contract.json",
+        "release/identities/custody.json",
+        "release/controls/expected-controls.json",
+        "release/controls/remediation-plan-github-protections.json",
+        "release/exercises/revocation-exercise-plan.json",
+        "release/exercises/revocation-exercise-result.json",
+        "release/exercises/tabletop-stewardship-continuity-2026-07-14.json",
+        "release/history/baseline-tags.json",
+        "release/history/ratifications/history-ratification-release-steward-2026-07-23.json",
+        "release/history/ratifications/history-ratification-repository-administrator-2026-07-23.json",
+    ] {
+        fs::copy(source_root.join(relative), isolated.join(relative))
+            .expect("copy current identifier-bound fixture input into clean fixture repository");
+    }
     fs::copy(
         source_root.join("release/schemas/history-observation.schema.json"),
         isolated.join("release/schemas/history-observation.schema.json"),
@@ -1354,21 +1398,87 @@ fn clean_manifest_generation_root(source_root: &Path) -> PathBuf {
         isolated.join("release/security/scans/npm-runtime-ts-2026-07-26.json"),
     )
     .expect("copy current npm security scan into clean fixture repository");
+    for entry in fs::read_dir(source_root.join("release/controls/observations"))
+        .expect("read current external-control observations for clean fixture repository")
+    {
+        let entry = entry.expect("read current external-control observation entry");
+        let source = entry.path();
+        if source.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        fs::copy(
+            &source,
+            isolated
+                .join("release/controls/observations")
+                .join(entry.file_name()),
+        )
+        .expect("synchronize current external-control observation into clean fixture repository");
+    }
+    for entry in fs::read_dir(source_root.join("release/schemas"))
+        .expect("read current release schemas for clean fixture repository")
+    {
+        let entry = entry.expect("read current release schema entry");
+        let source = entry.path();
+        if source.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        fs::copy(
+            &source,
+            isolated.join("release/schemas").join(entry.file_name()),
+        )
+        .expect("synchronize current release schema into clean fixture repository");
+    }
+    for entry in fs::read_dir(source_root.join("release"))
+        .expect("read current release contract for clean fixture repository")
+    {
+        let entry = entry.expect("read current release contract entry");
+        if entry.file_name().to_string_lossy() == "validator" {
+            continue;
+        }
+        let source = entry.path();
+        let destination = isolated.join("release").join(entry.file_name());
+        if source.is_dir() {
+            synchronize_fixture_tree(&source, &destination);
+        } else if source.is_file() {
+            fs::copy(&source, &destination)
+                .expect("synchronize current release contract file into clean fixture repository");
+        }
+    }
     let output = Command::new("git")
         .current_dir(&isolated)
         .args([
             "add",
+            "release",
+            "release/schemas",
+            "release/controls",
             "release/schemas/release-manifest-1.0.schema.json",
             "release/schemas/release-manifest-1.1.schema.json",
-            "release/schemas/release-manifest-1.2.schema.json",
-            "release/schemas/security-exception-1.0.schema.json",
-            "release/schemas/security-exception-1.1.schema.json",
-            "release/schemas/security-exception-set-1.0.schema.json",
-            "release/schemas/security-exception-set-1.1.schema.json",
-            "release/schemas/history-observation.schema.json",
-            "release/schemas/checkpoint-change-unit-1.0.schema.json",
-            "release/schemas/security-scan-1.0.schema.json",
-            "release/security/scans/npm-runtime-ts-2026-07-26.json",
+             "release/schemas/release-manifest-1.2.schema.json",
+             "release/schemas/security-exception-1.0.schema.json",
+             "release/schemas/security-exception-1.1.schema.json",
+             "release/schemas/security-exception-set-1.0.schema.json",
+              "release/schemas/security-exception-set-1.1.schema.json",
+              "release/schemas/stewardship.schema.json",
+              "release/schemas/stewardship-assignment.schema.json",
+              "release/schemas/candidate-custody-1.0.schema.json",
+             "release/schemas/history-observation.schema.json",
+             "release/schemas/checkpoint-change-unit-1.0.schema.json",
+              "release/schemas/security-scan-1.0.schema.json",
+              "release/catalog-lifecycle.json",
+              "release/decisions/runtime-go-version-2026-07-23.json",
+              "release/decisions/runtime-go-version-2026-07-26.json",
+              "release/stewardship/responsibilities.json",
+              "release/privileged/operations-contract.json",
+              "release/identities/custody.json",
+              "release/controls/expected-controls.json",
+              "release/controls/remediation-plan-github-protections.json",
+              "release/exercises/revocation-exercise-plan.json",
+              "release/exercises/revocation-exercise-result.json",
+              "release/exercises/tabletop-stewardship-continuity-2026-07-14.json",
+              "release/history/baseline-tags.json",
+              "release/history/ratifications/history-ratification-release-steward-2026-07-23.json",
+              "release/history/ratifications/history-ratification-repository-administrator-2026-07-23.json",
+              "release/security/scans/npm-runtime-ts-2026-07-26.json",
             "release/stewardship.json",
             "release/stewardship/assignments.json",
             "release/runbooks/privileged-readiness-and-fail-closed.md",
@@ -1493,7 +1603,7 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
     let history_snapshot_path = "release/history/observations/tag-snapshot-1.0.json";
     let history_snapshot = serde_json::json!({
         "$schema":"https://json-schema.org/draft/2020-12/schema",
-        "$id":"https://vexil.dev/release/history/observations/tag-snapshot-1.0.json",
+        "$id":"https://vexil-lang.org/release/history/observations/tag-snapshot-1.0.json",
         "claim":{"tags":[]},"collectorVersion":"fixture-1.0","contentId":format!("sha256:{}", "a".repeat(64)),
         "observationId":"tag-snapshot-1.0","observedAt":"2026-07-24T00:00:00Z","query":"git ls-remote --tags origin",
         "recordKind":"release-history-observation","sourceId":"git-remote-tags","state":"observed","validUntil":"2026-07-26T00:00:00Z","version":"1.0"
@@ -1524,7 +1634,7 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
     )
     .expect("create security scan parent");
     let security_scan = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/security-scan-1.0.schema.json","recordKind":"release-security-scan","schemaVersion":"1.0","scanId":"security-fixture-1.0","observedAt":"2026-07-25T00:00:00Z","scanner":"npm-audit@2",
+        "$schema":"https://vexil-lang.org/release/schemas/security-scan-1.0.schema.json","recordKind":"release-security-scan","schemaVersion":"1.0","scanId":"security-fixture-1.0","observedAt":"2026-07-25T00:00:00Z","scanner":"npm-audit@2",
         "scope":{"manifest":"packages/runtime-ts/package.json","lockfile":"packages/runtime-ts/package-lock.json","exposure":"build-test-release-chain"},"lockfileDigest":format!("sha256:{}",digest(&fs::read(root.join("packages/runtime-ts/package-lock.json")).expect("read fixture lockfile"))),
         "findings":[{"id":"fixture-remediated","package":"fixture","severity":"low","status":"remediated","releaseRelevant":true}]
     });
@@ -1538,7 +1648,7 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
     let artifact = |path: &str| serde_json::json!({"digest":digest(&fs::read(root.join(path)).expect("read fixture artifact")),"id":path,"version":"1.0"});
     let evidence_entry = |id: &str, path: &str| serde_json::json!({"contentDigest":digest(&fs::read(root.join(path)).expect("read fixture evidence")),"id":id,"kind":"fixture-input","path":path});
     let evidence_set = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-evidence-set-1.0.schema.json",
         "entries":[
             evidence_entry("approval-policy","release/policies/approval-1.0.json"),
             evidence_entry("candidate","release/candidates/candidate-1.0.json"),
@@ -1572,7 +1682,7 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
         "test: add canonical Manifest evidence-set fixture",
     );
     let manifest = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-manifest-1.1.schema.json",
         "approvalPolicy":artifact("release/policies/approval-1.0.json"),
         "baseCommit":fixture_head_commit(&root),"closeoutRequirements":artifact("release/policies/closeout-1.0.json"),
         "candidate":artifact("release/candidates/candidate-1.0.json"),"compatibilityEvidence":artifact("release/evidence/compatibility-1.0.json"),
@@ -1729,7 +1839,7 @@ fn manifest_generation_is_deterministic_external_digest_bound_and_side_effect_fr
     let expired_history_path = "release/history/observations/tag-snapshot-expired-1.0.json";
     let mut expired_history = history_snapshot.clone();
     expired_history["$id"] = serde_json::json!(
-        "https://vexil.dev/release/history/observations/tag-snapshot-expired-1.0.json"
+        "https://vexil-lang.org/release/history/observations/tag-snapshot-expired-1.0.json"
     );
     expired_history["observationId"] = serde_json::json!("tag-snapshot-expired-1.0");
     expired_history["validUntil"] = serde_json::json!("2026-07-24T23:59:59Z");
@@ -1954,7 +2064,7 @@ fn detached_approval_constructor_binds_exact_inputs_and_revalidates_governance()
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let evidence_source = fs::read(root.join("release/catalog.json")).unwrap();
     let evidence_set = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-evidence-set-1.0.schema.json",
         "entries":[{"contentDigest":digest(&evidence_source),"id":"catalog","kind":"release-catalog","path":"release/catalog.json"}],
         "reviewedAt":"2026-07-25T00:00:00Z",
         "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
@@ -1963,7 +2073,7 @@ fn detached_approval_constructor_binds_exact_inputs_and_revalidates_governance()
     let evidence_set_bytes = canonical_json(&evidence_set);
     let evidence_digest = digest(&evidence_set_bytes);
     let manifest = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-manifest-1.0.schema.json",
         "evidenceSetDigest":evidence_digest,"evidenceSetId":"evidence-fixture",
         "manifestId":"manifest-fixture",
         "recordKind":"release-manifest","reducer":{"digest":"c".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},
@@ -2180,7 +2290,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     let root = clean_manifest_generation_root(&source);
     let evidence_source = fs::read(root.join("release/catalog.json")).unwrap();
     let evidence_set = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-evidence-set-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-evidence-set-1.0.schema.json",
         "entries":[{"contentDigest":digest(&evidence_source),"id":"catalog","kind":"release-catalog","path":"release/catalog.json"}],
         "reviewedAt":"2026-07-25T00:00:00Z",
         "steward":{"actor":"github:furkanmamuk","assignment":"assignment-release-steward-2026-07-14","role":"release-steward"},
@@ -2205,7 +2315,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     let exception_set_path = "release/security/exception-sets/authorization-exceptions.json";
     fs::create_dir_all(root.join("release/security/exception-sets")).unwrap();
     let exception = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/security-exception-1.1.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/security-exception-1.1.schema.json",
         "recordKind":"release-security-exception","schemaVersion":"1.1",
         "exceptionId":"authorization-exception",
         "finding":{"scanId":"npm-runtime-ts-fixture","scanDigest":security_scan_digest,"findingId":"GHSA-fixture"},
@@ -2217,7 +2327,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "issuedAt":"2026-07-25T00:00:00Z","expiresAt":"2026-07-26T00:00:00Z","remediationIssue":"fixture"
     });
     let exception_set = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/security-exception-set-1.1.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/security-exception-set-1.1.schema.json",
         "recordKind":"release-security-exception-set","schemaVersion":"1.1",
         "setId":"authorization-exceptions","status":"active","exceptions":[exception],"withdrawal":null
     });
@@ -2226,14 +2336,14 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     let artifact =
         |id: &str, digest: String| serde_json::json!({"digest":digest,"id":id,"version":"1.0"});
     let mut manifest = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/release-manifest-1.1.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/release-manifest-1.1.schema.json",
         "approvalPolicy":artifact("release/policies/approval.json","a".repeat(64)),"baseCommit":"b".repeat(40),"candidate":artifact("release/candidates/candidate.json","1".repeat(64)),"closeoutRequirements":artifact("release/policies/closeout.json","c".repeat(64)),"compatibilityEvidence":artifact("release/evidence/compatibility.json","d".repeat(64)),
         "evidenceSetDigest":evidence_digest,"evidenceSetId":"authorization-evidence","failurePolicy":artifact("release/policies/failure.json","e".repeat(64)),"historicalTagSnapshot":artifact("release/history/observations/snapshot.json","f".repeat(64)),"manifestId":"authorization-manifest","publicationOrder":["vexil-runtime"],"recordKind":"release-manifest","recoveryPolicy":artifact("release/policies/recovery.json","0".repeat(64)),"registryCustody":artifact("release/identities/custody.json","2".repeat(64)),"rehearsal":artifact("release/rehearsals/rehearsal.json","3".repeat(64)),
         "reducer":{"digest":"c".repeat(64),"id":"release/reducers/run-state-1.0.wasm","version":"1.0"},"releaseUnits":[{"canonicalTag":"vexil-runtime-v0.5.1","changeUnits":[{"digest":"4".repeat(64),"id":"checkpoint-python-generator-fix"}],"previousVersion":null,"proposedVersion":"0.5.1","sourceCommit":"5".repeat(40),"targets":[{"kind":"npm-package","mandatory":true,"name":"@vexil-lang/runtime"}],"unitId":"vexil-runtime","versionRationale":{"digest":"6".repeat(64),"id":"runtime-rationale"},"versionSource":{"observedDeclaration":"0.5.1","path":"packages/runtime-ts/package.json"}}],
         "schemaVersion":"1.1","security":artifact(security_scan_path,security_scan_digest.clone()),"stateSchema":{"digest":"d".repeat(64),"id":"release/schemas/run-state-1.0.schema.json","version":"1.0"},"supersedes":null
     });
     manifest["$schema"] =
-        Value::String("https://vexil.dev/release/schemas/release-manifest-1.2.schema.json".into());
+        Value::String("https://vexil-lang.org/release/schemas/release-manifest-1.2.schema.json".into());
     manifest["schemaVersion"] = Value::String("1.2".into());
     manifest["securityExceptions"] = artifact(exception_set_path, digest(&exception_set_bytes));
     let manifest_bytes = canonical_json(&manifest);
@@ -2285,7 +2395,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
     })
     .expect("seal fixture custody");
     let custody = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/candidate-custody-1.0.schema.json",
         "recordKind":"candidate-custody","schemaVersion":"1.0","bundleId":"candidate-fixture",
         "bundleDigest":sealed_custody.bundle_digest,"subjectDigest":sealed_custody.subject_digest,
         "attestationDigest":sealed_custody.attestation_digest,"repository":"vexil-lang/vexil",
@@ -2295,7 +2405,7 @@ fn privileged_run_start_preflight_is_pure_and_exactly_bound() {
         "attestationIdentity":"fixture-identity","subjects":[{"name":"vexil-runtime-0.4.1.tgz","digest":"1".repeat(64)}]
     });
     let authorization = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/privileged-run-start-authorization-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/privileged-run-start-authorization-1.0.schema.json",
         "authorizationId":"authorization-preflight","candidate":{"attestationDigest":custody["attestationDigest"].clone(),"bundleDigest":custody["bundleDigest"].clone(),"bundleId":"candidate-fixture","subjectDigest":custody["subjectDigest"].clone()},
         "evidenceSetDigest":evidence_digest,"evidenceSetId":"authorization-evidence",
         "executionPrincipal":{"actor":"github:furkanmamuk","assignment":"assignment-release-run-coordinator-2026-07-14","role":"release-run-coordinator"},
@@ -3331,7 +3441,7 @@ fn candidate_custody_record_recomputes_every_immutable_binding() {
     };
     let sealed = seal_candidate_custody(&request).expect("seal custody");
     let record = serde_json::json!({
-        "$schema":"https://vexil.dev/release/schemas/candidate-custody-1.0.schema.json",
+        "$schema":"https://vexil-lang.org/release/schemas/candidate-custody-1.0.schema.json",
         "recordKind":"candidate-custody","schemaVersion":"1.0","bundleId":"candidate-fixture",
         "bundleDigest":sealed.bundle_digest,"subjectDigest":sealed.subject_digest,
         "attestationDigest":sealed.attestation_digest,"repository":request.repository,
@@ -3506,7 +3616,7 @@ fn historical_tag_baseline_and_additive_repair_guards_fail_closed() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut baseline = serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://vexil.dev/release/history/baseline-tags.json",
+        "$id": "https://vexil-lang.org/release/history/baseline-tags.json",
         "version": "1.0",
         "recordKind": "historical-tag-baseline",
         "status": "ratified",
@@ -3539,7 +3649,7 @@ fn historical_tag_baseline_and_additive_repair_guards_fail_closed() {
     .unwrap();
     let proposal = serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://vexil.dev/release/history/repair-proposals/forbidden-tag-move.json",
+        "$id": "https://vexil-lang.org/release/history/repair-proposals/forbidden-tag-move.json",
         "version": "1.0", "recordKind": "additive-repair-proposal", "proposalId": "forbidden-tag-move", "status": "proposed",
         "anomaly": "fixture", "affectedConsumers": ["fixture consumer"], "correctionSurface": "documentation", "newIdentifier": null,
         "approval": null, "evidenceReferences": ["fixture"], "proposedActions": ["move-tag"]
@@ -3557,7 +3667,7 @@ fn history_schemas_preserve_unknown_evidence_and_root_tag_prohibition() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let unknown = serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://vexil.dev/release/history/observations/registry-unavailable.json",
+        "$id": "https://vexil-lang.org/release/history/observations/registry-unavailable.json",
         "version": "1.0", "recordKind": "release-history-observation", "observationId": "registry-unavailable",
         "contentId": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "sourceId": "pypi", "query": "GET PyPI project metadata", "state": "unavailable",
@@ -3691,7 +3801,7 @@ fn version_rationales_are_per_unit_and_fail_closed() {
 
     let mut shared_evidence = rationale.clone();
     shared_evidence["$id"] =
-        Value::String("https://vexil.dev/release/rationales/vexil-runtime-py-0-1-0.json".into());
+        Value::String("https://vexil-lang.org/release/rationales/vexil-runtime-py-0-1-0.json".into());
     shared_evidence["rationaleId"] = Value::String("vexil-runtime-py-0-1-0".into());
     shared_evidence["unitId"] = Value::String("vexil-runtime-py".into());
     shared_evidence["proposedPackageVersion"] = Value::String("0.1.0".into());
@@ -3901,7 +4011,7 @@ fn version_rationales_are_per_unit_and_fail_closed() {
 
     let mut mismatched_public_id = rationale;
     mismatched_public_id["$id"] =
-        Value::String("https://vexil.dev/release/rationales/some-other-rationale.json".into());
+        Value::String("https://vexil-lang.org/release/rationales/some-other-rationale.json".into());
     vexil_release_governance_validator::validate_version_rationale(
         &root,
         &catalog,

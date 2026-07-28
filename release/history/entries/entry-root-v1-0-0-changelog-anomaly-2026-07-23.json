@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/history/entries/entry-root-v1-0-0-changelog-anomaly-2026-07-23.json",
+  "$id": "https://vexil-lang.org/release/history/entries/entry-root-v1-0-0-changelog-anomaly-2026-07-23.json",
   "version": "1.0",
   "recordKind": "release-history-ledger-entry",
   "entryId": "entry-root-v1-0-0-changelog-anomaly-2026-07-23",

@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/history-ratification.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/history-ratification.schema.json",
   "title": "Vexil Historical Tag Baseline Ratification",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "version", "recordKind", "ratificationId", "roleId", "actorId", "baselineDigest", "observationScope", "approvedAt"],
   "properties": {
-    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string", "pattern": "^https://vexil.dev/release/history/ratifications/.+[.]json$"}, "version": {"const": "1.0"}, "recordKind": {"const": "historical-tag-baseline-ratification"}, "ratificationId": {"type": "string", "minLength": 1}, "roleId": {"enum": ["release-steward", "repository-administrator"]}, "actorId": {"type": "string", "pattern": "^github:"}, "baselineDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "observationScope": {"type": "string", "minLength": 1}, "approvedAt": {"type": "string", "minLength": 20}
+    "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"type": "string", "pattern": "^https://vexil-lang.org/release/history/ratifications/.+[.]json$"}, "version": {"const": "1.0"}, "recordKind": {"const": "historical-tag-baseline-ratification"}, "ratificationId": {"type": "string", "minLength": 1}, "roleId": {"enum": ["release-steward", "repository-administrator"]}, "actorId": {"type": "string", "pattern": "^github:"}, "baselineDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "observationScope": {"type": "string", "minLength": 1}, "approvedAt": {"type": "string", "minLength": 20}
   }
 }

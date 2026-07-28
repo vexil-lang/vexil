@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/external-control.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/external-control.schema.json",
   "title": "Vexil Expected External Control Contract",
   "type": "object",
   "additionalProperties": false,

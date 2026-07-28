@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/history/observation-sources.json",
+  "$id": "https://vexil-lang.org/release/history/observation-sources.json",
   "version": "1.0",
   "sources": [
     {"id": "git-remote-tags", "kind": "git", "readOnlyQuery": "git ls-remote --tags <remote>"},

@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/stewardship.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/stewardship.schema.json",
   "title": "Vexil Stewardship Authority Contract",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "$id", "contractSchema", "version", "roles", "privilegedAuthorization", "nonAuthorityClasses", "advisoryAutomation", "governanceRoute", "publicationBlock"],
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
-    "$id": {"const": "https://vexil.dev/release/stewardship.json"},
-    "contractSchema": {"const": "https://vexil.dev/release/schemas/stewardship.schema.json"},
+    "$id": {"const": "https://vexil-lang.org/release/stewardship.json"},
+    "contractSchema": {"const": "https://vexil-lang.org/release/schemas/stewardship.schema.json"},
     "version": {"const": "1.0"},
     "roles": {"type": "array", "minItems": 5, "items": {"$ref": "#/$defs/role"}},
     "privilegedAuthorization": {"$ref": "#/$defs/privilegedAuthorization"},

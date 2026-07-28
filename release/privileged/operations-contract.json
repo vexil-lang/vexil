@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/privileged/operations-contract.json",
+  "$id": "https://vexil-lang.org/release/privileged/operations-contract.json",
   "version": "1.0",
   "inventorySource": "release/stewardship/responsibilities.json",
   "nonAuthorityStatement": "Historical bot configuration, historical behavior, green CI, tags, provider approval settings, CODEOWNERS, and private planning artifacts are not release authority.",

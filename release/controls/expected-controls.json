@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/controls/expected-controls.json",
+  "$id": "https://vexil-lang.org/release/controls/expected-controls.json",
   "version": "1.0",
   "recordKind": "expected-external-controls",
   "scope": {"provider": "github", "repository": "vexil-lang/vexil"},

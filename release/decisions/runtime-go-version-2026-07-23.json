@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/decisions/runtime-go-version-2026-07-23.json",
+  "$id": "https://vexil-lang.org/release/decisions/runtime-go-version-2026-07-23.json",
   "version": "1.0",
   "recordKind": "package-maintenance-decision",
   "decisionId": "runtime-go-version-2026-07-23",

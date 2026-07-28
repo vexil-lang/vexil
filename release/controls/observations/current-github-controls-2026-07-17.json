@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/controls/observations/current-github-controls-2026-07-17.json",
-  "observationSchema": "https://vexil.dev/release/schemas/external-observation.schema.json",
+  "$id": "https://vexil-lang.org/release/controls/observations/current-github-controls-2026-07-17.json",
+  "observationSchema": "https://vexil-lang.org/release/schemas/external-observation.schema.json",
   "version": "1.0",
   "recordId": "ECO-2026-07-17-CURRENT-GITHUB-CONTROLS",
   "evidenceState": "superseded",

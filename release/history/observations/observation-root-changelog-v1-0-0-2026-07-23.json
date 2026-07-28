@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/history/observations/observation-root-changelog-v1-0-0-2026-07-23.json",
+  "$id": "https://vexil-lang.org/release/history/observations/observation-root-changelog-v1-0-0-2026-07-23.json",
   "version": "1.0",
   "recordKind": "release-history-observation",
   "observationId": "observation-root-changelog-v1-0-0-2026-07-23",

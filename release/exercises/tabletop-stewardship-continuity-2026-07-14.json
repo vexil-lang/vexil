@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/exercises/tabletop-stewardship-continuity-2026-07-14.json",
-  "exerciseSchema": "https://vexil.dev/release/schemas/stewardship-exercise.schema.json",
+  "$id": "https://vexil-lang.org/release/exercises/tabletop-stewardship-continuity-2026-07-14.json",
+  "exerciseSchema": "https://vexil-lang.org/release/schemas/stewardship-exercise.schema.json",
   "version": "1.0",
   "recordId": "STE-2026-07-14-01",
   "kind": "tabletop-stewardship-continuity",

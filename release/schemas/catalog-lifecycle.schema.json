@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json",
+  "$id": "https://vexil-lang.org/release/schemas/catalog-lifecycle.schema.json",
   "title": "Vexil Release Unit Catalog Lifecycle",
   "description": "Public lifecycle governance for the source-led release catalog. It is not a Release Manifest, approval, Run, tag, provider query, registry assertion, or publication declaration.",
   "type": "object",
@@ -8,8 +8,8 @@
   "required": ["$schema", "$id", "lifecycleSchema", "version", "authorityBoundary", "catalogRevision", "records"],
   "properties": {
     "$schema": {"const": "https://json-schema.org/draft/2020-12/schema"},
-    "$id": {"const": "https://vexil.dev/release/catalog-lifecycle.json"},
-    "lifecycleSchema": {"const": "https://vexil.dev/release/schemas/catalog-lifecycle.schema.json"},
+    "$id": {"const": "https://vexil-lang.org/release/catalog-lifecycle.json"},
+    "lifecycleSchema": {"const": "https://vexil-lang.org/release/schemas/catalog-lifecycle.schema.json"},
     "version": {"const": "1.0"},
     "authorityBoundary": {"type": "string", "minLength": 1},
     "catalogRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
