@@ -4,26 +4,6 @@
 
 Vexil is maintained by a single lead developer (BDFL model).
 
-## Release stewardship authority
-
-The canonical, machine-checkable definition of release role types and authority
-boundaries is [`release/stewardship.json`](./release/stewardship.json). Its
-checked, non-authoritative public view is available in the
-[Stewardship Authority Model](./docs/book/src/release/stewardship.md).
-
-This contract supports Vexil's own reproducible release practice; it does not
-replace this BDFL decision model, the 14-day breaking-change comment period,
-or the RFC process below. It also does not prove live workflow or provider
-enforcement.
-
-Vexil has completed and publicly observed the target-scoped
-[`packages/runtime-go/v0.1.1`](./release/closeouts/runtime-go-0-1-1-manual-protected-tag-2026-07-26.json)
-manual protected-tag release. That outcome is not a GitHub Release, registry
-upload, deployment, bot action, workflow Run, or readiness finding for any
-other target. The [current release status](./docs/book/src/release/current-status.md)
-names the retained evidence and the separate prerequisites that remain for
-future targets and reusable automated procedures.
-
 ## Decision Making
 
 ### Architectural decisions

@@ -52,17 +52,3 @@
 - [Development Setup](./contributing/setup.md)
 - [Architecture](./contributing/architecture.md)
 
-# Release Governance
-
-- [Current Release Status](./release/current-status.md)
-- [Stewardship Authority Model](./release/stewardship.md)
-- [Named Stewardship Continuity](./release/stewardship-continuity.md)
-- [Retired-Bot Responsibility Inventory](./release/retired-bot-responsibilities.md)
-- [Advisory Automation and Manual Fallbacks](./release/advisory-automation.md)
-- [Privileged and Policy Operations](./release/privileged-operations.md)
-- [External Control Boundaries](./release/external-control-boundaries.md)
-- [Stewardship Continuity Tabletop Exercises](./release/stewardship-exercises.md)
-- [Release History and Additive Repair](./release/history.md)
-- [Release Unit Catalog](./release/catalog.md)
-- [Canonical Release Records](./release/canonical-records.md)
-- [First Recovered Release Set](./release/first-recovered-release-set.md)
