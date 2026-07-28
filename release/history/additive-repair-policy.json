@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil-lang.org/release/history/additive-repair-policy.json",
-  "version": "1.0",
-  "recordKind": "additive-repair-policy",
-  "allowedActions": ["document", "supersede", "publish-new-immutable-identity"],
-  "prohibitedActions": ["move-tag", "delete-tag", "force-update-tag", "recreate-tag", "reuse-tag", "overwrite-artifact", "replace-artifact"],
-  "preflight": "A proposal is schema-validated and checked against every ratified Historical Tag before any executor or remote operation is considered."
-}

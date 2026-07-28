@@ -1,1 +1,0 @@
-{"policyId":"runtime-go-approval","releaseBoundary":"Only the exact Manifest, its current evidence set, candidate custody, and a non-expired detached approval may authorize one protected human creation of packages/runtime-go/v0.1.1 at sourceCommit 99e2afef4d48ab35ec61e8b23a9c0d6c210e275f.","schemaVersion":"1.0"}

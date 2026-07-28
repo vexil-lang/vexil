@@ -1,4 +1,4 @@
-name: npm Release Readiness (publication disabled)
+name: Publish @vexil-lang/runtime to npm
 
 on:
   push:
@@ -7,36 +7,26 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  id-token: write
+  contents: write
 
 jobs:
-  readiness:
+  publish:
     runs-on: ubuntu-latest
     if: github.repository == 'vexil-lang/vexil'
-    # This job is deliberately advisory. It does not use a protected
-    # environment, registry credential, OIDC token, or write-capable token.
-    permissions:
-      contents: read
     defaults:
       run:
         working-directory: packages/runtime-ts
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22.12.0"
           registry-url: 'https://registry.npmjs.org'
-          # This advisory workflow has no reason to share runtime caches with
-          # a future privileged executor.
-          package-manager-cache: false
 
+      - run: npm version "${GITHUB_REF#refs/tags/vexil-runtime-ts-v}" --no-git-tag-version --allow-same-version
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - name: Record publication boundary
-        run: |
-          echo "npm publication is disabled pending verified target-isolated external controls."
-          echo "No registry credential, OIDC token, or protected environment was accessed."
+      - run: NODE_AUTH_TOKEN="" npm publish --access public --provenance

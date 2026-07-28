@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vexil-lang.org/release/schemas/history-reconciliation-decision.schema.json",
-  "title": "Vexil Release History Reconciliation Decision",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["$schema", "$id", "version", "recordKind", "decisionId", "status", "ledgerEntryIds", "namespaceClaims", "rootTagPolicy", "approval"],
-  "properties": {"$schema": {"const": "https://json-schema.org/draft/2020-12/schema"}, "$id": {"const": "https://vexil-lang.org/release/history/reconciliation-decision.json"}, "version": {"const": "1.0"}, "recordKind": {"const": "release-history-reconciliation-decision"}, "decisionId": {"type": "string", "minLength": 1}, "status": {"enum": ["awaiting-public-review", "approved", "rejected"]}, "ledgerEntryIds": {"type": "array", "items": {"type": "string", "minLength": 1}}, "namespaceClaims": {"type": "object", "additionalProperties": false, "required": ["language", "wire", "package", "coordinatedProject"], "properties": {"language": {"type": "string", "minLength": 1}, "wire": {"type": "string", "minLength": 1}, "package": {"type": "string", "minLength": 1}, "coordinatedProject": {"type": "string", "minLength": 1}}}, "rootTagPolicy": {"const": "prohibited-during-recovery"}, "approval": {"type": ["object", "null"]}}
-}
