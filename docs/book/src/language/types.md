@@ -97,4 +97,4 @@ All types encode to a deterministic byte sequence. Fixed-size types pack at thei
 
 The `@varint` annotation changes a fixed-width integer to unsigned LEB128 encoding. The `@zigzag` annotation uses ZigZag encoding for signed integers (small magnitudes use fewer bytes). The `@delta` annotation generates stateful encoder/decoder pairs that transmit field-level deltas.
 
-See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md) for complete encoding rules.
+See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for complete encoding rules.

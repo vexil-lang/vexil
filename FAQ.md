@@ -36,7 +36,7 @@ Vexil gives you all of that from a single schema file.
 
 ## Does Vexil support schema evolution?
 
-Yes, formally. [Spec §9](spec/vexil-spec.md) defines schema versioning (`@version`, SemVer 2.0.0) and [§10](spec/vexil-spec.md) is a normative table classifying every kind of schema change as compatible (patch/minor) or breaking (major) — adding a field, removing one, changing a type or ordinal, adding a variant to a `@non_exhaustive` enum, and so on. §11.10 walks through the actual encode/decode mechanics for each case.
+Yes, formally. [Spec §9](spec/language.md) defines schema versioning (`@version`, SemVer 2.0.0) and [§10](spec/language.md) is a normative table classifying every kind of schema change as compatible (patch/minor) or breaking (major) — adding a field, removing one, changing a type or ordinal, adding a variant to a `@non_exhaustive` enum, and so on. §11.10 walks through the actual encode/decode mechanics for each case.
 
 `vexilc compat old.vexil new.vexil` implements that table: it diffs two compiled schemas and reports every change, its classification, and the suggested version bump (exit code 0 if compatible, 1 if breaking). Reusing an ordinal after `@removed` is a compile-time error, not just a convention. This repository's own CI runs `vexilc compat` against every PR that touches a versioned `.vexil` file and fails the build if a breaking change isn't paired with at least the required `@version` bump.
 

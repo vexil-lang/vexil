@@ -1,7 +1,7 @@
 # Vexil Language — Formal Grammar
 #
 # Notation: Parsing Expression Grammar (PEG)
-# Reference: vexil-spec.md v1.0.0-draft
+# Reference: language.md v1.0.0-draft
 # License:   CC-BY 4.0 (this document) / Apache-2.0 (reference implementation)
 #
 # PEG conventions used:

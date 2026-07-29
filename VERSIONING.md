@@ -6,9 +6,9 @@ move on different schedules and don't need to match.
 
 ## Spec versions
 
-- [`spec/vexil-spec.md`](spec/vexil-spec.md) — the language specification
+- [`spec/language.md`](spec/language.md) — the language specification
   (syntax, type system). Currently `1.0.0-draft`: still evolving.
-- [`docs/spec/SPEC.md`](docs/spec/SPEC.md) — the binary wire format. Currently
+- [`spec/wire-format.md`](spec/wire-format.md) — the binary wire format. Currently
   `STABILIZING`: unchanged since April 2026, and breaking it would mean
   moving to a new format generation — but it hasn't been exercised by an
   external implementation or independently audited, so it isn't an ironclad
@@ -37,6 +37,6 @@ you need to know what a specific crate/package actually guarantees, check
 that component's own version and changelog — not the spec status, and not
 any other component's version.
 
-See [`docs/spec/SPEC.md`](docs/spec/SPEC.md) and
+See [`spec/wire-format.md`](spec/wire-format.md) and
 [`FAQ.md`](FAQ.md#is-vexil-production-ready) for what the spec's current
 status does and doesn't promise.
