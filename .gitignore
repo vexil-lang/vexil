@@ -29,6 +29,7 @@ CLAUDE.md
 MAINTAINER_HANDBOOK.md
 RELEASING.md
 docs/superpowers/archive/
+internal/
 
 # Node.js
 node_modules/
