@@ -1,0 +1,12 @@
+# cargo-release config: https://github.com/crate-ci/cargo-release
+#
+# Everything except the changelog hook already matches this repo's existing
+# conventions by default: tag-name defaults to "{{crate_name}}-v{{version}}",
+# dependent-version defaults to "upgrade" (bumps other workspace crates'
+# version requirements when a dependency they use gets released), and
+# publish/push/tag all default to true. vexil-bench (publish = false in its
+# own Cargo.toml) is skipped automatically.
+#
+# Usage: cargo release <patch|minor|major> -p <crate-name>
+# Always dry-run first (the default) and review before adding --execute.
+pre-release-hook = ["bash", "-c", "$WORKSPACE_ROOT/scripts/prepend-changelog.sh"]
