@@ -1,11 +1,11 @@
 # Vexil Wire Format — Limitations, Gaps, and What We Haven't Done Yet
 
-Last reviewed: 2026-07-27
+Last reviewed: 2026-07-29
 
 ## What We've Verified
 
 - **Deterministic encoding:** Golden byte vectors match between Rust and TypeScript for all primitive types, sub-byte packing, messages, enums, unions, optionals, arrays, maps, sets, and evolution scenarios.
-- **Schema evolution:** Field append and variant addition work (forward and backward). Trailing bytes are tolerated by older decoders.
+- **Schema evolution:** Formally specified (spec §9/§10) and enforced, not just informal convention — `vexilc compat` classifies every change as compatible or breaking against that table, ordinal reuse after `@removed` is a compile error, and this repo's CI runs `vexilc compat` on PRs that touch a versioned `.vexil` file. Field append and variant addition work (forward and backward); trailing bytes are tolerated by older decoders.
 - **Recursion safety:** Depth limit of 64 enforced at encode and decode in both Rust and TypeScript. Stack overflow is prevented, not just unlikely.
 - **NaN canonicalization:** All NaN inputs produce the same quiet NaN bytes (f32: `0x7FC00000`, f64: `0x7FF8000000000000`). We don't allow NaN payloads to vary.
 - **Delta encoding:** `@delta` works in both Rust and TypeScript. The system-monitor example uses it over WebSocket with live data.

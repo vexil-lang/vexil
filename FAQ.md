@@ -10,7 +10,7 @@ Other differences:
 - **No self-description on the wire** -- the schema is the contract, messages are compact
 - **Delta encoding** -- `@delta` generates stateful encoder/decoder pairs for streaming use cases
 
-The trade-off: Vexil doesn't have formal schema evolution rules yet. Language targets are Rust, TypeScript, Go, and Python, not the "15 languages" that Protobuf supports. If you need Java or C# today, Vexil isn't ready for you.
+The trade-off: language targets are Rust, TypeScript, Go, and Python, not the "15 languages" that Protobuf supports. If you need Java or C# today, Vexil isn't ready for you.
 
 ## Is Vexil production-ready?
 
@@ -36,9 +36,11 @@ Vexil gives you all of that from a single schema file.
 
 ## Does Vexil support schema evolution?
 
-Partially. The wire format tolerates trailing bytes, so an older decoder can read messages with fields appended by a newer schema. The BLAKE3 schema hash detects when sender and receiver are on different versions.
+Yes, formally. [Spec §9](spec/vexil-spec.md) defines schema versioning (`@version`, SemVer 2.0.0) and [§10](spec/vexil-spec.md) is a normative table classifying every kind of schema change as compatible (patch/minor) or breaking (major) — adding a field, removing one, changing a type or ordinal, adding a variant to a `@non_exhaustive` enum, and so on. §11.10 walks through the actual encode/decode mechanics for each case.
 
-What we don't have yet: formal field deprecation rules, variant removal guarantees, or wire-compatible schema diffing. The `@removed` annotation documents which ordinals were previously in use to prevent accidental reuse. Full evolution support is planned for 1.1.
+`vexilc compat old.vexil new.vexil` implements that table: it diffs two compiled schemas and reports every change, its classification, and the suggested version bump (exit code 0 if compatible, 1 if breaking). Reusing an ordinal after `@removed` is a compile-time error, not just a convention. This repository's own CI runs `vexilc compat` against every PR that touches a versioned `.vexil` file and fails the build if a breaking change isn't paired with at least the required `@version` bump.
+
+The wire format itself also tolerates trailing bytes, so an older decoder can read messages with fields appended by a newer schema without any of the above — that's forward compatibility for free, on top of the formal rules.
 
 ## Can I use Vexil for network protocols? File formats? IPC?
 
