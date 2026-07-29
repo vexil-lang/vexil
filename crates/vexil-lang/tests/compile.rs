@@ -37,6 +37,7 @@ fn valid_corpus_compiles() {
         "026_required_to_optional.vexil",
         "027_delta_on_message.vexil",
         "028_typed_tombstone.vexil",
+        "046_field_doc_placement.vexil",
     ];
     for file in &valid_files {
         let source = read_corpus("valid", file);
@@ -191,6 +192,34 @@ message A { v @0 : u32 }
     } else {
         panic!("expected Message");
     }
+}
+
+/// A line-leading `@doc` applies to the following field, while inline `@doc`
+/// continues to annotate the preceding field.
+#[test]
+fn field_doc_placement_is_unambiguous() {
+    let source = r#"
+namespace test.field_docs
+message Documented {
+    first @0 : u32 @since("1.0.0")
+    @doc("second")
+    second @1 : u32
+    third @2 : u32 @doc("third")
+}
+"#;
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.as_ref().expect("schema should compile");
+    let id = compiled.declarations[0];
+    let TypeDef::Message(message) = compiled.registry.get(id).expect("message exists") else {
+        panic!("expected message");
+    };
+    assert!(message.fields[0].annotations.doc.is_empty());
+    assert_eq!(
+        message.fields[0].annotations.since.as_deref(),
+        Some("1.0.0")
+    );
+    assert_eq!(message.fields[1].annotations.doc, vec!["second"]);
+    assert_eq!(message.fields[2].annotations.doc, vec!["third"]);
 }
 
 /// @deprecated carries both reason and since fields.

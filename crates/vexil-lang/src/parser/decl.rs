@@ -11,7 +11,7 @@ use crate::span::{Span, Spanned};
 use smol_str::SmolStr;
 
 use super::expr::{parse_literal_value, parse_statement, parse_type_expr};
-use super::{parse_annotation_value, parse_annotations, Parser};
+use super::{parse_annotation, parse_annotation_value, parse_annotations, Parser};
 
 // ---------------------------------------------------------------------------
 // Top-level dispatch
@@ -253,7 +253,7 @@ fn parse_field(
     let post_type_annotations = if is_at_tombstone(p) {
         Vec::new()
     } else {
-        parse_annotations(p)
+        parse_post_type_annotations(p, ty.span.range().end)
     };
 
     // Optional where clause
@@ -277,6 +277,29 @@ fn parse_field(
         },
         span,
     ))
+}
+
+/// Parse trailing field annotations without consuming a line-leading `@doc`
+/// intended for the following field.
+fn parse_post_type_annotations(p: &mut Parser<'_>, type_end: usize) -> Vec<Annotation> {
+    let mut annotations = Vec::new();
+    let mut previous_end = type_end;
+
+    while p.at(&TokenKind::At) {
+        let line_leading_doc = matches!(&p.peek_nth(1).kind, TokenKind::Ident(name) if name == "doc")
+            && p.has_line_break_between(previous_end, p.current_offset());
+        if line_leading_doc {
+            break;
+        }
+
+        let Some(annotation) = parse_annotation(p) else {
+            break;
+        };
+        previous_end = p.previous_token_end();
+        annotations.push(annotation);
+    }
+
+    annotations
 }
 
 /// Parse a field name — accepts Ident or any keyword (as field name).

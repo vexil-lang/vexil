@@ -154,6 +154,11 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     w.close_block(); // impl {Name}Encoder
     w.blank();
 
+    w.open_block(&format!("impl Default for {name}Encoder"));
+    w.line("fn default() -> Self { Self::new() }");
+    w.close_block();
+    w.blank();
+
     // -----------------------------------------------------------------------
     // {Name}Decoder
     // -----------------------------------------------------------------------
@@ -239,5 +244,10 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     w.close_block();
 
     w.close_block(); // impl {Name}Decoder
+    w.blank();
+
+    w.open_block(&format!("impl Default for {name}Decoder"));
+    w.line("fn default() -> Self { Self::new() }");
+    w.close_block();
     w.blank();
 }

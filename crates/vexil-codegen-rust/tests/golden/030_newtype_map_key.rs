@@ -2,7 +2,6 @@
 // Source: test.newtype_map_key
 
 use std::collections::BTreeMap;
-use vexil_runtime::*;
 
 pub const SCHEMA_HASH: [u8; 32] = [0x18, 0xfd, 0xc9, 0xe0, 0x68, 0x83, 0x2d, 0x02, 0x03, 0x88, 0x9a, 0x40, 0x58, 0x69, 0xe8, 0xd5, 0xf3, 0xc4, 0x44, 0xec, 0x31, 0xe3, 0x08, 0x0b, 0x7b, 0x3b, 0x56, 0x02, 0x9d, 0xc1, 0x41, 0x81];
 pub const SCHEMA_VERSION: &str = "1.0.0";
@@ -34,7 +33,7 @@ pub struct Label(pub String);
 
 impl vexil_runtime::Pack for Label {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
-        w.write_string(&self.0);
+        w.write_string(self.0.as_str());
         w.flush_to_byte_boundary();
         Ok(())
     }
@@ -68,7 +67,7 @@ impl vexil_runtime::Pack for UserProfile {
             w.enter_recursive()?;
             map_k.pack(w)?;
             w.leave_recursive();
-            w.write_string(&map_v);
+            w.write_string(map_v.as_str());
         }
         w.write_leb128(self.tags.len() as u64);
         for (map_k, map_v) in &self.tags {

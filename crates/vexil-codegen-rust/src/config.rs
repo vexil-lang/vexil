@@ -34,6 +34,7 @@ pub fn emit_config(
 
     // ── Default impl ─────────────────────────────────────────────────────────
     w.open_block(&format!("impl Default for {name}"));
+    w.line("#[allow(clippy::approx_constant)]");
     w.open_block("fn default() -> Self");
     w.open_block("Self");
     for field in &cfg.fields {
