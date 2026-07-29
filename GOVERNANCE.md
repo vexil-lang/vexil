@@ -18,8 +18,11 @@ Any contributor can submit a PR. Maintainers review and merge.
 
 ### Breaking changes
 
-Require a GitHub issue labeled `breaking-change`, open for at least
-**14 days** for community feedback before any PR is merged.
+Require a GitHub issue labeled `breaking-change`. The 14-day window below
+applies when there's actual external engagement to wait for — solo, with no
+outside comments, the project lead isn't required to sit out a clock with
+nothing on it. If someone does comment, the full window restarts from their
+last substantive input.
 
 ### Protocol changes (VNP wire format, Vexil schema language)
 
@@ -42,11 +45,15 @@ over time. There is no formal application process at this stage.
 
 1. Open a GitHub issue with the `rfc` label
 2. Describe: the problem, the proposed solution, and alternatives considered
-3. **14-day comment period** — the community may raise concerns or propose amendments
+3. **14-day comment period** if there's anyone to comment — see the note on
+   breaking changes above; this isn't a mandatory solo waiting period
 4. The project lead makes the final decision and documents the rationale in a GitHub issue labeled `decision`
 
 RFCs are required for: new language features, changes to encoding semantics,
 wire format modifications, and changes to the conformance corpus contract.
+Right now that mostly means writing the rationale down before acting, not
+waiting on feedback that doesn't exist yet — the process is there so it's
+ready the moment external contributors do.
 
 ## Code of Conduct
 
