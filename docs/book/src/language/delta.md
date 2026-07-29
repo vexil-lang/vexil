@@ -39,4 +39,4 @@ message GpsTrack {
 
 > **Note:** Delta encoding support is currently specified but implementation may vary by backend. Check the [limitations document](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md) for current status.
 
-See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md) for the full normative reference.
+See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

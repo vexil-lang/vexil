@@ -45,4 +45,4 @@ Multiple flags can be set simultaneously. The ordinal (`@N`) is the bit position
 
 Flags encode as their backing type on the wire. A `flags Permissions : u8` always occupies exactly 8 bits.
 
-See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md) for the full normative reference.
+See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

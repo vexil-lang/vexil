@@ -64,6 +64,6 @@ The project follows a spec-driven development approach:
 
 ## Source
 
-- [Language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md)
-- [PEG grammar](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-grammar.peg)
+- [Language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md)
+- [PEG grammar](https://github.com/vexil-lang/vexil/blob/main/spec/grammar.peg)
 - [Corpus manifest](https://github.com/vexil-lang/vexil/blob/main/corpus/MANIFEST.md)

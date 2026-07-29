@@ -277,8 +277,9 @@ The `compile()` function returns a result with diagnostics (warnings and errors)
 
 ```
 spec/
-  vexil-spec.md          # Language specification (normative, S1-S14)
-  vexil-grammar.peg      # Formal PEG grammar
+  language.md            # Language specification (normative, S1-S14)
+  wire-format.md         # Binary wire-format specification (normative)
+  grammar.peg             # Formal PEG grammar
 corpus/
   valid/                 # 43 schemas -- a conformant impl must accept all
   invalid/               # 65 schemas -- a conformant impl must reject all
@@ -310,7 +311,8 @@ examples/
 ## Documentation
 
 - [Documentation book](docs/book/src/SUMMARY.md) -- installation, language guide, CLI reference, runtimes, and examples
-- [Language Specification](spec/vexil-spec.md)
+- [Language Specification](spec/language.md)
+- [Wire-Format Specification](spec/wire-format.md)
 - [FAQ](FAQ.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)

@@ -211,4 +211,4 @@ Vectors are versioned with the spec. The `v1_types.json` file contains tests for
 
 ---
 
-**See also:** [SPEC.md](/docs/spec/SPEC.md) — Complete binary format specification
+**See also:** [Wire-Format Specification](/spec/wire-format.md) — Complete binary format specification

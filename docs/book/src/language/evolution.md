@@ -65,4 +65,4 @@ message Config {
 
 The tombstone tells the decoder exactly how many bytes to skip for ordinal 1, even though the field no longer exists in the current schema.
 
-See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md) for the full normative reference.
+See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

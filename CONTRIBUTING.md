@@ -8,7 +8,7 @@ This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By partic
 
 - **Bug reports** -- open an issue. Include the schema that triggers the bug and the error output.
 - **Feature requests** -- open an issue and explain the problem you're solving. "Add X" without context is hard to evaluate.
-- **Spec corrections** -- typos, ambiguities, or things that don't match the implementation. The spec is in `spec/vexil-spec.md`.
+- **Spec corrections** -- typos, ambiguities, or things that don't match the implementation. The language specification is in `spec/language.md`; the binary wire-format specification is in `spec/wire-format.md`.
 - **Corpus additions** -- new test cases for `corpus/valid/` or `corpus/invalid/`. Add the `.vexil` file and a line in `corpus/MANIFEST.md`.
 - **Documentation** -- typos, better examples, things that are wrong. If something confused you, it'll confuse someone else.
 - **Code** -- see below.

@@ -30,4 +30,4 @@ config VERSION : string = "1.0.0"
 
 Configs are useful for sharing magic numbers and version strings between schema and application code without encoding them in every message.
 
-See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/vexil-spec.md) for the full normative reference.
+See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.
