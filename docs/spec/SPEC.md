@@ -1,17 +1,22 @@
 ---
-status: FROZEN
-version: 1.0.0
-frozen_date: 2026-04-10
+status: STABILIZING
+stable_since: 2026-04-10
 ---
 
-> **SPEC FROZEN**: This specification is locked for Vexil 1.0.
-> Changes require major version bump.
+> **STABILIZING**: This binary format hasn't changed since 2026-04-10, and
+> breaking it would require a major version bump. It has not yet been
+> exercised by external implementations or independently audited — treat
+> this as a strong signal of intent, not an ironclad guarantee.
 
 # Vexil 1.0 Binary Format Specification
 
-**Version:** 1.0.0  
-**Status:** FROZEN  
+**Status:** Stabilizing  
 **Date:** 2026-04-10
+
+"1.0" here names the target format generation this document specifies — it
+is not a claim about the maturity of any published crate or package. See
+[`VERSIONING.md`](../../VERSIONING.md) for how spec and implementation
+versions relate.
 
 ---
 
@@ -581,7 +586,7 @@ Final: `[0x01, 0x08, 0x1F, 0x85, 0xEB, 0x51, 0xB8, 0x1E, 0x09, 0x40]`
 
 ## Appendix B: Changes from Pre-1.0
 
-This frozen spec includes these features added for 1.0:
+This spec includes these features added for 1.0:
 
 - Fixed-point types (`fixed32`, `fixed64`)
 - Geometric types (`vec2`, `vec3`, `vec4`, `quat`, `mat3`, `mat4`)

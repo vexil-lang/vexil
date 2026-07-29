@@ -98,7 +98,7 @@ const decoded = decodeSensorReading(r);
 - Rust and TypeScript backends from the same schema -- byte-identical output, verified by compliance vectors; Go and Python lack that verification
 - Same data always produces the same bytes -- no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
-- 108-file conformance corpus (43 valid, 65 invalid) that any conformant implementation must pass
+- 111-file conformance corpus (45 valid, 66 invalid) that any conformant implementation must pass
 
 ## Fixed-Point Types
 
@@ -315,7 +315,7 @@ examples/
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
 - [**vexmon**](https://github.com/vexil-lang/vexmon) -- real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)
-- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-codegen-py](https://docs.rs/vexil-codegen-py) | [vexil-store](https://docs.rs/vexil-store)
+- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-store](https://docs.rs/vexil-store) (`vexil-codegen-py` isn't published to crates.io yet, so no docs.rs page exists for it)
 
 ## Contributing
 
