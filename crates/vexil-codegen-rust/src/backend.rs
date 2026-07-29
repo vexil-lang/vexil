@@ -85,16 +85,22 @@ impl CodegenBackend for RustBackend {
 
             // Collect all Named TypeIds referenced by declared types.
             let mut import_paths: HashMap<TypeId, String> = HashMap::new();
-            for &type_id in &compiled.declarations {
+            let impl_ids = compiled.impls().map(|(id, _)| id).collect::<Vec<_>>();
+            for &type_id in compiled.declarations.iter().chain(impl_ids.iter()) {
                 if let Some(typedef) = compiled.registry.get(type_id) {
-                    collect_named_ids_from_typedef(typedef, &declared_ids, |imported_id| {
-                        if let Some(imported_def) = compiled.registry.get(imported_id) {
-                            let name = crate::type_name_of(imported_def);
-                            if let Some(rust_path) = global_type_map.get(name) {
-                                import_paths.insert(imported_id, rust_path.clone());
+                    collect_named_ids_from_typedef(
+                        typedef,
+                        &compiled.registry,
+                        &declared_ids,
+                        |imported_id| {
+                            if let Some(imported_def) = compiled.registry.get(imported_id) {
+                                let name = crate::type_name_of(imported_def);
+                                if let Some(rust_path) = global_type_map.get(name) {
+                                    import_paths.insert(imported_id, rust_path.clone());
+                                }
                             }
-                        }
-                    });
+                        },
+                    );
                 }
             }
 
@@ -138,6 +144,7 @@ impl CodegenBackend for RustBackend {
 /// the declared set (i.e., it's an imported type). Calls `on_import` for each.
 fn collect_named_ids_from_typedef(
     typedef: &TypeDef,
+    registry: &vexil_lang::ir::TypeRegistry,
     declared: &HashSet<TypeId>,
     mut on_import: impl FnMut(TypeId),
 ) {
@@ -160,6 +167,24 @@ fn collect_named_ids_from_typedef(
         TypeDef::Config(cfg) => {
             for f in &cfg.fields {
                 collect_named_ids_from_resolved(&f.resolved_type, declared, &mut on_import);
+            }
+        }
+        TypeDef::Trait(trait_def) => {
+            for field in &trait_def.fields {
+                collect_named_ids_from_resolved(&field.ty, declared, &mut on_import);
+            }
+        }
+        TypeDef::Impl(impl_def) => {
+            collect_named_ids_from_resolved(&impl_def.target_type, declared, &mut on_import);
+            for arg in &impl_def.type_args {
+                collect_named_ids_from_resolved(arg, declared, &mut on_import);
+            }
+            for (id, def) in registry.iter() {
+                if matches!(def, TypeDef::Trait(t) if t.name == impl_def.trait_name)
+                    && !declared.contains(&id)
+                {
+                    on_import(id);
+                }
             }
         }
         _ => {}

@@ -46,8 +46,6 @@ struct LowerCtx {
     /// TypeIds of generic aliases registered during lowering.
     /// These are added to the declarations list after processing.
     generic_alias_ids: Vec<TypeId>,
-    /// Collected impl definitions for conformance checking.
-    impls: Vec<TypeId>,
 }
 
 impl LowerCtx {
@@ -61,7 +59,6 @@ impl LowerCtx {
             constants: HashMap::new(),
             const_decls: HashMap::new(),
             generic_alias_ids: Vec::new(),
-            impls: Vec::new(),
         }
     }
 
@@ -134,12 +131,11 @@ pub fn lower_with_deps(
             impl_def.trait_name, impl_def.target_type
         ));
         let type_def = TypeDef::Impl(impl_def);
-        let id = ctx.registry.register(impl_name, type_def);
-        ctx.impls.push(id);
+        ctx.registry.register(impl_name, type_def);
     }
 
-    // Second pass: process aliases after all regular declarations exist
-    // This ensures alias targets can be resolved.
+    // Second pass: process aliases after all regular declarations exist.
+    // This preserves the established alias lowering lifecycle.
     for alias in alias_decls {
         lower_alias(alias, &mut ctx);
     }

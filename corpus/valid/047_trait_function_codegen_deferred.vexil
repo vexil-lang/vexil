@@ -1,0 +1,5 @@
+namespace test.trait_function_codegen_deferred
+
+trait Validatable {
+    fn validate() -> bool
+}

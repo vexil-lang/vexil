@@ -117,3 +117,13 @@ fn test_027_delta_on_message() {
 fn test_028_typed_tombstone() {
     golden_test("028_typed_tombstone");
 }
+
+#[test]
+fn test_045_generic_trait() {
+    golden_test("045_generic_trait");
+}
+
+#[test]
+fn test_048_generic_trait_nested() {
+    golden_test("048_generic_trait_nested");
+}

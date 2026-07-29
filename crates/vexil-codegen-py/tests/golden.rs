@@ -277,3 +277,13 @@ fn test_041_map_key_ordering() {
 fn test_043_invariant() {
     golden_test("043_invariant");
 }
+
+#[test]
+fn test_045_generic_trait() {
+    golden_test("045_generic_trait");
+}
+
+#[test]
+fn test_048_generic_trait_nested() {
+    golden_test("048_generic_trait_nested");
+}

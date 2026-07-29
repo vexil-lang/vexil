@@ -9,14 +9,17 @@ fn golden_test(corpus_name: &str) {
         .parent()
         .unwrap()
         .join("corpus/valid");
-    let golden_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
-
     let source_path = corpus_dir.join(format!("{corpus_name}.vexil"));
-    let golden_path = golden_dir.join(format!("{corpus_name}.rs"));
-
     let source = fs::read_to_string(&source_path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", source_path.display()));
-    let result = vexil_lang::compile(&source);
+    golden_source_test(corpus_name, &source);
+}
+
+fn golden_source_test(test_name: &str, source: &str) {
+    let golden_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let golden_path = golden_dir.join(format!("{test_name}.rs"));
+
+    let result = vexil_lang::compile(source);
     assert!(
         !result
             .diagnostics
@@ -46,7 +49,7 @@ fn golden_test(corpus_name: &str) {
 
     if generated != expected {
         let diff = simple_diff(&expected, &generated);
-        panic!("Golden file mismatch for {corpus_name}:\n{diff}");
+        panic!("Golden file mismatch for {test_name}:\n{diff}");
     }
 }
 
@@ -151,4 +154,22 @@ fn test_040_inline_bits() {
 #[test]
 fn test_046_field_doc_placement() {
     golden_test("046_field_doc_placement");
+}
+
+#[test]
+fn test_045_generic_trait() {
+    golden_test("045_generic_trait");
+}
+
+#[test]
+fn test_048_generic_trait_nested() {
+    golden_test("048_generic_trait_nested");
+}
+
+#[test]
+fn trait_only_generic_map() {
+    golden_source_test(
+        "trait_only_generic_map",
+        "namespace test.trait_only_map\ntrait Lookup<T> {\n    values @0 : map<string, T>\n}",
+    );
 }

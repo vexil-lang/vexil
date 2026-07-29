@@ -10,6 +10,7 @@ pub mod enum_gen;
 pub mod flags;
 pub mod message;
 pub mod newtype;
+pub mod trait_gen;
 pub mod types;
 pub mod union_gen;
 
@@ -24,6 +25,8 @@ pub enum CodegenError {
         type_id: vexil_lang::ir::TypeId,
         referenced_by: String,
     },
+    #[error("function-bearing trait code generation is not supported")]
+    TraitFunctionsUnsupported,
 }
 
 /// Generate Go code for a compiled schema (no cross-file imports).
@@ -38,6 +41,7 @@ pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
+    ensure_field_only_traits(compiled)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -60,7 +64,7 @@ pub(crate) fn generate_with_imports(
         compiled
             .registry
             .get(id)
-            .is_some_and(|td| !matches!(td, TypeDef::Config(_)))
+            .is_some_and(|td| !matches!(td, TypeDef::Config(_) | TypeDef::Trait(_)))
     });
 
     let has_unions = compiled.declarations.iter().any(|&id| {
@@ -152,8 +156,16 @@ pub(crate) fn generate_with_imports(
             TypeDef::Config(cfg) => {
                 message::emit_config(&mut w, cfg, &compiled.registry);
             }
+            TypeDef::Trait(trait_def) => {
+                trait_gen::emit_trait(&mut w, trait_def, &compiled.registry)
+            }
             _ => {} // non_exhaustive guard
         }
+    }
+
+    for (_, impl_def) in compiled.impls() {
+        w.blank();
+        trait_gen::emit_impl(&mut w, impl_def, &compiled.registry, import_types);
     }
 
     Ok(w.finish())
@@ -168,8 +180,23 @@ pub(crate) fn type_name_of(typedef: &TypeDef) -> &str {
         TypeDef::Union(u) => u.name.as_str(),
         TypeDef::Newtype(n) => n.name.as_str(),
         TypeDef::Config(c) => c.name.as_str(),
+        TypeDef::Trait(t) => t.name.as_str(),
         _ => "Unknown",
     }
+}
+
+fn ensure_field_only_traits(compiled: &CompiledSchema) -> Result<(), CodegenError> {
+    if compiled
+        .registry
+        .iter()
+        .any(|(_, def)| matches!(def, TypeDef::Trait(t) if !t.functions.is_empty()))
+        || compiled
+            .impls()
+            .any(|(_, impl_def)| !impl_def.functions.is_empty())
+    {
+        return Err(CodegenError::TraitFunctionsUnsupported);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -205,5 +232,48 @@ mod tests {
         let backend = crate::backend::GoBackend;
         let trait_fn = backend.generate(&compiled).unwrap();
         assert_eq!(free_fn, trait_fn);
+    }
+
+    #[test]
+    fn rejects_function_bearing_traits() {
+        let compiled = vexil_lang::compile(
+            "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
+        )
+        .compiled
+        .unwrap();
+        assert_eq!(
+            generate(&compiled),
+            Err(CodegenError::TraitFunctionsUnsupported)
+        );
+    }
+
+    #[test]
+    fn project_codegen_qualifies_imported_trait() {
+        use vexil_lang::codegen::CodegenBackend;
+        use vexil_lang::resolve::InMemoryLoader;
+
+        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { }";
+        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T }";
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert("proj.dep".into(), dep_src.into());
+        let result = vexil_lang::compile_project(
+            root_src,
+            &std::path::PathBuf::from("proj/root.vexil"),
+            &loader,
+        )
+        .unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+
+        let files = crate::backend::GoBackend.generate_project(&result).unwrap();
+        let root = files
+            .iter()
+            .find(|(path, _)| path.to_string_lossy().ends_with("root.go"))
+            .map(|(_, code)| code)
+            .unwrap();
+        assert!(root.contains("\"proj/dep\""), "{root}");
+        assert!(
+            root.contains("var _ dep.Tagged[uint64] = (*Event)(nil)"),
+            "{root}"
+        );
     }
 }

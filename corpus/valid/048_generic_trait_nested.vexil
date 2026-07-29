@@ -1,0 +1,11 @@
+namespace test.generic_trait_nested
+
+trait Container<T> {
+    items @0 : array<T>
+}
+
+message EventList {
+    items @0 : array<u64>
+}
+
+impl Container<u64> for EventList { }

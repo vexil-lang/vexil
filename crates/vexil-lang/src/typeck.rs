@@ -654,28 +654,13 @@ fn check_impl_conformance(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>
     let mut traits: HashMap<SmolStr, &TraitDef> = HashMap::new();
     let mut impls: Vec<&ImplDef> = Vec::new();
 
-    for &id in &compiled.declarations {
-        if let Some(type_def) = compiled.registry.get(id) {
-            match type_def {
-                TypeDef::Trait(t) => {
-                    traits.insert(t.name.clone(), t);
-                }
-                TypeDef::Impl(i) => {
-                    impls.push(i);
-                }
-                _ => {}
-            }
+    for (_id, type_def) in compiled.registry.iter() {
+        if let TypeDef::Trait(t) = type_def {
+            traits.insert(t.name.clone(), t);
         }
     }
-
-    // Also check impls that are not in declarations (collected separately)
-    for (_id, type_def) in compiled.registry.iter() {
-        if let TypeDef::Impl(i) = type_def {
-            // Check if we already have this impl
-            if !impls.iter().any(|existing| std::ptr::eq(*existing, i)) {
-                impls.push(i);
-            }
-        }
+    for (_, impl_def) in compiled.impls() {
+        impls.push(impl_def);
     }
 
     // Check each impl
@@ -1036,27 +1021,13 @@ fn resolve_trait_calls(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>) {
     let mut traits: HashMap<SmolStr, &TraitDef> = HashMap::new();
     let mut impls: Vec<&ImplDef> = Vec::new();
 
-    for &id in &compiled.declarations {
-        if let Some(type_def) = compiled.registry.get(id) {
-            match type_def {
-                TypeDef::Trait(t) => {
-                    traits.insert(t.name.clone(), t);
-                }
-                TypeDef::Impl(i) => {
-                    impls.push(i);
-                }
-                _ => {}
-            }
+    for (_id, type_def) in compiled.registry.iter() {
+        if let TypeDef::Trait(t) = type_def {
+            traits.insert(t.name.clone(), t);
         }
     }
-
-    // Also check impls that are not in declarations (collected separately)
-    for (_id, type_def) in compiled.registry.iter() {
-        if let TypeDef::Impl(i) = type_def {
-            if !impls.iter().any(|existing| std::ptr::eq(*existing, i)) {
-                impls.push(i);
-            }
-        }
+    for (_, impl_def) in compiled.impls() {
+        impls.push(impl_def);
     }
 
     // For each impl, verify that method calls in function bodies resolve correctly
