@@ -16,9 +16,18 @@ examples/system-monitor/data/
 Thumbs.db
 .idea/
 
-# Worktrees and AI tools
+# Worktrees
 .worktrees/
+
+# Private maintainer and AI tooling
 .claude/
+.agents/
+.codex/
+.opencode/
+AGENTS.md
+CLAUDE.md
+MAINTAINER_HANDBOOK.md
+RELEASING.md
 docs/superpowers/archive/
 
 # Node.js
@@ -31,7 +40,3 @@ __pycache__/
 
 # Go
 packages/runtime-go/vendor/
-
-# AI tooling (local only)
-.agents/
-CLAUDE.md
