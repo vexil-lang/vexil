@@ -14,7 +14,7 @@ The trade-off: Vexil doesn't have formal schema evolution rules yet. Language ta
 
 ## Is Vexil production-ready?
 
-The binary wire format is frozen, while the language specification remains a draft. The repository includes a 108-file conformance corpus (43 valid and 65 invalid) and cross-implementation byte vectors for Rust and TypeScript. BLAKE3 schema hashes help peers detect incompatible schemas before exchanging application data.
+The binary wire format hasn't changed since April 2026 and breaking it would require a major version bump, while the language specification remains a draft. The repository includes a 108-file conformance corpus (43 valid and 65 invalid) and cross-implementation byte vectors for Rust and TypeScript. BLAKE3 schema hashes help peers detect incompatible schemas before exchanging application data. Neither the wire format nor the corpus have been exercised by external implementations or independently audited yet.
 
 This is not a claim of a final stable release or a substitute for application-level compatibility testing. Go and Python code generation are not covered by the same cross-language code-generation conformance claim, and the project has not published a security audit. Review the [limitations](docs/limitations-and-gaps.md) and verify your target combination before shipping a cross-language protocol.
 
