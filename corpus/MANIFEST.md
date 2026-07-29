@@ -6,7 +6,7 @@ Generated: 2026-04-09
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (42 files)
+## Valid Corpus (45 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
