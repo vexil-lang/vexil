@@ -2,9 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +19,61 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  changes:
+    name: Change classification
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.classify.outputs.rust }}
+      ts_runtime: ${{ steps.classify.outputs.ts_runtime }}
+      go_runtime: ${{ steps.classify.outputs.go_runtime }}
+      schema: ${{ steps.classify.outputs.schema }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: classify
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "ts_runtime=true" >> "$GITHUB_OUTPUT"
+            echo "go_runtime=true" >> "$GITHUB_OUTPUT"
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}"...HEAD)"
+          matches() { grep -Eq "$1" <<< "$changed"; }
+
+          # Default to the complete Rust suite. Only changes known to be isolated
+          # from the workspace may opt out; new build inputs stay fail-closed.
+          if [[ -n "$changed" ]] && ! grep -Ev '^(docs/book/|packages/runtime-ts/|packages/runtime-go/|CODE_OF_CONDUCT\.md|CONTRIBUTING\.md|FAQ\.md|GOVERNANCE\.md|SECURITY\.md|VERSIONING\.md)$' <<< "$changed"; then
+            rust=false
+          else
+            rust=true
+          fi
+          matches '^(packages/runtime-ts/|compliance/vectors/|\.github/workflows/ci\.yml)' && ts_runtime=true || ts_runtime=false
+          matches '^(packages/runtime-go/|compliance/vectors/|\.github/workflows/ci\.yml)' && go_runtime=true || go_runtime=false
+          matches '\.vexil$' && schema=true || schema=false
+
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          echo "ts_runtime=$ts_runtime" >> "$GITHUB_OUTPUT"
+          echo "go_runtime=$go_runtime" >> "$GITHUB_OUTPUT"
+          echo "schema=$schema" >> "$GITHUB_OUTPUT"
+
+  # Main-branch protection requires this stable gate. Without it, a failed
+  # classifier could cause the dependent required jobs to be skipped.
+  ci-gate:
+    name: CI gate
+    needs: changes
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful classification
+        run: test "${{ needs.changes.result }}" = "success"
+
   # ── Cross-platform tests ────────────────────────────────────────────────────
   # Wire golden tests (wire_golden.rs) run on every platform/arch combination
   # below to prove encoding → bytes and bytes → decoding are identical everywhere.
@@ -25,6 +81,8 @@ jobs:
   # or integer-representation bug in the encoder/decoder.
   test:
     name: Test (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ${{ matrix.os }}
     # CI is advisory: it receives only repository read access and no environment.
     permissions:
@@ -68,6 +126,8 @@ jobs:
   # Only needs one platform — Node.js is cross-platform.
   ts-runtime:
     name: TypeScript runtime
+    needs: changes
+    if: needs.changes.outputs.ts_runtime == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,6 +158,8 @@ jobs:
   # Only needs one platform — Go is cross-platform.
   go-runtime:
     name: Go runtime
+    needs: changes
+    if: needs.changes.outputs.go_runtime == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -122,6 +184,8 @@ jobs:
   # MSRV is 1.94 (see CLAUDE.md). Only build+test; clippy/fmt use stable toolchain.
   msrv:
     name: MSRV (1.94)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -157,7 +221,8 @@ jobs:
   # meaningful on pull requests, where there's a base revision to diff against.
   schema-compat:
     name: Schema compatibility
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.schema == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
