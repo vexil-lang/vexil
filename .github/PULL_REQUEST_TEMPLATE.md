@@ -13,6 +13,14 @@ Closes #<!-- issue number, if applicable -->
 - [ ] Refactor / cleanup
 - [ ] CI / build changes
 
+## Contract Impact
+
+- Change lane:
+- Normative specs:
+- Corpus/vectors:
+- Compatibility:
+- Language targets:
+
 ## Testing
 
 - [ ] Existing tests pass (`cargo test --workspace`)
