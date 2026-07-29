@@ -64,7 +64,7 @@ pub(crate) fn generate_with_imports(
         compiled
             .registry
             .get(id)
-            .is_some_and(|td| !matches!(td, TypeDef::Config(_)))
+            .is_some_and(|td| !matches!(td, TypeDef::Config(_) | TypeDef::Trait(_)))
     });
 
     let has_unions = compiled.declarations.iter().any(|&id| {

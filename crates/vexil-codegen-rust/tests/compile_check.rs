@@ -6,15 +6,20 @@ fn check_compiles(corpus_name: &str) {
     let corpus_path = workspace_root
         .join("corpus/valid")
         .join(format!("{corpus_name}.vexil"));
-    let runtime_path = workspace_root.join("crates/vexil-runtime");
-
     let source = std::fs::read_to_string(&corpus_path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", corpus_path.display()));
-    let result = vexil_lang::compile(&source);
-    let compiled = result.compiled.expect("corpus file should compile");
+    check_source_compiles(corpus_name, &source);
+}
+
+fn check_source_compiles(test_name: &str, source: &str) {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
+    let runtime_path = workspace_root.join("crates/vexil-runtime");
+    let result = vexil_lang::compile(source);
+    let compiled = result.compiled.expect("schema should compile");
     let code = vexil_codegen_rust::generate(&compiled).expect("codegen should succeed");
 
-    let tmp = std::env::temp_dir().join(format!("vexil-codegen-check-{corpus_name}"));
+    let tmp = std::env::temp_dir().join(format!("vexil-codegen-check-{test_name}"));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(tmp.join("src")).unwrap();
 
@@ -50,7 +55,7 @@ vexil-runtime = {{ path = "{runtime_path_str}" }}
 
     assert!(
         output.status.success(),
-        "Generated code for {corpus_name} failed Clippy:\nstderr: {}",
+        "Generated code for {test_name} failed Clippy:\nstderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -93,4 +98,12 @@ fn test_016_recursive() {
 #[test]
 fn test_048_generic_trait_nested() {
     check_compiles("048_generic_trait_nested");
+}
+
+#[test]
+fn trait_only_generic_map() {
+    check_source_compiles(
+        "trait-only-generic-map",
+        "namespace test.trait_only_map\ntrait Lookup<T> {\n    values @0 : map<string, T>\n}",
+    );
 }

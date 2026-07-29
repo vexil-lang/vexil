@@ -139,7 +139,7 @@ fn project_type(
             project_type(&inner.node, params, args, registry)
         ),
         TypeExpr::Map(key, value) => format!(
-            "BTreeMap<{}, {}>",
+            "std::collections::BTreeMap<{}, {}>",
             project_type(&key.node, params, args, registry),
             project_type(&value.node, params, args, registry)
         ),
