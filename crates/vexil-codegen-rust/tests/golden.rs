@@ -152,3 +152,13 @@ fn test_040_inline_bits() {
 fn test_046_field_doc_placement() {
     golden_test("046_field_doc_placement");
 }
+
+#[test]
+fn test_045_generic_trait() {
+    golden_test("045_generic_trait");
+}
+
+#[test]
+fn test_048_generic_trait_nested() {
+    golden_test("048_generic_trait_nested");
+}

@@ -89,3 +89,8 @@ fn test_011_config() {
 fn test_016_recursive() {
     check_compiles("016_recursive");
 }
+
+#[test]
+fn test_048_generic_trait_nested() {
+    check_compiles("048_generic_trait_nested");
+}

@@ -106,6 +106,17 @@ const _: fn() = || {
 };
 
 impl CompiledSchema {
+    /// Iterates implementation declarations defined in this schema.
+    ///
+    /// Impls are registry-only records: they have no exportable name and do
+    /// not participate in `declarations` or canonical schema ordering.
+    pub fn impls(&self) -> impl Iterator<Item = (TypeId, &ImplDef)> {
+        self.registry.iter().filter_map(|(id, def)| match def {
+            TypeDef::Impl(impl_def) => Some((id, impl_def)),
+            _ => None,
+        })
+    }
+
     /// Returns all type names declared in this schema (not imports).
     pub fn type_names(&self) -> Vec<&str> {
         self.declarations

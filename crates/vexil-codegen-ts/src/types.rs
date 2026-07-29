@@ -94,6 +94,7 @@ fn type_def_name(def: &TypeDef) -> String {
         TypeDef::Union(u) => u.name.to_string(),
         TypeDef::Newtype(n) => n.name.to_string(),
         TypeDef::Config(c) => c.name.to_string(),
+        TypeDef::Trait(t) => t.name.to_string(),
         _ => "UnknownTypeDef".to_string(),
     }
 }

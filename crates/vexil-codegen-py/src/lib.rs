@@ -11,6 +11,7 @@ pub mod enum_gen;
 pub mod flags;
 pub mod message;
 pub mod newtype;
+pub mod trait_gen;
 pub mod types;
 pub mod union_gen;
 
@@ -25,6 +26,8 @@ pub enum CodegenError {
         type_id: vexil_lang::ir::TypeId,
         referenced_by: String,
     },
+    #[error("function-bearing trait code generation is not supported")]
+    TraitFunctionsUnsupported,
 }
 
 /// Generate Python code for a compiled schema (no cross-file imports).
@@ -39,6 +42,7 @@ pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
+    ensure_field_only_traits(compiled)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -50,7 +54,15 @@ pub(crate) fn generate_with_imports(
     // Imports
     w.line("from __future__ import annotations");
     w.line("from dataclasses import dataclass");
-    w.line("from typing import Optional");
+    let has_traits = compiled
+        .declarations
+        .iter()
+        .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
+    if has_traits {
+        w.line("from typing import Optional, Protocol, TypeVar, runtime_checkable");
+    } else {
+        w.line("from typing import Optional");
+    }
     w.blank();
     w.line("# Runtime support (to be provided by vexil Python runtime)");
     w.line("from vexil_runtime import _BitWriter, _BitReader");
@@ -81,6 +93,20 @@ pub(crate) fn generate_with_imports(
     // Schema version
     if let Some(ref version) = compiled.annotations.version {
         w.line(&format!("SCHEMA_VERSION: str = \"{version}\""));
+    }
+
+    if has_traits {
+        for (_, trait_def) in compiled.registry.iter().filter_map(|(_, def)| match def {
+            TypeDef::Trait(t) => Some(((), t)),
+            _ => None,
+        }) {
+            for param in &trait_def.type_params {
+                w.line(&format!(
+                    "{} = TypeVar(\"{}\")",
+                    param.name.node, param.name.node
+                ));
+            }
+        }
     }
 
     w.blank();
@@ -120,11 +146,19 @@ pub(crate) fn generate_with_imports(
             TypeDef::Config(cfg) => {
                 message::emit_config(&mut w, cfg, &compiled.registry);
             }
+            TypeDef::Trait(trait_def) => {
+                trait_gen::emit_trait(&mut w, trait_def, &compiled.registry)
+            }
             _ => {} // non_exhaustive guard
         }
     }
 
-    Ok(w.finish())
+    let generated = w.finish();
+    if has_traits {
+        Ok(format!("{}\n", generated.trim_end()))
+    } else {
+        Ok(generated)
+    }
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.
@@ -136,8 +170,23 @@ pub(crate) fn type_name_of(typedef: &TypeDef) -> &str {
         TypeDef::Union(u) => u.name.as_str(),
         TypeDef::Newtype(n) => n.name.as_str(),
         TypeDef::Config(c) => c.name.as_str(),
+        TypeDef::Trait(t) => t.name.as_str(),
         _ => "Unknown",
     }
+}
+
+fn ensure_field_only_traits(compiled: &CompiledSchema) -> Result<(), CodegenError> {
+    if compiled
+        .registry
+        .iter()
+        .any(|(_, def)| matches!(def, TypeDef::Trait(t) if !t.functions.is_empty()))
+        || compiled
+            .impls()
+            .any(|(_, impl_def)| !impl_def.functions.is_empty())
+    {
+        return Err(CodegenError::TraitFunctionsUnsupported);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -174,5 +223,46 @@ mod tests {
         let backend = crate::backend::PythonBackend;
         let trait_fn = backend.generate(&compiled).unwrap();
         assert_eq!(free_fn, trait_fn);
+    }
+
+    #[test]
+    fn rejects_function_bearing_traits() {
+        let compiled = vexil_lang::compile(
+            "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
+        )
+        .compiled
+        .unwrap();
+        assert_eq!(
+            generate(&compiled),
+            Err(CodegenError::TraitFunctionsUnsupported)
+        );
+    }
+
+    #[test]
+    fn project_codegen_imports_named_trait_for_local_impl() {
+        use vexil_lang::codegen::CodegenBackend;
+        use vexil_lang::resolve::InMemoryLoader;
+
+        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { }";
+        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T }";
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert("proj.dep".into(), dep_src.into());
+        let result = vexil_lang::compile_project(
+            root_src,
+            &std::path::PathBuf::from("proj/root.vexil"),
+            &loader,
+        )
+        .unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+
+        let files = crate::backend::PythonBackend
+            .generate_project(&result)
+            .unwrap();
+        let root = files
+            .iter()
+            .find(|(path, _)| path.to_string_lossy().ends_with("root.py"))
+            .map(|(_, code)| code)
+            .unwrap();
+        assert!(root.contains("from proj.dep import *"), "{root}");
     }
 }

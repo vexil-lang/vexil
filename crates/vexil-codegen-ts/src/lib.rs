@@ -17,6 +17,8 @@ pub mod flags;
 pub mod message;
 /// Newtype (wrapper) generation: type alias + encode/decode delegation.
 pub mod newtype;
+/// Field-only trait and implementation proof generation.
+pub mod trait_gen;
 /// TypeScript type mapping utilities for Vexil resolved types.
 pub mod types;
 /// Union (tagged-discriminant) generation: discriminated union + encode/decode.
@@ -35,6 +37,8 @@ pub enum CodegenError {
         type_id: vexil_lang::ir::TypeId,
         referenced_by: String,
     },
+    #[error("function-bearing trait code generation is not supported")]
+    TraitFunctionsUnsupported,
 }
 
 /// Generate TypeScript code for a compiled schema (no cross-file imports).
@@ -49,6 +53,7 @@ pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
     import_paths: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
+    ensure_field_only_traits(compiled)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -65,9 +70,16 @@ pub(crate) fn generate_with_imports(
         let mut imports: Vec<(&String, &String)> = paths.iter().collect();
         imports.sort_by_key(|(name, _)| (*name).clone());
         for (type_name, module_path) in imports {
-            w.line(&format!(
-                "import {{ {type_name}, encode{type_name}, decode{type_name} }} from '{module_path}';",
-            ));
+            let is_trait = compiled.registry.iter().any(|(_, def)| {
+                matches!(def, TypeDef::Trait(trait_def) if trait_def.name == type_name.as_str())
+            });
+            if is_trait {
+                w.line(&format!("import {{ {type_name} }} from '{module_path}';"));
+            } else {
+                w.line(&format!(
+                    "import {{ {type_name}, encode{type_name}, decode{type_name} }} from '{module_path}';",
+                ));
+            }
         }
     }
     w.blank();
@@ -86,6 +98,11 @@ pub(crate) fn generate_with_imports(
     // Schema version
     if let Some(ref version) = compiled.annotations.version {
         w.line(&format!("export const SCHEMA_VERSION = '{version}';"));
+    }
+
+    if compiled.impls().next().is_some() {
+        w.blank();
+        w.line("type _VexilAssertAssignable<T extends U, U> = T;");
     }
 
     // Emit each declared type
@@ -123,8 +140,16 @@ pub(crate) fn generate_with_imports(
             TypeDef::Config(cfg) => {
                 message::emit_config(&mut w, cfg, &compiled.registry);
             }
+            TypeDef::Trait(trait_def) => {
+                trait_gen::emit_trait(&mut w, trait_def, &compiled.registry)
+            }
             _ => {} // non_exhaustive guard
         }
+    }
+
+    for (_, impl_def) in compiled.impls() {
+        w.blank();
+        trait_gen::emit_impl_assertion(&mut w, impl_def, &compiled.registry);
     }
 
     Ok(w.finish())
@@ -139,8 +164,23 @@ pub(crate) fn type_name_of(typedef: &TypeDef) -> &str {
         TypeDef::Union(u) => u.name.as_str(),
         TypeDef::Newtype(n) => n.name.as_str(),
         TypeDef::Config(c) => c.name.as_str(),
+        TypeDef::Trait(t) => t.name.as_str(),
         _ => "Unknown",
     }
+}
+
+fn ensure_field_only_traits(compiled: &CompiledSchema) -> Result<(), CodegenError> {
+    if compiled
+        .registry
+        .iter()
+        .any(|(_, def)| matches!(def, TypeDef::Trait(t) if !t.functions.is_empty()))
+        || compiled
+            .impls()
+            .any(|(_, impl_def)| !impl_def.functions.is_empty())
+    {
+        return Err(CodegenError::TraitFunctionsUnsupported);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -176,5 +216,50 @@ mod tests {
         let backend = crate::backend::TypeScriptBackend;
         let trait_fn = backend.generate(&compiled).unwrap();
         assert_eq!(free_fn, trait_fn);
+    }
+
+    #[test]
+    fn rejects_function_bearing_traits() {
+        let compiled = vexil_lang::compile(
+            "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
+        )
+        .compiled
+        .unwrap();
+        assert_eq!(
+            generate(&compiled),
+            Err(CodegenError::TraitFunctionsUnsupported)
+        );
+    }
+
+    #[test]
+    fn project_codegen_imports_trait_without_codec_symbols() {
+        use vexil_lang::codegen::CodegenBackend;
+        use vexil_lang::resolve::InMemoryLoader;
+
+        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { }";
+        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T }";
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert("proj.dep".into(), dep_src.into());
+        let result = vexil_lang::compile_project(
+            root_src,
+            &std::path::PathBuf::from("proj/root.vexil"),
+            &loader,
+        )
+        .unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+
+        let files = crate::backend::TypeScriptBackend
+            .generate_project(&result)
+            .unwrap();
+        let root = files
+            .iter()
+            .find(|(path, _)| path.to_string_lossy().ends_with("root.ts"))
+            .map(|(_, code)| code)
+            .unwrap();
+        assert!(
+            root.contains("import { Tagged } from './proj/dep';"),
+            "{root}"
+        );
+        assert!(!root.contains("encodeTagged"), "{root}");
     }
 }

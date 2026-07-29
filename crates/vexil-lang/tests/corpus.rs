@@ -257,6 +257,16 @@ fn valid_045_generic_trait() {
     parse_valid("045_generic_trait.vexil");
 }
 
+#[test]
+fn valid_048_generic_trait_nested() {
+    parse_valid("048_generic_trait_nested.vexil");
+}
+
+#[test]
+fn valid_047_trait_function_codegen_deferred() {
+    parse_valid("047_trait_function_codegen_deferred.vexil");
+}
+
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================

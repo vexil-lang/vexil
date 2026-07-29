@@ -34,7 +34,7 @@ impl CodegenBackend for PythonBackend {
         // Step 1: Build a global type_name -> Python module path map.
         let mut global_type_map: HashMap<String, String> = HashMap::new();
         for (ns, compiled) in &result.schemas {
-            let module_path = ns.replace('.', "/");
+            let module_path = ns.to_string();
             for &type_id in &compiled.declarations {
                 if let Some(typedef) = compiled.registry.get(type_id) {
                     let name = crate::type_name_of(typedef);
@@ -55,16 +55,22 @@ impl CodegenBackend for PythonBackend {
             let declared_ids: HashSet<TypeId> = compiled.declarations.iter().copied().collect();
 
             let mut import_types: HashMap<String, String> = HashMap::new();
-            for &type_id in &compiled.declarations {
+            let impl_ids = compiled.impls().map(|(id, _)| id).collect::<Vec<_>>();
+            for &type_id in compiled.declarations.iter().chain(impl_ids.iter()) {
                 if let Some(typedef) = compiled.registry.get(type_id) {
-                    collect_named_ids_from_typedef(typedef, &declared_ids, |imported_id| {
-                        if let Some(imported_def) = compiled.registry.get(imported_id) {
-                            let name = crate::type_name_of(imported_def);
-                            if let Some(py_path) = global_type_map.get(name) {
-                                import_types.insert(name.to_string(), py_path.clone());
+                    collect_named_ids_from_typedef(
+                        typedef,
+                        &compiled.registry,
+                        &declared_ids,
+                        |imported_id| {
+                            if let Some(imported_def) = compiled.registry.get(imported_id) {
+                                let name = crate::type_name_of(imported_def);
+                                if let Some(py_path) = global_type_map.get(name) {
+                                    import_types.insert(name.to_string(), py_path.clone());
+                                }
                             }
-                        }
-                    });
+                        },
+                    );
                 }
             }
 
@@ -95,6 +101,7 @@ impl CodegenBackend for PythonBackend {
 /// the declared set (i.e., it's an imported type).
 fn collect_named_ids_from_typedef(
     typedef: &TypeDef,
+    registry: &vexil_lang::ir::TypeRegistry,
     declared: &HashSet<TypeId>,
     mut on_import: impl FnMut(TypeId),
 ) {
@@ -117,6 +124,24 @@ fn collect_named_ids_from_typedef(
         TypeDef::Config(cfg) => {
             for f in &cfg.fields {
                 collect_named_ids_from_resolved(&f.resolved_type, declared, &mut on_import);
+            }
+        }
+        TypeDef::Trait(trait_def) => {
+            for field in &trait_def.fields {
+                collect_named_ids_from_resolved(&field.ty, declared, &mut on_import);
+            }
+        }
+        TypeDef::Impl(impl_def) => {
+            collect_named_ids_from_resolved(&impl_def.target_type, declared, &mut on_import);
+            for arg in &impl_def.type_args {
+                collect_named_ids_from_resolved(arg, declared, &mut on_import);
+            }
+            for (id, def) in registry.iter() {
+                if matches!(def, TypeDef::Trait(t) if t.name == impl_def.trait_name)
+                    && !declared.contains(&id)
+                {
+                    on_import(id);
+                }
             }
         }
         _ => {}

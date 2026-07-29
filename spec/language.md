@@ -808,7 +808,11 @@ trait Tagged<T> {
 ```
 
 Traits have ZERO wire impact. They are compile-time contracts used for
-code generation.
+code generation. The reference generators project field-only traits to their
+target-language structural-contract mechanisms. A schema containing trait
+function signatures or impl-function bodies remains valid Vexil, but the
+reference generators MUST reject it with a code-generation diagnostic until a
+portable function projection is specified.
 
 ### 4.10  impl
 
@@ -818,7 +822,8 @@ An impl declaration states that a type satisfies a trait.
 impl SensorData for TemperatureReading { }
 ```
 
-The trait name MUST reference an existing trait declaration. The target type
+The trait name MUST be an unqualified reference to an existing trait
+declaration; an import alias cannot be used as an `impl` head. The target type
 MUST exist. The compiler SHOULD validate that the target type contains
 fields matching the trait's requirements (by name and type).
 
