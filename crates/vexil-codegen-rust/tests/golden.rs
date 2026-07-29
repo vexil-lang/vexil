@@ -147,3 +147,8 @@ fn test_039_geometric() {
 fn test_040_inline_bits() {
     golden_test("040_inline_bits");
 }
+
+#[test]
+fn test_046_field_doc_placement() {
+    golden_test("046_field_doc_placement");
+}

@@ -213,12 +213,34 @@ const-expr-primary
 #   x @0 @varint : u64                  (between ordinal and colon)
 #   x @0 : u64 @varint                  (trailing annotation)
 #   @doc("X") x @0 @varint : u64 @delta (all positions)
+#
+# A `@doc` which begins on a later line than the preceding field's type or
+# trailing annotation is a leading annotation for the following field. Keep a
+# trailing `@doc` on the same line as its field type.
 
 field
-    = field-annotations field-name _ ordinal field-annotations ':' _ type-expr field-annotations where-clause?
+    = field-annotations field-name _ ordinal field-annotations ':' _ type-expr post-type-field-annotations where-clause?
 
 field-annotations
     = (_ annotation)*
+
+post-type-field-annotations
+    = (!line-leading-doc _ annotation)*
+
+line-leading-doc
+    = annotation-gap-with-newline '@doc'
+
+annotation-gap-with-newline
+    = (horizontal-ws / line-comment / newline)* newline (horizontal-ws / line-comment / newline)*
+
+horizontal-ws
+    = [ \t]*
+
+line-comment
+    = '#' [^\n]*
+
+newline
+    = '\r'? '\n'
 
 where-clause
     = _ KW_WHERE _ constraint-expr

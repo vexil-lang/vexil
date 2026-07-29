@@ -6,7 +6,7 @@ Generated: 2026-04-09
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (45 files)
+## Valid Corpus (46 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -55,6 +55,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 044_generic_alias.vexil | §4.7 | Generic type alias with type parameter substitution |
 | 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
 | 045_generic_trait.vexil | §4.9 | Generic trait impl with type arguments (`impl Tagged<u64>`) |
+| 046_field_doc_placement.vexil | §5.2, §13.2 | Line-leading and inline trailing field `@doc` ownership |
 
 ## Invalid Corpus (66 files)
 

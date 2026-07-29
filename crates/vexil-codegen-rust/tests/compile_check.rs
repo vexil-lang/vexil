@@ -40,7 +40,7 @@ vexil-runtime = {{ path = "{runtime_path_str}" }}
     .unwrap();
 
     let output = std::process::Command::new("cargo")
-        .arg("check")
+        .args(["clippy", "--", "-D", "warnings"])
         .current_dir(&tmp)
         .env("CARGO_TARGET_DIR", tmp.join("target"))
         .output()
@@ -50,7 +50,7 @@ vexil-runtime = {{ path = "{runtime_path_str}" }}
 
     assert!(
         output.status.success(),
-        "Generated code for {corpus_name} failed to compile:\nstderr: {}",
+        "Generated code for {corpus_name} failed Clippy:\nstderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

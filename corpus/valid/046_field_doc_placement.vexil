@@ -1,0 +1,11 @@
+# §5.2, §13.2: Line-leading @doc annotates the following field.
+namespace test.field_doc_placement
+
+message DocumentedFields {
+    first @0 : u32 @since("1.0.0")
+
+    @doc("Documentation for second")
+    second @1 : u32
+
+    third @2 : u32 @doc("Inline documentation for third")
+}

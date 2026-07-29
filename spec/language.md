@@ -892,6 +892,10 @@ NOT treat an ordinal as an annotation.
 | Enum/union variant | Before variant name |
 | Tombstone (`@removed`) | Standalone statement inside a declaration body (not on a field) |
 
+For `@doc`, a line-leading annotation belongs to the field that follows it. A
+trailing `@doc` belongs to the preceding field only when it appears on the
+same line as that field's type expression.
+
 `@removed` is syntactically a tombstone statement, not a field annotation. It
 appears as a standalone line within a `message` or `union` variant body. The
 grammar for a declaration body is:

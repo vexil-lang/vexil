@@ -2,7 +2,6 @@
 // Source: test.set
 
 use std::collections::BTreeMap;
-use vexil_runtime::*;
 
 pub const SCHEMA_HASH: [u8; 32] = [0x86, 0x3c, 0x08, 0x4e, 0x75, 0x4f, 0x2a, 0xdf, 0x37, 0x16, 0x57, 0x6e, 0xe8, 0xfa, 0xd1, 0x44, 0xd1, 0xfb, 0xb4, 0xe7, 0xce, 0x9a, 0x1e, 0xa8, 0x6c, 0x80, 0x95, 0x96, 0xe9, 0x25, 0x78, 0x1e];
 
@@ -17,7 +16,7 @@ impl vexil_runtime::Pack for Tags {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.write_leb128(self.names.len() as u64);
         for item in self.names {
-            w.write_string(&item);
+            w.write_string(item.as_str());
         }
         w.flush_to_byte_boundary();
         if !self._unknown.is_empty() {

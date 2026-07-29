@@ -228,6 +228,11 @@ fn valid_040_inline_bits() {
 }
 
 #[test]
+fn valid_046_field_doc_placement() {
+    parse_valid("046_field_doc_placement.vexil");
+}
+
+#[test]
 fn valid_041_map_key_ordering() {
     parse_valid("041_map_key_ordering.vexil");
 }

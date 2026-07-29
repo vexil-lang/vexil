@@ -51,6 +51,15 @@ fn primitive_bits(p: &PrimitiveType) -> u8 {
     }
 }
 
+/// Return an unsigned value suitable for LEB128 output without an identity cast.
+fn unsigned_varint_expr(access: &str, ty: &ResolvedType) -> String {
+    if matches!(ty, ResolvedType::Primitive(PrimitiveType::U64)) {
+        access.to_string()
+    } else {
+        format!("{access} as u64")
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Copy-type helper
 // ---------------------------------------------------------------------------
@@ -215,7 +224,10 @@ pub fn emit_write(
                     "if ({access} as u64) > {limit}_u64 {{ return Err(vexil_runtime::EncodeError::LimitExceeded {{ field: \"{field_name}\", limit: {limit}_u64, actual: {access} as u64 }}); }}"
                 ));
             }
-            w.line(&format!("w.write_leb128({access} as u64);"));
+            w.line(&format!(
+                "w.write_leb128({});",
+                unsigned_varint_expr(access, ty)
+            ));
             return;
         }
         Encoding::ZigZag => {
@@ -299,8 +311,8 @@ fn emit_write_type(
             w.line(&format!("w.write_bits({access} as u64, {bits}_u8);"));
         }
         ResolvedType::Semantic(s) => match s {
-            SemanticType::String => w.line(&format!("w.write_string(&{access});")),
-            SemanticType::Bytes => w.line(&format!("w.write_bytes(&{access});")),
+            SemanticType::String => w.line(&format!("w.write_string({access}.as_str());")),
+            SemanticType::Bytes => w.line(&format!("w.write_bytes({access}.as_slice());")),
             SemanticType::Rgb => {
                 w.line(&format!("w.write_u8({access}.0);"));
                 w.line(&format!("w.write_u8({access}.1);"));
@@ -469,9 +481,12 @@ pub fn emit_read(
             }
             // Cast to the appropriate Rust type
             let rust_ty = read_cast_for_varint(ty);
-            w.line(&format!(
-                "let {var_name}: {rust_ty} = {var_name}_raw as {rust_ty};"
-            ));
+            let value = if rust_ty == "u64" {
+                format!("{var_name}_raw")
+            } else {
+                format!("{var_name}_raw as {rust_ty}")
+            };
+            w.line(&format!("let {var_name}: {rust_ty} = {value};"));
             return;
         }
         Encoding::ZigZag => {

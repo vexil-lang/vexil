@@ -79,6 +79,13 @@ impl<'s> Parser<'s> {
         matches!(self.peek_kind(), TokenKind::Eof)
     }
 
+    /// Returns whether the source gap contains a line break.
+    pub(crate) fn has_line_break_between(&self, start: usize, end: usize) -> bool {
+        self.source
+            .get(start..end)
+            .is_some_and(|gap| gap.contains(['\n', '\r']))
+    }
+
     /// Peek at the token `offset` positions ahead of the current position
     /// without consuming anything.  `peek_nth(0)` is equivalent to `peek()`.
     pub(crate) fn peek_nth(&self, offset: usize) -> &Token {
@@ -121,6 +128,13 @@ impl<'s> Parser<'s> {
 
     pub(crate) fn current_offset(&self) -> usize {
         self.peek().span.offset as usize
+    }
+
+    /// Return the source end offset of the most recently consumed token.
+    pub(crate) fn previous_token_end(&self) -> usize {
+        self.tokens
+            .get(self.pos.saturating_sub(1))
+            .map_or(0, |token| token.span.range().end)
     }
 
     /// Return a slice of the original source text for the given byte range.
@@ -366,62 +380,70 @@ pub(crate) fn parse_annotations(p: &mut Parser<'_>) -> Vec<Annotation> {
     let mut annotations = Vec::new();
 
     while p.at(&TokenKind::At) {
-        let start = p.current_offset();
-        p.advance(); // consume At
+        let Some(annotation) = parse_annotation(p) else {
+            break;
+        };
+        annotations.push(annotation);
+    }
 
-        // Annotation name - can be identifier or keyword.
-        let name = match p.peek_kind().clone() {
-            TokenKind::Ident(s) => {
+    annotations
+}
+
+/// Parse one annotation at the current `@` token.
+pub(crate) fn parse_annotation(p: &mut Parser<'_>) -> Option<Annotation> {
+    let start = p.current_offset();
+    p.advance(); // consume At
+
+    // Annotation name - can be identifier or keyword.
+    let name = match p.peek_kind().clone() {
+        TokenKind::Ident(s) => {
+            let tok = p.advance();
+            Spanned::new(s, tok.span)
+        }
+        ref kind if kind.is_keyword() => {
+            // Keywords can be used as annotation names (e.g., @type)
+            if let Some(name_str) = kind.as_field_name() {
                 let tok = p.advance();
-                Spanned::new(s, tok.span)
-            }
-            ref kind if kind.is_keyword() => {
-                // Keywords can be used as annotation names (e.g., @type)
-                if let Some(name_str) = kind.as_field_name() {
-                    let tok = p.advance();
-                    Spanned::new(name_str, tok.span)
-                } else {
-                    p.emit(
-                        p.peek().span,
-                        ErrorClass::UnexpectedToken,
-                        "expected annotation name",
-                    );
-                    continue;
-                }
-            }
-            _ => {
+                Spanned::new(name_str, tok.span)
+            } else {
                 p.emit(
                     p.peek().span,
                     ErrorClass::UnexpectedToken,
                     "expected annotation name",
                 );
-                continue;
+                return None;
             }
-        };
+        }
+        _ => {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected annotation name",
+            );
+            return None;
+        }
+    };
 
-        // Optional args.
-        let args = if p.at(&TokenKind::LParen) {
-            p.advance(); // consume LParen
-            let args = parse_annotation_args(p);
-            if !p.at(&TokenKind::RParen) {
-                p.emit(
-                    p.peek().span,
-                    ErrorClass::UnexpectedToken,
-                    "expected `)` to close annotation",
-                );
-            } else {
-                p.advance(); // consume RParen
-            }
-            Some(args)
+    // Optional args.
+    let args = if p.at(&TokenKind::LParen) {
+        p.advance(); // consume LParen
+        let args = parse_annotation_args(p);
+        if !p.at(&TokenKind::RParen) {
+            p.emit(
+                p.peek().span,
+                ErrorClass::UnexpectedToken,
+                "expected `)` to close annotation",
+            );
         } else {
-            None
-        };
+            p.advance(); // consume RParen
+        }
+        Some(args)
+    } else {
+        None
+    };
 
-        let span = p.span_from(start);
-        annotations.push(Annotation { span, name, args });
-    }
-
-    annotations
+    let span = p.span_from(start);
+    Some(Annotation { span, name, args })
 }
 
 fn parse_annotation_args(p: &mut Parser<'_>) -> Vec<AnnotationArg> {

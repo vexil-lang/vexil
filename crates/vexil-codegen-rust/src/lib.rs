@@ -72,8 +72,6 @@ pub(crate) fn generate_with_imports(
     if schema_uses_map(compiled) {
         w.line("use std::collections::BTreeMap;");
     }
-    w.line("use vexil_runtime::*;");
-
     // Cross-file use statements.
     if let Some(paths) = import_paths {
         let mut unique_paths: Vec<&String> = paths.values().collect();
@@ -380,6 +378,46 @@ mod tests {
         let backend = crate::backend::RustBackend;
         let trait_fn = backend.generate(&compiled).unwrap();
         assert_eq!(free_fn, trait_fn);
+    }
+
+    #[test]
+    fn generated_rust_avoids_lint_noise_and_preserves_field_docs() {
+        let source = r#"
+namespace test.lint
+message Example {
+    first @0 : u32
+    @doc("second field")
+    second @1 : u64 @varint
+    text @2 : string
+    values @3 : array<string>
+}
+config Settings {
+    enabled : bool = true
+}
+"#;
+        let compiled = vexil_lang::compile(source)
+            .compiled
+            .expect("schema compiles");
+        let code = generate(&compiled).expect("code generation succeeds");
+
+        assert!(!code.contains("use vexil_runtime::*;"));
+        assert!(code.contains("/// second field\n    pub second: u64,"));
+        assert!(code.contains("w.write_leb128(self.second);"));
+        assert!(!code.contains("self.second as u64"));
+        assert!(code.contains("w.write_string(self.text.as_str());"));
+        assert!(code.contains("w.write_string(item.as_str());"));
+    }
+
+    #[test]
+    fn config_only_output_has_no_runtime_import() {
+        let compiled = vexil_lang::compile(
+            "namespace test.config_only\nconfig Settings { enabled : bool = true }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("code generation succeeds");
+
+        assert!(!code.contains("use vexil_runtime"));
     }
 
     #[test]
