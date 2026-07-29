@@ -150,3 +150,28 @@ jobs:
 
       - name: Test (MSRV)
         run: cargo test --workspace
+
+  # ── Schema compatibility check ───────────────────────────────────────────────
+  # Enforces spec §9/§10: a *.vexil change that vexilc compat classifies as
+  # breaking must be paired with at least a matching @version bump. Only
+  # meaningful on pull requests, where there's a base revision to diff against.
+  schema-compat:
+    name: Schema compatibility
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+
+      - name: Build vexilc
+        run: cargo build -p vexilc
+
+      - name: Check schema compatibility vs @version
+        run: python3 scripts/check-schema-compat.py "${{ github.event.pull_request.base.sha }}" ./target/debug/vexilc
