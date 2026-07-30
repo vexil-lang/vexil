@@ -49,7 +49,9 @@ The `compat` command exits with code 0 for compatible changes and code 1 for bre
 
 ## Forward compatibility
 
-When a v1 decoder receives v2-encoded data with extra fields, the trailing bytes are captured in the `_unknown` field. Re-encoding preserves them -- no data loss during round-tripping.
+When a v1 decoder receives v2-encoded data with extra fields, it reads its known fields and ignores the trailing bytes. Decoding succeeds rather than failing on the unrecognised data, which is what makes appending a field a compatible change.
+
+The ignored bytes are discarded, not retained -- a v1 decoder cannot re-encode the v2 data it did not understand. See [unknown fields](./messages.md#unknown-fields) for what generated messages do and do not carry.
 
 ## Typed tombstones
 
