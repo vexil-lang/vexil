@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
 from vexil_runtime import _BitWriter, _BitReader, DecodeError

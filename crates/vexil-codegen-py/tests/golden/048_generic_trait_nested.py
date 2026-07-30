@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import _BitWriter, _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x47, 0xe1, 0xbb, 0xd9, 0xad, 0x5a, 0x99, 0x4e, 0xbc, 0xbd, 0x7a, 0xc1, 0xad, 0x0a, 0xae, 0x13, 0x99, 0x05, 0x87, 0x87, 0x89, 0x04, 0xa6, 0xf8, 0xb9, 0x2e, 0xa1, 0xb9, 0x78, 0x7f, 0x36, 0x86)
 T = TypeVar("T")

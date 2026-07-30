@@ -49,6 +49,16 @@ pub(crate) fn generate_with_imports(
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
     let impl_functions = prepare_trait_functions(compiled)?;
+    let has_traits = compiled
+        .declarations
+        .iter()
+        .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
+    let has_impls = compiled.impls().next().is_some();
+
+    // Emit declarations first so runtime imports can be driven by what the
+    // generated code actually references.
+    let body = emit_declarations(compiled, &impl_functions, has_impls)?;
+    let runtime_imports = required_runtime_imports(&body);
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -59,20 +69,27 @@ pub(crate) fn generate_with_imports(
 
     // Imports
     w.line("from __future__ import annotations");
-    w.line("from dataclasses import dataclass");
-    let has_traits = compiled
-        .declarations
-        .iter()
-        .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
-    let has_impls = compiled.impls().next().is_some();
-    if has_traits || has_impls {
-        w.line("from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable");
-    } else {
-        w.line("from typing import Optional");
+    if body.contains("@dataclass") {
+        w.line("from dataclasses import dataclass");
     }
-    w.blank();
-    w.line("# Runtime support (to be provided by vexil Python runtime)");
-    w.line("from vexil_runtime import _BitWriter, _BitReader, DecodeError");
+    let mut typing_imports = Vec::new();
+    if has_impls {
+        typing_imports.push("TYPE_CHECKING");
+    }
+    if has_traits {
+        typing_imports.extend(["Protocol", "TypeVar", "runtime_checkable"]);
+    }
+    if !typing_imports.is_empty() {
+        w.line(&format!("from typing import {}", typing_imports.join(", ")));
+    }
+    if !runtime_imports.is_empty() {
+        w.blank();
+        w.line("# Runtime support (to be provided by vexil Python runtime)");
+        w.line(&format!(
+            "from vexil_runtime import {}",
+            runtime_imports.join(", ")
+        ));
+    }
     w.blank();
 
     // Cross-module imports if needed
@@ -126,7 +143,25 @@ pub(crate) fn generate_with_imports(
 
     w.blank();
 
-    // Emit each declared type
+    let generated = format!("{}{body}", w.finish());
+    if has_traits {
+        Ok(format!("{}\n", generated.trim_end()))
+    } else {
+        Ok(generated)
+    }
+}
+
+/// Emit the body: one section per declared type.
+///
+/// Produced before the header so that import emission can be driven by the
+/// symbols the generated code actually references.
+fn emit_declarations(
+    compiled: &CompiledSchema,
+    impl_functions: &HashMap<TypeId, Vec<PortableFunction>>,
+    has_impls: bool,
+) -> Result<String, CodegenError> {
+    let mut w = emit::CodeWriter::new();
+
     for &type_id in &compiled.declarations {
         let typedef =
             compiled
@@ -182,12 +217,18 @@ pub(crate) fn generate_with_imports(
         w.dedent();
     }
 
-    let generated = w.finish();
-    if has_traits {
-        Ok(format!("{}\n", generated.trim_end()))
-    } else {
-        Ok(generated)
-    }
+    Ok(w.finish())
+}
+
+/// Runtime symbols the generated body references, in a stable order.
+///
+/// A trait-only or alias-only schema emits no codec, so it needs no runtime
+/// import at all.
+fn required_runtime_imports(body: &str) -> Vec<&'static str> {
+    ["_BitWriter", "_BitReader", "DecodeError"]
+        .into_iter()
+        .filter(|symbol| body.contains(symbol))
+        .collect()
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.
