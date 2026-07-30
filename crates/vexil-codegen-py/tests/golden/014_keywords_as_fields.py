@@ -21,14 +21,14 @@ class KeywordFields:
     enum: int
     union: int
     config: bool
-    import: int
+    import_: int
     namespace: str
     array: int
     map: int
     result: int
     optional: int
-    from: int
-    as: int
+    from_: int
+    as_: int
     void: int
     none: int
     true: int
@@ -49,14 +49,14 @@ class KeywordFields:
         w.write_u8(self.enum)
         w.write_u8(self.union)
         w.write_bool(self.config)
-        w.write_u32(self.import)
+        w.write_u32(self.import_)
         w.write_string(self.namespace)
         w.write_u8(self.array)
         w.write_u8(self.map)
         w.write_u8(self.result)
         w.write_u8(self.optional)
-        w.write_u8(self.from)
-        w.write_u8(self.as)
+        w.write_u8(self.from_)
+        w.write_u8(self.as_)
         w.write_u8(self.void)
         w.write_u8(self.none)
         w.write_u8(self.true)
@@ -81,14 +81,14 @@ class KeywordFields:
         m.enum = r.read_u8()
         m.union = r.read_u8()
         m.config = r.read_bool()
-        m.import = r.read_u32()
+        m.import_ = r.read_u32()
         m.namespace = r.read_string()
         m.array = r.read_u8()
         m.map = r.read_u8()
         m.result = r.read_u8()
         m.optional = r.read_u8()
-        m.from = r.read_u8()
-        m.as = r.read_u8()
+        m.from_ = r.read_u8()
+        m.as_ = r.read_u8()
         m.void = r.read_u8()
         m.none = r.read_u8()
         m.true = r.read_u8()

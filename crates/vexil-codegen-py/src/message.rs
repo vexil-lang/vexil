@@ -6,7 +6,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::py_type;
+use crate::types::{py_ident, py_type};
 
 // ---------------------------------------------------------------------------
 // Constraint validation
@@ -661,7 +661,7 @@ pub fn emit_message(
     w.open_block(&format!("class {name}"));
     for field in &msg.fields {
         let py_ty = py_type(&field.resolved_type, registry);
-        let field_name = &field.name;
+        let field_name = py_ident(field.name.as_str());
         w.line(&format!("{field_name}: {py_ty}"));
     }
     w.line("unknown: bytes = b\"\"");
@@ -681,7 +681,7 @@ pub fn emit_message(
 
     w.open_block("def encode_to(self, w: _BitWriter)");
     for field in &msg.fields {
-        let field_name = &field.name;
+        let field_name = py_ident(field.name.as_str());
         let access = format!("self.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
@@ -733,7 +733,7 @@ pub fn emit_message(
     for (_ord, action) in actions.iter() {
         match action {
             DecodeAction::Field(field) => {
-                let field_name = &field.name;
+                let field_name = py_ident(field.name.as_str());
                 let target = format!("m.{field_name}");
                 emit_read(
                     w,
@@ -776,7 +776,7 @@ pub fn emit_config(w: &mut CodeWriter, cfg: &ConfigDef, registry: &TypeRegistry)
     w.open_block(&format!("class {name}"));
     for field in &cfg.fields {
         let py_ty = py_type(&field.resolved_type, registry);
-        let field_name = &field.name;
+        let field_name = py_ident(field.name.as_str());
         w.line(&format!("{field_name}: {py_ty}"));
     }
     w.close_block();

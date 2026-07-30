@@ -34,7 +34,10 @@ pub fn emit_trait(
     w.indent();
     for field in &trait_def.fields {
         let ty = project_type(&field.unresolved_ty, registry);
-        w.line(&format!("{}: {ty}", field.name));
+        w.line(&format!(
+            "{}: {ty}",
+            crate::types::py_ident(field.name.as_str())
+        ));
     }
     for function in vexil_lang::codegen::portable::trait_signatures(compiled, trait_id)? {
         let mut function_params = vec!["self".to_string()];

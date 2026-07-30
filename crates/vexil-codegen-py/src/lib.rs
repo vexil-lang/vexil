@@ -494,4 +494,75 @@ mod tests {
             "{root}"
         );
     }
+
+    #[test]
+    fn reserved_python_keywords_are_escaped_in_field_names() {
+        let compiled = vexil_lang::compile(
+            "namespace test.kw\nmessage Kw { from @0 : u32  import @1 : u8  as @2 : bool }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        // Declaration, encode access, and decode target must all agree.
+        for escaped in ["from_", "import_", "as_"] {
+            assert!(
+                code.contains(&format!("    {escaped}: ")),
+                "missing escaped field declaration {escaped} in:\n{code}"
+            );
+        }
+        assert!(
+            code.contains("self.from_"),
+            "encode must use from_:\n{code}"
+        );
+        assert!(code.contains("m.from_ ="), "decode must use from_:\n{code}");
+
+        // A bare keyword as an identifier is a Python syntax error.
+        assert!(
+            !code.contains("self.from ") && !code.contains("m.from ="),
+            "bare `from` left in generated code:\n{code}"
+        );
+    }
+
+    #[test]
+    fn non_keyword_field_names_are_left_alone() {
+        let compiled =
+            vexil_lang::compile("namespace test.kw2\nmessage Ok { match @0 : u32  hash @1 : u8 }")
+                .compiled
+                .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        // `match` is a soft keyword and `hash` a builtin; both are valid identifiers.
+        assert!(code.contains("    match: "), "{code}");
+        assert!(code.contains("    hash: "), "{code}");
+        assert!(!code.contains("match_"), "{code}");
+    }
+
+    #[test]
+    fn nested_fixed_array_annotation_has_no_embedded_comment() {
+        let compiled =
+            vexil_lang::compile("namespace test.fa\nmessage N { a @0 : array<array<u8, 4>, 3> }")
+                .compiled
+                .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        // A `#` inside a type annotation comments out the rest of the line.
+        for line in code.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some(hash_at) = line.find('#') {
+                assert!(
+                    line[..hash_at].trim_end().ends_with(']')
+                        || !line[..hash_at].contains("tuple["),
+                    "type annotation contains an embedded comment: {line}"
+                );
+            }
+        }
+        assert!(
+            code.contains("tuple[tuple[int, ...], ...]"),
+            "nested fixed array should nest cleanly:\n{code}"
+        );
+    }
 }

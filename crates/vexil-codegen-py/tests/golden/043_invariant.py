@@ -45,7 +45,7 @@ class Balance:
 # ---------- Transfer ----------
 @dataclass
 class Transfer:
-    from: int
+    from_: int
     to: int
     amount: int
     unknown: bytes = b""
@@ -56,7 +56,7 @@ class Transfer:
         return w.finish()
 
     def encode_to(self, w: _BitWriter):
-        w.write_i64(self.from)
+        w.write_i64(self.from_)
         w.write_i64(self.to)
         w.write_i64(self.amount)
         w.flush_to_byte_boundary()
@@ -71,7 +71,7 @@ class Transfer:
     @staticmethod
     def decode_from(r: _BitReader):
         m = Transfer.__new__(Transfer)
-        m.from = r.read_i64()
+        m.from_ = r.read_i64()
         m.to = r.read_i64()
         m.amount = r.read_i64()
         r.flush_to_byte_boundary()

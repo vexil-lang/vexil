@@ -1,6 +1,30 @@
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{ResolvedType, TypeDef, TypeRegistry};
 
+/// Python reserved words, which cannot appear as identifiers.
+///
+/// Soft keywords (`match`, `case`, `type`, `_`) are valid identifiers and are
+/// deliberately absent.
+const PY_KEYWORDS: &[&str] = &[
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
+    "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
+    "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
+    "with", "yield",
+];
+
+/// Render a Vexil field or variant name as a valid Python identifier.
+///
+/// Vexil permits names that are Python reserved words (see corpus
+/// `014_keywords_as_fields`). Those are given a trailing underscore, following
+/// the PEP 8 convention for keyword conflicts. Every other name is unchanged.
+pub fn py_ident(name: &str) -> String {
+    if PY_KEYWORDS.contains(&name) {
+        format!("{name}_")
+    } else {
+        name.to_string()
+    }
+}
+
 /// Convert a ResolvedType to its Python type annotation string.
 pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
     match ty {
@@ -33,9 +57,11 @@ pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             let _bits = names.len() as u8;
             "int".to_string()
         }
-        ResolvedType::FixedArray(inner, size) => {
+        ResolvedType::FixedArray(inner, _size) => {
+            // No trailing `# fixed[N]` comment: a type string is substituted
+            // into nested annotations, where a comment swallows the rest of
+            // the line. Matches the fixed-size geometric types below.
             let inner_str = py_type(inner, registry);
-            let _ = size;
             format!("tuple[{inner_str}, ...]")
         }
         ResolvedType::Set(inner) => {

@@ -2,7 +2,7 @@ use vexil_lang::ir::{TypeRegistry, UnionDef};
 
 use crate::emit::CodeWriter;
 use crate::message::{emit_read, emit_write};
-use crate::types::py_type;
+use crate::types::{py_ident, py_type};
 
 /// Emit a complete Python union: base class + variant classes + encode/decode.
 pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
@@ -44,12 +44,13 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
                 .iter()
                 .map(|f| {
                     let py_ty = py_type(&f.resolved_type, registry);
-                    format!("{}: {py_ty}", f.name)
+                    format!("{}: {py_ty}", py_ident(f.name.as_str()))
                 })
                 .collect();
             w.open_block(&format!("def __init__(self, {})", params.join(", ")));
             for field in &variant.fields {
-                w.line(&format!("self.{} = {}", field.name, field.name));
+                let ident = py_ident(field.name.as_str());
+                w.line(&format!("self.{ident} = {ident}"));
             }
             w.close_block();
         }
@@ -66,7 +67,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         } else {
             w.line("pw = _BitWriter()");
             for field in &variant.fields {
-                let access = format!("self.{}", field.name);
+                let access = format!("self.{}", py_ident(field.name.as_str()));
                 emit_write(
                     w,
                     &access,
@@ -115,20 +116,24 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             // Read each field into locals
             for field in &variant.fields {
                 let py_ty = py_type(&field.resolved_type, registry);
+                let ident = py_ident(field.name.as_str());
                 w.line(&format!(
-                    "{}: {py_ty} = None  # type: ignore[assignment]",
-                    field.name
+                    "{ident}: {py_ty} = None  # type: ignore[assignment]"
                 ));
                 emit_read(
                     w,
-                    &field.name,
+                    &ident,
                     &field.resolved_type,
                     &field.encoding,
                     registry,
                     "pr",
                 );
             }
-            let field_names: Vec<&str> = variant.fields.iter().map(|f| f.name.as_str()).collect();
+            let field_names: Vec<String> = variant
+                .fields
+                .iter()
+                .map(|f| py_ident(f.name.as_str()))
+                .collect();
             w.line(&format!("return {class_name}({})", field_names.join(", ")));
         }
         w.close_block();
