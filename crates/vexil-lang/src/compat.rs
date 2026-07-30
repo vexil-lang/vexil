@@ -361,6 +361,14 @@ fn compare_decls(
         (TypeDef::Config(_), TypeDef::Config(_)) => {
             // Config has no wire format, skip
         }
+        (TypeDef::Trait(_), TypeDef::Trait(_)) => {
+            // Traits and their generated methods are wire-inert. Function
+            // projection changes do not affect schema compatibility.
+        }
+        (TypeDef::Impl(_), TypeDef::Impl(_)) => {
+            // Implementations are code-generation projections with no wire
+            // representation of their own.
+        }
         _ => unreachable!("discriminant check above guarantees matching variants"),
     }
 }
@@ -740,6 +748,33 @@ mod tests {
         let report = check(&old, &new);
         assert!(report.changes.is_empty());
         assert_eq!(report.result, CompatResult::Compatible);
+    }
+
+    #[test]
+    fn trait_function_projection_changes_are_wire_compatible() {
+        let old = compile_schema(
+            r#"
+            namespace test.trait_compat
+            trait Adjustable { fn adjust(delta: i32) -> i32 }
+            message Counter { value @0 : i32 }
+            impl Adjustable for Counter {
+                fn adjust(delta: i32) -> i32 { return delta }
+            }
+        "#,
+        );
+        let new = compile_schema(
+            r#"
+            namespace test.trait_compat
+            trait Adjustable { fn adjust(delta: i32) -> i32 }
+            message Counter { value @0 : i32 }
+            impl Adjustable for Counter {
+                fn adjust(delta: i32) -> i32 { return delta + 1 }
+            }
+        "#,
+        );
+        let report = check(&old, &new);
+        assert_eq!(report.result, CompatResult::Compatible);
+        assert!(report.changes.is_empty(), "{:?}", report.changes);
     }
 
     #[test]

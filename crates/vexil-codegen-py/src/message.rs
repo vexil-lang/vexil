@@ -1,4 +1,5 @@
 use vexil_lang::ast::{PrimitiveType, SemanticType};
+use vexil_lang::codegen::portable::PortableFunction;
 use vexil_lang::ir::{
     CmpOp, ConfigDef, ConstraintOperand, Encoding, FieldConstraint, FieldEncoding, MessageDef,
     ResolvedType, TombstoneDef, TypeDef, TypeRegistry,
@@ -603,7 +604,12 @@ fn emit_tombstone_read(
 // emit_message - main message struct + encode/decode
 // ---------------------------------------------------------------------------
 
-pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry) {
+pub fn emit_message(
+    w: &mut CodeWriter,
+    msg: &MessageDef,
+    registry: &TypeRegistry,
+    functions: &[PortableFunction],
+) {
     let name = msg.name.as_str();
 
     // Dataclass definition with methods
@@ -615,6 +621,10 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         w.line(&format!("{field_name}: {py_ty}"));
     }
     w.line("unknown: bytes = b\"\"");
+    for function in functions {
+        w.blank();
+        crate::fn_body::emit_function(w, function, registry);
+    }
     w.blank();
 
     // encode method

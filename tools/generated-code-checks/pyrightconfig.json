@@ -1,0 +1,12 @@
+{
+  "include": [
+    "../../crates/vexil-codegen-py/tests/golden/049_trait_function_portable_body.py"
+  ],
+  "extraPaths": [
+    "../../packages/runtime-py"
+  ],
+  "pythonVersion": "3.10",
+  "reportPrivateUsage": "none",
+  "reportUnusedImport": "none",
+  "typeCheckingMode": "strict"
+}

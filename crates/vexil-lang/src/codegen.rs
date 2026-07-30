@@ -3,6 +3,9 @@
 //! Codegen backend trait and shared error type. Implement [`CodegenBackend`]
 //! to add a new code-generation target to `vexilc`.
 
+/// Typed, target-independent projection of portable trait-function bodies.
+pub mod portable;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 

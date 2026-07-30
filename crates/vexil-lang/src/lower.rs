@@ -46,6 +46,9 @@ struct LowerCtx {
     /// TypeIds of generic aliases registered during lowering.
     /// These are added to the declarations list after processing.
     generic_alias_ids: Vec<TypeId>,
+    /// Local aliases known from the AST but registered on the established
+    /// post-declaration lifecycle.
+    deferred_alias_names: HashSet<SmolStr>,
 }
 
 impl LowerCtx {
@@ -59,6 +62,7 @@ impl LowerCtx {
             constants: HashMap::new(),
             const_decls: HashMap::new(),
             generic_alias_ids: Vec::new(),
+            deferred_alias_names: HashSet::new(),
         }
     }
 
@@ -93,6 +97,7 @@ pub fn lower_with_deps(
     for decl_spanned in &schema.declarations {
         match &decl_spanned.node {
             Decl::Alias(alias) => {
+                ctx.deferred_alias_names.insert(alias.name.node.clone());
                 alias_decls.push(alias);
             }
             Decl::Const(c) => {
@@ -118,26 +123,45 @@ pub fn lower_with_deps(
                 if let Some(slot) = ctx.registry.get_mut(id) {
                     *slot = def;
                 }
+                if let Decl::Trait(trait_decl) = &decl_spanned.node {
+                    for function in &trait_decl.functions {
+                        if let Some(return_type) = &function.return_type {
+                            ctx.registry.set_trait_fn_return_type(
+                                id,
+                                function.name.node.clone(),
+                                return_type.node.clone(),
+                            );
+                        }
+                    }
+                }
             }
         }
     }
 
-    // Process impl declarations after all types are registered
+    // Reserve impl slots in their established registry positions. Function
+    // signatures and bodies are filled after aliases are registered so their
+    // wire-inert types can use transparent aliases without changing TypeIds.
+    let mut impl_slots = Vec::with_capacity(impl_decls.len());
     for (impl_decl, span) in impl_decls {
-        let impl_def = lower_impl(impl_decl, span, &mut ctx);
+        let target_type = resolve_impl_target(impl_decl, &mut ctx);
         // Generate a unique name for the impl based on trait and target type
         let impl_name = SmolStr::new(format!(
             "__impl_{:?}_{:?}",
-            impl_def.trait_name, impl_def.target_type
+            impl_decl.trait_name.node, target_type
         ));
-        let type_def = TypeDef::Impl(impl_def);
-        ctx.registry.register(impl_name, type_def);
+        let impl_id = ctx.registry.register_stub(impl_name);
+        impl_slots.push((impl_decl, span, impl_id));
     }
 
     // Second pass: process aliases after all regular declarations exist.
     // This preserves the established alias lowering lifecycle.
     for alias in alias_decls {
         lower_alias(alias, &mut ctx);
+    }
+
+    for (impl_decl, span, impl_id) in impl_slots {
+        let impl_def = lower_impl(impl_decl, span, &mut ctx);
+        ctx.registry.fill_stub(impl_id, TypeDef::Impl(impl_def));
     }
 
     // Third pass: evaluate constants after all types are resolved
@@ -772,14 +796,14 @@ fn lower_trait(
                 .iter()
                 .map(|p| crate::ir::FnParamDef {
                     name: p.name.node.clone(),
-                    ty: resolve_type_expr(&p.ty.node, p.ty.span, ctx),
+                    ty: resolve_trait_function_type(&p.ty.node, &type_param_names, p.ty.span, ctx),
                     unresolved_ty: p.ty.node.clone(),
                 })
                 .collect(),
             return_type: fn_decl
                 .return_type
                 .as_ref()
-                .map(|ty| resolve_type_expr(&ty.node, ty.span, ctx)),
+                .map(|ty| resolve_trait_function_type(&ty.node, &type_param_names, ty.span, ctx)),
         })
         .collect();
 
@@ -796,19 +820,7 @@ fn lower_trait(
 /// Lower an impl declaration to IR.
 fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> crate::ir::ImplDef {
     let trait_name = decl.trait_name.node.clone();
-
-    // Resolve the target type name to a TypeId
-    let target_type_name = decl.target_type.node.as_str();
-    let target_type = if let Some(id) = ctx.registry.lookup(target_type_name) {
-        crate::ir::ResolvedType::Named(id)
-    } else if ctx.local_names.contains(target_type_name) {
-        // Type should be registered but isn't yet - this shouldn't happen
-        crate::ir::ResolvedType::Named(crate::ir::types::POISON_TYPE_ID)
-    } else {
-        // External type - register a stub
-        let id = ctx.registry.register_stub(SmolStr::new(target_type_name));
-        crate::ir::ResolvedType::Named(id)
-    };
+    let target_type = resolve_impl_target(decl, ctx);
 
     // Lower type arguments for generic traits
     let type_args: Vec<ResolvedType> = decl
@@ -856,6 +868,132 @@ fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> cr
         functions,
         annotations: resolve_annotations(&decl.annotations),
         span,
+    }
+}
+
+fn resolve_impl_target(decl: &crate::ast::ImplDecl, ctx: &mut LowerCtx) -> ResolvedType {
+    let target_type_name = decl.target_type.node.as_str();
+    if let Some(id) = ctx.registry.lookup(target_type_name) {
+        ResolvedType::Named(id)
+    } else if ctx.local_names.contains(target_type_name) {
+        ResolvedType::Named(ir::types::POISON_TYPE_ID)
+    } else {
+        let id = ctx.registry.register_stub(SmolStr::new(target_type_name));
+        ResolvedType::Named(id)
+    }
+}
+
+fn resolve_trait_function_type(
+    expr: &TypeExpr,
+    type_params: &HashSet<SmolStr>,
+    span: Span,
+    ctx: &mut LowerCtx,
+) -> ResolvedType {
+    match expr {
+        TypeExpr::Named(name) if type_params.contains(name) => {
+            ResolvedType::Named(ir::types::POISON_TYPE_ID)
+        }
+        TypeExpr::Named(name) if ctx.deferred_alias_names.contains(name) => {
+            ResolvedType::Named(ir::types::POISON_TYPE_ID)
+        }
+        TypeExpr::Optional(inner) => ResolvedType::Optional(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Array(inner) => ResolvedType::Array(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::FixedArray(inner, length) => ResolvedType::FixedArray(
+            Box::new(resolve_trait_function_type(
+                &inner.node,
+                type_params,
+                inner.span,
+                ctx,
+            )),
+            *length,
+        ),
+        TypeExpr::Set(inner) => ResolvedType::Set(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Map(key, value) => ResolvedType::Map(
+            Box::new(resolve_trait_function_type(
+                &key.node,
+                type_params,
+                key.span,
+                ctx,
+            )),
+            Box::new(resolve_trait_function_type(
+                &value.node,
+                type_params,
+                value.span,
+                ctx,
+            )),
+        ),
+        TypeExpr::Result(ok, error) => ResolvedType::Result(
+            Box::new(resolve_trait_function_type(
+                &ok.node,
+                type_params,
+                ok.span,
+                ctx,
+            )),
+            Box::new(resolve_trait_function_type(
+                &error.node,
+                type_params,
+                error.span,
+                ctx,
+            )),
+        ),
+        TypeExpr::Vec2(inner) => ResolvedType::Vec2(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Vec3(inner) => ResolvedType::Vec3(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Vec4(inner) => ResolvedType::Vec4(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Quat(inner) => ResolvedType::Quat(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Mat3(inner) => ResolvedType::Mat3(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Mat4(inner) => ResolvedType::Mat4(Box::new(resolve_trait_function_type(
+            &inner.node,
+            type_params,
+            inner.span,
+            ctx,
+        ))),
+        TypeExpr::Generic(name, _)
+            if ctx.deferred_alias_names.contains(name)
+                || contains_type_param(expr, type_params) =>
+        {
+            ResolvedType::Named(ir::types::POISON_TYPE_ID)
+        }
+        _ => resolve_type_expr(expr, span, ctx),
     }
 }
 

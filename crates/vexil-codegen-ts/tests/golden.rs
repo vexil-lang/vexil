@@ -127,3 +127,13 @@ fn test_045_generic_trait() {
 fn test_048_generic_trait_nested() {
     golden_test("048_generic_trait_nested");
 }
+
+#[test]
+fn test_047_trait_function_codegen_deferred() {
+    golden_test("047_trait_function_codegen_deferred");
+}
+
+#[test]
+fn test_049_trait_function_portable_body() {
+    golden_test("049_trait_function_portable_body");
+}

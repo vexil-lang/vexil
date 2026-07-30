@@ -1,0 +1,12 @@
+{
+  "name": "vexil-generated-code-checks",
+  "private": true,
+  "scripts": {
+    "check": "npm --prefix ../../packages/runtime-ts run build && npm run check:typescript && npm run check:python",
+    "check:python": "node check-python.mjs",
+    "check:typescript": "node check-typescript.mjs"
+  },
+  "devDependencies": {
+    "pyright": "1.1.411"
+  }
+}

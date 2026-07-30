@@ -1,9 +1,15 @@
 use vexil_lang::ast::TypeExpr;
-use vexil_lang::ir::{ImplDef, ResolvedType, TraitDef, TypeRegistry};
+use vexil_lang::ir::{CompiledSchema, ImplDef, ResolvedType, TraitDef, TypeId, TypeRegistry};
 
 use crate::emit::CodeWriter;
 
-pub fn emit_trait(w: &mut CodeWriter, trait_def: &TraitDef, registry: &TypeRegistry) {
+pub fn emit_trait(
+    w: &mut CodeWriter,
+    trait_id: TypeId,
+    trait_def: &TraitDef,
+    compiled: &CompiledSchema,
+) -> Result<(), crate::CodegenError> {
+    let registry = &compiled.registry;
     let params = &trait_def.type_params;
     let generic = if params.is_empty() {
         String::new()
@@ -23,6 +29,29 @@ pub fn emit_trait(w: &mut CodeWriter, trait_def: &TraitDef, registry: &TypeRegis
         let ty = project_type(&field.unresolved_ty, params, None, registry);
         w.line(&format!("readonly {}: {ty};", field.name));
     }
+    for function in vexil_lang::codegen::portable::trait_signatures(compiled, trait_id)? {
+        let function_params = function
+            .params
+            .iter()
+            .map(|parameter| {
+                format!(
+                    "{}: {}",
+                    parameter.name,
+                    project_type(&parameter.ty, params, None, registry)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let return_type = function
+            .return_type
+            .as_ref()
+            .map(|ty| project_type(ty, params, None, registry))
+            .unwrap_or_else(|| "void".to_string());
+        w.line(&format!(
+            "{}({function_params}): {return_type};",
+            function.name
+        ));
+    }
     w.dedent();
     w.line("}");
     w.blank();
@@ -35,6 +64,12 @@ pub fn emit_trait(w: &mut CodeWriter, trait_def: &TraitDef, registry: &TypeRegis
         .fields
         .iter()
         .map(|f| format!("'{}' in value", f.name))
+        .chain(trait_def.functions.iter().map(|function| {
+            format!(
+                "'{}' in value && typeof value.{} === 'function'",
+                function.name, function.name
+            )
+        }))
         .collect::<Vec<_>>();
     let condition = if checks.is_empty() {
         "true".to_string()
@@ -46,6 +81,7 @@ pub fn emit_trait(w: &mut CodeWriter, trait_def: &TraitDef, registry: &TypeRegis
     ));
     w.dedent();
     w.line("}");
+    Ok(())
 }
 
 fn project_type(

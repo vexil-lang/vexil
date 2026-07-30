@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable
 
 # Runtime support (to be provided by vexil Python runtime)
 from vexil_runtime import _BitWriter, _BitReader
@@ -43,3 +43,9 @@ class Event:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+
+
+if TYPE_CHECKING:
+    def _vexil_assert_Event_implements_Tagged(value: Event) -> Tagged[int]:  # pyright: ignore[reportUnusedFunction]
+        return value

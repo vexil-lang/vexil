@@ -1,0 +1,5 @@
+namespace test.duplicate_function_parameter
+
+trait Adjustable {
+    fn adjust(delta: i32, delta: i32) -> i32
+}

@@ -6,6 +6,7 @@ use vexil_lang::ir::{
 
 use crate::emit::CodeWriter;
 use crate::types::ts_type;
+use vexil_lang::codegen::portable::PortableFunction;
 
 // ---------------------------------------------------------------------------
 // Byte-alignment helper
@@ -697,7 +698,12 @@ fn emit_tombstone_read(
 // ---------------------------------------------------------------------------
 
 /// Emit a complete message: interface + encode function + decode function.
-pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry) {
+pub fn emit_message(
+    w: &mut CodeWriter,
+    msg: &MessageDef,
+    registry: &TypeRegistry,
+    functions: &[PortableFunction],
+) {
     let name = msg.name.as_str();
 
     // Interface
@@ -707,8 +713,38 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         w.line(&format!("{}: {};", field.name, field_ts));
     }
     w.line("_unknown: Uint8Array;");
+    for function in functions {
+        w.line(&format!(
+            "{};",
+            crate::fn_body::method_signature(function, registry)
+        ));
+    }
     w.close_block();
     w.blank();
+
+    if !functions.is_empty() {
+        let method_names = functions
+            .iter()
+            .map(|function| format!("'{}'", function.name))
+            .collect::<Vec<_>>()
+            .join(" | ");
+        w.line(&format!(
+            "export type {name}Fields = Omit<{name}, {method_names}>;"
+        ));
+        w.open_block(&format!(
+            "export function create{name}(fields: {name}Fields): {name}"
+        ));
+        w.line("return {");
+        w.indent();
+        w.line("...fields,");
+        for function in functions {
+            crate::fn_body::emit_object_method(w, function, registry);
+        }
+        w.dedent();
+        w.line("};");
+        w.close_block();
+        w.blank();
+    }
 
     // Encode function
     w.open_block(&format!(
@@ -791,7 +827,12 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
     let field_names: Vec<&str> = msg.fields.iter().map(|f| f.name.as_str()).collect();
     let mut all_names = field_names;
     all_names.push("_unknown");
-    w.line(&format!("return {{ {} }};", all_names.join(", ")));
+    let decoded = format!("{{ {} }}", all_names.join(", "));
+    if functions.is_empty() {
+        w.line(&format!("return {decoded};"));
+    } else {
+        w.line(&format!("return create{name}({decoded});"));
+    }
     w.close_block();
     w.blank();
 }

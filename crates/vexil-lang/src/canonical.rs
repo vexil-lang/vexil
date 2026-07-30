@@ -837,6 +837,29 @@ mod tests {
         assert_eq!(h1, h2, "field ordering in source should not affect hash");
     }
 
+    #[test]
+    fn trait_function_body_is_wire_hash_inert() {
+        let old = r#"
+            namespace test.trait_hash
+            trait Adjustable { fn adjust(delta: i32) -> i32 }
+            message Counter { value @0 : i32 }
+            impl Adjustable for Counter {
+                fn adjust(delta: i32) -> i32 { return delta }
+            }
+        "#;
+        let new = r#"
+            namespace test.trait_hash
+            trait Adjustable { fn adjust(delta: i32) -> i32 }
+            message Counter { value @0 : i32 }
+            impl Adjustable for Counter {
+                fn adjust(delta: i32) -> i32 { return delta + 1 }
+            }
+        "#;
+        let old_hash = schema_hash(&crate::compile(old).compiled.unwrap());
+        let new_hash = schema_hash(&crate::compile(new).compiled.unwrap());
+        assert_eq!(old_hash, new_hash);
+    }
+
     fn corpus_path(name: &str) -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -963,6 +986,20 @@ mod tests {
             [
                 161, 37, 203, 80, 41, 62, 163, 37, 96, 115, 8, 66, 82, 197, 202, 240, 131, 245,
                 221, 247, 48, 24, 248, 81, 142, 84, 169, 253, 190, 235, 145, 174
+            ]
+        );
+    }
+
+    #[test]
+    fn corpus_hash_049_trait_function_portable_body() {
+        let src = std::fs::read_to_string(corpus_path("049_trait_function_portable_body")).unwrap();
+        let compiled = crate::compile(&src).compiled.unwrap();
+        assert_eq!(
+            schema_hash(&compiled),
+            [
+                0xf0, 0x55, 0x8d, 0xce, 0xf6, 0x4f, 0x18, 0xb1, 0x08, 0xa4, 0x01, 0xc7, 0xba, 0xd5,
+                0x29, 0x8d, 0x06, 0x0b, 0xe3, 0x08, 0x48, 0xa3, 0xac, 0xab, 0x0c, 0xcc, 0x34, 0xfe,
+                0xc7, 0x42, 0xef, 0xb2,
             ]
         );
     }

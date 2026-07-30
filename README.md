@@ -91,14 +91,14 @@ const decoded = decodeSensorReading(r);
 - **Type aliases**: `type UserId = u64` -- same wire encoding, better names
 - **Compile-time constants**: `const MaxSize : u32 = 1024` -- usable in array sizes and where clauses
 - **Where clauses**: `field @0 : u32 where value > 0` -- validated on encode and decode, invalid data never touches the wire
-- **Traits and impl**: `trait SensorData { sensor_id @0 : u32 }` -- structural contracts, zero wire impact
+- **Traits and impl**: structural fields and portable generated instance methods, with zero wire impact
 - **Invariants**: `invariant { value >= 0 }` -- cross-field conditions in messages
 - **Type param bounds**: `type Sorted<T: Ord> = array<T>` -- constrain generic types
 - BLAKE3 hash of the canonical schema form embedded as a compile-time constant in generated code
 - Rust and TypeScript backends from the same schema -- byte-identical output, verified by compliance vectors; Go and Python lack that verification
 - Same data always produces the same bytes -- no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
-- 111-file conformance corpus (45 valid, 66 invalid) that any conformant implementation must pass
+- 124-file conformance corpus (49 valid, 75 invalid) that any conformant implementation must pass
 
 ## Fixed-Point Types
 
@@ -281,8 +281,8 @@ spec/
   wire-format.md         # Binary wire-format specification (normative)
   grammar.peg             # Formal PEG grammar
 corpus/
-  valid/                 # 43 schemas -- a conformant impl must accept all
-  invalid/               # 65 schemas -- a conformant impl must reject all
+  valid/                 # 49 schemas -- a conformant impl must accept all
+  invalid/               # 75 schemas -- a conformant impl must reject all
   projects/              # Multi-file integration tests
 compliance/
   vectors/               # Golden byte vectors -- cross-implementation contract

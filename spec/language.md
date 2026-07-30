@@ -49,12 +49,18 @@ detectable at runtime, before any data corruption occurs.
 Vexil intentionally excludes:
 
 - Control flow (loops, conditionals, branching)
-- Functions or procedures
-- Variable binding or assignment
+- Free functions, procedures, or callable execution outside the portable
+  trait-function projection (§4.9–§4.10)
+- Mutable local bindings, local reassignment, or assignment outside the
+  portable impl-body subset
 - A runtime or execution environment
 - Service or RPC interface definitions (reserved for a future version)
 
-Implementations MUST NOT accept syntax or semantics for any of the above.
+Except for the portable trait-function declarations and straight-line impl
+bodies defined in §4.9–§4.10, implementations MUST NOT accept general-purpose
+execution syntax or semantics for any of the above. The permitted subset is a
+declarative code-generation contract: Vexil does not execute it; reference
+generators project it into target-language methods.
 Constraint expressions (e.g. `where x > 0`) are declarative — they describe
 valid states and generate validation code in target languages, but are not
 evaluated by Vexil itself.
@@ -807,12 +813,23 @@ trait Tagged<T> {
 }
 ```
 
-Traits have ZERO wire impact. They are compile-time contracts used for
-code generation. The reference generators project field-only traits to their
-target-language structural-contract mechanisms. A schema containing trait
-function signatures or impl-function bodies remains valid Vexil, but the
-reference generators MUST reject it with a code-generation diagnostic until a
-portable function projection is specified.
+Traits have ZERO wire impact. They are compile-time contracts used for code
+generation. A trait function is an instance method whose declared parameters
+exclude an implicit mutable receiver. Function names MUST be unique within a
+trait, and parameter names MUST be unique within a function.
+
+The reference generators project trait functions as follows:
+
+| Target | Receiver and signature |
+| --- | --- |
+| Rust | `&mut self` trait method |
+| TypeScript | interface method; implementing messages use an object factory |
+| Go | interface method with a pointer-receiver implementation |
+| Python | `Protocol` method with an implementing dataclass method |
+
+An omitted return type and `void` both mean that the function returns no
+value. They project to Rust `()`, TypeScript `void`, no Go result, and Python
+`None`.
 
 ### 4.10  impl
 
@@ -829,6 +846,40 @@ fields matching the trait's requirements (by name and type).
 
 Multiple traits MAY be implemented for the same type. The same trait
 MUST NOT be implemented more than once for the same type.
+
+For every trait function, an impl MUST contain exactly one function with the
+same name, parameter names, parameter types, and return type after substituting
+the impl's trait type arguments. An impl MUST NOT omit a required function or
+declare a function absent from its trait.
+
+Reference generators support a portable, straight-line impl-body subset:
+
+- literals, parameters, `self`, and `self.field`;
+- immutable `let` bindings;
+- `return`;
+- assignment to `self.field`; and
+- unary negation/logical-not and arithmetic, equality, and ordering operators
+  where their operands have compatible types.
+
+Local reassignment, assignment to a target other than `self.field`, bare
+expression statements, statements after `return`, and incompatible expression,
+assignment, or return types are invalid. A value-returning function MUST end
+with a value-compatible `return`. A no-value function MAY be empty and MAY use
+a bare `return`.
+
+Free-function calls and method calls remain syntactically valid Vexil, but the
+reference generators MUST reject them with an explicit portable-code-generation
+diagnostic. They do not imply dynamic dispatch, a runtime trait registry, FFI,
+or native implementations.
+
+Portable arithmetic is emitted directly using the target language's native
+operators. Vexil does not define an additional cross-target overflow or
+division execution model for impl bodies.
+
+If a projected method name collides with a generated field, accessor, codec
+member, another implemented trait method, or a reserved target identifier, the
+generator MUST reject the schema before producing output. It MUST NOT invent a
+target-specific suffix.
 
 Impls have ZERO wire impact.
 

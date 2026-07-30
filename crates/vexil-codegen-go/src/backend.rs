@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 
+use vexil_lang::codegen::portable::{PortableExpr, PortableExprKind, PortableStatement};
 use vexil_lang::codegen::{CodegenBackend, CodegenError};
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
 use vexil_lang::project::ProjectResult;
@@ -62,7 +63,7 @@ impl CodegenBackend for GoBackend {
                 if let Some(typedef) = compiled.registry.get(type_id) {
                     collect_named_ids_from_typedef(
                         typedef,
-                        &compiled.registry,
+                        compiled,
                         &declared_ids,
                         |imported_id| {
                             if let Some(imported_def) = compiled.registry.get(imported_id) {
@@ -103,10 +104,11 @@ impl CodegenBackend for GoBackend {
 /// the declared set (i.e., it's an imported type).
 fn collect_named_ids_from_typedef(
     typedef: &TypeDef,
-    registry: &vexil_lang::ir::TypeRegistry,
+    compiled: &CompiledSchema,
     declared: &HashSet<TypeId>,
     mut on_import: impl FnMut(TypeId),
 ) {
+    let registry = &compiled.registry;
     match typedef {
         TypeDef::Message(msg) => {
             for f in &msg.fields {
@@ -132,11 +134,34 @@ fn collect_named_ids_from_typedef(
             for field in &trait_def.fields {
                 collect_named_ids_from_resolved(&field.ty, declared, &mut on_import);
             }
+            for function in &trait_def.functions {
+                for parameter in &function.params {
+                    collect_named_ids_from_resolved(&parameter.ty, declared, &mut on_import);
+                }
+                if let Some(return_type) = &function.return_type {
+                    collect_named_ids_from_resolved(return_type, declared, &mut on_import);
+                }
+            }
         }
         TypeDef::Impl(impl_def) => {
             collect_named_ids_from_resolved(&impl_def.target_type, declared, &mut on_import);
             for arg in &impl_def.type_args {
                 collect_named_ids_from_resolved(arg, declared, &mut on_import);
+            }
+            for function in &impl_def.functions {
+                for parameter in &function.params {
+                    collect_named_ids_from_resolved(&parameter.ty, declared, &mut on_import);
+                }
+                if let Some(return_type) = &function.return_type {
+                    collect_named_ids_from_resolved(return_type, declared, &mut on_import);
+                }
+            }
+            if let Ok(functions) = vexil_lang::codegen::portable::project_impl(compiled, impl_def) {
+                for function in &functions {
+                    for statement in &function.statements {
+                        collect_named_ids_from_statement(statement, declared, &mut on_import);
+                    }
+                }
             }
             for (id, def) in registry.iter() {
                 if matches!(def, TypeDef::Trait(t) if t.name == impl_def.trait_name)
@@ -147,6 +172,49 @@ fn collect_named_ids_from_typedef(
             }
         }
         _ => {}
+    }
+}
+
+fn collect_named_ids_from_statement(
+    statement: &PortableStatement,
+    declared: &HashSet<TypeId>,
+    on_import: &mut impl FnMut(TypeId),
+) {
+    match statement {
+        PortableStatement::Let { ty, value, .. } => {
+            collect_named_ids_from_resolved(ty, declared, on_import);
+            collect_named_ids_from_expr(value, declared, on_import);
+        }
+        PortableStatement::Return(Some(value))
+        | PortableStatement::AssignSelfField { value, .. } => {
+            collect_named_ids_from_expr(value, declared, on_import);
+        }
+        PortableStatement::Return(None) => {}
+    }
+}
+
+fn collect_named_ids_from_expr(
+    expression: &PortableExpr,
+    declared: &HashSet<TypeId>,
+    on_import: &mut impl FnMut(TypeId),
+) {
+    collect_named_ids_from_resolved(&expression.ty, declared, on_import);
+    match &expression.kind {
+        PortableExprKind::Binary(_, left, right) => {
+            collect_named_ids_from_expr(left, declared, on_import);
+            collect_named_ids_from_expr(right, declared, on_import);
+        }
+        PortableExprKind::Unary(_, value) => {
+            collect_named_ids_from_expr(value, declared, on_import);
+        }
+        PortableExprKind::Int(_)
+        | PortableExprKind::UInt(_)
+        | PortableExprKind::Float(_)
+        | PortableExprKind::Bool(_)
+        | PortableExprKind::String(_)
+        | PortableExprKind::Local(_)
+        | PortableExprKind::SelfRef
+        | PortableExprKind::SelfField(_) => {}
     }
 }
 
@@ -161,7 +229,18 @@ fn collect_named_ids_from_resolved(
                 on_import(*id);
             }
         }
-        ResolvedType::Optional(inner) | ResolvedType::Array(inner) => {
+        ResolvedType::Optional(inner)
+        | ResolvedType::Array(inner)
+        | ResolvedType::Set(inner)
+        | ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            collect_named_ids_from_resolved(inner, declared, on_import);
+        }
+        ResolvedType::FixedArray(inner, _) => {
             collect_named_ids_from_resolved(inner, declared, on_import);
         }
         ResolvedType::Map(k, v) | ResolvedType::Result(k, v) => {
@@ -169,5 +248,154 @@ fn collect_named_ids_from_resolved(
             collect_named_ids_from_resolved(v, declared, on_import);
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vexil_lang::codegen::CodegenBackend;
+    use vexil_lang::ir::POISON_TYPE_ID;
+    use vexil_lang::resolve::InMemoryLoader;
+
+    #[test]
+    fn collects_named_ids_from_every_resolved_container() {
+        let named = ResolvedType::Named(POISON_TYPE_ID);
+        let containers = [
+            ResolvedType::Optional(Box::new(named.clone())),
+            ResolvedType::Array(Box::new(named.clone())),
+            ResolvedType::FixedArray(Box::new(named.clone()), 2),
+            ResolvedType::Set(Box::new(named.clone())),
+            ResolvedType::Map(
+                Box::new(ResolvedType::Primitive(vexil_lang::ast::PrimitiveType::U8)),
+                Box::new(named.clone()),
+            ),
+            ResolvedType::Result(
+                Box::new(named.clone()),
+                Box::new(ResolvedType::Primitive(vexil_lang::ast::PrimitiveType::U8)),
+            ),
+            ResolvedType::Vec2(Box::new(named.clone())),
+            ResolvedType::Vec3(Box::new(named.clone())),
+            ResolvedType::Vec4(Box::new(named.clone())),
+            ResolvedType::Quat(Box::new(named.clone())),
+            ResolvedType::Mat3(Box::new(named.clone())),
+            ResolvedType::Mat4(Box::new(named)),
+        ];
+
+        for container in containers {
+            let mut collected = Vec::new();
+            collect_named_ids_from_resolved(&container, &HashSet::new(), &mut |id| {
+                collected.push(id);
+            });
+            assert_eq!(collected, vec![POISON_TYPE_ID], "{container:?}");
+        }
+    }
+
+    #[test]
+    fn project_codegen_collects_function_only_imports_through_diamond() {
+        let result = function_import_diamond();
+        let files = GoBackend.generate_project(&result).unwrap();
+
+        let left = project_file(&files, "left.go");
+        assert!(left.contains("\"imports/base\""), "{left}");
+        assert!(
+            left.contains("Left(input base.Payload) base.Payload"),
+            "{left}"
+        );
+
+        let root = project_file(&files, "root.go");
+        assert!(root.contains("\"imports/base\""), "{root}");
+        assert!(root.contains("\"imports/left\""), "{root}");
+        assert!(root.contains("\"imports/right\""), "{root}");
+        assert!(
+            root.contains("func (m *Host) Left(input base.Payload) base.Payload"),
+            "{root}"
+        );
+        assert!(
+            root.contains("var _ left.LeftTransformer = (*Host)(nil)"),
+            "{root}"
+        );
+        assert_eq!(result.schemas.len(), 4);
+        assert_generated_project_compiles(&files);
+    }
+
+    fn function_import_diamond() -> ProjectResult {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "imports.base".into(),
+            "namespace imports.base\nmessage Payload { value @0 : i32 }".into(),
+        );
+        loader.schemas.insert(
+            "imports.left".into(),
+            "namespace imports.left\nimport { Payload } from imports.base\ntrait LeftTransformer { fn left(input: Payload) -> Payload }".into(),
+        );
+        loader.schemas.insert(
+            "imports.right".into(),
+            "namespace imports.right\nimport { Payload } from imports.base\ntrait RightTransformer { fn right(input: Payload) -> Payload }".into(),
+        );
+        let root = "namespace imports.root\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
+        let result =
+            vexil_lang::compile_project(root, &PathBuf::from("imports/root.vexil"), &loader)
+                .unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        result
+    }
+
+    fn project_file<'a>(files: &'a BTreeMap<PathBuf, String>, suffix: &str) -> &'a str {
+        files
+            .iter()
+            .find(|(path, _)| path.to_string_lossy().ends_with(suffix))
+            .map(|(_, code)| code.as_str())
+            .unwrap()
+    }
+
+    fn assert_generated_project_compiles(files: &BTreeMap<PathBuf, String>) {
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let runtime_path = workspace_root
+            .join("packages/runtime-go")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let temp = std::env::temp_dir().join("vexil-codegen-go-function-import-diamond");
+        let _ = std::fs::remove_dir_all(&temp);
+        for package in ["base", "left", "right", "root"] {
+            let directory = temp.join(package);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(
+                directory.join("generated.go"),
+                project_file(files, &format!("{package}.go")),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            temp.join("go.mod"),
+            format!(
+                "module imports\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => {runtime_path}\n"
+            ),
+        )
+        .unwrap();
+
+        let output = std::process::Command::new("go")
+            .args(["test", "./..."])
+            .current_dir(&temp)
+            .output();
+        let _ = std::fs::remove_dir_all(&temp);
+        let output = match output {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                eprintln!("skipping generated project check: `go` executable not found");
+                return;
+            }
+            Err(error) => panic!("failed to run go test: {error}"),
+        };
+        assert!(
+            output.status.success(),
+            "generated project failed go test:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }

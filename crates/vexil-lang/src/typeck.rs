@@ -68,9 +68,8 @@ pub fn check(compiled: &mut CompiledSchema) -> Vec<Diagnostic> {
         }
     }
 
-    // Check trait conformance and resolve trait method calls
+    // Check trait conformance and portable function-body semantics.
     check_impl_conformance(compiled, &mut diags);
-    resolve_trait_calls(compiled, &mut diags);
 
     diags
 }
@@ -701,7 +700,7 @@ fn check_single_impl_conformance(
     check_trait_fields(impl_def, trait_def, compiled, diags);
 
     // Check all trait functions are implemented
-    check_trait_functions(impl_def, trait_def, diags);
+    check_trait_functions(impl_def, compiled, diags);
 }
 
 fn check_trait_fields(
@@ -770,40 +769,48 @@ fn check_trait_fields(
     }
 }
 
-fn check_trait_functions(impl_def: &ImplDef, trait_def: &TraitDef, diags: &mut Vec<Diagnostic>) {
-    // Check all trait functions are implemented
-    for trait_fn in &trait_def.functions {
-        let found = impl_def.functions.iter().any(|f| {
-            f.name == trait_fn.name
-                && f.params.len() == trait_fn.params.len()
-                && f.return_type == trait_fn.return_type
-        });
+fn check_trait_functions(
+    impl_def: &ImplDef,
+    compiled: &CompiledSchema,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::codegen::portable::{project_impl, PortableFunctionError};
 
-        if !found {
-            diags.push(Diagnostic::error(
-                impl_def.span,
-                ErrorClass::UnresolvedType,
-                format!(
-                    "impl for '{:?}' missing trait function '{}'",
-                    impl_def.target_type, trait_fn.name
-                ),
-            ));
+    let error = match project_impl(compiled, impl_def) {
+        Ok(_) => return,
+        Err(error) => error,
+    };
+    let class = match &error {
+        PortableFunctionError::MissingFunction { .. } => ErrorClass::ImplFnMissing,
+        PortableFunctionError::ExtraFunction { .. } => ErrorClass::ImplFnExtra,
+        PortableFunctionError::DuplicateFunction { .. }
+        | PortableFunctionError::SignatureMismatch { .. } => ErrorClass::ImplFnSignatureMismatch,
+        PortableFunctionError::InvalidAssignmentTarget { .. } => {
+            ErrorClass::ImplFnAssignmentInvalid
         }
-    }
-
-    for impl_fn in &impl_def.functions {
-        let found = trait_def.functions.iter().any(|f| f.name == impl_fn.name);
-        if !found {
-            diags.push(Diagnostic::error(
-                impl_def.span,
-                ErrorClass::UnresolvedType,
-                format!(
-                    "impl for '{:?}' has extra function '{}' not in trait '{}'",
-                    impl_def.target_type, impl_fn.name, trait_def.name
-                ),
-            ));
+        PortableFunctionError::ReturnMismatch { .. }
+        | PortableFunctionError::StatementsAfterReturn { .. } => ErrorClass::ImplFnReturnMismatch,
+        PortableFunctionError::TypeMismatch { context, .. } if context == "return" => {
+            ErrorClass::ImplFnReturnMismatch
         }
-    }
+        PortableFunctionError::UnsupportedCall { .. }
+        | PortableFunctionError::UnsupportedMethodCall { .. } => {
+            // These constructs remain valid Vexil. Reference generators reject
+            // them at the portable code-generation boundary.
+            return;
+        }
+        PortableFunctionError::UnknownTrait { .. }
+        | PortableFunctionError::InvalidTarget
+        | PortableFunctionError::ExternalFunction { .. }
+        | PortableFunctionError::UnknownLocal { .. }
+        | PortableFunctionError::UnknownField { .. }
+        | PortableFunctionError::DuplicateLocal { .. }
+        | PortableFunctionError::UnsupportedExpressionStatement { .. }
+        | PortableFunctionError::TypeMismatch { .. }
+        | PortableFunctionError::InvalidOperator { .. }
+        | PortableFunctionError::UnresolvedType { .. } => ErrorClass::ImplFnBodyTypeMismatch,
+    };
+    diags.push(Diagnostic::error(impl_def.span, class, error.to_string()));
 }
 
 fn types_compatible(a: &ResolvedType, b: &ResolvedType) -> bool {
@@ -1005,145 +1012,5 @@ fn resolve_type_name(name: &SmolStr, compiled: &CompiledSchema) -> ResolvedType 
         ResolvedType::Named(id)
     } else {
         ResolvedType::Named(POISON_TYPE_ID)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Static Trait Dispatch (Monomorphization)
-// ---------------------------------------------------------------------------
-
-use crate::ir::{Expr, FnBody, Statement};
-
-/// Resolve trait method calls to specific impl functions.
-/// This implements static dispatch by replacing TraitMethodCall with direct Call.
-fn resolve_trait_calls(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>) {
-    // Collect all traits and impls for lookup
-    let mut traits: HashMap<SmolStr, &TraitDef> = HashMap::new();
-    let mut impls: Vec<&ImplDef> = Vec::new();
-
-    for (_id, type_def) in compiled.registry.iter() {
-        if let TypeDef::Trait(t) = type_def {
-            traits.insert(t.name.clone(), t);
-        }
-    }
-    for (_, impl_def) in compiled.impls() {
-        impls.push(impl_def);
-    }
-
-    // For each impl, verify that method calls in function bodies resolve correctly
-    for impl_def in &impls {
-        let Some(trait_def) = traits.get(&impl_def.trait_name) else {
-            continue; // Error already reported during conformance checking
-        };
-
-        // Verify each function in the impl matches a trait function
-        for impl_fn in &impl_def.functions {
-            let trait_fn = trait_def.functions.iter().find(|f| f.name == impl_fn.name);
-
-            if trait_fn.is_none() {
-                diags.push(Diagnostic::error(
-                    impl_def.span,
-                    ErrorClass::UnresolvedType,
-                    format!(
-                        "impl function '{}' not found in trait '{}'",
-                        impl_fn.name, impl_def.trait_name
-                    ),
-                ));
-            }
-
-            // Verify method calls in function body if present
-            if let FnBody::Block(stmts) = &impl_fn.body {
-                for stmt in stmts {
-                    verify_trait_calls_in_statement(
-                        stmt,
-                        &impl_def.trait_name,
-                        trait_def,
-                        impl_def,
-                        diags,
-                    );
-                }
-            }
-        }
-    }
-}
-
-/// Verify that trait method calls in a statement are valid.
-fn verify_trait_calls_in_statement(
-    stmt: &Statement,
-    trait_name: &SmolStr,
-    trait_def: &crate::ir::TraitDef,
-    impl_def: &crate::ir::ImplDef,
-    diags: &mut Vec<Diagnostic>,
-) {
-    match stmt {
-        Statement::Expr(expr)
-        | Statement::Let { value: expr, .. }
-        | Statement::Return(Some(expr)) => {
-            verify_trait_calls_in_expr(expr, trait_name, trait_def, impl_def, diags);
-        }
-        Statement::Return(None) => {}
-        Statement::Assign { target, value } => {
-            verify_trait_calls_in_expr(target, trait_name, trait_def, impl_def, diags);
-            verify_trait_calls_in_expr(value, trait_name, trait_def, impl_def, diags);
-        }
-    }
-}
-
-/// Verify that trait method calls in an expression are valid.
-fn verify_trait_calls_in_expr(
-    expr: &Expr,
-    trait_name: &SmolStr,
-    trait_def: &crate::ir::TraitDef,
-    impl_def: &crate::ir::ImplDef,
-    diags: &mut Vec<Diagnostic>,
-) {
-    match expr {
-        Expr::TraitMethodCall {
-            trait_name: call_trait,
-            method_name,
-            receiver,
-            args,
-        } => {
-            // Check if the trait name is resolved or if it matches the current impl's trait
-            if call_trait.as_str() == "__unresolved" {
-                // Try to resolve by looking for a matching trait function
-                let found = trait_def.functions.iter().any(|f| &f.name == method_name);
-                if !found {
-                    diags.push(Diagnostic::error(
-                        impl_def.span,
-                        ErrorClass::UnresolvedType,
-                        format!(
-                            "method '{}' not found in trait '{}'",
-                            method_name, trait_name
-                        ),
-                    ));
-                }
-            } else if call_trait != trait_name {
-                // Call to a different trait - verify that trait exists
-                // (this will be checked separately for each impl)
-            }
-
-            // Recursively check the receiver and arguments
-            verify_trait_calls_in_expr(receiver, trait_name, trait_def, impl_def, diags);
-            for arg in args {
-                verify_trait_calls_in_expr(arg, trait_name, trait_def, impl_def, diags);
-            }
-        }
-        Expr::Binary(_, lhs, rhs) => {
-            verify_trait_calls_in_expr(lhs, trait_name, trait_def, impl_def, diags);
-            verify_trait_calls_in_expr(rhs, trait_name, trait_def, impl_def, diags);
-        }
-        Expr::Unary(_, inner) => {
-            verify_trait_calls_in_expr(inner, trait_name, trait_def, impl_def, diags);
-        }
-        Expr::FieldAccess(obj, _) => {
-            verify_trait_calls_in_expr(obj, trait_name, trait_def, impl_def, diags);
-        }
-        Expr::Call(_, args) => {
-            for arg in args {
-                verify_trait_calls_in_expr(arg, trait_name, trait_def, impl_def, diags);
-            }
-        }
-        _ => {} // Literals, Local, SelfRef - no nested expressions
     }
 }

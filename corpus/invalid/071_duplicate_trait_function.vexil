@@ -1,0 +1,6 @@
+namespace test.duplicate_trait_function
+
+trait Validatable {
+    fn validate() -> bool
+    fn validate() -> bool
+}

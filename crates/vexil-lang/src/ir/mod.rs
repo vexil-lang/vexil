@@ -386,8 +386,8 @@ pub struct TraitFnDef {
 pub struct FnParamDef {
     pub name: SmolStr,
     pub ty: ResolvedType,
-    /// Original AST type expression, preserved for trait function param validation.
-    /// Currently unused but reserved for future trait function signature conformance checking.
+    /// Original AST type expression, preserved for generic trait substitution
+    /// and target signature projection.
     pub unresolved_ty: crate::ast::TypeExpr,
 }
 
@@ -408,7 +408,7 @@ pub struct ImplFnDef {
     pub name: SmolStr,
     pub params: Vec<FnParamDef>,
     pub return_type: Option<ResolvedType>,
-    pub body: FnBody, // For now, just store signature; body comes later
+    pub body: FnBody,
 }
 
 /// Binary operators in IR expressions.

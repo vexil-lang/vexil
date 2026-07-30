@@ -6,7 +6,7 @@ Generated: 2026-04-09
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (46 files)
+## Valid Corpus (49 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -56,10 +56,11 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
 | 045_generic_trait.vexil | §4.9 | Generic trait impl with type arguments (`impl Tagged<u64>`) |
 | 046_field_doc_placement.vexil | §5.2, §13.2 | Line-leading and inline trailing field `@doc` ownership |
-| 047_trait_function_codegen_deferred.vexil | §4.9 | Function-bearing trait accepted by the language but deferred by all code generators |
+| 047_trait_function_codegen_deferred.vexil | §4.9 | Function-bearing trait signature accepted and projected by all reference generators |
 | 048_generic_trait_nested.vexil | §4.9 | Generic trait with a nested `array<T>` field and concrete implementation |
+| 049_trait_function_portable_body.vexil | §4.9–4.10 | Generic trait functions with immutable local, arithmetic, receiver mutation, and value/void returns |
 
-## Invalid Corpus (66 files)
+## Invalid Corpus (75 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -129,6 +130,15 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 064_where_len_invalid.vexil | §4.1 | Type | Where clause: len() on non-collection type |
 | 065_impl_unknown_trait.vexil | §4.9 | Type | Impl references trait that doesn't exist |
 | 066_external_fn.vexil | §4.9 | Semantic | External function in impl block (no body) |
+| 067_impl_missing_function.vexil | §4.10 | Type | Impl omits a required trait function |
+| 068_impl_extra_function.vexil | §4.10 | Type | Impl declares a function absent from its trait |
+| 069_impl_generic_signature_mismatch.vexil | §4.10 | Type | Impl parameter name/type and return disagree after generic substitution |
+| 070_impl_return_mismatch.vexil | §4.10 | Type | Impl body returns a value incompatible with its result |
+| 071_duplicate_trait_function.vexil | §4.9 | Semantic | Trait repeats a function name |
+| 072_duplicate_function_parameter.vexil | §4.9 | Semantic | Trait function repeats a parameter name |
+| 073_impl_invalid_assignment.vexil | §4.10 | Type | Impl body assigns to an immutable local rather than a receiver field |
+| 074_impl_body_type_mismatch.vexil | §4.10 | Type | Impl local annotation conflicts with the inferred expression type |
+| 075_impl_bare_expression_statement.vexil | §4.10 | Type | Impl body contains a bare expression statement |
 
 ## Error class taxonomy
 

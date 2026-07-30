@@ -1,0 +1,16 @@
+namespace test.impl_invalid_assignment
+
+trait Adjustable {
+    fn adjust(delta: i32) -> i32
+}
+
+message Counter {
+    value @0 : i32
+}
+
+impl Adjustable for Counter {
+    fn adjust(delta: i32) -> i32 {
+        delta = self.value
+        return delta
+    }
+}

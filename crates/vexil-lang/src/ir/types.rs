@@ -35,6 +35,11 @@ pub struct TypeRegistry {
     /// Primitive type aliases (alias name -> PrimitiveType).
     /// These map alias names directly to primitive types.
     primitive_aliases: HashMap<SmolStr, PrimitiveType>,
+    /// Source-faithful return expressions for trait functions.
+    ///
+    /// Trait function IR keeps its stable resolved return field. This private
+    /// side table retains generic return expressions for impl substitution.
+    trait_fn_return_types: HashMap<(TypeId, SmolStr), crate::ast::TypeExpr>,
 }
 
 impl Default for TypeRegistry {
@@ -51,6 +56,7 @@ impl TypeRegistry {
             by_name: HashMap::new(),
             alias_map: HashMap::new(),
             primitive_aliases: HashMap::new(),
+            trait_fn_return_types: HashMap::new(),
         }
     }
 
@@ -149,6 +155,42 @@ impl TypeRegistry {
     /// Iterate over all registered type names (excluding stubs).
     pub fn iter_names(&self) -> impl Iterator<Item = &str> {
         self.by_name.keys().map(|k| k.as_str())
+    }
+
+    pub(crate) fn set_trait_fn_return_type(
+        &mut self,
+        trait_id: TypeId,
+        function: SmolStr,
+        return_type: crate::ast::TypeExpr,
+    ) {
+        self.trait_fn_return_types
+            .insert((trait_id, function), return_type);
+    }
+
+    pub(crate) fn trait_fn_return_type(
+        &self,
+        trait_id: TypeId,
+        function: &str,
+    ) -> Option<&crate::ast::TypeExpr> {
+        self.trait_fn_return_types
+            .get(&(trait_id, SmolStr::new(function)))
+    }
+
+    pub(crate) fn clone_trait_fn_return_types(
+        &mut self,
+        source: &TypeRegistry,
+        source_id: TypeId,
+        target_id: TypeId,
+    ) {
+        let entries: Vec<_> = source
+            .trait_fn_return_types
+            .iter()
+            .filter(|((id, _), _)| *id == source_id)
+            .map(|((_, name), ty)| (name.clone(), ty.clone()))
+            .collect();
+        for (name, ty) in entries {
+            self.trait_fn_return_types.insert((target_id, name), ty);
+        }
     }
 }
 

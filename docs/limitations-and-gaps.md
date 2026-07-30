@@ -1,6 +1,6 @@
 # Vexil Wire Format — Limitations, Gaps, and What We Haven't Done Yet
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-30
 
 ## What We've Verified
 
@@ -18,7 +18,7 @@ Last reviewed: 2026-07-29
 - **No built-in compression:** Wire format is uncompressed. Layer zstd or LZ4 on top if you need it. We decided not to bake compression into the format because different use cases want different compression.
 - **No self-description:** The wire bytes contain no type info. Both sides need the schema. This is a design choice, not a gap — it keeps messages small. But it means you can't debug a packet without the schema file.
 - **Go code-generation compatibility needs target-specific verification:** The Go runtime exercises shared byte vectors, but generated Go output is not covered by the same cross-language code-generation conformance claim as Rust and TypeScript. Verify byte output for your schemas before shipping a cross-language protocol.
-- **Trait functions are not code-generated:** Field-only traits project to Rust traits, TypeScript interfaces, Go interfaces, and Python protocols. Schemas with trait functions or impl-function bodies receive a clear code-generation error until a portable function projection is specified.
+- **Trait function bodies use a bounded portable subset:** Rust, TypeScript, Go, and Python generate instance methods for straight-line bodies with immutable locals, receiver-field mutation, returns, and unary/binary expressions. Free calls, method calls, external/native bodies, and non-receiver assignment remain explicit diagnostics before output; there is no runtime trait dispatch.
 
 ## What's Missing
 

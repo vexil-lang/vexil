@@ -292,6 +292,38 @@ fn test_048_generic_trait_nested() {
 }
 
 #[test]
+fn test_047_trait_function_codegen_deferred() {
+    golden_test("047_trait_function_codegen_deferred");
+}
+
+#[test]
+fn test_049_trait_function_portable_body() {
+    golden_test("049_trait_function_portable_body");
+}
+
+#[test]
+fn trait_function_unused_local() {
+    golden_source_test(
+        "trait_function_unused_local",
+        r#"
+namespace test.trait_function_unused_local
+trait Identity {
+    fn identity(input: i32) -> i32
+}
+message Counter {
+    value @0 : i32
+}
+impl Identity for Counter {
+    fn identity(input: i32) -> i32 {
+        let unused: i32 = input
+        return input
+    }
+}
+"#,
+    );
+}
+
+#[test]
 fn trait_only_generic() {
     golden_source_test(
         "trait_only_generic",

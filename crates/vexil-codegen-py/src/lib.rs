@@ -9,6 +9,7 @@ pub mod delta;
 pub mod emit;
 pub mod enum_gen;
 pub mod flags;
+pub mod fn_body;
 pub mod message;
 pub mod newtype;
 pub mod trait_gen;
@@ -17,7 +18,10 @@ pub mod union_gen;
 
 pub use backend::PythonBackend;
 
-use vexil_lang::ir::{CompiledSchema, TypeDef};
+use std::collections::HashMap;
+
+use vexil_lang::codegen::portable::PortableFunction;
+use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum CodegenError {
@@ -26,8 +30,10 @@ pub enum CodegenError {
         type_id: vexil_lang::ir::TypeId,
         referenced_by: String,
     },
-    #[error("function-bearing trait code generation is not supported")]
-    TraitFunctionsUnsupported,
+    #[error(transparent)]
+    PortableFunction(#[from] vexil_lang::codegen::portable::PortableFunctionError),
+    #[error("Python identifier collision for '{name}': {context}")]
+    IdentifierCollision { name: String, context: String },
 }
 
 /// Generate Python code for a compiled schema (no cross-file imports).
@@ -42,7 +48,7 @@ pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
-    ensure_field_only_traits(compiled)?;
+    let impl_functions = prepare_trait_functions(compiled)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -58,8 +64,9 @@ pub(crate) fn generate_with_imports(
         .declarations
         .iter()
         .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
-    if has_traits {
-        w.line("from typing import Optional, Protocol, TypeVar, runtime_checkable");
+    let has_impls = compiled.impls().next().is_some();
+    if has_traits || has_impls {
+        w.line("from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable");
     } else {
         w.line("from typing import Optional");
     }
@@ -128,7 +135,11 @@ pub(crate) fn generate_with_imports(
 
         match typedef {
             TypeDef::Message(msg) => {
-                message::emit_message(&mut w, msg, &compiled.registry);
+                let functions = impl_functions
+                    .get(&type_id)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
+                message::emit_message(&mut w, msg, &compiled.registry, functions);
                 delta::emit_delta(&mut w, msg, &compiled.registry);
             }
             TypeDef::Enum(en) => {
@@ -147,10 +158,20 @@ pub(crate) fn generate_with_imports(
                 message::emit_config(&mut w, cfg, &compiled.registry);
             }
             TypeDef::Trait(trait_def) => {
-                trait_gen::emit_trait(&mut w, trait_def, &compiled.registry)
+                trait_gen::emit_trait(&mut w, type_id, trait_def, compiled)?
             }
             _ => {} // non_exhaustive guard
         }
+    }
+
+    if has_impls {
+        w.blank();
+        w.line("if TYPE_CHECKING:");
+        w.indent();
+        for (_, impl_def) in compiled.impls() {
+            trait_gen::emit_impl_proof(&mut w, impl_def, &compiled.registry);
+        }
+        w.dedent();
     }
 
     let generated = w.finish();
@@ -175,18 +196,146 @@ pub(crate) fn type_name_of(typedef: &TypeDef) -> &str {
     }
 }
 
-fn ensure_field_only_traits(compiled: &CompiledSchema) -> Result<(), CodegenError> {
-    if compiled
-        .registry
-        .iter()
-        .any(|(_, def)| matches!(def, TypeDef::Trait(t) if !t.functions.is_empty()))
-        || compiled
-            .impls()
-            .any(|(_, impl_def)| !impl_def.functions.is_empty())
-    {
-        return Err(CodegenError::TraitFunctionsUnsupported);
+fn prepare_trait_functions(
+    compiled: &CompiledSchema,
+) -> Result<HashMap<TypeId, Vec<PortableFunction>>, CodegenError> {
+    for &type_id in &compiled.declarations {
+        let Some(TypeDef::Trait(trait_def)) = compiled.registry.get(type_id) else {
+            continue;
+        };
+        for function in vexil_lang::codegen::portable::trait_signatures(compiled, type_id)? {
+            if trait_def
+                .fields
+                .iter()
+                .any(|field| field.name == function.name)
+            {
+                return Err(CodegenError::IdentifierCollision {
+                    name: function.name.to_string(),
+                    context: "trait function conflicts with a generated field member".to_string(),
+                });
+            }
+            reject_python_keyword(function.name.as_str(), "trait function")?;
+            for parameter in &function.params {
+                reject_python_binding(parameter.name.as_str(), "function parameter")?;
+            }
+        }
     }
-    Ok(())
+
+    let mut by_target: HashMap<TypeId, Vec<PortableFunction>> = HashMap::new();
+    for (_, impl_def) in compiled.impls() {
+        let ResolvedType::Named(target_id) = &impl_def.target_type else {
+            continue;
+        };
+        let message = match compiled.registry.get(*target_id) {
+            Some(TypeDef::Message(message)) => message,
+            _ => continue,
+        };
+        for function in vexil_lang::codegen::portable::project_impl(compiled, impl_def)? {
+            if message
+                .fields
+                .iter()
+                .any(|field| field.name == function.name)
+                || matches!(
+                    function.name.as_str(),
+                    "encode" | "decode" | "unknown" | "__init__" | "__new__"
+                )
+            {
+                return Err(CodegenError::IdentifierCollision {
+                    name: function.name.to_string(),
+                    context: "trait method conflicts with a generated Python member".to_string(),
+                });
+            }
+            reject_python_keyword(function.name.as_str(), "trait method")?;
+            let functions = by_target.entry(*target_id).or_default();
+            if functions
+                .iter()
+                .any(|existing| existing.name == function.name)
+            {
+                return Err(CodegenError::IdentifierCollision {
+                    name: function.name.to_string(),
+                    context: "multiple implemented traits project the same method".to_string(),
+                });
+            }
+            for parameter in &function.params {
+                reject_python_binding(parameter.name.as_str(), "function parameter")?;
+            }
+            for statement in &function.statements {
+                if let vexil_lang::codegen::portable::PortableStatement::Let { name, .. } =
+                    statement
+                {
+                    reject_python_binding(name.as_str(), "local binding")?;
+                }
+            }
+            functions.push(function);
+        }
+    }
+    Ok(by_target)
+}
+
+fn reject_python_keyword(name: &str, subject: &str) -> Result<(), CodegenError> {
+    if is_python_keyword(name) {
+        Err(CodegenError::IdentifierCollision {
+            name: name.to_string(),
+            context: format!("{subject} is a reserved Python keyword"),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn reject_python_binding(name: &str, subject: &str) -> Result<(), CodegenError> {
+    reject_python_keyword(name, subject)?;
+    if name == "self" {
+        Err(CodegenError::IdentifierCollision {
+            name: name.to_string(),
+            context: format!("{subject} conflicts with the generated Python receiver"),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn is_python_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "False"
+            | "None"
+            | "True"
+            | "and"
+            | "as"
+            | "assert"
+            | "async"
+            | "await"
+            | "break"
+            | "class"
+            | "continue"
+            | "def"
+            | "del"
+            | "elif"
+            | "else"
+            | "except"
+            | "finally"
+            | "for"
+            | "from"
+            | "global"
+            | "if"
+            | "import"
+            | "in"
+            | "is"
+            | "lambda"
+            | "nonlocal"
+            | "not"
+            | "or"
+            | "pass"
+            | "raise"
+            | "return"
+            | "try"
+            | "while"
+            | "with"
+            | "yield"
+            | "match"
+            | "case"
+    )
 }
 
 #[cfg(test)]
@@ -226,16 +375,42 @@ mod tests {
     }
 
     #[test]
-    fn rejects_function_bearing_traits() {
+    fn emits_function_bearing_traits() {
         let compiled = vexil_lang::compile(
             "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
         )
         .compiled
         .unwrap();
-        assert_eq!(
+        let generated = generate(&compiled).expect("function signature generates");
+        assert!(generated.contains("def validate(self) -> bool:"));
+    }
+
+    #[test]
+    fn rejects_trait_function_member_collisions() {
+        let compiled = vexil_lang::compile(
+            "namespace test.collision\ntrait Conflicting { value @0 : i32 fn value() -> i32 }",
+        )
+        .compiled
+        .unwrap();
+        assert!(matches!(
             generate(&compiled),
-            Err(CodegenError::TraitFunctionsUnsupported)
-        );
+            Err(CodegenError::IdentifierCollision { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_nonportable_calls_at_codegen_boundary() {
+        let compiled = vexil_lang::compile(
+            "namespace test.call\ntrait Validatable { fn validate() -> bool }\nmessage Event { value @0 : bool }\nimpl Validatable for Event { fn validate() -> bool { return helper() } }",
+        )
+        .compiled
+        .unwrap();
+        assert!(matches!(
+            generate(&compiled),
+            Err(CodegenError::PortableFunction(
+                vexil_lang::codegen::portable::PortableFunctionError::UnsupportedCall { .. }
+            ))
+        ));
     }
 
     #[test]
@@ -243,8 +418,8 @@ mod tests {
         use vexil_lang::codegen::CodegenBackend;
         use vexil_lang::resolve::InMemoryLoader;
 
-        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { }";
-        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T }";
+        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { fn retag(tag: u64) -> u64 { self.tag = tag return self.tag } }";
+        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T fn retag(tag: T) -> T }";
         let mut loader = InMemoryLoader::new();
         loader.schemas.insert("proj.dep".into(), dep_src.into());
         let result = vexil_lang::compile_project(
@@ -264,5 +439,10 @@ mod tests {
             .map(|(_, code)| code)
             .unwrap();
         assert!(root.contains("from proj.dep import *"), "{root}");
+        assert!(root.contains("def retag(self, tag: int) -> int:"), "{root}");
+        assert!(
+            root.contains("def _vexil_assert_Event_implements_Tagged"),
+            "{root}"
+        );
     }
 }

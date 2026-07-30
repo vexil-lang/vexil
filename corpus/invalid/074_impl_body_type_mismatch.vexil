@@ -1,0 +1,15 @@
+namespace test.impl_body_type_mismatch
+
+trait Resettable {
+    fn reset()
+}
+
+message Counter {
+    value @0 : i32
+}
+
+impl Resettable for Counter {
+    fn reset() {
+        let invalid: bool = self.value
+    }
+}

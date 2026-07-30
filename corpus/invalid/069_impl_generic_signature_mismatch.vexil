@@ -1,0 +1,15 @@
+namespace test.impl_generic_signature_mismatch
+
+trait Adjustable<T> {
+    fn adjust(delta: T) -> T
+}
+
+message Counter {
+    value @0 : i32
+}
+
+impl Adjustable<i32> for Counter {
+    fn adjust(amount: i64) -> i64 {
+        return amount
+    }
+}
