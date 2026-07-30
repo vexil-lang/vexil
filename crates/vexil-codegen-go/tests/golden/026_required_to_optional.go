@@ -69,20 +69,22 @@ func (m *SettingsV2) Pack(w *vexil.BitWriter) error {
 func (m *SettingsV2) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil {
+		if err != nil && err != vexil.ErrUnexpectedEOF {
 			return err
 		}
-		r.FlushToByteBoundary()
-		if present {
-			var optVal uint32
-			{
-				v, err := r.ReadU32()
-				if err != nil {
-					return err
+		if err == nil {
+			r.FlushToByteBoundary()
+			if present {
+				var optVal uint32
+				{
+					v, err := r.ReadU32()
+					if err != nil {
+						return err
+					}
+					optVal = v
 				}
-				optVal = v
+				m.Timeout = &optVal
 			}
-			m.Timeout = &optVal
 		}
 	}
 	{

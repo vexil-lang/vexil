@@ -62,6 +62,68 @@ function writeProject(temp, source, emit = false) {
   return config;
 }
 
+function checkAliasedTraitProject() {
+  const temp = mkdtempSync(join(tmpdir(), "vexil-tsc-alias-project-"));
+  try {
+    installRuntime(temp);
+    const project = resolve(repoRoot, "corpus/projects/trait_alias");
+    const generated = join(temp, "generated");
+    const build = spawnSync(
+      "cargo",
+      [
+        "run",
+        "--quiet",
+        "-p",
+        "vexilc",
+        "--",
+        "build",
+        join(project, "app/root.vexil"),
+        "--include",
+        project,
+        "--output",
+        generated,
+        "--target",
+        "typescript",
+      ],
+      { cwd: repoRoot, encoding: "utf8" },
+    );
+    if (build.status !== 0) {
+      process.stderr.write(build.stdout);
+      process.stderr.write(build.stderr);
+      process.stderr.write("vexilc could not generate the aliased TypeScript trait project.\n");
+      process.exit(build.status ?? 1);
+    }
+    const config = join(temp, "alias-tsconfig.json");
+    writeFileSync(
+      config,
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: "ESNext",
+            moduleResolution: "Bundler",
+            noEmit: true,
+            skipLibCheck: true,
+            strict: true,
+            target: "ES2022",
+          },
+          include: [join(generated, "**/*.ts")],
+        },
+        null,
+        2,
+      ),
+    );
+    const result = runTsc(config);
+    if (result.status !== 0) {
+      process.stderr.write(result.stdout);
+      process.stderr.write(result.stderr);
+      process.stderr.write("TypeScript rejected the aliased generated trait project.\n");
+      process.exit(result.status ?? 1);
+    }
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 const temp = mkdtempSync(join(tmpdir(), "vexil-tsc-check-"));
 try {
   installRuntime(temp);
@@ -131,6 +193,7 @@ if (counter.value !== 0) {
     process.stderr.write(runtime.stderr);
     process.exit(runtime.status ?? 1);
   }
+  checkAliasedTraitProject();
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }

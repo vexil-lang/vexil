@@ -44,6 +44,8 @@ pub struct TypeRegistry {
     origins: HashMap<TypeId, (SmolStr, SmolStr)>,
     /// Resolved trait identity for each local impl record.
     impl_trait_ids: HashMap<TypeId, TypeId>,
+    /// Source span of the trait reference for each local impl record.
+    impl_trait_spans: HashMap<TypeId, Span>,
 }
 
 impl Default for TypeRegistry {
@@ -63,6 +65,7 @@ impl TypeRegistry {
             trait_fn_return_types: HashMap::new(),
             origins: HashMap::new(),
             impl_trait_ids: HashMap::new(),
+            impl_trait_spans: HashMap::new(),
         }
     }
 
@@ -240,6 +243,14 @@ impl TypeRegistry {
 
     pub(crate) fn set_impl_trait_id(&mut self, impl_id: TypeId, trait_id: TypeId) {
         self.impl_trait_ids.insert(impl_id, trait_id);
+    }
+
+    pub(crate) fn set_impl_trait_span(&mut self, impl_id: TypeId, span: Span) {
+        self.impl_trait_spans.insert(impl_id, span);
+    }
+
+    pub(crate) fn impl_trait_span(&self, impl_id: TypeId) -> Option<Span> {
+        self.impl_trait_spans.get(&impl_id).copied()
     }
 
     /// Return the resolved trait identity associated with an impl record.

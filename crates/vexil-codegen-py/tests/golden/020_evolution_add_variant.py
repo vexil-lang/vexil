@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xb1, 0x0f, 0x2e, 0x28, 0x31, 0xe3, 0xae, 0x61, 0xa2, 0x0f, 0x7c, 0xcb, 0x87, 0x0e, 0xeb, 0x2c, 0x7a, 0x7d, 0x09, 0x08, 0x40, 0xf9, 0x13, 0xb0, 0x96, 0xe9, 0x8d, 0x3c, 0x2e, 0x8a, 0xf8, 0x74)
 SCHEMA_VERSION: str = "1.0.0"
@@ -33,7 +33,7 @@ class ShapeV1Circle(ShapeV1):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -51,23 +51,22 @@ class ShapeV1Rect(ShapeV1):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
-def decode_ShapeV1(data: bytes) -> ShapeV1:
-    r = _BitReader(data)
+def decode_ShapeV1_from(r: _BitReader) -> ShapeV1:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         radius: float = None  # type: ignore[assignment]
         radius = pr.read_f32()
         return ShapeV1Circle(radius)
     elif disc == 1:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         w: float = None  # type: ignore[assignment]
         w = pr.read_f32()
@@ -76,6 +75,10 @@ def decode_ShapeV1(data: bytes) -> ShapeV1:
         return ShapeV1Rect(w, h)
     else:
         raise ValueError(f"unknown ShapeV1 discriminant: {disc}")
+
+def decode_ShapeV1(data: bytes) -> ShapeV1:
+    r = _BitReader(data)
+    return decode_ShapeV1_from(r)
 
 
 # ---------- ShapeV2 ----------
@@ -99,7 +102,7 @@ class ShapeV2Circle(ShapeV2):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -117,7 +120,7 @@ class ShapeV2Rect(ShapeV2):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -135,23 +138,22 @@ class ShapeV2Triangle(ShapeV2):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
-def decode_ShapeV2(data: bytes) -> ShapeV2:
-    r = _BitReader(data)
+def decode_ShapeV2_from(r: _BitReader) -> ShapeV2:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         radius: float = None  # type: ignore[assignment]
         radius = pr.read_f32()
         return ShapeV2Circle(radius)
     elif disc == 1:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         w: float = None  # type: ignore[assignment]
         w = pr.read_f32()
@@ -159,7 +161,7 @@ def decode_ShapeV2(data: bytes) -> ShapeV2:
         h = pr.read_f32()
         return ShapeV2Rect(w, h)
     elif disc == 2:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         base: float = None  # type: ignore[assignment]
         base = pr.read_f32()
@@ -168,4 +170,8 @@ def decode_ShapeV2(data: bytes) -> ShapeV2:
         return ShapeV2Triangle(base, height)
     else:
         raise ValueError(f"unknown ShapeV2 discriminant: {disc}")
+
+def decode_ShapeV2(data: bytes) -> ShapeV2:
+    r = _BitReader(data)
+    return decode_ShapeV2_from(r)
 

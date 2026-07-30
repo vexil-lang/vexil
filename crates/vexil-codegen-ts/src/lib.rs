@@ -430,10 +430,7 @@ mod tests {
             .find(|(path, _)| path.to_string_lossy().ends_with("root.ts"))
             .map(|(_, code)| code)
             .unwrap();
-        assert!(
-            root.contains("import { Tagged } from './proj/dep';"),
-            "{root}"
-        );
+        assert!(root.contains("import { Tagged } from './dep';"), "{root}");
         assert!(!root.contains("encodeTagged"), "{root}");
         assert!(root.contains("retag(tag: bigint): bigint"), "{root}");
     }

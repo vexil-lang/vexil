@@ -452,6 +452,40 @@ mod tests {
     }
 
     #[test]
+    fn diamond_dependency_keeps_owned_impl_only_in_defining_schema() {
+        let loader = make_loader(&[
+            (
+                "d",
+                "namespace d\ntrait Tagged { value @0 : u32 }\nmessage Base { value @0 : u32 }\nimpl Tagged for Base { }",
+            ),
+            (
+                "b",
+                "namespace b\nimport { Base } from d\nmessage Left { value @0 : Base }",
+            ),
+            (
+                "c",
+                "namespace c\nimport { Base } from d\nmessage Right { value @0 : Base }",
+            ),
+        ]);
+        let root = "namespace a\nimport { Left } from b\nimport { Right } from c\nmessage Root { left @0 : Left right @1 : Right }";
+        let result = compile_project(root, &PathBuf::from("<test>"), &loader).unwrap();
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Severity::Error),
+            "{:#?}",
+            result.diagnostics
+        );
+        let owners = result
+            .schemas
+            .iter()
+            .flat_map(|(namespace, schema)| schema.impls().map(move |_| namespace.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(owners, vec!["d"]);
+    }
+
+    #[test]
     fn compile_project_single_file_no_imports() {
         let loader = InMemoryLoader::new();
         let root = "namespace solo\nmessage Msg { x @0 : u32 }";
@@ -526,6 +560,55 @@ impl Contract.Tagged<u64> for Event { }
             compiled.registry.origin(trait_id),
             Some(("traits.contract", "Tagged"))
         );
+    }
+
+    #[test]
+    fn trait_import_spelling_does_not_change_hash_or_compatibility() {
+        let loader = make_loader(&[(
+            "contracts",
+            "namespace contracts\ntrait Tagged { value @0 : u64 }",
+        )]);
+        let named = compile_project(
+            "namespace app.root\nimport { Tagged } from contracts\nmessage Event { value @0 : u64 }\nimpl Tagged for Event { }",
+            &PathBuf::from("<memory>/named/root.vexil"),
+            &loader,
+        )
+        .unwrap();
+        let aliased = compile_project(
+            "namespace app.root\nimport contracts as Contracts\nmessage Event { value @0 : u64 }\nimpl Contracts.Tagged for Event { }",
+            &PathBuf::from("<memory>/aliased/root.vexil"),
+            &loader,
+        )
+        .unwrap();
+        for result in [&named, &aliased] {
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .all(|diagnostic| diagnostic.severity != Severity::Error),
+                "{:#?}",
+                result.diagnostics
+            );
+        }
+        let named_root = named
+            .schemas
+            .iter()
+            .find(|(namespace, _)| namespace == "app.root")
+            .map(|(_, schema)| schema)
+            .expect("named root schema");
+        let aliased_root = aliased
+            .schemas
+            .iter()
+            .find(|(namespace, _)| namespace == "app.root")
+            .map(|(_, schema)| schema)
+            .expect("aliased root schema");
+        assert_eq!(
+            crate::canonical::schema_hash(named_root),
+            crate::canonical::schema_hash(aliased_root)
+        );
+        let report = crate::compat::check(named_root, aliased_root);
+        assert_eq!(report.result, crate::compat::CompatResult::Compatible);
+        assert!(report.changes.is_empty(), "{:?}", report.changes);
     }
 
     #[test]
@@ -733,6 +816,26 @@ impl Tagged for Event { }
     }
 
     #[test]
+    fn unused_distinct_wildcard_name_collision_is_not_an_error() {
+        let loader = make_loader(&[
+            ("left", "namespace left\ntrait Tagged { left @0 : u64 }"),
+            ("right", "namespace right\ntrait Tagged { right @0 : u64 }"),
+        ]);
+        let root =
+            "namespace app.root\nimport left\nimport right\nmessage Event { value @0 : u64 }";
+        let result =
+            compile_project(root, &PathBuf::from("<memory>/app/root.vexil"), &loader).unwrap();
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Severity::Error),
+            "{:#?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
     fn qualified_trait_failures_have_one_primary_diagnostic_on_the_reference() {
         let loader = make_loader(&[(
             "contracts",
@@ -818,6 +921,107 @@ impl Contracts.Tagged for Event { }
             errors[0].message,
             "trait 'Contracts.Tagged' has 1 type parameters but impl provides 0"
         );
-        assert!(root[errors[0].span.range()].starts_with("impl Contracts.Tagged"));
+        assert_eq!(&root[errors[0].span.range()], "Contracts.Tagged");
+    }
+
+    #[test]
+    fn duplicate_import_alias_is_one_deterministic_error_on_the_second_alias() {
+        let loader = make_loader(&[
+            ("left", "namespace left\ntrait LeftTrait { value @0 : u64 }"),
+            (
+                "right",
+                "namespace right\ntrait RightTrait { value @0 : u64 }",
+            ),
+        ]);
+        let root =
+            "namespace app.root\nimport left as Contracts\nimport right as Contracts\nmessage Event { value @0 : u64 }";
+        let result =
+            compile_project(root, &PathBuf::from("<memory>/app/root.vexil"), &loader).unwrap();
+        let errors: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == Severity::Error)
+            .collect();
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        assert_eq!(errors[0].class, ErrorClass::UnresolvedType);
+        assert_eq!(errors[0].message, "duplicate import alias 'Contracts'");
+        assert_eq!(&root[errors[0].span.range()], "Contracts");
+        assert_eq!(
+            errors[0].span.offset as usize,
+            root.rfind("Contracts").expect("second alias")
+        );
+    }
+
+    #[test]
+    fn qualification_bypasses_unqualified_local_trait_shadowing() {
+        let loader = make_loader(&[(
+            "contracts",
+            "namespace contracts\ntrait Tagged { external @0 : u64 }",
+        )]);
+        let root = r#"
+namespace app.root
+import contracts as Contracts
+trait Tagged { local @0 : u64 }
+message ExternalEvent { external @0 : u64 }
+message LocalEvent { local @0 : u64 }
+impl Contracts.Tagged for ExternalEvent { }
+impl Tagged for LocalEvent { }
+"#;
+        let result =
+            compile_project(root, &PathBuf::from("<memory>/app/root.vexil"), &loader).unwrap();
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Severity::Error),
+            "{:#?}",
+            result.diagnostics
+        );
+        let (_, compiled) = result
+            .schemas
+            .iter()
+            .find(|(namespace, _)| namespace == "app.root")
+            .expect("root schema");
+        let origins = compiled
+            .impls()
+            .map(|(impl_id, _)| {
+                let trait_id = compiled
+                    .registry
+                    .impl_trait_id(impl_id)
+                    .expect("trait identity");
+                compiled.registry.origin(trait_id).expect("trait origin")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            origins,
+            vec![("contracts", "Tagged"), ("app.root", "Tagged")]
+        );
+    }
+
+    #[test]
+    fn distinct_direct_named_imports_with_same_spelling_are_rejected() {
+        let loader = make_loader(&[
+            ("left", "namespace left\ntrait Tagged { left @0 : u64 }"),
+            ("right", "namespace right\ntrait Tagged { right @0 : u64 }"),
+        ]);
+        let root = "namespace app.root\nimport { Tagged } from left\nimport { Tagged } from right\nmessage Event { value @0 : u64 }";
+        let result =
+            compile_project(root, &PathBuf::from("<memory>/app/root.vexil"), &loader).unwrap();
+        let errors: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == Severity::Error)
+            .collect();
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        assert_eq!(errors[0].class, ErrorClass::UnresolvedType);
+        assert_eq!(
+            errors[0].message,
+            "named import 'Tagged' conflicts between namespaces 'left' and 'right'"
+        );
+        assert_eq!(&root[errors[0].span.range()], "Tagged");
+        assert_eq!(
+            errors[0].span.offset as usize,
+            root.rfind("Tagged").expect("second named import")
+        );
     }
 }

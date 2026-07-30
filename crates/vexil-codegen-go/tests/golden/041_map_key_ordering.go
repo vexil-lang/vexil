@@ -201,6 +201,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.BoolMap = make(map[bool]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey bool
+			var mapVal string
 			{
 				v, err := r.ReadBool()
 				if err != nil {
@@ -225,6 +227,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.U8Map = make(map[uint8]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey uint8
+			var mapVal string
 			{
 				v, err := r.ReadU8()
 				if err != nil {
@@ -249,6 +253,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.U32Map = make(map[uint32]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey uint32
+			var mapVal string
 			{
 				v, err := r.ReadU32()
 				if err != nil {
@@ -273,6 +279,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.I32Map = make(map[int32]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey int32
+			var mapVal string
 			{
 				v, err := r.ReadI32()
 				if err != nil {
@@ -297,6 +305,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.FixedMap = make(map[int32]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey int32
+			var mapVal string
 			{
 				v, err := r.ReadI32()
 				if err != nil {
@@ -321,6 +331,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.StringMap = make(map[string]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey string
+			var mapVal uint32
 			{
 				v, err := r.ReadString()
 				if err != nil {
@@ -345,6 +357,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.BytesMap = make(map[[]byte]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey []byte
+			var mapVal uint32
 			{
 				v, err := r.ReadBytes()
 				if err != nil {
@@ -369,6 +383,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.UuidMap = make(map[[16]byte]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey [16]byte
+			var mapVal string
 			{
 				v, err := r.ReadRawBytes(16)
 				if err != nil {
@@ -393,6 +409,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.EnumMap = make(map[Status]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Status
+			var mapVal string
 			if err := mapKey.Unpack(r); err != nil {
 				return err
 			}
@@ -413,6 +431,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.FlagsMap = make(map[Permissions]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Permissions
+			var mapVal string
 			if err := mapKey.Unpack(r); err != nil {
 				return err
 			}
@@ -433,6 +453,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.NewtypeU32Map = make(map[UserId]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey UserId
+			var mapVal string
 			{
 				v, err := UnpackUserId(r)
 				if err != nil {
@@ -457,6 +479,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.NewtypeStrMap = make(map[Label]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Label
+			var mapVal uint32
 			{
 				v, err := UnpackLabel(r)
 				if err != nil {

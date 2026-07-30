@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xb2, 0x56, 0xf5, 0x41, 0xe5, 0x8d, 0xeb, 0x54, 0x58, 0x21, 0xa3, 0xbe, 0x87, 0x43, 0xaa, 0xaf, 0x16, 0xe2, 0x4a, 0x3b, 0xf4, 0xdf, 0xbc, 0x74, 0x43, 0x07, 0xae, 0x2e, 0x48, 0xd6, 0x5a, 0x3f)
 
@@ -22,6 +22,10 @@ class Basic:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.a is not None)
         w.flush_to_byte_boundary()
         if self.a is not None:
@@ -43,19 +47,26 @@ class Basic:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Basic.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Basic.__new__(Basic)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.a: int = None  # type: ignore[assignment]
-            m.a = r.read_u32()
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.a = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.a: int = None  # type: ignore[assignment]
+                m.a = r.read_u32()
+            else:
+                m.a = None
         arr_len = r.read_leb128()
         m.b = []
         for _ in range(arr_len):
@@ -99,6 +110,10 @@ class Nested:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.a is not None)
         w.flush_to_byte_boundary()
         if self.a is not None:
@@ -149,35 +164,46 @@ class Nested:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Nested.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Nested.__new__(Nested)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.a: list[str] = None  # type: ignore[assignment]
-            arr_len = r.read_leb128()
-            m.a = []
-            for _ in range(arr_len):
-                _item: str = None  # type: ignore[assignment]
-                _item = r.read_string()
-                m.a.append(_item)
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.a = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.a: list[str] = None  # type: ignore[assignment]
+                arr_len = r.read_leb128()
+                m.a = []
+                for _ in range(arr_len):
+                    _item: str = None  # type: ignore[assignment]
+                    _item = r.read_string()
+                    m.a.append(_item)
+            else:
+                m.a = None
         arr_len = r.read_leb128()
         m.b = []
         for _ in range(arr_len):
             _item: int | None = None  # type: ignore[assignment]
-            present = r.read_bool()
-            r.flush_to_byte_boundary()
-            if present:
-                _item: int = None  # type: ignore[assignment]
-                _item = r.read_u32()
-            else:
+            try:
+                present = r.read_bool()
+            except DecodeError:
                 _item = None
+            else:
+                r.flush_to_byte_boundary()
+                if present:
+                    _item: int = None  # type: ignore[assignment]
+                    _item = r.read_u32()
+                else:
+                    _item = None
             m.b.append(_item)
         map_len = r.read_leb128()
         m.c = {}
@@ -215,33 +241,37 @@ class Nested:
         else:
             _err_val: None = None  # type: ignore[assignment]
             m.f = (False, _err_val)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.g: tuple[bool, list[str] | dict[int, str]] = None  # type: ignore[assignment]
-            is_ok = r.read_bool()
-            if is_ok:
-                _ok_val: list[str] = None  # type: ignore[assignment]
-                arr_len = r.read_leb128()
-                _ok_val: list[str] = []
-                for _ in range(arr_len):
-                    _item: str = None  # type: ignore[assignment]
-                    _item = r.read_string()
-                    _ok_val.append(_item)
-                m.g = (True, _ok_val)
-            else:
-                _err_val: dict[int, str] = None  # type: ignore[assignment]
-                map_len = r.read_leb128()
-                _err_val: dict[int, str] = {}
-                for _ in range(map_len):
-                    _k: int = None  # type: ignore[assignment]
-                    _v: str = None  # type: ignore[assignment]
-                    _k = r.read_u32()
-                    _v = r.read_string()
-                    _err_val[_k] = _v
-                m.g = (False, _err_val)
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.g = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.g: tuple[bool, list[str] | dict[int, str]] = None  # type: ignore[assignment]
+                is_ok = r.read_bool()
+                if is_ok:
+                    _ok_val: list[str] = None  # type: ignore[assignment]
+                    arr_len = r.read_leb128()
+                    _ok_val: list[str] = []
+                    for _ in range(arr_len):
+                        _item: str = None  # type: ignore[assignment]
+                        _item = r.read_string()
+                        _ok_val.append(_item)
+                    m.g = (True, _ok_val)
+                else:
+                    _err_val: dict[int, str] = None  # type: ignore[assignment]
+                    map_len = r.read_leb128()
+                    _err_val: dict[int, str] = {}
+                    for _ in range(map_len):
+                        _k: int = None  # type: ignore[assignment]
+                        _v: str = None  # type: ignore[assignment]
+                        _k = r.read_u32()
+                        _v = r.read_string()
+                        _err_val[_k] = _v
+                    m.g = (False, _err_val)
+            else:
+                m.g = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

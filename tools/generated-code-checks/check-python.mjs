@@ -13,6 +13,22 @@ const python =
 const runtimePath = resolve(repoRoot, "packages/runtime-py");
 const goldenDir = resolve(repoRoot, "crates/vexil-codegen-py/tests/golden");
 
+const syntaxCheck = spawnSync(
+  python,
+  [
+    "-c",
+    "import ast, pathlib, sys\nfor value in sys.argv[1:]:\n    path = pathlib.Path(value)\n    ast.parse(path.read_text(encoding='utf-8'), filename=str(path))",
+    join(goldenDir, "037_fixed_array.py"),
+  ],
+  { encoding: "utf8" },
+);
+if (syntaxCheck.status !== 0) {
+  process.stderr.write("A generated Python golden is not valid Python syntax.\n");
+  process.stderr.write(syntaxCheck.stdout);
+  process.stderr.write(syntaxCheck.stderr);
+  process.exit(syntaxCheck.status ?? 1);
+}
+
 function runPyright(project, json = false) {
   return spawnSync(
     process.execPath,
@@ -99,7 +115,7 @@ function assertProtocolAssignmentFailure(label, source, expectedProtocol) {
   }
 }
 
-function buildImportedGenericTraitProject(temp) {
+function buildImportedGenericTraitProject(temp, aliased = false) {
   const schemas = join(temp, "schemas");
   const traits = join(schemas, "imported", "traits.vexil");
   const consumer = join(schemas, "imported", "consumer.vexil");
@@ -118,13 +134,13 @@ trait Tagged<T> {
     consumer,
     `namespace imported.consumer
 
-import { Tagged } from imported.traits
+${aliased ? "import imported.traits as Contracts" : "import { Tagged } from imported.traits"}
 
 message Event {
     tag @0 : u64
 }
 
-impl Tagged<u64> for Event { }
+impl ${aliased ? "Contracts.Tagged" : "Tagged"}<u64> for Event { }
 `,
   );
 
@@ -216,6 +232,46 @@ try {
   rmSync(importedTemp, { recursive: true, force: true });
 }
 
+const aliasedTemp = mkdtempSync(join(tmpdir(), "vexil-pyright-aliased-"));
+try {
+  const generated = buildImportedGenericTraitProject(aliasedTemp, true);
+  const consumer = join(generated, "imported", "consumer.py");
+  const consumerOutput = readFileSync(consumer, "utf8");
+  if (
+    !consumerOutput.includes("from imported.traits import Tagged") ||
+    !consumerOutput.includes("-> Tagged[int]") ||
+    consumerOutput.includes("Contracts.Tagged") ||
+    consumerOutput.includes(".register(")
+  ) {
+    throw new Error("aliased generic trait output lost its resolved static protocol proof");
+  }
+  const config = join(aliasedTemp, "aliased-pyrightconfig.json");
+  writeFileSync(
+    config,
+    JSON.stringify(
+      {
+        include: [relative(aliasedTemp, generated).replaceAll("\\", "/")],
+        extraPaths: [runtimePath, generated].map((path) =>
+          relative(aliasedTemp, path).replaceAll("\\", "/"),
+        ),
+        pythonVersion: "3.10",
+        reportPrivateUsage: "none",
+        reportUnusedImport: "none",
+        typeCheckingMode: "strict",
+      },
+      null,
+      2,
+    ),
+  );
+  const result = runPyright(config);
+  if (result.status !== 0) {
+    process.stderr.write("Pyright rejected the aliased generic trait project.\n");
+    fail(result);
+  }
+} finally {
+  rmSync(aliasedTemp, { recursive: true, force: true });
+}
+
 assertProtocolAssignmentFailure(
   "wrong_generic_field",
   `${readFileSync(genericField, "utf8")}
@@ -282,6 +338,14 @@ const runtimeTemp = mkdtempSync(join(tmpdir(), "vexil-python-runtime-"));
 try {
   const generated = join(runtimeTemp, "trait_methods.py");
   writeFileSync(generated, readFileSync(functionBearing, "utf8"));
+  writeFileSync(
+    join(runtimeTemp, "fixed_arrays.py"),
+    readFileSync(join(goldenDir, "037_fixed_array.py"), "utf8"),
+  );
+  writeFileSync(
+    join(runtimeTemp, "newtype_fields.py"),
+    readFileSync(join(goldenDir, "030_newtype_map_key.py"), "utf8"),
+  );
   const runtime = spawnSync(
     python,
     [
@@ -289,12 +353,24 @@ try {
       `import sys
 sys.path.insert(0, ${JSON.stringify(runtimeTemp)})
 from trait_methods import Counter
+from fixed_arrays import Nested
+from newtype_fields import UserId, UserProfile
 counter = Counter(5)
 assert counter.adjust(3) == 5
 assert counter.value == 8
 assert counter.encode() == bytes.fromhex("08000000")
 counter.reset()
 assert counter.value == 0
+nested = Nested(a=((1, 2, 3, 4), (5, 6, 7, 8), (9, 10, 11, 12)))
+nested_bytes = nested.encode()
+assert nested_bytes == bytes(range(1, 13))
+assert Nested.decode(nested_bytes) == nested
+profile = UserProfile(id=UserId(7), friends={}, tags={})
+profile_bytes = profile.encode()
+assert profile_bytes == bytes.fromhex("070000000000")
+decoded_profile = UserProfile.decode(profile_bytes)
+assert decoded_profile.id == UserId(7)
+assert decoded_profile.friends == {} and decoded_profile.tags == {}
 `,
     ],
     {
@@ -304,7 +380,9 @@ assert counter.value == 0
     },
   );
   if (runtime.status !== 0) {
-    process.stderr.write("Generated Python runtime import, methods, or encoding regressed.\n");
+    process.stderr.write(
+      "Generated Python runtime import, methods, fixed arrays, newtypes, or encoding regressed.\n",
+    );
     fail(runtime);
   }
 } finally {

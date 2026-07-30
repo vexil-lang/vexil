@@ -21,9 +21,9 @@ It requires Python 3.10 or later.
 
 ## Compatibility
 
-The runtime exercises local byte-vector tests. Verify generated Python output
-for the schemas and runtime versions you intend to ship before using it in a
-cross-language protocol.
+Generated Python and its runtime are exercised together against a
+representative shared wire matrix. This is not exhaustive for every schema or
+environment.
 
 ## Source
 

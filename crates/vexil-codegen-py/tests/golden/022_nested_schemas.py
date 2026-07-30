@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x11, 0x4e, 0x60, 0xd2, 0x61, 0x98, 0x1e, 0xde, 0x1b, 0x91, 0xfc, 0x98, 0x11, 0x18, 0xaa, 0xa3, 0x93, 0xe2, 0xc9, 0x29, 0x15, 0xad, 0x63, 0xcd, 0x51, 0xa5, 0x3d, 0x96, 0xdf, 0x59, 0x93, 0xd5)
 
@@ -20,16 +20,23 @@ class Coord:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_i32(self.x)
         w.write_i32(self.y)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Coord.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Coord.__new__(Coord)
         m.x = r.read_i32()
         m.y = r.read_i32()
@@ -48,16 +55,23 @@ class Rect:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_message(self.origin)
-        w.write_message(self.size)
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        self.origin.encode_to(w)
+        self.size.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Rect.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Rect.__new__(Rect)
         m.origin = Coord.decode_from(r)
         m.size = Coord.decode_from(r)
@@ -77,19 +91,26 @@ class Canvas:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_message(self.bounds)
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        self.bounds.encode_to(w)
         w.write_string(self.name)
         w.write_leb128(len(self.layers))
         for item in self.layers:
-            w.write_message(item)
+            item.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Canvas.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Canvas.__new__(Canvas)
         m.bounds = Rect.decode_from(r)
         m.name = r.read_string()

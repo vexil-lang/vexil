@@ -95,6 +95,9 @@ fn clone_types_into_with_bindings(
     }
 
     for (&old_impl_id, &new_impl_id) in &id_map {
+        if let Some(span) = source.impl_trait_span(old_impl_id) {
+            target.set_impl_trait_span(new_impl_id, span);
+        }
         if let Some(old_trait_id) = source.impl_trait_id(old_impl_id) {
             if let Some(&new_trait_id) = id_map.get(&old_trait_id) {
                 target.set_impl_trait_id(new_impl_id, new_trait_id);

@@ -32,18 +32,6 @@ impl CodegenBackend for PythonBackend {
     ) -> Result<BTreeMap<PathBuf, String>, CodegenError> {
         let mut files = BTreeMap::new();
 
-        // Step 1: Build a global type_name -> Python module path map.
-        let mut global_type_map: HashMap<String, String> = HashMap::new();
-        for (ns, compiled) in &result.schemas {
-            let module_path = ns.to_string();
-            for &type_id in &compiled.declarations {
-                if let Some(typedef) = compiled.registry.get(type_id) {
-                    let name = crate::type_name_of(typedef);
-                    global_type_map.insert(name.to_string(), module_path.clone());
-                }
-            }
-        }
-
         for (ns, compiled) in &result.schemas {
             let segments: Vec<&str> = ns.split('.').collect();
             if segments.is_empty() {
@@ -54,8 +42,17 @@ impl CodegenBackend for PythonBackend {
 
             // Step 2: Build import_types for this schema.
             let declared_ids: HashSet<TypeId> = compiled.declarations.iter().copied().collect();
+            let local_names: HashSet<String> = compiled
+                .declarations
+                .iter()
+                .filter_map(|id| compiled.registry.get(*id))
+                .map(crate::type_name_of)
+                .filter(|name| *name != "Unknown")
+                .map(str::to_owned)
+                .collect();
 
             let mut import_types: HashMap<String, String> = HashMap::new();
+            let mut import_collision = None;
             let impl_ids = compiled.impls().map(|(id, _)| id).collect::<Vec<_>>();
             for &type_id in compiled.declarations.iter().chain(impl_ids.iter()) {
                 if let Some(typedef) = compiled.registry.get(type_id) {
@@ -64,15 +61,41 @@ impl CodegenBackend for PythonBackend {
                         compiled,
                         &declared_ids,
                         |imported_id| {
-                            if let Some(imported_def) = compiled.registry.get(imported_id) {
-                                let name = crate::type_name_of(imported_def);
-                                if let Some(py_path) = global_type_map.get(name) {
-                                    import_types.insert(name.to_string(), py_path.clone());
+                            if let Some((origin_namespace, origin_name)) =
+                                compiled.registry.origin(imported_id)
+                            {
+                                let path = origin_namespace.to_string();
+                                if local_names.contains(origin_name) {
+                                    import_collision.get_or_insert_with(|| {
+                                        crate::CodegenError::IdentifierCollision {
+                                            name: origin_name.to_string(),
+                                            context: format!(
+                                                "project imports '{origin_name}' from '{path}' into namespace '{ns}', which already declares '{origin_name}'"
+                                            ),
+                                        }
+                                    });
+                                }
+                                if let Some(existing) =
+                                    import_types.insert(origin_name.to_string(), path.clone())
+                                {
+                                    if existing != path {
+                                        import_collision = Some(
+                                            crate::CodegenError::IdentifierCollision {
+                                                name: origin_name.to_string(),
+                                                context: format!(
+                                                    "project imports both '{existing}' and '{path}' into namespace '{ns}'"
+                                                ),
+                                            },
+                                        );
+                                    }
                                 }
                             }
                         },
                     );
                 }
+            }
+            if let Some(error) = import_collision {
+                return Err(CodegenError::BackendSpecific(Box::new(error)));
             }
 
             // Generate code with cross-file imports.

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x86, 0x3c, 0x08, 0x4e, 0x75, 0x4f, 0x2a, 0xdf, 0x37, 0x16, 0x57, 0x6e, 0xe8, 0xfa, 0xd1, 0x44, 0xd1, 0xfb, 0xb4, 0xe7, 0xce, 0x9a, 0x1e, 0xa8, 0x6c, 0x80, 0x95, 0x96, 0xe9, 0x25, 0x78, 0x1e)
 
@@ -19,17 +19,24 @@ class Tags:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_leb128(len(self.names))
-        for item in self.names:
+        for item in sorted(self.names):
             w.write_string(item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Tags.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Tags.__new__(Tags)
         set_len = r.read_leb128()
         m.names = set()

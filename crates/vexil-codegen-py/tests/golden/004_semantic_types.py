@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x39, 0xb0, 0x6f, 0xca, 0x22, 0x4d, 0x88, 0x38, 0x78, 0xf8, 0x98, 0xaf, 0x9a, 0x78, 0x83, 0x90, 0x14, 0x32, 0x7e, 0x02, 0x1f, 0x50, 0x44, 0x0b, 0xa7, 0xf3, 0xee, 0xc0, 0xd8, 0x9e, 0x64, 0x99)
 
@@ -24,6 +24,10 @@ class AllSemantic:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_string(self.a)
         w.write_bytes(self.b)
         w.write_u8(self.c[0])
@@ -35,14 +39,17 @@ class AllSemantic:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return AllSemantic.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = AllSemantic.__new__(AllSemantic)
         m.a = r.read_string()
-        m.b = r.read_bytes()
+        m.b = r.read_bytes(r.read_leb128())
         r = r.read_u8()
         g = r.read_u8()
         b = r.read_u8()

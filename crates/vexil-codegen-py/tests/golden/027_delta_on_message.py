@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x07, 0x20, 0xc0, 0x79, 0x18, 0xe4, 0x24, 0xcf, 0xdb, 0xde, 0x48, 0xe0, 0xdb, 0x86, 0xb5, 0xb2, 0x2e, 0x55, 0x23, 0x7f, 0xf9, 0x9c, 0xe5, 0xd7, 0x95, 0x14, 0x35, 0x9e, 0x8f, 0xab, 0x99, 0x67)
 
@@ -22,6 +22,10 @@ class Telemetry:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_zigzag(self.timestamp)
         w.write_f32(self.value)
         w.write_string(self.label)
@@ -29,11 +33,14 @@ class Telemetry:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Telemetry.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Telemetry.__new__(Telemetry)
         m.timestamp = r.read_zigzag()
         m.value = r.read_f32()

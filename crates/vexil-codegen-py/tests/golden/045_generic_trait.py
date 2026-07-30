@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x16, 0x42, 0x5b, 0xff, 0xc9, 0xdf, 0xc2, 0xaf, 0x53, 0x92, 0x98, 0xc8, 0x88, 0x87, 0xa9, 0xa8, 0xb0, 0xeb, 0xa0, 0xa3, 0x1b, 0xfd, 0x4e, 0x5d, 0xb4, 0xc2, 0xd3, 0xce, 0xad, 0x22, 0x3b, 0xfd)
 T = TypeVar("T")
@@ -27,16 +27,23 @@ class Event:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u64(self.tag)
         w.write_string(self.label)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Event.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Event.__new__(Event)
         m.tag = r.read_u64()
         m.label = r.read_string()

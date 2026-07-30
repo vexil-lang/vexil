@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x9c, 0x01, 0x2f, 0x63, 0xdf, 0x9c, 0xe2, 0x4a, 0xc7, 0xf3, 0xe8, 0xf3, 0xb9, 0xae, 0xf9, 0xfd, 0xe8, 0xca, 0x7d, 0x82, 0x0b, 0x60, 0xd0, 0x8b, 0x23, 0x72, 0xdb, 0x8e, 0x8c, 0x1f, 0xa3, 0x80)
 SCHEMA_VERSION: str = "2.0.0"
@@ -22,17 +22,24 @@ class Config:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_string(self.name)
         w.write_string(self.old_name)
         w.write_u32(self.timeout)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Config.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Config.__new__(Config)
         m.name = r.read_string()
         m.old_name = r.read_string()

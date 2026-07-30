@@ -47,7 +47,6 @@ jobs:
           fi
 
           changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}"...HEAD)"
-          matches() { grep -Eq "$1" <<< "$changed"; }
 
           # Default to the complete Rust suite. Only changes known to be isolated
           # from the workspace may opt out; new build inputs stay fail-closed.
@@ -56,16 +55,9 @@ jobs:
           else
             rust=true
           fi
-          matches '^(packages/runtime-ts/|compliance/vectors/|\.github/workflows/ci\.yml)' && ts_runtime=true || ts_runtime=false
-          matches '^(packages/runtime-go/|compliance/vectors/|\.github/workflows/ci\.yml)' && go_runtime=true || go_runtime=false
-          matches '\.vexil$' && schema=true || schema=false
-          matches '^(crates/vexil-lang/|crates/vexil-codegen-(rust|ts|go|py)/|corpus/|spec/|tools/generated-code-checks/|packages/runtime-(ts|go|py)/|\.github/workflows/ci\.yml)' && generated_targets=true || generated_targets=false
-
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
-          echo "ts_runtime=$ts_runtime" >> "$GITHUB_OUTPUT"
-          echo "go_runtime=$go_runtime" >> "$GITHUB_OUTPUT"
-          echo "schema=$schema" >> "$GITHUB_OUTPUT"
-          echo "generated_targets=$generated_targets" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$changed" |
+            bash .github/scripts/classify-generated-changes.sh >> "$GITHUB_OUTPUT"
 
   # Main-branch protection requires this stable gate. Without it, a failed
   # classifier could cause the dependent required jobs to be skipped.
@@ -242,6 +234,13 @@ jobs:
       - name: Verify TypeScript and Python contracts
         working-directory: tools/generated-code-checks
         run: npm run check
+
+      - name: Verify generated Go and Python wire matrix
+        working-directory: tools/generated-code-checks
+        run: npm run check:wire
+
+      - name: Verify generated change classification
+        run: bash .github/scripts/test-classify-generated-changes.sh
 
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.

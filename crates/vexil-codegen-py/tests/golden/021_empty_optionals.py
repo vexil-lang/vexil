@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x97, 0x11, 0x67, 0xf9, 0x7a, 0xc2, 0x7a, 0xdd, 0xd0, 0x04, 0xd9, 0xee, 0x7f, 0x28, 0x66, 0xd8, 0x38, 0x00, 0x0b, 0xd8, 0x04, 0xc1, 0x61, 0xc5, 0x34, 0x53, 0xe8, 0x35, 0x51, 0x01, 0x42, 0x60)
 
@@ -21,6 +21,10 @@ class WithOptionals:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.name is not None)
         w.flush_to_byte_boundary()
         if self.name is not None:
@@ -36,33 +40,48 @@ class WithOptionals:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return WithOptionals.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = WithOptionals.__new__(WithOptionals)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.name: str = None  # type: ignore[assignment]
-            m.name = r.read_string()
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.name = None
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.value: int = None  # type: ignore[assignment]
-            m.value = r.read_u32()
         else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.name: str = None  # type: ignore[assignment]
+                m.name = r.read_string()
+            else:
+                m.name = None
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.value = None
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.flag: bool = None  # type: ignore[assignment]
-            m.flag = r.read_bool()
         else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.value: int = None  # type: ignore[assignment]
+                m.value = r.read_u32()
+            else:
+                m.value = None
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.flag = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.flag: bool = None  # type: ignore[assignment]
+                m.flag = r.read_bool()
+            else:
+                m.flag = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -77,6 +96,10 @@ class NestedOptional:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.inner is not None)
         w.flush_to_byte_boundary()
         if self.inner is not None:
@@ -87,25 +110,36 @@ class NestedOptional:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return NestedOptional.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = NestedOptional.__new__(NestedOptional)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.inner: int | None = None  # type: ignore[assignment]
+        try:
             present = r.read_bool()
+        except DecodeError:
+            m.inner = None
+        else:
             r.flush_to_byte_boundary()
             if present:
-                m.inner: int = None  # type: ignore[assignment]
-                m.inner = r.read_u32()
+                m.inner: int | None = None  # type: ignore[assignment]
+                try:
+                    present = r.read_bool()
+                except DecodeError:
+                    m.inner = None
+                else:
+                    r.flush_to_byte_boundary()
+                    if present:
+                        m.inner: int = None  # type: ignore[assignment]
+                        m.inner = r.read_u32()
+                    else:
+                        m.inner = None
             else:
                 m.inner = None
-        else:
-            m.inner = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -122,6 +156,10 @@ class AllEmpty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.a is not None)
         w.flush_to_byte_boundary()
         if self.a is not None:
@@ -137,33 +175,48 @@ class AllEmpty:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return AllEmpty.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = AllEmpty.__new__(AllEmpty)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.a: str = None  # type: ignore[assignment]
-            m.a = r.read_string()
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.a = None
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.b: int = None  # type: ignore[assignment]
-            m.b = r.read_u32()
         else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.a: str = None  # type: ignore[assignment]
+                m.a = r.read_string()
+            else:
+                m.a = None
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.b = None
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.c: bool = None  # type: ignore[assignment]
-            m.c = r.read_bool()
         else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.b: int = None  # type: ignore[assignment]
+                m.b = r.read_u32()
+            else:
+                m.b = None
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.c = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.c: bool = None  # type: ignore[assignment]
+                m.c = r.read_bool()
+            else:
+                m.c = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

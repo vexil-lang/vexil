@@ -79,7 +79,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             w.line("pw.flush_to_byte_boundary()");
             w.line("payload = pw.finish()");
             w.line("w.write_leb128(len(payload))");
-            w.line("w.write_raw_bytes(payload)");
+            w.line("w.write_raw_bytes(payload, len(payload))");
         }
         w.line("return w.finish()");
         w.close_block();
@@ -89,9 +89,9 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         w.blank();
     }
 
-    // Module-level decode function
-    w.open_block(&format!("def decode_{name}(data: bytes) -> {name}"));
-    w.line("r = _BitReader(data)");
+    // Reader-level decode lets messages consume one union value without
+    // guessing its size. The byte-array convenience wrapper follows below.
+    w.open_block(&format!("def decode_{name}_from(r: _BitReader) -> {name}"));
     w.line("r.flush_to_byte_boundary()");
     w.line("disc = r.read_leb128()");
     w.line("length = r.read_leb128()");
@@ -110,7 +110,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         if variant.fields.is_empty() {
             w.line(&format!("return {class_name}()"));
         } else {
-            w.line("_payload = r.read_raw_bytes(length)");
+            w.line("_payload = r.read_bytes(length)");
             w.line("pr = _BitReader(_payload)");
             // Read each field into locals
             for field in &variant.fields {
@@ -141,6 +141,12 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     ));
     w.close_block();
 
+    w.close_block();
+    w.blank();
+
+    w.open_block(&format!("def decode_{name}(data: bytes) -> {name}"));
+    w.line("r = _BitReader(data)");
+    w.line(&format!("return decode_{name}_from(r)"));
     w.close_block();
     w.blank();
 }

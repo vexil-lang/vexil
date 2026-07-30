@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x2f, 0x63, 0x8f, 0x3e, 0x17, 0x8f, 0x50, 0x9c, 0x8f, 0x7b, 0xfb, 0x6d, 0x38, 0xa8, 0x56, 0x8f, 0x6e, 0x8c, 0xc9, 0xad, 0xe3, 0xf0, 0xa5, 0x06, 0x9a, 0x5c, 0x9d, 0x97, 0x97, 0x71, 0xa7, 0xb9)
 
@@ -32,7 +32,7 @@ class ShapeCircle(Shape):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -50,7 +50,7 @@ class ShapeRectangle(Shape):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -65,19 +65,18 @@ class ShapePoint(Shape):
         return w.finish()
 
 
-def decode_Shape(data: bytes) -> Shape:
-    r = _BitReader(data)
+def decode_Shape_from(r: _BitReader) -> Shape:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         radius: float = None  # type: ignore[assignment]
         radius = pr.read_f32()
         return ShapeCircle(radius)
     elif disc == 1:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         width: float = None  # type: ignore[assignment]
         width = pr.read_f32()
@@ -88,6 +87,10 @@ def decode_Shape(data: bytes) -> Shape:
         return ShapePoint()
     else:
         raise ValueError(f"unknown Shape discriminant: {disc}")
+
+def decode_Shape(data: bytes) -> Shape:
+    r = _BitReader(data)
+    return decode_Shape_from(r)
 
 
 # ---------- Color ----------
@@ -111,7 +114,7 @@ class ColorAnsi(Color):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -131,7 +134,7 @@ class ColorRgb(Color):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -146,19 +149,18 @@ class ColorReset(Color):
         return w.finish()
 
 
-def decode_Color(data: bytes) -> Color:
-    r = _BitReader(data)
+def decode_Color_from(r: _BitReader) -> Color:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         code: int = None  # type: ignore[assignment]
         code = pr.read_u8()
         return ColorAnsi(code)
     elif disc == 1:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         r: int = None  # type: ignore[assignment]
         r = pr.read_u8()
@@ -171,6 +173,10 @@ def decode_Color(data: bytes) -> Color:
         return ColorReset()
     else:
         raise ValueError(f"unknown Color discriminant: {disc}")
+
+def decode_Color(data: bytes) -> Color:
+    r = _BitReader(data)
+    return decode_Color_from(r)
 
 
 # ---------- Event ----------
@@ -196,7 +202,7 @@ class EventClick(Event):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -212,17 +218,16 @@ class EventScroll(Event):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
-def decode_Event(data: bytes) -> Event:
-    r = _BitReader(data)
+def decode_Event_from(r: _BitReader) -> Event:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         x: int = None  # type: ignore[assignment]
         x = pr.read_u16()
@@ -230,11 +235,15 @@ def decode_Event(data: bytes) -> Event:
         y = pr.read_u16()
         return EventClick(x, y)
     elif disc == 2:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         delta: int = None  # type: ignore[assignment]
         delta = pr.read_i16()
         return EventScroll(delta)
     else:
         raise ValueError(f"unknown Event discriminant: {disc}")
+
+def decode_Event(data: bytes) -> Event:
+    r = _BitReader(data)
+    return decode_Event_from(r)
 

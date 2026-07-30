@@ -2,10 +2,11 @@
 
 Vexil's binary wire format hasn't changed since April 2026 and breaking it
 would require a major version bump, while the language specification remains
-a draft. Rust and TypeScript generated paths have cross-language byte-vector
-coverage. Verify generated Go or Python output for the schemas and runtime
-versions you intend to ship. The wire format has not yet been exercised by
-external implementations or independently audited.
+a draft. Rust and TypeScript generated paths have broad cross-language
+byte-vector coverage. Generated Go and Python are verified against a
+representative shared wire matrix, not every schema or environment. The wire
+format has not yet been exercised by external implementations or independently
+audited.
 
 The maintained list of verified behavior, known limitations, and missing work
 is available in the repository's [limitations and gaps document](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md).

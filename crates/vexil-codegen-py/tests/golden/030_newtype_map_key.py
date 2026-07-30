@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x18, 0xfd, 0xc9, 0xe0, 0x68, 0x83, 0x2d, 0x02, 0x03, 0x88, 0x9a, 0x40, 0x58, 0x69, 0xe8, 0xd5, 0xf3, 0xc4, 0x44, 0xec, 0x31, 0xe3, 0x08, 0x0b, 0x7b, 0x3b, 0x56, 0x02, 0x9d, 0xc1, 0x41, 0x81)
 SCHEMA_VERSION: str = "1.0.0"
@@ -20,12 +20,21 @@ class UserId:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_u32(self.value)
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_u32(self.value)
 
     @staticmethod
     def decode(data: bytes) -> UserId:
         r = _BitReader(data)
+        inner: int = None  # type: ignore[assignment]
+        inner = r.read_u32()
+        return UserId(inner)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> UserId:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_u32()
         return UserId(inner)
@@ -45,12 +54,21 @@ class Label:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_string(self.value)
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_string(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Label:
         r = _BitReader(data)
+        inner: str = None  # type: ignore[assignment]
+        inner = r.read_string()
+        return Label(inner)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Label:
         inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
@@ -72,33 +90,38 @@ class UserProfile:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.extend(self.id.encode())
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        self.id.encode_to(w)
         w.write_leb128(len(self.friends))
         for map_k, map_v in self.friends.items():
-            w.extend(map_k.encode())
+            map_k.encode_to(w)
             w.write_string(map_v)
         w.write_leb128(len(self.tags))
         for map_k, map_v in self.tags.items():
-            w.extend(map_k.encode())
+            map_k.encode_to(w)
             w.write_u32(map_v)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return UserProfile.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = UserProfile.__new__(UserProfile)
-        _payload = r.read_bytes()
-        m.id = UserId.decode(_payload)
+        m.id = UserId.decode_from(r)
         map_len = r.read_leb128()
         m.friends = {}
         for _ in range(map_len):
             _k: UserId = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
-            _payload = r.read_bytes()
-            _k = UserId.decode(_payload)
+            _k = UserId.decode_from(r)
             _v = r.read_string()
             m.friends[_k] = _v
         map_len = r.read_leb128()
@@ -106,8 +129,7 @@ class UserProfile:
         for _ in range(map_len):
             _k: Label = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
-            _payload = r.read_bytes()
-            _k = Label.decode(_payload)
+            _k = Label.decode_from(r)
             _v = r.read_u32()
             m.tags[_k] = _v
         r.flush_to_byte_boundary()

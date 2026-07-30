@@ -655,19 +655,26 @@ fn check_impl_conformance(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>
         let Some(TypeDef::Trait(trait_def)) = compiled.registry.get(trait_id) else {
             continue;
         };
-        check_single_impl_conformance(impl_def, trait_def, compiled, diags);
+        check_single_impl_conformance(
+            impl_def,
+            trait_def,
+            compiled.registry.impl_trait_span(impl_id),
+            compiled,
+            diags,
+        );
     }
 }
 
 fn check_single_impl_conformance(
     impl_def: &ImplDef,
     trait_def: &TraitDef,
+    trait_span: Option<crate::span::Span>,
     compiled: &CompiledSchema,
     diags: &mut Vec<Diagnostic>,
 ) {
     if impl_def.type_args.len() != trait_def.type_params.len() {
         diags.push(Diagnostic::error(
-            impl_def.span,
+            trait_span.unwrap_or(impl_def.span),
             ErrorClass::UnresolvedType,
             format!(
                 "trait '{}' has {} type parameters but impl provides {}",

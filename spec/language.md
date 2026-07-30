@@ -230,9 +230,11 @@ declarations. Direct and transitive circular imports MUST be rejected. A circula
 import exists when the transitive closure of a schema's imports includes the
 schema itself.
 
-If two wildcard-imported schemas export the same name, the compiler MUST emit an
-error requiring explicit disambiguation. Named imports and aliased imports take
-precedence over wildcard imports.
+If two wildcard-imported schemas export the same name, that spelling is
+ambiguous when used and the compiler MUST require explicit disambiguation at
+the use site. An unused collision is not an error. Local declarations and named
+imports take precedence over wildcard candidates; aliased imports are accessed
+only through their qualifier.
 
 ---
 
@@ -1008,8 +1010,9 @@ standard annotation that MAY appear multiple times on the same element.
    loaded.
 4. Local declarations shadow wildcard imports.
 5. Named and aliased imports shadow wildcard imports.
-6. Conflicting wildcard imports (same name exported by two schemas) MUST be
-   reported as an error.
+6. A reference to a name exported by multiple distinct wildcard origins MUST be
+   reported as ambiguous unless a local declaration or named import resolves
+   that spelling. Unused wildcard-name collisions are not errors.
 
 ### 6.2  Circular import detection
 

@@ -190,9 +190,13 @@ fn type_def_has_string_map(type_def: &TypeDef) -> bool {
             ResolvedType::Map(key, _) => {
                 matches!(key.as_ref(), ResolvedType::Semantic(SemanticType::String))
             }
+            ResolvedType::Set(inner)
+                if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) =>
+            {
+                true
+            }
             ResolvedType::Optional(inner)
             | ResolvedType::Array(inner)
-            | ResolvedType::Set(inner)
             | ResolvedType::FixedArray(inner, _)
             | ResolvedType::Vec2(inner)
             | ResolvedType::Vec3(inner)

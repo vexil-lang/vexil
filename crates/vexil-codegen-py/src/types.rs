@@ -35,7 +35,8 @@ pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         }
         ResolvedType::FixedArray(inner, size) => {
             let inner_str = py_type(inner, registry);
-            format!("tuple[{inner_str}, ...]  # fixed[{size}]")
+            let _ = size;
+            format!("tuple[{inner_str}, ...]")
         }
         ResolvedType::Set(inner) => {
             let inner_str = py_type(inner, registry);

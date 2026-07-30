@@ -17,7 +17,7 @@ Last reviewed: 2026-07-30
 - **No streaming decode:** You need the entire message in memory before you can start decoding. If you're working with unbounded streams, you need a framing layer on top. The transport header in Appendix A of the spec is one option.
 - **No built-in compression:** Wire format is uncompressed. Layer zstd or LZ4 on top if you need it. We decided not to bake compression into the format because different use cases want different compression.
 - **No self-description:** The wire bytes contain no type info. Both sides need the schema. This is a design choice, not a gap — it keeps messages small. But it means you can't debug a packet without the schema file.
-- **Go code-generation compatibility needs target-specific verification:** The Go runtime exercises shared byte vectors, but generated Go output is not covered by the same cross-language code-generation conformance claim as Rust and TypeScript. Verify byte output for your schemas before shipping a cross-language protocol.
+- **Generated Go coverage is representative:** Generated Go is verified against a shared representative wire matrix. This is not exhaustive for every schema or deployment environment.
 - **Trait function bodies use a bounded portable subset:** Rust, TypeScript, Go, and Python generate instance methods for straight-line bodies with immutable locals, receiver-field mutation, returns, and unary/binary expressions. Free calls, method calls, external/native bodies, and non-receiver assignment remain explicit diagnostics before output; there is no runtime trait dispatch.
 
 ## What's Missing
@@ -27,7 +27,7 @@ Things that would be useful but aren't implemented:
 - **Reflection / runtime type info:** Generated code doesn't emit metadata for schema introspection. If you need it, you'll have to build it on top.
 - **Runtime type guards (TypeScript):** The generated TypeScript has interfaces but no runtime validation. You can't check "is this object a valid `SensorReading`?" without the schema.
 - **Schema registry:** No built-in distribution mechanism. The BLAKE3 hash gives you identity but not discovery.
-- **Python code-generation compatibility needs target-specific verification:** Verify byte output for your schemas before shipping a cross-language protocol.
+- **Generated Python coverage is representative:** Generated Python is verified against a shared representative wire matrix. This is not exhaustive for every schema or deployment environment.
 
 ## Performance
 

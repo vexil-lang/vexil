@@ -72,7 +72,7 @@ pub(crate) fn generate_with_imports(
     }
     w.blank();
     w.line("# Runtime support (to be provided by vexil Python runtime)");
-    w.line("from vexil_runtime import _BitWriter, _BitReader");
+    w.line("from vexil_runtime import _BitWriter, _BitReader, DecodeError");
     w.blank();
 
     // Cross-module imports if needed

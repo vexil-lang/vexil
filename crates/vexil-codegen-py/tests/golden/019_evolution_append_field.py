@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xf8, 0xb1, 0xdc, 0x0f, 0x53, 0xff, 0x64, 0x6e, 0xd7, 0x81, 0xc9, 0xf7, 0x39, 0x2a, 0x31, 0x85, 0xe6, 0x21, 0xa7, 0xd7, 0x2a, 0xc8, 0x70, 0x9f, 0x25, 0xd1, 0x21, 0x89, 0xa4, 0x69, 0x71, 0x3a)
 SCHEMA_VERSION: str = "1.0.0"
@@ -21,16 +21,23 @@ class HeaderV1:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u8(self.kind)
         w.write_u8(self.status)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return HeaderV1.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = HeaderV1.__new__(HeaderV1)
         m.kind = r.read_u8()
         m.status = r.read_u8()
@@ -50,17 +57,24 @@ class HeaderV2:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u8(self.kind)
         w.write_u8(self.status)
         w.write_u16(self.flags)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return HeaderV2.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = HeaderV2.__new__(HeaderV2)
         m.kind = r.read_u8()
         m.status = r.read_u8()

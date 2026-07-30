@@ -84,5 +84,21 @@
     "value": { "v": "" },
     "expected_bytes": "00",
     "notes": "LEB128 length 0, no payload"
+  },
+  {
+    "name": "f32_finite_one_point_five",
+    "schema": "namespace test.prim\nmessage M { v @0 : f32 }",
+    "type": "M",
+    "value": { "v": 1.5 },
+    "expected_bytes": "0000c03f",
+    "notes": "Finite f32 1.5 in IEEE 754 little-endian form."
+  },
+  {
+    "name": "bytes_three",
+    "schema": "namespace test.prim\nmessage M { v @0 : bytes }",
+    "type": "M",
+    "value": { "v": [222, 173, 190] },
+    "expected_bytes": "03deadbe",
+    "notes": "LEB128 length 3 followed by raw bytes de ad be."
   }
 ]

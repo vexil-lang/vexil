@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xc4, 0x4e, 0x40, 0xb2, 0xf3, 0x59, 0x8c, 0xc5, 0xf4, 0x0d, 0xfe, 0xbc, 0x69, 0x4b, 0x7c, 0xcf, 0xee, 0x8b, 0x02, 0x52, 0xd5, 0x4f, 0xc1, 0x80, 0xb7, 0xa2, 0xd0, 0xc0, 0xca, 0x3c, 0xa0, 0x55)
 
@@ -18,14 +18,21 @@ class Empty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Empty.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Empty.__new__(Empty)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -42,16 +49,23 @@ class Wrapper:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_message(self.inner)
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        self.inner.encode_to(w)
         w.write_u8(self.tag)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Wrapper.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Wrapper.__new__(Wrapper)
         m.inner = Empty.decode_from(r)
         m.tag = r.read_u8()
@@ -104,12 +118,11 @@ class EventData(Event):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
-def decode_Event(data: bytes) -> Event:
-    r = _BitReader(data)
+def decode_Event_from(r: _BitReader) -> Event:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
@@ -118,11 +131,15 @@ def decode_Event(data: bytes) -> Event:
     elif disc == 1:
         return EventPong()
     elif disc == 2:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         payload: bytes = None  # type: ignore[assignment]
-        payload = pr.read_bytes()
+        payload = pr.read_bytes(pr.read_leb128())
         return EventData(payload)
     else:
         raise ValueError(f"unknown Event discriminant: {disc}")
+
+def decode_Event(data: bytes) -> Event:
+    r = _BitReader(data)
+    return decode_Event_from(r)
 

@@ -39,6 +39,8 @@ struct LowerCtx {
     wildcard_origins: HashMap<SmolStr, Option<String>>,
     /// Direct named import bindings, which outrank wildcard candidates.
     explicit_import_names: HashSet<SmolStr>,
+    /// Defining namespace for each direct named import.
+    named_import_origins: HashMap<SmolStr, String>,
     /// Aliases declared by explicit aliased imports.
     import_aliases: HashSet<SmolStr>,
     /// Names from local declarations (populated during `register_declarations`).
@@ -63,6 +65,7 @@ impl LowerCtx {
             wildcard_imports: HashSet::new(),
             wildcard_origins: HashMap::new(),
             explicit_import_names: HashSet::new(),
+            named_import_origins: HashMap::new(),
             import_aliases: HashSet::new(),
             local_names: HashSet::new(),
             constants: HashMap::new(),
@@ -208,6 +211,8 @@ pub fn lower_with_deps(
     for (impl_decl, span, impl_id) in impl_slots {
         let impl_def = lower_impl(impl_decl, span, &mut ctx);
         ctx.registry.fill_stub(impl_id, TypeDef::Impl(impl_def));
+        ctx.registry
+            .set_impl_trait_span(impl_id, impl_decl.trait_name.span);
         if let Some(trait_id) = resolve_impl_trait(impl_decl, &mut ctx) {
             ctx.registry.set_impl_trait_id(impl_id, trait_id);
         }
@@ -278,6 +283,23 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                     ImportKind::Named { names } => {
                         for name_spanned in names {
                             let name = &name_spanned.node;
+                            if let Some(existing_namespace) =
+                                ctx.named_import_origins.get(name.as_str()).cloned()
+                            {
+                                if existing_namespace != ns_key {
+                                    ctx.emit(
+                                        name_spanned.span,
+                                        ErrorClass::UnresolvedType,
+                                        format!(
+                                            "named import '{name}' conflicts between namespaces '{existing_namespace}' and '{ns_key}'"
+                                        ),
+                                    );
+                                    continue;
+                                }
+                            } else {
+                                ctx.named_import_origins
+                                    .insert(name.clone(), ns_key.clone());
+                            }
                             let found = dep_compiled.declarations.iter().find(|&&id| {
                                 dep_compiled
                                     .registry

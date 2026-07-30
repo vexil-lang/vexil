@@ -205,7 +205,7 @@ fn emit_write_type(
             };
             match registry.get(*id) {
                 Some(TypeDef::Message(_)) => {
-                    w.line(&format!("{writer}.write_message({access})"));
+                    w.line(&format!("{access}.encode_to({writer})"));
                 }
                 Some(TypeDef::Enum(_)) => {
                     w.line(&format!("{access}.encode_to({writer})"));
@@ -214,10 +214,13 @@ fn emit_write_type(
                     w.line(&format!("{access}.encode_to({writer})"));
                 }
                 Some(TypeDef::Union(_)) => {
-                    w.line(&format!("{writer}.extend({access}.encode())"));
+                    w.line(&format!("_encoded_union = {access}.encode()"));
+                    w.line(&format!(
+                        "{writer}.write_raw_bytes(_encoded_union, len(_encoded_union))"
+                    ));
                 }
                 Some(TypeDef::Newtype(_)) => {
-                    w.line(&format!("{writer}.extend({access}.encode())"));
+                    w.line(&format!("{access}.encode_to({writer})"));
                 }
                 _ => {
                     w.line(&format!("# Unknown type: {type_name}"));
@@ -261,7 +264,11 @@ fn emit_write_type(
         }
         ResolvedType::Set(inner) => {
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            w.open_block(&format!("for item in {access}"));
+            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
+                w.open_block(&format!("for item in sorted({access})"));
+            } else {
+                w.open_block(&format!("for item in {access}"));
+            }
             emit_write_type(w, "item", inner, registry, writer);
             w.close_block();
         }
@@ -369,7 +376,9 @@ fn emit_read_type(
                 w.line(&format!("{target} = {reader}.read_string()"));
             }
             SemanticType::Bytes => {
-                w.line(&format!("{target} = {reader}.read_bytes()"));
+                w.line(&format!(
+                    "{target} = {reader}.read_bytes({reader}.read_leb128())"
+                ));
             }
             SemanticType::Rgb => {
                 w.line(&format!("r = {reader}.read_u8()"));
@@ -410,12 +419,10 @@ fn emit_read_type(
                     w.line(&format!("{target} = {type_name}.decode_from({reader})"));
                 }
                 Some(TypeDef::Union(_)) => {
-                    w.line(&format!("_payload = {reader}.read_bytes()"));
-                    w.line(&format!("{target} = decode_{type_name}(_payload)"));
+                    w.line(&format!("{target} = decode_{type_name}_from({reader})"));
                 }
                 Some(TypeDef::Newtype(_)) => {
-                    w.line(&format!("_payload = {reader}.read_bytes()"));
-                    w.line(&format!("{target} = {type_name}.decode(_payload)"));
+                    w.line(&format!("{target} = {type_name}.decode_from({reader})"));
                 }
                 _ => {
                     w.line(&format!("# Unknown type: {type_name}"));
@@ -423,7 +430,15 @@ fn emit_read_type(
             }
         }
         ResolvedType::Optional(inner) => {
+            w.open_block("try");
             w.line(&format!("present = {reader}.read_bool()"));
+            w.close_block();
+            w.line("except DecodeError:");
+            w.indent();
+            w.line(&format!("{target} = None"));
+            w.dedent();
+            w.line("else:");
+            w.indent();
             w.line(&format!("{reader}.flush_to_byte_boundary()"));
             w.open_block("if present");
             let inner_py = py_type(inner, registry);
@@ -436,6 +451,7 @@ fn emit_read_type(
             w.indent();
             w.line(&format!("{target} = None"));
             w.close_block();
+            w.dedent();
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("arr_len = {reader}.read_leb128()"));
@@ -463,14 +479,21 @@ fn emit_read_type(
         }
         ResolvedType::FixedArray(inner, size) => {
             let inner_py = py_type(inner, registry);
-            w.line(&format!("{target}: tuple[{inner_py}, ...] = ("));
-            w.indent();
-            for i in 0..*size {
-                let _ = i;
-                w.line(&format!("{reader}.read_value(),"));
-            }
-            w.dedent();
-            w.line(")");
+            let suffix = target
+                .chars()
+                .filter(char::is_ascii_alphanumeric)
+                .collect::<String>();
+            let items = format!("_fixed_items_{suffix}");
+            let item = format!("_fixed_item_{suffix}");
+            w.line(&format!("{items}: list[{inner_py}] = []"));
+            w.open_block(&format!("for _ in range({size})"));
+            w.line(&format!(
+                "{item}: {inner_py} = None  # type: ignore[assignment]"
+            ));
+            emit_read_type(w, &item, inner, registry, reader);
+            w.line(&format!("{items}.append({item})"));
+            w.close_block();
+            w.line(&format!("{target} = tuple({items})"));
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("map_len = {reader}.read_leb128()"));
@@ -557,7 +580,9 @@ fn emit_tombstone_read(
         ResolvedType::Semantic(s) => {
             let read_expr = match s {
                 SemanticType::String => format!("_ = {reader}.read_string()"),
-                SemanticType::Bytes => format!("_ = {reader}.read_bytes()"),
+                SemanticType::Bytes => {
+                    format!("_ = {reader}.read_bytes({reader}.read_leb128())")
+                }
                 SemanticType::Rgb => {
                     w.line(&format!("_ = {reader}.read_u8()"));
                     w.line(&format!("_ = {reader}.read_u8()"));
@@ -649,6 +674,12 @@ pub fn emit_message(
     // encode method
     w.open_block("def encode(self) -> bytes");
     w.line("w = _BitWriter()");
+    w.line("self.encode_to(w)");
+    w.line("return w.finish()");
+    w.close_block();
+    w.blank();
+
+    w.open_block("def encode_to(self, w: _BitWriter)");
     for field in &msg.fields {
         let field_name = &field.name;
         let access = format!("self.{field_name}");
@@ -669,7 +700,6 @@ pub fn emit_message(
     w.open_block("if self.unknown");
     w.line("w.write_raw_bytes(self.unknown, len(self.unknown))");
     w.close_block();
-    w.line("return w.finish()");
     w.close_block();
     w.blank();
 
@@ -677,6 +707,12 @@ pub fn emit_message(
     w.line("@staticmethod");
     w.open_block("def decode(data: bytes)");
     w.line("r = _BitReader(data)");
+    w.line(&format!("return {name}.decode_from(r)"));
+    w.close_block();
+    w.blank();
+
+    w.line("@staticmethod");
+    w.open_block("def decode_from(r: _BitReader)");
     w.line(&format!("m = {name}.__new__({name})"));
 
     enum DecodeAction<'a> {

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xef, 0xee, 0x10, 0x5d, 0x3c, 0x9d, 0x98, 0x5a, 0xde, 0x68, 0xb4, 0x62, 0xb3, 0x18, 0x50, 0x8e, 0xa1, 0x8d, 0xbd, 0x5e, 0x4e, 0x6d, 0xed, 0x3d, 0xa9, 0x59, 0x67, 0xec, 0xe4, 0x69, 0xf4, 0x3f)
 
@@ -19,15 +19,22 @@ class Balance:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_i64(self.amount)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Balance.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Balance.__new__(Balance)
         m.amount = r.read_i64()
         r.flush_to_byte_boundary()
@@ -46,17 +53,24 @@ class Transfer:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_i64(self.from)
         w.write_i64(self.to)
         w.write_i64(self.amount)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Transfer.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Transfer.__new__(Transfer)
         m.from = r.read_i64()
         m.to = r.read_i64()

@@ -311,6 +311,8 @@ func (m *Limited) Unpack(r *vexil.BitReader) error {
 		}
 		m.Headers = make(map[string]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey string
+			var mapVal string
 			{
 				v, err := r.ReadString()
 				if err != nil {

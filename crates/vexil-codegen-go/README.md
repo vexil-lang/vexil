@@ -39,7 +39,9 @@ vexilc build root.vexil --include ./schemas --output ./generated --target go
 
 ## Wire compatibility
 
-The Go runtime exercises the shared [compliance vectors](../../compliance/vectors/). Verify generated Go output for your schemas before shipping a cross-language protocol.
+Generated Go and its runtime are exercised together against a representative
+shared [wire matrix](../../tools/generated-code-checks/check-generated-wire.mjs).
+This is not exhaustive for every schema or environment.
 
 ## License
 
