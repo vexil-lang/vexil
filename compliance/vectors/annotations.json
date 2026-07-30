@@ -1,0 +1,10 @@
+[
+  {
+    "name": "varint_and_zigzag",
+    "schema": "namespace test.annotation\nmessage M { count @0 : u32 @varint  delta @1 : i32 @zigzag }",
+    "type": "M",
+    "value": { "count": 300, "delta": -5 },
+    "expected_bytes": "ac0209",
+    "notes": "u32 300 as LEB128 (ac02), followed by ZigZag i32 -5 (09)."
+  }
+]

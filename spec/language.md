@@ -49,12 +49,18 @@ detectable at runtime, before any data corruption occurs.
 Vexil intentionally excludes:
 
 - Control flow (loops, conditionals, branching)
-- Functions or procedures
-- Variable binding or assignment
+- Free functions, procedures, or callable execution outside the portable
+  trait-function projection (§4.9–§4.10)
+- Mutable local bindings, local reassignment, or assignment outside the
+  portable impl-body subset
 - A runtime or execution environment
 - Service or RPC interface definitions (reserved for a future version)
 
-Implementations MUST NOT accept syntax or semantics for any of the above.
+Except for the portable trait-function declarations and straight-line impl
+bodies defined in §4.9–§4.10, implementations MUST NOT accept general-purpose
+execution syntax or semantics for any of the above. The permitted subset is a
+declarative code-generation contract: Vexil does not execute it; reference
+generators project it into target-language methods.
 Constraint expressions (e.g. `where x > 0`) are declarative — they describe
 valid states and generate validation code in target languages, but are not
 evaluated by Vexil itself.
@@ -224,9 +230,11 @@ declarations. Direct and transitive circular imports MUST be rejected. A circula
 import exists when the transitive closure of a schema's imports includes the
 schema itself.
 
-If two wildcard-imported schemas export the same name, the compiler MUST emit an
-error requiring explicit disambiguation. Named imports and aliased imports take
-precedence over wildcard imports.
+If two wildcard-imported schemas export the same name, that spelling is
+ambiguous when used and the compiler MUST require explicit disambiguation at
+the use site. An unused collision is not an error. Local declarations and named
+imports take precedence over wildcard candidates; aliased imports are accessed
+only through their qualifier.
 
 ---
 
@@ -789,8 +797,13 @@ trait SensorData {
 }
 ```
 
-Trait fields use the same syntax as message fields but carry no ordinals
-(traits have no wire encoding). A trait MAY also declare function signatures:
+Trait fields use the same tagged syntax as message fields, so every trait field
+MUST include exactly one numeric `@N` tag. The tag is source-level syntax only:
+its numeric value has no wire, conformance, declaration-ordering,
+canonical-hash, or compatibility meaning. In particular, implementations match
+trait fields by name and type, and changing, reordering, or repeating trait
+field tag values does not change that contract. A trait MAY also declare
+function signatures:
 
 ```vexil
 trait Validatable {
@@ -807,12 +820,23 @@ trait Tagged<T> {
 }
 ```
 
-Traits have ZERO wire impact. They are compile-time contracts used for
-code generation. The reference generators project field-only traits to their
-target-language structural-contract mechanisms. A schema containing trait
-function signatures or impl-function bodies remains valid Vexil, but the
-reference generators MUST reject it with a code-generation diagnostic until a
-portable function projection is specified.
+Traits have ZERO wire impact. They are compile-time contracts used for code
+generation. A trait function is an instance method whose declared parameters
+exclude an implicit mutable receiver. Function names MUST be unique within a
+trait, and parameter names MUST be unique within a function.
+
+The reference generators project trait functions as follows:
+
+| Target | Receiver and signature |
+| --- | --- |
+| Rust | `&mut self` trait method |
+| TypeScript | interface method; implementing messages use an object factory |
+| Go | interface method with a pointer-receiver implementation |
+| Python | `Protocol` method with an implementing dataclass method |
+
+An omitted return type and `void` both mean that the function returns no
+value. They project to Rust `()`, TypeScript `void`, no Go result, and Python
+`None`.
 
 ### 4.10  impl
 
@@ -822,13 +846,66 @@ An impl declaration states that a type satisfies a trait.
 impl SensorData for TemperatureReading { }
 ```
 
-The trait name MUST be an unqualified reference to an existing trait
-declaration; an import alias cannot be used as an `impl` head. The target type
-MUST exist. The compiler SHOULD validate that the target type contains
-fields matching the trait's requirements (by name and type).
+The trait reference MUST be either an unqualified `Trait` or exactly one
+explicit import-alias qualifier, `Alias.Trait`. Namespace paths and additional
+qualifiers are invalid. Only `import namespace as Alias` creates a qualifier;
+qualification resolves within that alias and bypasses unqualified shadowing.
+The target type remains an unqualified name and MUST exist. The compiler SHOULD
+validate that the target type contains fields matching the trait's requirements
+(by name and type).
+
+Trait visibility follows the ordinary import rules with no implicit re-export:
+
+| Import form | Trait usable for a local impl | Imported impl record |
+| --- | --- | --- |
+| Direct named | Yes, unqualified | Never copied |
+| Unique wildcard | Yes, unqualified | Never copied |
+| Aliased | Yes, as `Alias.Trait` | Never copied |
+| Transitive only | No; the root MUST import it explicitly | Never copied |
+| Diamond, same origin | Yes when explicitly visible; origin is deduplicated | Emitted once in its defining schema |
+| Same spelling, distinct wildcard origins | Ambiguous on use | Never deduplicated silently |
+
+Local declarations and direct named imports take precedence over wildcard
+candidates. A direct named import resolves an otherwise ambiguous wildcard
+spelling. Project loading order does not make dependency-closure names visible,
+and importing a schema never copies or re-exports its impl declarations.
 
 Multiple traits MAY be implemented for the same type. The same trait
 MUST NOT be implemented more than once for the same type.
+
+For every trait function, an impl MUST contain exactly one function with the
+same name, parameter names, parameter types, and return type after substituting
+the impl's trait type arguments. An impl MUST NOT omit a required function or
+declare a function absent from its trait.
+
+Reference generators support a portable, straight-line impl-body subset:
+
+- literals, parameters, `self`, and `self.field`;
+- immutable `let` bindings;
+- `return`;
+- assignment to `self.field`; and
+- unary negation/logical-not and arithmetic, equality, and ordering operators
+  where their operands have compatible types.
+
+Local reassignment, assignment to a target other than `self.field`, bare
+expression statements, statements after `return`, and incompatible expression,
+assignment, or return types are invalid. A value-returning function MUST end
+with a value-compatible `return`. A no-value function MAY be empty and MAY use
+a bare `return`.
+
+Free-function calls and method calls remain syntactically valid Vexil, but the
+reference generators MUST reject them with an explicit portable-code-generation
+diagnostic. They do not imply dynamic dispatch, a runtime trait registry, FFI,
+or native implementations.
+
+Portable arithmetic is emitted directly using the target language's native
+operators. Vexil does not define an additional cross-target overflow or
+division execution model for impl bodies.
+
+If a projected method name collides with a generated field, accessor, codec
+member, another implemented trait method, or a reserved target identifier, the
+generator MUST reject the schema before producing output. It MUST NOT invent a
+target-specific suffix.
 
 Impls have ZERO wire impact.
 
@@ -933,8 +1010,9 @@ standard annotation that MAY appear multiple times on the same element.
    loaded.
 4. Local declarations shadow wildcard imports.
 5. Named and aliased imports shadow wildcard imports.
-6. Conflicting wildcard imports (same name exported by two schemas) MUST be
-   reported as an error.
+6. A reference to a name exported by multiple distinct wildcard origins MUST be
+   reported as ambiguous unless a local declaration or named import resolves
+   that spelling. Unused wildcard-name collisions are not errors.
 
 ### 6.2  Circular import detection
 

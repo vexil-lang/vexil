@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x8a, 0xc5, 0x25, 0xce, 0x0a, 0xec, 0xba, 0x7a, 0xf1, 0x28, 0xaf, 0x30, 0xbc, 0x21, 0x43, 0xe0, 0xfa, 0x59, 0x1b, 0x4a, 0x62, 0xf6, 0xd7, 0x19, 0x90, 0x74, 0xe9, 0xca, 0x84, 0x9e, 0x34, 0x68)
 
@@ -19,13 +19,22 @@ class Direction(int):
     WEST = 3
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 2).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 2)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(2)
         return Direction(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Direction(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"Direction({int(self)})"
@@ -39,13 +48,22 @@ class ClientKind(int):
     SHELL = 3
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 8).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 8)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(8)
         return ClientKind(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return ClientKind(r.read_bits(8))
 
     def __repr__(self) -> str:
         return f"ClientKind({int(self)})"
@@ -58,13 +76,22 @@ class HardwareStatus(int):
     FAULT = 2
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 16).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 16)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(16)
         return HardwareStatus(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return HardwareStatus(r.read_bits(16))
 
     def __repr__(self) -> str:
         return f"HardwareStatus({int(self)})"
@@ -76,13 +103,22 @@ class Sparse(int):
     HIGH = 1000
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 32).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 32)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(32)
         return Sparse(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Sparse(r.read_bits(32))
 
     def __repr__(self) -> str:
         return f"Sparse({int(self)})"
@@ -94,13 +130,22 @@ class Lifecycle(int):
     PENDING = 2
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 2).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 2)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(2)
         return Lifecycle(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Lifecycle(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"Lifecycle({int(self)})"

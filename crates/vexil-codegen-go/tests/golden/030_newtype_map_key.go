@@ -92,6 +92,8 @@ func (m *UserProfile) Unpack(r *vexil.BitReader) error {
 		}
 		m.Friends = make(map[UserId]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey UserId
+			var mapVal string
 			{
 				v, err := UnpackUserId(r)
 				if err != nil {
@@ -116,6 +118,8 @@ func (m *UserProfile) Unpack(r *vexil.BitReader) error {
 		}
 		m.Tags = make(map[Label]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Label
+			var mapVal uint32
 			{
 				v, err := UnpackLabel(r)
 				if err != nil {

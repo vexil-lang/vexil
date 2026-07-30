@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x90, 0xa6, 0xac, 0x06, 0xc5, 0xfe, 0x85, 0x72, 0xb5, 0x2e, 0x26, 0x8b, 0xe5, 0xef, 0xcf, 0xd9, 0x40, 0x98, 0xb9, 0x29, 0x6e, 0xab, 0x66, 0xe5, 0x2e, 0x4c, 0x44, 0x96, 0x31, 0x82, 0x5a, 0xa3)
 
@@ -20,14 +20,21 @@ class Permissions(int):
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_u8(int(self))
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_u8(int(self))
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_u8()
         return Permissions(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Permissions(r.read_u8())
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -44,14 +51,21 @@ class WideFlags(int):
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_u64(int(self))
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_u64(int(self))
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_u64()
         return WideFlags(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return WideFlags(r.read_u64())
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -69,14 +83,21 @@ class FileMode(int):
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_u8(int(self))
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_u8(int(self))
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_u8()
         return FileMode(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return FileMode(r.read_u8())
 
     def has(self, flag: int):
         return bool(int(self) & flag)

@@ -167,9 +167,85 @@ fn test_048_generic_trait_nested() {
 }
 
 #[test]
+fn test_047_trait_function_codegen_deferred() {
+    golden_test("047_trait_function_codegen_deferred");
+}
+
+#[test]
+fn test_049_trait_function_portable_body() {
+    golden_test("049_trait_function_portable_body");
+}
+
+#[test]
 fn trait_only_generic_map() {
     golden_source_test(
         "trait_only_generic_map",
         "namespace test.trait_only_map\ntrait Lookup<T> {\n    values @0 : map<string, T>\n}",
     );
+}
+
+#[test]
+fn trait_field_tags_do_not_change_generated_output() {
+    let first = "namespace test.trait_tags\ntrait Tagged { value @0 : i32 label @1 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let retagged = "namespace test.trait_tags\ntrait Tagged { value @9 : i32 label @9 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let first = vexil_lang::compile(first).compiled.expect("first schema");
+    let retagged = vexil_lang::compile(retagged)
+        .compiled
+        .expect("retagged schema");
+    assert_eq!(
+        vexil_codegen_rust::generate(&first).expect("first output"),
+        vexil_codegen_rust::generate(&retagged).expect("retagged output")
+    );
+}
+
+#[test]
+fn portable_function_rust_projection_is_ownership_and_storage_aware() {
+    let result = vexil_lang::compile(
+        r#"
+namespace test.portable_projection
+
+trait Portable {
+    fn preserve(text: string) -> string
+    fn successor() -> optional<Node>
+    fn replace_successor(next: optional<Node>)
+}
+
+message Node {
+    label @0 : string
+    next @1 : optional<Node>
+}
+
+impl Portable for Node {
+    fn preserve(text: string) -> string {
+        let unused: string = text
+        self.label = text
+        return text
+    }
+
+    fn successor() -> optional<Node> {
+        return self.next
+    }
+
+    fn replace_successor(next: optional<Node>) {
+        self.next = next
+    }
+}
+"#,
+    );
+    assert!(
+        !result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Error),
+        "compilation errors: {:?}",
+        result.diagnostics
+    );
+    let generated = vexil_codegen_rust::generate(&result.compiled.expect("schema should compile"))
+        .expect("codegen should succeed");
+
+    assert!(generated.contains("let _unused: String = text.clone();"));
+    assert!(generated.contains("self.label = text.clone();"));
+    assert!(generated.contains("fn successor(&mut self) -> Option<Node>"));
+    assert!(generated.contains("self.next.clone().map(|value| *value)"));
+    assert!(generated.contains("self.next = next.clone().map(Box::new);"));
 }

@@ -32,6 +32,22 @@ fn parse_invalid(file: &str, expected: ErrorClass) {
     );
 }
 
+fn compile_invalid(file: &str, expected: ErrorClass) {
+    let path = format!("{}/../../corpus/invalid/{file}", env!("CARGO_MANIFEST_DIR"));
+    let source =
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
+    let result = vexil_lang::compile(&source);
+    let has_expected = result
+        .diagnostics
+        .iter()
+        .any(|d| d.class == expected && d.severity == Severity::Error);
+    assert!(
+        has_expected,
+        "expected {expected:?} in {file}, got: {:#?}",
+        result.diagnostics
+    );
+}
+
 #[test]
 fn valid_001_minimal() {
     parse_valid("001_minimal.vexil");
@@ -265,6 +281,11 @@ fn valid_048_generic_trait_nested() {
 #[test]
 fn valid_047_trait_function_codegen_deferred() {
     parse_valid("047_trait_function_codegen_deferred.vexil");
+}
+
+#[test]
+fn valid_049_trait_function_portable_body() {
+    parse_valid("049_trait_function_portable_body.vexil");
 }
 
 // =========================================================================
@@ -737,4 +758,78 @@ fn invalid_065_impl_unknown_trait() {
 #[test]
 fn invalid_066_external_fn() {
     parse_invalid("066_external_fn.vexil", ErrorClass::ImplFnExternal);
+}
+
+#[test]
+fn invalid_067_impl_missing_function() {
+    compile_invalid("067_impl_missing_function.vexil", ErrorClass::ImplFnMissing);
+}
+
+#[test]
+fn invalid_068_impl_extra_function() {
+    compile_invalid("068_impl_extra_function.vexil", ErrorClass::ImplFnExtra);
+}
+
+#[test]
+fn invalid_069_impl_generic_signature_mismatch() {
+    compile_invalid(
+        "069_impl_generic_signature_mismatch.vexil",
+        ErrorClass::ImplFnSignatureMismatch,
+    );
+}
+
+#[test]
+fn invalid_070_impl_return_mismatch() {
+    compile_invalid(
+        "070_impl_return_mismatch.vexil",
+        ErrorClass::ImplFnReturnMismatch,
+    );
+}
+
+#[test]
+fn invalid_071_duplicate_trait_function() {
+    parse_invalid(
+        "071_duplicate_trait_function.vexil",
+        ErrorClass::TraitFnDuplicate,
+    );
+}
+
+#[test]
+fn invalid_072_duplicate_function_parameter() {
+    parse_invalid(
+        "072_duplicate_function_parameter.vexil",
+        ErrorClass::FnParamDuplicate,
+    );
+}
+
+#[test]
+fn invalid_073_impl_invalid_assignment() {
+    compile_invalid(
+        "073_impl_invalid_assignment.vexil",
+        ErrorClass::ImplFnAssignmentInvalid,
+    );
+}
+
+#[test]
+fn invalid_074_impl_body_type_mismatch() {
+    compile_invalid(
+        "074_impl_body_type_mismatch.vexil",
+        ErrorClass::ImplFnBodyTypeMismatch,
+    );
+}
+
+#[test]
+fn invalid_075_impl_bare_expression_statement() {
+    compile_invalid(
+        "075_impl_bare_expression_statement.vexil",
+        ErrorClass::ImplFnBodyTypeMismatch,
+    );
+}
+
+#[test]
+fn invalid_076_impl_trait_path_too_deep() {
+    parse_invalid(
+        "076_impl_trait_path_too_deep.vexil",
+        ErrorClass::UnexpectedToken,
+    );
 }

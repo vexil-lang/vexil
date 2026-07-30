@@ -1,0 +1,30 @@
+namespace test.trait_function_portable_body
+
+trait Adjustable<T> {
+    value @0 : T
+
+    fn adjust(delta: T) -> T
+    fn reset()
+    fn snapshot() -> Counter
+}
+
+message Counter {
+    value @0 : i32
+}
+
+impl Adjustable<i32> for Counter {
+    fn adjust(delta: i32) -> i32 {
+        let previous: i32 = self.value
+        self.value = self.value + delta
+        return previous
+    }
+
+    fn reset() {
+        self.value = 0
+        return
+    }
+
+    fn snapshot() -> Counter {
+        return self
+    }
+}

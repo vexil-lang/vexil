@@ -43,7 +43,7 @@
     "name": "fixed_array_u8",
     "schema": "namespace test.fa\nmessage M { data @0 : array<u8, 4> }",
     "type": "M",
-    "value": { "data": [0x01, 0x02, 0x03, 0x04] },
+    "value": { "data": [1, 2, 3, 4] },
     "expected_bytes": "01020304",
     "notes": "No count prefix, just 4 bytes"
   },

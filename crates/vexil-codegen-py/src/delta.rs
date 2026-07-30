@@ -3,7 +3,7 @@ use vexil_lang::ir::{Encoding, FieldEncoding, MessageDef, ResolvedType, TypeRegi
 
 use crate::emit::CodeWriter;
 use crate::message::{emit_read, emit_write};
-use crate::types::{py_type, to_pascal_case};
+use crate::types::py_type;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,12 +74,11 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     w.line("w = _BitWriter()");
     for field in &msg.fields {
         let fname = field.name.as_str();
-        let pascal = to_pascal_case(fname);
         if is_delta(&field.encoding) {
             let attr = format!("_prev_{fname}");
             let inner_enc = strip_delta(&field.encoding);
             // Compute delta
-            w.line(&format!("delta_{fname} = val.{pascal} - self.{attr}"));
+            w.line(&format!("delta_{fname} = val.{fname} - self.{attr}"));
             // Write the delta
             emit_write(
                 w,
@@ -90,9 +89,9 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
                 "w",
             );
             // Update prev
-            w.line(&format!("self.{attr} = val.{pascal}"));
+            w.line(&format!("self.{attr} = val.{fname}"));
         } else {
-            let access = format!("val.{pascal}");
+            let access = format!("val.{fname}");
             emit_write(
                 w,
                 &access,
@@ -148,7 +147,6 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     w.line(&format!("m = {name}.__new__({name})"));
     for field in &msg.fields {
         let fname = field.name.as_str();
-        let pascal = to_pascal_case(fname);
         if is_delta(&field.encoding) {
             let attr = format!("_prev_{fname}");
             let inner_enc = strip_delta(&field.encoding);
@@ -163,11 +161,11 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
                 "r",
             );
             // Reconstruct
-            w.line(&format!("m.{pascal} = self.{attr} + delta_{fname}"));
+            w.line(&format!("m.{fname} = self.{attr} + delta_{fname}"));
             // Update prev
-            w.line(&format!("self.{attr} = m.{pascal}"));
+            w.line(&format!("self.{attr} = m.{fname}"));
         } else {
-            let target = format!("m.{pascal}");
+            let target = format!("m.{fname}");
             emit_read(
                 w,
                 &target,

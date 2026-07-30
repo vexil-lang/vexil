@@ -1,0 +1,13 @@
+namespace app.root
+
+import traits.contracts as Contracts
+
+message Event {
+    value @0 : u64
+}
+
+impl Contracts.Tagged<u64> for Event {
+    fn reset() {
+        self.value = 0
+    }
+}

@@ -1,0 +1,7 @@
+namespace test.impl_trait_path_too_deep
+
+message Event {
+    value @0 : u64
+}
+
+impl A.B.C for Event { }

@@ -1,16 +1,26 @@
+use std::collections::HashSet;
+
 use vexil_lang::ast::TypeExpr;
-use vexil_lang::ir::{ImplDef, ResolvedType, TraitDef, TypeDef, TypeRegistry};
+use vexil_lang::ir::{
+    CompiledSchema, ImplDef, ResolvedType, TraitDef, TypeDef, TypeId, TypeRegistry,
+};
 
 use crate::emit::CodeWriter;
 
-pub fn emit_trait(w: &mut CodeWriter, trait_def: &TraitDef, registry: &TypeRegistry) {
-    let params = &trait_def.type_params;
-    let generic = if params.is_empty() {
+pub fn emit_trait(
+    w: &mut CodeWriter,
+    trait_id: TypeId,
+    trait_def: &TraitDef,
+    compiled: &CompiledSchema,
+) -> Result<(), crate::CodegenError> {
+    let registry = &compiled.registry;
+    let generic_params = &trait_def.type_params;
+    let generic = if generic_params.is_empty() {
         String::new()
     } else {
         format!(
             "<{}>",
-            params
+            generic_params
                 .iter()
                 .map(|p| p.name.node.as_str())
                 .collect::<Vec<_>>()
@@ -23,27 +33,73 @@ pub fn emit_trait(w: &mut CodeWriter, trait_def: &TraitDef, registry: &TypeRegis
         w.line(&format!(
             "fn {}(&self) -> &{};",
             field.name,
-            project_type(&field.unresolved_ty, params, None, registry)
+            project_type(&field.unresolved_ty, generic_params, None, registry)
+        ));
+    }
+    for function in vexil_lang::codegen::portable::trait_signatures(compiled, trait_id)? {
+        let function_params = function
+            .params
+            .iter()
+            .map(|parameter| {
+                format!(
+                    "{}: {}",
+                    parameter.name,
+                    project_type(&parameter.ty, generic_params, None, registry)
+                )
+            })
+            .collect::<Vec<_>>();
+        let tail = if function_params.is_empty() {
+            String::new()
+        } else {
+            format!(", {}", function_params.join(", "))
+        };
+        let return_type = function
+            .return_type
+            .as_ref()
+            .map(|ty| {
+                format!(
+                    " -> {}",
+                    project_type(ty, &trait_def.type_params, None, registry)
+                )
+            })
+            .unwrap_or_default();
+        w.line(&format!(
+            "fn {}(&mut self{tail}){return_type};",
+            function.name
         ));
     }
     w.dedent();
     w.line("}");
+    Ok(())
 }
 
-pub fn emit_impl(w: &mut CodeWriter, impl_def: &ImplDef, registry: &TypeRegistry) {
+pub fn emit_impl(
+    w: &mut CodeWriter,
+    impl_def: &ImplDef,
+    compiled: &CompiledSchema,
+    needs_box: &HashSet<(TypeId, usize)>,
+) -> Result<(), crate::CodegenError> {
+    let registry = &compiled.registry;
     let trait_args = impl_def
         .type_args
         .iter()
         .map(|ty| rust_type(ty, registry))
         .collect::<Vec<_>>();
+    let trait_name = registry
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| definition.name.as_str())
+        .unwrap_or(impl_def.trait_name.as_str());
     let trait_ref = if trait_args.is_empty() {
-        impl_def.trait_name.to_string()
+        trait_name.to_string()
     } else {
-        format!("{}<{}>", impl_def.trait_name, trait_args.join(", "))
+        format!("{trait_name}<{}>", trait_args.join(", "))
     };
     let target = rust_type(&impl_def.target_type, registry);
-    let Some(TypeDef::Message(message)) = target_def(&impl_def.target_type, registry) else {
-        return;
+    let ResolvedType::Named(target_id) = &impl_def.target_type else {
+        return Ok(());
+    };
+    let Some(TypeDef::Message(message)) = registry.get(*target_id) else {
+        return Ok(());
     };
     w.line(&format!("impl {trait_ref} for {target} {{"));
     w.indent();
@@ -57,15 +113,12 @@ pub fn emit_impl(w: &mut CodeWriter, impl_def: &ImplDef, registry: &TypeRegistry
             w.line("}");
         }
     }
+    for function in vexil_lang::codegen::portable::project_impl(compiled, impl_def)? {
+        crate::fn_body::emit_function(w, &function, registry, message, *target_id, needs_box);
+    }
     w.dedent();
     w.line("}");
-}
-
-fn target_def<'a>(ty: &ResolvedType, registry: &'a TypeRegistry) -> Option<&'a TypeDef> {
-    match ty {
-        ResolvedType::Named(id) => registry.get(*id),
-        _ => None,
-    }
+    Ok(())
 }
 
 fn trait_field_for_impl<'a>(
@@ -73,12 +126,9 @@ fn trait_field_for_impl<'a>(
     name: &str,
     registry: &'a TypeRegistry,
 ) -> Option<&'a vexil_lang::ir::TraitFieldDef> {
-    registry.iter().find_map(|(_, def)| match def {
-        TypeDef::Trait(trait_def) if trait_def.name == impl_def.trait_name => {
-            trait_def.fields.iter().find(|f| f.name == name)
-        }
-        _ => None,
-    })
+    registry
+        .trait_for_impl(impl_def)
+        .and_then(|(_, trait_def)| trait_def.fields.iter().find(|f| f.name == name))
 }
 
 fn resolved_trait_field_type(
@@ -87,11 +137,8 @@ fn resolved_trait_field_type(
     registry: &TypeRegistry,
 ) -> String {
     let params = registry
-        .iter()
-        .find_map(|(_, def)| match def {
-            TypeDef::Trait(t) if t.name == impl_def.trait_name => Some(&t.type_params),
-            _ => None,
-        })
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| &definition.type_params)
         .map(|params| params.as_slice())
         .unwrap_or(&[]);
     project_type(

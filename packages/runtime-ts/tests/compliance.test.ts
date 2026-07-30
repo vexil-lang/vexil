@@ -46,7 +46,7 @@ function encodeValue(
 
   for (const field of fields) {
     const v = value[field.name];
-    writeField(w, field.type, v);
+    writeField(w, field.type, v, schema);
   }
 
   return w.finish();
@@ -64,7 +64,7 @@ function decodeValue(
   const result: Record<string, unknown> = {};
 
   for (const field of fields) {
-    result[field.name] = readField(r, field.type);
+    result[field.name] = readField(r, field.type, schema);
   }
 
   return result;
@@ -80,10 +80,22 @@ interface FieldDef {
  * Handles schemas like: "namespace test.prim\nmessage M { v @0 : bool }"
  */
 function parseFields(schema: string): FieldDef[] {
-  // Find message body between { }
-  const braceStart = schema.indexOf('{');
-  const braceEnd = schema.lastIndexOf('}');
-  if (braceStart === -1 || braceEnd === -1) return [];
+  const message = schema.match(/\bmessage\s+M\s*\{/);
+  if (!message || message.index === undefined) return [];
+  const braceStart = schema.indexOf('{', message.index);
+  let depth = 0;
+  let braceEnd = -1;
+  for (let index = braceStart; index < schema.length; index++) {
+    if (schema[index] === '{') depth++;
+    if (schema[index] === '}') {
+      depth--;
+      if (depth === 0) {
+        braceEnd = index;
+        break;
+      }
+    }
+  }
+  if (braceEnd === -1) return [];
 
   const body = schema.substring(braceStart + 1, braceEnd).trim();
   if (body.length === 0) return [];
@@ -103,6 +115,7 @@ function writeField(
   w: BitWriter,
   type: string,
   value: unknown,
+  schema: string,
 ): void {
   // Handle sub-byte types like u1, u3, u5, u6
   const subByteMatch = type.match(/^u(\d+)$/);
@@ -169,12 +182,22 @@ function writeField(
     case 'string':
       w.writeString(value as string);
       break;
+    case 'bytes':
+      w.writeBytes(Uint8Array.from(value as number[]));
+      break;
     default:
-      throw new Error(`Unsupported type: ${type}`);
+      for (const field of parseNamedMessageFields(schema, type)) {
+        writeField(
+          w,
+          field.type,
+          (value as Record<string, unknown>)[field.name],
+          schema,
+        );
+      }
   }
 }
 
-function readField(r: BitReader, type: string): unknown {
+function readField(r: BitReader, type: string, schema: string): unknown {
   // Handle sub-byte types like u1, u3, u5, u6
   const subByteMatch = type.match(/^u(\d+)$/);
   if (subByteMatch) {
@@ -209,9 +232,42 @@ function readField(r: BitReader, type: string): unknown {
       return r.readF64();
     case 'string':
       return r.readString();
+    case 'bytes':
+      return r.readBytes();
     default:
-      throw new Error(`Unsupported type: ${type}`);
+      return Object.fromEntries(
+        parseNamedMessageFields(schema, type).map((field) => [
+          field.name,
+          readField(r, field.type, schema),
+        ]),
+      );
   }
+}
+
+function parseNamedMessageFields(schema: string, name: string): FieldDef[] {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`\\bmessage\\s+${escaped}\\s*\\{`).exec(schema);
+  if (!match || match.index === undefined) {
+    throw new Error(`Unsupported type: ${name}`);
+  }
+  const braceStart = schema.indexOf('{', match.index);
+  let depth = 0;
+  let braceEnd = -1;
+  for (let index = braceStart; index < schema.length; index++) {
+    if (schema[index] === '{') depth++;
+    if (schema[index] === '}') {
+      depth--;
+      if (depth === 0) {
+        braceEnd = index;
+        break;
+      }
+    }
+  }
+  const body = schema.substring(braceStart + 1, braceEnd);
+  return Array.from(body.matchAll(/(\w+)\s+@\d+\s*:\s*(\w+)/g), (field) => ({
+    name: field[1],
+    type: field[2],
+  }));
 }
 
 /**
@@ -236,6 +292,27 @@ function valuesMatch(
   }
   if (type === 'u64' || type === 'i64') {
     return (actual as bigint) === BigInt(expected as number);
+  }
+  if (actual instanceof Uint8Array && Array.isArray(expected)) {
+    return (
+      actual.length === expected.length &&
+      actual.every((value, index) => value === expected[index])
+    );
+  }
+  if (
+    typeof actual === 'object' &&
+    actual !== null &&
+    typeof expected === 'object' &&
+    expected !== null
+  ) {
+    const actualRecord = actual as Record<string, unknown>;
+    const expectedRecord = expected as Record<string, unknown>;
+    return (
+      Object.keys(actualRecord).length === Object.keys(expectedRecord).length &&
+      Object.entries(expectedRecord).every(
+        ([key, value]) => actualRecord[key] === value,
+      )
+    );
   }
   return actual === expected;
 }
@@ -490,7 +567,9 @@ describe('Compliance: arrays_maps.json', () => {
             w.writeU32(elem as number);
           }
         } else if (typeof v === 'object' && v !== null) {
-          const entries = Object.entries(v as Record<string, unknown>);
+          const entries = Object.entries(
+            v as Record<string, unknown>,
+          ).sort(([left], [right]) => left.localeCompare(right));
           w.writeLeb128(entries.length);
           for (const [key, val] of entries) {
             w.writeString(key);

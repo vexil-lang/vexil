@@ -3,7 +3,11 @@
 
 package map_key_ordering
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"sort"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0xf6, 0x28, 0xdf, 0x10, 0x8a, 0xab, 0x0d, 0x88, 0x79, 0x58, 0x8a, 0x9f, 0xe6, 0xf8, 0x5f, 0x4a, 0xb6, 0x27, 0x11, 0x96, 0xd4, 0x78, 0x05, 0xce, 0x3e, 0x33, 0x37, 0x5b, 0x81, 0x1d, 0x3e, 0xc9}
 const SchemaVersion = "1.0.0"
@@ -142,7 +146,13 @@ func (m *MapKeyTest) Pack(w *vexil.BitWriter) error {
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.StringMap)))
-	for mapK, mapV := range m.StringMap {
+	mapKeysmStringMap := make([]string, 0, len(m.StringMap))
+	for mapK := range m.StringMap {
+		mapKeysmStringMap = append(mapKeysmStringMap, mapK)
+	}
+	sort.Strings(mapKeysmStringMap)
+	for _, mapK := range mapKeysmStringMap {
+		mapV := m.StringMap[mapK]
 		w.WriteString(mapK)
 		w.WriteU32(mapV)
 	}
@@ -191,6 +201,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.BoolMap = make(map[bool]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey bool
+			var mapVal string
 			{
 				v, err := r.ReadBool()
 				if err != nil {
@@ -215,6 +227,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.U8Map = make(map[uint8]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey uint8
+			var mapVal string
 			{
 				v, err := r.ReadU8()
 				if err != nil {
@@ -239,6 +253,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.U32Map = make(map[uint32]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey uint32
+			var mapVal string
 			{
 				v, err := r.ReadU32()
 				if err != nil {
@@ -263,6 +279,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.I32Map = make(map[int32]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey int32
+			var mapVal string
 			{
 				v, err := r.ReadI32()
 				if err != nil {
@@ -287,6 +305,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.FixedMap = make(map[int32]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey int32
+			var mapVal string
 			{
 				v, err := r.ReadI32()
 				if err != nil {
@@ -311,6 +331,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.StringMap = make(map[string]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey string
+			var mapVal uint32
 			{
 				v, err := r.ReadString()
 				if err != nil {
@@ -335,6 +357,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.BytesMap = make(map[[]byte]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey []byte
+			var mapVal uint32
 			{
 				v, err := r.ReadBytes()
 				if err != nil {
@@ -359,6 +383,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.UuidMap = make(map[[16]byte]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey [16]byte
+			var mapVal string
 			{
 				v, err := r.ReadRawBytes(16)
 				if err != nil {
@@ -383,6 +409,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.EnumMap = make(map[Status]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Status
+			var mapVal string
 			if err := mapKey.Unpack(r); err != nil {
 				return err
 			}
@@ -403,6 +431,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.FlagsMap = make(map[Permissions]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Permissions
+			var mapVal string
 			if err := mapKey.Unpack(r); err != nil {
 				return err
 			}
@@ -423,6 +453,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.NewtypeU32Map = make(map[UserId]string, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey UserId
+			var mapVal string
 			{
 				v, err := UnpackUserId(r)
 				if err != nil {
@@ -447,6 +479,8 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		}
 		m.NewtypeStrMap = make(map[Label]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
+			var mapKey Label
+			var mapVal uint32
 			{
 				v, err := UnpackLabel(r)
 				if err != nil {

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x26, 0x17, 0x33, 0xb3, 0x2d, 0x8b, 0x2f, 0xf3, 0x27, 0x2f, 0xf2, 0x60, 0xc8, 0xb1, 0xb2, 0x99, 0xa6, 0xea, 0x63, 0xeb, 0xcf, 0xd8, 0xee, 0x99, 0x90, 0xe8, 0x3c, 0xb6, 0x88, 0x83, 0x6b, 0xd3)
 
@@ -20,16 +20,23 @@ class SettingsV1:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.timeout)
         w.write_string(self.name)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return SettingsV1.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = SettingsV1.__new__(SettingsV1)
         m.timeout = r.read_u32()
         m.name = r.read_string()
@@ -48,6 +55,10 @@ class SettingsV2:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.timeout is not None)
         w.flush_to_byte_boundary()
         if self.timeout is not None:
@@ -56,19 +67,26 @@ class SettingsV2:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return SettingsV2.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = SettingsV2.__new__(SettingsV2)
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.timeout: int = None  # type: ignore[assignment]
-            m.timeout = r.read_u32()
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.timeout = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.timeout: int = None  # type: ignore[assignment]
+                m.timeout = r.read_u32()
+            else:
+                m.timeout = None
         m.name = r.read_string()
         r.flush_to_byte_boundary()
         m.unknown = b""

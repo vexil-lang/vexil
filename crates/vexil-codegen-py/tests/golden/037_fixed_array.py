@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x06, 0xd9, 0x95, 0xe1, 0xc7, 0x2a, 0xef, 0xec, 0x68, 0x94, 0xe9, 0x71, 0x21, 0x92, 0x96, 0x74, 0xb6, 0xaa, 0xb0, 0x66, 0x4b, 0x64, 0x27, 0x91, 0x85, 0x34, 0x22, 0x3e, 0xdc, 0xeb, 0x60, 0x31)
 
@@ -14,15 +14,19 @@ SCHEMA_HASH: tuple[int, ...] = (0x06, 0xd9, 0x95, 0xe1, 0xc7, 0x2a, 0xef, 0xec, 
 # ---------- Basic ----------
 @dataclass
 class Basic:
-    a: tuple[int, ...]  # fixed[4]
-    b: tuple[int, ...]  # fixed[8]
-    c: tuple[float, ...]  # fixed[16]
-    d: tuple[str, ...]  # fixed[3]
-    e: tuple[Point, ...]  # fixed[5]
+    a: tuple[int, ...]
+    b: tuple[int, ...]
+    c: tuple[float, ...]
+    d: tuple[str, ...]
+    e: tuple[Point, ...]
     unknown: bytes = b""
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.a:
             w.write_u8(item)
         for item in self.b:
@@ -32,62 +36,49 @@ class Basic:
         for item in self.d:
             w.write_string(item)
         for item in self.e:
-            w.write_message(item)
+            item.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Basic.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Basic.__new__(Basic)
-        m.a: tuple[int, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
-        m.b: tuple[int, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
-        m.c: tuple[float, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
-        m.d: tuple[str, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
-        m.e: tuple[Point, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
+        _fixed_items_ma: list[int] = []
+        for _ in range(4):
+            _fixed_item_ma: int = None  # type: ignore[assignment]
+            _fixed_item_ma = r.read_u8()
+            _fixed_items_ma.append(_fixed_item_ma)
+        m.a = tuple(_fixed_items_ma)
+        _fixed_items_mb: list[int] = []
+        for _ in range(8):
+            _fixed_item_mb: int = None  # type: ignore[assignment]
+            _fixed_item_mb = r.read_u32()
+            _fixed_items_mb.append(_fixed_item_mb)
+        m.b = tuple(_fixed_items_mb)
+        _fixed_items_mc: list[float] = []
+        for _ in range(16):
+            _fixed_item_mc: float = None  # type: ignore[assignment]
+            _fixed_item_mc = r.read_f64()
+            _fixed_items_mc.append(_fixed_item_mc)
+        m.c = tuple(_fixed_items_mc)
+        _fixed_items_md: list[str] = []
+        for _ in range(3):
+            _fixed_item_md: str = None  # type: ignore[assignment]
+            _fixed_item_md = r.read_string()
+            _fixed_items_md.append(_fixed_item_md)
+        m.d = tuple(_fixed_items_md)
+        _fixed_items_me: list[Point] = []
+        for _ in range(5):
+            _fixed_item_me: Point = None  # type: ignore[assignment]
+            _fixed_item_me = Point.decode_from(r)
+            _fixed_items_me.append(_fixed_item_me)
+        m.e = tuple(_fixed_items_me)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -103,16 +94,23 @@ class Point:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_f32(self.x)
         w.write_f32(self.y)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Point.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Point.__new__(Point)
         m.x = r.read_f32()
         m.y = r.read_f32()
@@ -125,28 +123,41 @@ class Point:
 # ---------- Nested ----------
 @dataclass
 class Nested:
-    a: tuple[tuple[int, ...]  # fixed[4], ...]  # fixed[3]
+    a: tuple[tuple[int, ...], ...]
     unknown: bytes = b""
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.a:
             for item in item:
                 w.write_u8(item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Nested.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Nested.__new__(Nested)
-        m.a: tuple[tuple[int, ...]  # fixed[4], ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
+        _fixed_items_ma: list[tuple[int, ...]] = []
+        for _ in range(3):
+            _fixed_item_ma: tuple[int, ...] = None  # type: ignore[assignment]
+            _fixed_items_fixeditemma: list[int] = []
+            for _ in range(4):
+                _fixed_item_fixeditemma: int = None  # type: ignore[assignment]
+                _fixed_item_fixeditemma = r.read_u8()
+                _fixed_items_fixeditemma.append(_fixed_item_fixeditemma)
+            _fixed_item_ma = tuple(_fixed_items_fixeditemma)
+            _fixed_items_ma.append(_fixed_item_ma)
+        m.a = tuple(_fixed_items_ma)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -156,11 +167,15 @@ class Nested:
 # ---------- WithOptional ----------
 @dataclass
 class WithOptional:
-    a: tuple[int | None, ...]  # fixed[10]
+    a: tuple[int | None, ...]
     unknown: bytes = b""
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.a:
             w.write_bool(item is not None)
             w.flush_to_byte_boundary()
@@ -169,24 +184,31 @@ class WithOptional:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return WithOptional.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = WithOptional.__new__(WithOptional)
-        m.a: tuple[int | None, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
+        _fixed_items_ma: list[int | None] = []
+        for _ in range(10):
+            _fixed_item_ma: int | None = None  # type: ignore[assignment]
+            try:
+                present = r.read_bool()
+            except DecodeError:
+                _fixed_item_ma = None
+            else:
+                r.flush_to_byte_boundary()
+                if present:
+                    _fixed_item_ma: int = None  # type: ignore[assignment]
+                    _fixed_item_ma = r.read_u32()
+                else:
+                    _fixed_item_ma = None
+            _fixed_items_ma.append(_fixed_item_ma)
+        m.a = tuple(_fixed_items_ma)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -201,18 +223,25 @@ class WithUnion:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.extend(self.data.encode())
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        _encoded_union = self.data.encode()
+        w.write_raw_bytes(_encoded_union, len(_encoded_union))
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return WithUnion.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = WithUnion.__new__(WithUnion)
-        _payload = r.read_bytes()
-        m.data = decode_Data(_payload)
+        m.data = decode_Data_from(r)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -229,7 +258,7 @@ class Data:
         raise NotImplementedError
 
 class DataFixedInts(Data):
-    def __init__(self, values: tuple[int, ...]  # fixed[4]):
+    def __init__(self, values: tuple[int, ...]):
         self.values = values
 
     def _encode_variant(self) -> bytes:
@@ -241,12 +270,12 @@ class DataFixedInts(Data):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
 class DataFixedBytes(Data):
-    def __init__(self, bytes: tuple[int, ...]  # fixed[32]):
+    def __init__(self, bytes: tuple[int, ...]):
         self.bytes = bytes
 
     def _encode_variant(self) -> bytes:
@@ -258,79 +287,58 @@ class DataFixedBytes(Data):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
-def decode_Data(data: bytes) -> Data:
-    r = _BitReader(data)
+def decode_Data_from(r: _BitReader) -> Data:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
-        values: tuple[int, ...]  # fixed[4] = None  # type: ignore[assignment]
-        values: tuple[int, ...] = (
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-        )
+        values: tuple[int, ...] = None  # type: ignore[assignment]
+        _fixed_items_values: list[int] = []
+        for _ in range(4):
+            _fixed_item_values: int = None  # type: ignore[assignment]
+            _fixed_item_values = pr.read_i32()
+            _fixed_items_values.append(_fixed_item_values)
+        values = tuple(_fixed_items_values)
         return DataFixedInts(values)
     elif disc == 1:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
-        bytes: tuple[int, ...]  # fixed[32] = None  # type: ignore[assignment]
-        bytes: tuple[int, ...] = (
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-            pr.read_value(),
-        )
+        bytes: tuple[int, ...] = None  # type: ignore[assignment]
+        _fixed_items_bytes: list[int] = []
+        for _ in range(32):
+            _fixed_item_bytes: int = None  # type: ignore[assignment]
+            _fixed_item_bytes = pr.read_u8()
+            _fixed_items_bytes.append(_fixed_item_bytes)
+        bytes = tuple(_fixed_items_bytes)
         return DataFixedBytes(bytes)
     else:
         raise ValueError(f"unknown Data discriminant: {disc}")
+
+def decode_Data(data: bytes) -> Data:
+    r = _BitReader(data)
+    return decode_Data_from(r)
 
 
 # ---------- EdgeCases ----------
 @dataclass
 class EdgeCases:
-    single: tuple[int, ...]  # fixed[1]
-    large: tuple[int, ...]  # fixed[1024]
-    hex_sized: tuple[int, ...]  # fixed[16]
+    single: tuple[int, ...]
+    large: tuple[int, ...]
+    hex_sized: tuple[int, ...]
     unknown: bytes = b""
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.single:
             w.write_u8(item)
         for item in self.large:
@@ -340,1059 +348,33 @@ class EdgeCases:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return EdgeCases.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = EdgeCases.__new__(EdgeCases)
-        m.single: tuple[int, ...] = (
-            r.read_value(),
-        )
-        m.large: tuple[int, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
-        m.hex_sized: tuple[int, ...] = (
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-            r.read_value(),
-        )
+        _fixed_items_msingle: list[int] = []
+        for _ in range(1):
+            _fixed_item_msingle: int = None  # type: ignore[assignment]
+            _fixed_item_msingle = r.read_u8()
+            _fixed_items_msingle.append(_fixed_item_msingle)
+        m.single = tuple(_fixed_items_msingle)
+        _fixed_items_mlarge: list[int] = []
+        for _ in range(1024):
+            _fixed_item_mlarge: int = None  # type: ignore[assignment]
+            _fixed_item_mlarge = r.read_u8()
+            _fixed_items_mlarge.append(_fixed_item_mlarge)
+        m.large = tuple(_fixed_items_mlarge)
+        _fixed_items_mhexsized: list[int] = []
+        for _ in range(16):
+            _fixed_item_mhexsized: int = None  # type: ignore[assignment]
+            _fixed_item_mhexsized = r.read_u16()
+            _fixed_items_mhexsized.append(_fixed_item_mhexsized)
+        m.hex_sized = tuple(_fixed_items_mhexsized)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

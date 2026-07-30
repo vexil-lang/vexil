@@ -3,7 +3,11 @@
 
 package set
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"sort"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0x86, 0x3c, 0x08, 0x4e, 0x75, 0x4f, 0x2a, 0xdf, 0x37, 0x16, 0x57, 0x6e, 0xe8, 0xfa, 0xd1, 0x44, 0xd1, 0xfb, 0xb4, 0xe7, 0xce, 0x9a, 0x1e, 0xa8, 0x6c, 0x80, 0x95, 0x96, 0xe9, 0x25, 0x78, 0x1e}
 
@@ -14,6 +18,15 @@ type Tags struct {
 }
 
 func (m *Tags) Pack(w *vexil.BitWriter) error {
+	w.WriteLeb128(uint64(len(m.Names)))
+	setKeysmNames := make([]string, 0, len(m.Names))
+	for item := range m.Names {
+		setKeysmNames = append(setKeysmNames, item)
+	}
+	sort.Strings(setKeysmNames)
+	for _, item := range setKeysmNames {
+		w.WriteString(item)
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)

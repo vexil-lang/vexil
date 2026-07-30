@@ -22,6 +22,27 @@ type Basic struct {
 }
 
 func (m *Basic) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.A {
+		w.WriteU8(item)
+	}
+	for _, item := range m.B {
+		w.WriteU32(item)
+	}
+	for _, item := range m.C {
+		w.WriteF64(item)
+	}
+	for _, item := range m.D {
+		w.WriteString(item)
+	}
+	for _, item := range m.E {
+		if err := w.EnterRecursive(); err != nil {
+			return err
+		}
+		if err := item.Pack(w); err != nil {
+			return err
+		}
+		w.LeaveRecursive()
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -133,6 +154,11 @@ type Nested struct {
 }
 
 func (m *Nested) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.A {
+		for _, item := range item {
+			w.WriteU8(item)
+		}
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -167,6 +193,13 @@ type WithOptional struct {
 }
 
 func (m *WithOptional) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.A {
+		w.WriteBool(item != nil)
+		w.FlushToByteBoundary()
+		if item != nil {
+			w.WriteU32(*item)
+		}
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -179,20 +212,22 @@ func (m *WithOptional) Unpack(r *vexil.BitReader) error {
 	for i := 0; i < 10; i++ {
 		{
 			present, err := r.ReadBool()
-			if err != nil {
+			if err != nil && err != vexil.ErrUnexpectedEOF {
 				return err
 			}
-			r.FlushToByteBoundary()
-			if present {
-				var optVal uint32
-				{
-					v, err := r.ReadU32()
-					if err != nil {
-						return err
+			if err == nil {
+				r.FlushToByteBoundary()
+				if present {
+					var optVal uint32
+					{
+						v, err := r.ReadU32()
+						if err != nil {
+							return err
+						}
+						optVal = v
 					}
-					optVal = v
+					m.A[i] = &optVal
 				}
-				m.A[i] = &optVal
 			}
 		}
 	}
@@ -259,6 +294,9 @@ func PackData(v Data, w *vexil.BitWriter) error {
 		case *DataFixedInts: {
 			w.WriteLeb128(0)
 			pw := vexil.NewBitWriter()
+			for _, item := range t.Values {
+				pw.WriteI32(item)
+			}
 			pw.FlushToByteBoundary()
 			payload := pw.Finish()
 			w.WriteLeb128(uint64(len(payload)))
@@ -267,6 +305,9 @@ func PackData(v Data, w *vexil.BitWriter) error {
 		case *DataFixedBytes: {
 			w.WriteLeb128(1)
 			pw := vexil.NewBitWriter()
+			for _, item := range t.Bytes {
+				pw.WriteU8(item)
+			}
 			pw.FlushToByteBoundary()
 			payload := pw.Finish()
 			w.WriteLeb128(uint64(len(payload)))
@@ -351,6 +392,15 @@ type EdgeCases struct {
 }
 
 func (m *EdgeCases) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.Single {
+		w.WriteU8(item)
+	}
+	for _, item := range m.Large {
+		w.WriteU8(item)
+	}
+	for _, item := range m.HexSized {
+		w.WriteU16(item)
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)

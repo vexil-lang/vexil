@@ -1,0 +1,13 @@
+namespace test.impl_extra_function
+
+trait Adjustable { }
+
+message Counter {
+    value @0 : i32
+}
+
+impl Adjustable for Counter {
+    fn adjust(delta: i32) -> i32 {
+        return delta
+    }
+}

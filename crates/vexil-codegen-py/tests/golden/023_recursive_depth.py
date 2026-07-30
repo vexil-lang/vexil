@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x4f, 0x25, 0x39, 0x5a, 0x3e, 0x94, 0xda, 0xf1, 0x8a, 0xee, 0xff, 0x59, 0x90, 0x93, 0x11, 0xaa, 0x20, 0x39, 0xa6, 0x36, 0x6b, 0xe5, 0x3c, 0xb0, 0x16, 0x54, 0x23, 0x6c, 0x09, 0x44, 0x4d, 0x73)
 
@@ -20,22 +20,29 @@ class TreeNode:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.value)
         w.write_leb128(len(self.children))
         for item in self.children:
-            w.write_message(item)
+            item.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return TreeNode.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_u32()
         arr_len = r.read_leb128()
-        m.children: list[TreeNode] = []
+        m.children = []
         for _ in range(arr_len):
             _item: TreeNode = None  # type: ignore[assignment]
             _item = TreeNode.decode_from(r)
@@ -55,28 +62,39 @@ class LinkedList:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_i64(self.value)
         w.write_bool(self.next is not None)
         w.flush_to_byte_boundary()
         if self.next is not None:
-            w.write_message(self.next)
+            self.next.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return LinkedList.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_i64()
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.next: LinkedList = None  # type: ignore[assignment]
-            m.next = LinkedList.decode_from(r)
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.next = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.next: LinkedList = None  # type: ignore[assignment]
+                m.next = LinkedList.decode_from(r)
+            else:
+                m.next = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xf6, 0x28, 0xdf, 0x10, 0x8a, 0xab, 0x0d, 0x88, 0x79, 0x58, 0x8a, 0x9f, 0xe6, 0xf8, 0x5f, 0x4a, 0xb6, 0x27, 0x11, 0x96, 0xd4, 0x78, 0x05, 0xce, 0x3e, 0x33, 0x37, 0x5b, 0x81, 0x1d, 0x3e, 0xc9)
 SCHEMA_VERSION: str = "1.0.0"
@@ -19,13 +19,22 @@ class Status(int):
     COMPLETED = 2
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 2).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 2)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(2)
         return Status(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Status(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"Status({int(self)})"
@@ -39,14 +48,21 @@ class Permissions(int):
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_u8(int(self))
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_u8(int(self))
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_u8()
         return Permissions(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Permissions(r.read_u8())
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -63,12 +79,21 @@ class UserId:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_u32(self.value)
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_u32(self.value)
 
     @staticmethod
     def decode(data: bytes) -> UserId:
         r = _BitReader(data)
+        inner: int = None  # type: ignore[assignment]
+        inner = r.read_u32()
+        return UserId(inner)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> UserId:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_u32()
         return UserId(inner)
@@ -88,12 +113,21 @@ class Label:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.write_string(self.value)
+        self.encode_to(w)
         return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_string(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Label:
         r = _BitReader(data)
+        inner: str = None  # type: ignore[assignment]
+        inner = r.read_string()
+        return Label(inner)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Label:
         inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
@@ -124,6 +158,10 @@ class MapKeyTest:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_leb128(len(self.bool_map))
         for map_k, map_v in self.bool_map.items():
             w.write_bool(map_k)
@@ -145,7 +183,8 @@ class MapKeyTest:
             w.write_i32(map_k)
             w.write_string(map_v)
         w.write_leb128(len(self.string_map))
-        for map_k, map_v in self.string_map.items():
+        for map_k in sorted(self.string_map):
+            map_v = self.string_map[map_k]
             w.write_string(map_k)
             w.write_u32(map_v)
         w.write_leb128(len(self.bytes_map))
@@ -166,23 +205,26 @@ class MapKeyTest:
             w.write_string(map_v)
         w.write_leb128(len(self.newtype_u32_map))
         for map_k, map_v in self.newtype_u32_map.items():
-            w.extend(map_k.encode())
+            map_k.encode_to(w)
             w.write_string(map_v)
         w.write_leb128(len(self.newtype_str_map))
         for map_k, map_v in self.newtype_str_map.items():
-            w.extend(map_k.encode())
+            map_k.encode_to(w)
             w.write_u32(map_v)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return MapKeyTest.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = MapKeyTest.__new__(MapKeyTest)
         map_len = r.read_leb128()
-        m.bool_map: dict[bool, str] = {}
+        m.bool_map = {}
         for _ in range(map_len):
             _k: bool = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -190,7 +232,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.bool_map[_k] = _v
         map_len = r.read_leb128()
-        m.u8_map: dict[int, str] = {}
+        m.u8_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -198,7 +240,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.u8_map[_k] = _v
         map_len = r.read_leb128()
-        m.u32_map: dict[int, str] = {}
+        m.u32_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -206,7 +248,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.u32_map[_k] = _v
         map_len = r.read_leb128()
-        m.i32_map: dict[int, str] = {}
+        m.i32_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -214,7 +256,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.i32_map[_k] = _v
         map_len = r.read_leb128()
-        m.fixed_map: dict[int, str] = {}
+        m.fixed_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -222,7 +264,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.fixed_map[_k] = _v
         map_len = r.read_leb128()
-        m.string_map: dict[str, int] = {}
+        m.string_map = {}
         for _ in range(map_len):
             _k: str = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
@@ -230,15 +272,15 @@ class MapKeyTest:
             _v = r.read_u32()
             m.string_map[_k] = _v
         map_len = r.read_leb128()
-        m.bytes_map: dict[bytes, int] = {}
+        m.bytes_map = {}
         for _ in range(map_len):
             _k: bytes = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
-            _k = r.read_bytes()
+            _k = r.read_bytes(r.read_leb128())
             _v = r.read_u32()
             m.bytes_map[_k] = _v
         map_len = r.read_leb128()
-        m.uuid_map: dict[bytes, str] = {}
+        m.uuid_map = {}
         for _ in range(map_len):
             _k: bytes = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -246,7 +288,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.uuid_map[_k] = _v
         map_len = r.read_leb128()
-        m.enum_map: dict[Status, str] = {}
+        m.enum_map = {}
         for _ in range(map_len):
             _k: Status = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -254,7 +296,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.enum_map[_k] = _v
         map_len = r.read_leb128()
-        m.flags_map: dict[Permissions, str] = {}
+        m.flags_map = {}
         for _ in range(map_len):
             _k: Permissions = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -262,21 +304,19 @@ class MapKeyTest:
             _v = r.read_string()
             m.flags_map[_k] = _v
         map_len = r.read_leb128()
-        m.newtype_u32_map: dict[UserId, str] = {}
+        m.newtype_u32_map = {}
         for _ in range(map_len):
             _k: UserId = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
-            _payload = r.read_bytes()
-            _k = UserId.decode(_payload)
+            _k = UserId.decode_from(r)
             _v = r.read_string()
             m.newtype_u32_map[_k] = _v
         map_len = r.read_leb128()
-        m.newtype_str_map: dict[Label, int] = {}
+        m.newtype_str_map = {}
         for _ in range(map_len):
             _k: Label = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
-            _payload = r.read_bytes()
-            _k = Label.decode(_payload)
+            _k = Label.decode_from(r)
             _v = r.read_u32()
             m.newtype_str_map[_k] = _v
         r.flush_to_byte_boundary()

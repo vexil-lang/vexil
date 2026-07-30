@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xa9, 0xc6, 0x2a, 0x4b, 0xfc, 0xfb, 0x2a, 0xa6, 0x5a, 0xe5, 0x6e, 0xd3, 0x03, 0x51, 0xc4, 0xca, 0xaf, 0x02, 0x47, 0x4b, 0x04, 0xdb, 0x21, 0x05, 0xb5, 0x3c, 0x1e, 0xb0, 0x36, 0x31, 0xd2, 0x5b)
 
@@ -31,6 +31,10 @@ class SubByteUnsigned:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bits(self.a, 1)
         w.write_bits(self.b, 2)
         w.write_bits(self.c, 3)
@@ -47,11 +51,14 @@ class SubByteUnsigned:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return SubByteUnsigned.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = SubByteUnsigned.__new__(SubByteUnsigned)
         m.a = r.read_bits(1)
         m.b = r.read_bits(2)
@@ -91,6 +98,10 @@ class SubByteSigned:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bits(self.a, 2)
         w.write_bits(self.b, 3)
         w.write_bits(self.c, 4)
@@ -106,11 +117,14 @@ class SubByteSigned:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return SubByteSigned.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = SubByteSigned.__new__(SubByteSigned)
         m.a = r.read_bits(2)
         m.b = r.read_bits(3)

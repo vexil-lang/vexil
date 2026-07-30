@@ -342,9 +342,55 @@ fn emit_write_type(
             emit_write_type(w, "item", inner, registry, writer, err_return);
             w.close_block();
         }
+        ResolvedType::Set(inner) => {
+            w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
+            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
+                let keys = format!(
+                    "setKeys{}",
+                    access
+                        .chars()
+                        .filter(char::is_ascii_alphanumeric)
+                        .collect::<String>()
+                );
+                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
+                w.open_block(&format!("for item := range {access}"));
+                w.line(&format!("{keys} = append({keys}, item)"));
+                w.close_block();
+                w.line(&format!("sort.Strings({keys})"));
+                w.open_block(&format!("for _, item := range {keys}"));
+            } else {
+                w.open_block(&format!("for item := range {access}"));
+            }
+            emit_write_type(w, "item", inner, registry, writer, err_return);
+            w.close_block();
+        }
+        ResolvedType::FixedArray(inner, _) => {
+            w.open_block(&format!("for _, item := range {access}"));
+            emit_write_type(w, "item", inner, registry, writer, err_return);
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
-            w.open_block(&format!("for mapK, mapV := range {access}"));
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
+                // String keys have a canonical lexical order. Go deliberately
+                // randomizes map iteration, so encode through a sorted key slice.
+                let keys = format!(
+                    "mapKeys{}",
+                    access
+                        .chars()
+                        .filter(char::is_ascii_alphanumeric)
+                        .collect::<String>()
+                );
+                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
+                w.open_block(&format!("for mapK := range {access}"));
+                w.line(&format!("{keys} = append({keys}, mapK)"));
+                w.close_block();
+                w.line(&format!("sort.Strings({keys})"));
+                w.open_block(&format!("for _, mapK := range {keys}"));
+                w.line(&format!("mapV := {access}[mapK]"));
+            } else {
+                w.open_block(&format!("for mapK, mapV := range {access}"));
+            }
             emit_write_type(w, "mapK", k, registry, writer, err_return);
             emit_write_type(w, "mapV", v, registry, writer, err_return);
             w.close_block();
@@ -635,9 +681,10 @@ fn emit_read_type(
         ResolvedType::Optional(inner) => {
             w.open_block("");
             w.line(&format!("present, err := {reader}.ReadBool()"));
-            w.open_block("if err != nil");
+            w.open_block("if err != nil && err != vexil.ErrUnexpectedEOF");
             w.line(err_return);
             w.close_block();
+            w.open_block("if err == nil");
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.FlushToByteBoundary()"));
             }
@@ -646,6 +693,7 @@ fn emit_read_type(
             w.line(&format!("var optVal {inner_go}"));
             emit_read_type(w, "optVal", inner, registry, reader, err_return);
             w.line(&format!("{target} = &optVal"));
+            w.close_block();
             w.close_block();
             w.close_block();
         }
@@ -738,6 +786,8 @@ fn emit_read_type(
             let v_go = go_type(v, registry);
             w.line(&format!("{target} = make(map[{k_go}]{v_go}, mapLen)"));
             w.open_block("for i := uint64(0); i < mapLen; i++");
+            w.line(&format!("var mapKey {k_go}"));
+            w.line(&format!("var mapVal {v_go}"));
             emit_read_type(w, "mapKey", k, registry, reader, err_return);
             emit_read_type(w, "mapVal", v, registry, reader, err_return);
             w.line(&format!("{target}[mapKey] = mapVal"));

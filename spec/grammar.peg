@@ -91,6 +91,8 @@ type-decl
     / config-decl
     / type-alias-decl
     / const-decl
+    / trait-decl
+    / impl-decl
 
 
 # ── message ────────────────────────────────────────────────────────────
@@ -198,6 +200,94 @@ const-expr-mul
 
 const-expr-primary
     = dec-int / hex-int / upper-ident / '(' _ const-expr _ ')'
+
+
+# ── trait and impl ─────────────────────────────────────────────────────
+
+trait-decl
+    = annotation* KW_TRAIT __ upper-ident type-param-list? _ '{' _ trait-body _ '}' _
+
+type-param-list
+    = '<' _ type-param (_ ',' _ type-param)* _ '>'
+
+type-param
+    = (ident / upper-ident) (_ ':' _ upper-ident (_ '+' _ upper-ident)*)?
+
+trait-body
+    = (trait-body-item _)*
+
+trait-body-item
+    = trait-fn-decl / field
+
+trait-fn-decl
+    = KW_FN __ field-name _ '(' _ fn-param-list? _ ')' fn-return?
+
+fn-param-list
+    = fn-param (_ ',' _ fn-param)*
+
+fn-param
+    = field-name _ ':' _ type-expr
+
+fn-return
+    = _ '->' _ type-expr
+
+impl-decl
+    = annotation* KW_IMPL __ impl-trait-ref type-arg-list? __ KW_FOR __ upper-ident _ impl-body?
+
+impl-trait-ref
+    = upper-ident ('.' upper-ident)?
+
+type-arg-list
+    = '<' _ type-expr (_ ',' _ type-expr)* _ '>'
+
+impl-body
+    = '{' _ (impl-fn-decl _)* '}'
+
+impl-fn-decl
+    = KW_FN __ field-name _ '(' _ fn-param-list? _ ')' fn-return? _ fn-block?
+
+fn-block
+    = '{' _ (statement _)* '}'
+
+statement
+    = let-statement / return-statement / assignment-statement / expression-statement
+
+let-statement
+    = KW_LET __ ident (_ ':' _ type-expr)? _ '=' _ runtime-expr
+
+return-statement
+    = KW_RETURN (_ runtime-expr)?
+
+assignment-statement
+    = runtime-expr _ '=' _ runtime-expr
+
+expression-statement
+    = runtime-expr
+
+runtime-expr
+    = runtime-comparison
+
+runtime-comparison
+    = runtime-additive (_ ('==' / '!=' / '<=' / '>=' / '<' / '>') _ runtime-additive)*
+
+runtime-additive
+    = runtime-multiplicative (_ ('+' / '-') _ runtime-multiplicative)*
+
+runtime-multiplicative
+    = runtime-unary (_ ('*' / '/') _ runtime-unary)*
+
+runtime-unary
+    = ('-' / '!') _ runtime-unary / runtime-postfix
+
+runtime-postfix
+    = runtime-primary (_ ('.' _ field-name (_ call-args)? / call-args))*
+
+runtime-primary
+    = dec-int / hex-int / float-lit / string-lit / bool-lit
+    / KW_SELF / ident / upper-ident / '(' _ runtime-expr _ ')'
+
+call-args
+    = '(' _ (runtime-expr (_ ',' _ runtime-expr)*)? _ ')'
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -484,6 +574,7 @@ ident-continue
 keyword
     = ( 'namespace' / 'import' / 'from' / 'as' / 'none'
       / 'message' / 'enum' / 'flags' / 'union' / 'newtype' / 'config' / 'type' / 'const'
+      / 'trait' / 'impl' / 'for' / 'fn' / 'self' / 'let' / 'return'
       / 'optional' / 'array' / 'map' / 'result' / 'set'
       / 'bool' / 'void' / 'string' / 'bytes' / 'rgb' / 'uuid' / 'timestamp' / 'hash'
       / 'fixed32' / 'fixed64'
@@ -511,6 +602,13 @@ KW_NEWTYPE   = 'newtype'   !ident-continue
 KW_CONFIG    = 'config'    !ident-continue
 KW_TYPE      = 'type'      !ident-continue
 KW_CONST     = 'const'     !ident-continue
+KW_TRAIT     = 'trait'     !ident-continue
+KW_IMPL      = 'impl'      !ident-continue
+KW_FOR       = 'for'       !ident-continue
+KW_FN        = 'fn'        !ident-continue
+KW_SELF      = 'self'      !ident-continue
+KW_LET       = 'let'       !ident-continue
+KW_RETURN    = 'return'    !ident-continue
 KW_OPTIONAL  = 'optional'  !ident-continue
 KW_ARRAY     = 'array'     !ident-continue
 KW_MAP       = 'map'       !ident-continue

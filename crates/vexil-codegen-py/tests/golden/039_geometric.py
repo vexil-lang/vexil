@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xf4, 0x47, 0xd3, 0x4c, 0x08, 0xcc, 0x78, 0xb6, 0x9c, 0x9d, 0x84, 0x50, 0x19, 0x8b, 0x33, 0x1d, 0xe1, 0xb2, 0x41, 0x97, 0x22, 0x0b, 0x7c, 0x8d, 0xac, 0x4d, 0x1a, 0x65, 0x15, 0x68, 0x5f, 0x5b)
 
@@ -22,6 +22,10 @@ class Transform:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.pos:
             w.write_i64(item)
         for item in self.rot:
@@ -33,11 +37,14 @@ class Transform:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Transform.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Transform.__new__(Transform)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -55,6 +62,10 @@ class Vectors:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.v2:
             w.write_f64(item)
         for item in self.v3:
@@ -64,11 +75,14 @@ class Vectors:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Vectors.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Vectors.__new__(Vectors)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -85,6 +99,10 @@ class Matrices:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         for item in self.m3:
             w.write_f64(item)
         for item in self.m4:
@@ -92,11 +110,14 @@ class Matrices:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Matrices.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Matrices.__new__(Matrices)
         r.flush_to_byte_boundary()
         m.unknown = b""

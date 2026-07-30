@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xe6, 0x4c, 0x04, 0xab, 0xea, 0xe9, 0xc8, 0x5a, 0xc2, 0x27, 0x20, 0xe6, 0xf8, 0x3b, 0x27, 0x24, 0x6f, 0xcb, 0x78, 0xc3, 0x4d, 0x7c, 0xf8, 0x64, 0x2c, 0x82, 0x94, 0x0f, 0x5f, 0x52, 0x87, 0x11)
 
@@ -20,16 +20,23 @@ class Foo:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.x)
         w.write_string(self.y)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Foo.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Foo.__new__(Foo)
         m.x = r.read_u32()
         m.y = r.read_string()
@@ -45,13 +52,22 @@ class Bar(int):
     B = 1
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 1).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 1)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(1)
         return Bar(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return Bar(r.read_bits(1))
 
     def __repr__(self) -> str:
         return f"Bar({int(self)})"

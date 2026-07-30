@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x7c, 0x63, 0xe0, 0x11, 0xba, 0x5b, 0x99, 0xab, 0x88, 0x41, 0x02, 0xf3, 0x55, 0xed, 0x30, 0x4a, 0xd3, 0x38, 0xbe, 0x28, 0x8e, 0x69, 0xac, 0x3e, 0xdf, 0x8b, 0x61, 0x99, 0x49, 0x20, 0x41, 0x01)
 
@@ -30,6 +30,10 @@ class AllPrimitives:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_bool(self.a)
         w.write_u8(self.b)
         w.write_u16(self.c)
@@ -44,11 +48,14 @@ class AllPrimitives:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return AllPrimitives.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = AllPrimitives.__new__(AllPrimitives)
         m.a = r.read_bool()
         m.b = r.read_u8()

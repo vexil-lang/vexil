@@ -8,6 +8,7 @@ pub mod delta;
 pub mod emit;
 pub mod enum_gen;
 pub mod flags;
+pub mod fn_body;
 pub mod message;
 pub mod newtype;
 pub mod trait_gen;
@@ -16,7 +17,8 @@ pub mod union_gen;
 
 pub use backend::GoBackend;
 
-use vexil_lang::ir::{CompiledSchema, TypeDef};
+use vexil_lang::ast::SemanticType;
+use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum CodegenError {
@@ -25,8 +27,10 @@ pub enum CodegenError {
         type_id: vexil_lang::ir::TypeId,
         referenced_by: String,
     },
-    #[error("function-bearing trait code generation is not supported")]
-    TraitFunctionsUnsupported,
+    #[error(transparent)]
+    PortableFunction(#[from] vexil_lang::codegen::portable::PortableFunctionError),
+    #[error("Go identifier collision for '{name}': {context}")]
+    IdentifierCollision { name: String, context: String },
 }
 
 /// Generate Go code for a compiled schema (no cross-file imports).
@@ -41,7 +45,7 @@ pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
-    ensure_field_only_traits(compiled)?;
+    preflight_trait_functions(compiled)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -78,7 +82,13 @@ pub(crate) fn generate_with_imports(
     let has_cross_imports = import_types.is_some_and(|m| !m.is_empty());
 
     let needs_fmt = has_unions;
-    let needs_grouped = has_cross_imports || (has_codecs && needs_fmt);
+    let needs_sort = compiled.declarations.iter().any(|&id| {
+        compiled
+            .registry
+            .get(id)
+            .is_some_and(type_def_has_string_map)
+    });
+    let needs_grouped = has_cross_imports || (has_codecs && (needs_fmt || needs_sort));
 
     if has_codecs || has_cross_imports {
         if needs_grouped {
@@ -86,6 +96,9 @@ pub(crate) fn generate_with_imports(
             w.indent();
             if needs_fmt {
                 w.line("\"fmt\"");
+            }
+            if needs_sort {
+                w.line("\"sort\"");
             }
             if has_codecs {
                 w.blank();
@@ -157,7 +170,7 @@ pub(crate) fn generate_with_imports(
                 message::emit_config(&mut w, cfg, &compiled.registry);
             }
             TypeDef::Trait(trait_def) => {
-                trait_gen::emit_trait(&mut w, trait_def, &compiled.registry)
+                trait_gen::emit_trait(&mut w, type_id, trait_def, compiled, import_types)?
             }
             _ => {} // non_exhaustive guard
         }
@@ -165,10 +178,58 @@ pub(crate) fn generate_with_imports(
 
     for (_, impl_def) in compiled.impls() {
         w.blank();
-        trait_gen::emit_impl(&mut w, impl_def, &compiled.registry, import_types);
+        trait_gen::emit_impl(&mut w, impl_def, compiled, import_types)?;
     }
 
     Ok(w.finish())
+}
+
+fn type_def_has_string_map(type_def: &TypeDef) -> bool {
+    fn contains_string_map(ty: &ResolvedType) -> bool {
+        match ty {
+            ResolvedType::Map(key, _) => {
+                matches!(key.as_ref(), ResolvedType::Semantic(SemanticType::String))
+            }
+            ResolvedType::Set(inner)
+                if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) =>
+            {
+                true
+            }
+            ResolvedType::Optional(inner)
+            | ResolvedType::Array(inner)
+            | ResolvedType::FixedArray(inner, _)
+            | ResolvedType::Vec2(inner)
+            | ResolvedType::Vec3(inner)
+            | ResolvedType::Vec4(inner)
+            | ResolvedType::Quat(inner)
+            | ResolvedType::Mat3(inner)
+            | ResolvedType::Mat4(inner) => contains_string_map(inner),
+            ResolvedType::Result(ok, err) => contains_string_map(ok) || contains_string_map(err),
+            _ => false,
+        }
+    }
+
+    match type_def {
+        TypeDef::Message(message) => message
+            .fields
+            .iter()
+            .any(|field| contains_string_map(&field.resolved_type)),
+        TypeDef::Union(union) => union
+            .variants
+            .iter()
+            .flat_map(|variant| &variant.fields)
+            .any(|field| contains_string_map(&field.resolved_type)),
+        TypeDef::Newtype(newtype) => contains_string_map(&newtype.inner_type),
+        TypeDef::Config(config) => config
+            .fields
+            .iter()
+            .any(|field| contains_string_map(&field.resolved_type)),
+        TypeDef::Trait(trait_def) => trait_def
+            .fields
+            .iter()
+            .any(|field| contains_string_map(&field.ty)),
+        _ => false,
+    }
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.
@@ -185,18 +246,130 @@ pub(crate) fn type_name_of(typedef: &TypeDef) -> &str {
     }
 }
 
-fn ensure_field_only_traits(compiled: &CompiledSchema) -> Result<(), CodegenError> {
-    if compiled
-        .registry
-        .iter()
-        .any(|(_, def)| matches!(def, TypeDef::Trait(t) if !t.functions.is_empty()))
-        || compiled
-            .impls()
-            .any(|(_, impl_def)| !impl_def.functions.is_empty())
-    {
-        return Err(CodegenError::TraitFunctionsUnsupported);
+fn preflight_trait_functions(compiled: &CompiledSchema) -> Result<(), CodegenError> {
+    for &type_id in &compiled.declarations {
+        let Some(TypeDef::Trait(trait_def)) = compiled.registry.get(type_id) else {
+            continue;
+        };
+        let mut methods = Vec::new();
+        for function in vexil_lang::codegen::portable::trait_signatures(compiled, type_id)? {
+            let method = crate::types::to_pascal_case(function.name.as_str());
+            let conflicts_with_field = trait_def.fields.iter().any(|field| {
+                let field_name = crate::types::to_pascal_case(field.name.as_str());
+                method == field_name || method == format!("Get{field_name}")
+            });
+            if conflicts_with_field || methods.contains(&method) {
+                return Err(CodegenError::IdentifierCollision {
+                    name: method,
+                    context: "trait function conflicts with another generated Go member"
+                        .to_string(),
+                });
+            }
+            methods.push(method);
+            for parameter in &function.params {
+                reject_go_keyword(parameter.name.as_str(), "function parameter")?;
+            }
+        }
+    }
+
+    let mut target_methods: std::collections::HashMap<vexil_lang::ir::TypeId, Vec<String>> =
+        std::collections::HashMap::new();
+    for (_, impl_def) in compiled.impls() {
+        let functions = vexil_lang::codegen::portable::project_impl(compiled, impl_def)?;
+        let message = match &impl_def.target_type {
+            vexil_lang::ir::ResolvedType::Named(id) => match compiled.registry.get(*id) {
+                Some(TypeDef::Message(message)) => (*id, message),
+                _ => continue,
+            },
+            _ => continue,
+        };
+        for function in functions {
+            let method = crate::types::to_pascal_case(function.name.as_str());
+            let conflicts_with_field = message.1.fields.iter().any(|field| {
+                let field_name = crate::types::to_pascal_case(field.name.as_str());
+                method == field_name || method == format!("Get{field_name}")
+            });
+            if conflicts_with_field || matches!(method.as_str(), "Pack" | "Unpack") {
+                return Err(CodegenError::IdentifierCollision {
+                    name: method,
+                    context: "trait method conflicts with a generated Go member".to_string(),
+                });
+            }
+            let methods = target_methods.entry(message.0).or_default();
+            if methods.contains(&method) {
+                return Err(CodegenError::IdentifierCollision {
+                    name: method,
+                    context: "multiple implemented traits project the same Go method".to_string(),
+                });
+            }
+            methods.push(method);
+            for parameter in &function.params {
+                reject_go_binding(parameter.name.as_str(), "function parameter")?;
+            }
+            for statement in &function.statements {
+                if let vexil_lang::codegen::portable::PortableStatement::Let { name, .. } =
+                    statement
+                {
+                    reject_go_binding(name.as_str(), "local binding")?;
+                }
+            }
+        }
     }
     Ok(())
+}
+
+fn reject_go_keyword(name: &str, subject: &str) -> Result<(), CodegenError> {
+    if is_go_keyword(name) {
+        Err(CodegenError::IdentifierCollision {
+            name: name.to_string(),
+            context: format!("{subject} is a reserved Go keyword"),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn reject_go_binding(name: &str, subject: &str) -> Result<(), CodegenError> {
+    reject_go_keyword(name, subject)?;
+    if name == "m" {
+        Err(CodegenError::IdentifierCollision {
+            name: name.to_string(),
+            context: format!("{subject} conflicts with the generated Go receiver"),
+        })
+    } else {
+        Ok(())
+    }
+}
+
+fn is_go_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "break"
+            | "default"
+            | "func"
+            | "interface"
+            | "select"
+            | "case"
+            | "defer"
+            | "go"
+            | "map"
+            | "struct"
+            | "chan"
+            | "else"
+            | "goto"
+            | "package"
+            | "switch"
+            | "const"
+            | "fallthrough"
+            | "if"
+            | "range"
+            | "type"
+            | "continue"
+            | "for"
+            | "import"
+            | "return"
+            | "var"
+    )
 }
 
 #[cfg(test)]
@@ -235,16 +408,42 @@ mod tests {
     }
 
     #[test]
-    fn rejects_function_bearing_traits() {
+    fn emits_function_bearing_traits() {
         let compiled = vexil_lang::compile(
             "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
         )
         .compiled
         .unwrap();
-        assert_eq!(
+        let generated = generate(&compiled).expect("function signature generates");
+        assert!(generated.contains("Validate() bool"));
+    }
+
+    #[test]
+    fn rejects_trait_function_member_collisions() {
+        let compiled = vexil_lang::compile(
+            "namespace test.collision\ntrait Conflicting { value @0 : i32 fn value() -> i32 }",
+        )
+        .compiled
+        .unwrap();
+        assert!(matches!(
             generate(&compiled),
-            Err(CodegenError::TraitFunctionsUnsupported)
-        );
+            Err(CodegenError::IdentifierCollision { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_nonportable_calls_at_codegen_boundary() {
+        let compiled = vexil_lang::compile(
+            "namespace test.call\ntrait Validatable { fn validate() -> bool }\nmessage Event { value @0 : bool }\nimpl Validatable for Event { fn validate() -> bool { return helper() } }",
+        )
+        .compiled
+        .unwrap();
+        assert!(matches!(
+            generate(&compiled),
+            Err(CodegenError::PortableFunction(
+                vexil_lang::codegen::portable::PortableFunctionError::UnsupportedCall { .. }
+            ))
+        ));
     }
 
     #[test]
@@ -252,8 +451,8 @@ mod tests {
         use vexil_lang::codegen::CodegenBackend;
         use vexil_lang::resolve::InMemoryLoader;
 
-        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { }";
-        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T }";
+        let root_src = "namespace proj.root\nimport { Tagged } from proj.dep\nmessage Event { tag @0 : u64 }\nimpl Tagged<u64> for Event { fn retag(tag: u64) -> u64 { self.tag = tag return self.tag } }";
+        let dep_src = "namespace proj.dep\ntrait Tagged<T> { tag @0 : T fn retag(tag: T) -> T }";
         let mut loader = InMemoryLoader::new();
         loader.schemas.insert("proj.dep".into(), dep_src.into());
         let result = vexil_lang::compile_project(
@@ -273,6 +472,10 @@ mod tests {
         assert!(root.contains("\"proj/dep\""), "{root}");
         assert!(
             root.contains("var _ dep.Tagged[uint64] = (*Event)(nil)"),
+            "{root}"
+        );
+        assert!(
+            root.contains("func (m *Event) Retag(tag uint64) uint64"),
             "{root}"
         );
     }

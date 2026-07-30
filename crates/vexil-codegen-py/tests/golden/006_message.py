@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xbc, 0x60, 0xb5, 0xe9, 0x66, 0x24, 0x00, 0x12, 0xd3, 0x08, 0xec, 0xcb, 0xc0, 0x03, 0x0c, 0x3b, 0xc4, 0xf2, 0x7e, 0xb2, 0xc9, 0x41, 0xf6, 0x0b, 0x38, 0x90, 0x91, 0xfe, 0xd3, 0xc5, 0x29, 0x61)
 
@@ -18,14 +18,21 @@ class Empty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Empty.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Empty.__new__(Empty)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -43,17 +50,24 @@ class WithGaps:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.first)
         w.write_u32(self.third)
         w.write_string(self.tenth)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return WithGaps.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = WithGaps.__new__(WithGaps)
         m.first = r.read_u32()
         m.third = r.read_u32()
@@ -72,15 +86,22 @@ class Annotated:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u8(self.version)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Annotated.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Annotated.__new__(Annotated)
         m.version = r.read_u8()
         r.flush_to_byte_boundary()
@@ -100,6 +121,10 @@ class FieldAnnotations:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.a)
         w.write_leb128(self.b)
         w.write_string(self.c)
@@ -107,11 +132,14 @@ class FieldAnnotations:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return FieldAnnotations.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = FieldAnnotations.__new__(FieldAnnotations)
         m.a = r.read_u32()
         m.b = r.read_leb128()
@@ -129,12 +157,12 @@ class FieldAnnotationsEncoder:
 
     def encode(self, val: FieldAnnotations) -> bytes:
         w = _BitWriter()
-        w.write_u32(val.A)
-        w.write_leb128(val.B)
-        w.write_string(val.C)
-        delta_d = val.D - self._prev_d
+        w.write_u32(val.a)
+        w.write_leb128(val.b)
+        w.write_string(val.c)
+        delta_d = val.d - self._prev_d
         w.write_i32(delta_d)
-        self._prev_d = val.D
+        self._prev_d = val.d
         w.flush_to_byte_boundary()
         return w.finish()
 
@@ -149,13 +177,13 @@ class FieldAnnotationsDecoder:
     def decode(self, data: bytes) -> FieldAnnotations:
         r = _BitReader(data)
         m = FieldAnnotations.__new__(FieldAnnotations)
-        m.A = r.read_u32()
-        m.B = r.read_leb128()
-        m.C = r.read_string()
+        m.a = r.read_u32()
+        m.b = r.read_leb128()
+        m.c = r.read_string()
         delta_d = None
         delta_d = r.read_i32()
-        m.D = self._prev_d + delta_d
-        self._prev_d = m.D
+        m.d = self._prev_d + delta_d
+        self._prev_d = m.d
         r.flush_to_byte_boundary()
         return m
 

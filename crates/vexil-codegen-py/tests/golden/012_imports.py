@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xe6, 0x77, 0xbb, 0x9e, 0xff, 0x71, 0x0e, 0x00, 0xdf, 0x90, 0x26, 0x63, 0x68, 0xcb, 0x1b, 0x47, 0xd2, 0xc3, 0x00, 0xb2, 0x61, 0x64, 0x63, 0x0e, 0x84, 0xa1, 0x59, 0xaa, 0x40, 0x77, 0xb2, 0xd9)
 
@@ -21,17 +21,24 @@ class UseImports:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         # Unknown type: Unknown
         # Unknown type: Unknown
         # Unknown type: Unknown
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return UseImports.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = UseImports.__new__(UseImports)
         # Unknown type: Unknown
         # Unknown type: Unknown

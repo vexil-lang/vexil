@@ -8,7 +8,7 @@ Vexil (Validated Exchange Language) is a typed schema language where the wire en
   <a href="https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md">Review compatibility limits</a>
 </div>
 
-> **Choose a verified path.** Rust and TypeScript have cross-language byte-vector coverage. Verify generated Go or Python output for the schemas and runtime versions you intend to ship.
+> **Choose a verified path.** Rust and TypeScript have broad cross-language byte-vector coverage. Generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.
 
 ## What makes Vexil different?
 
@@ -16,7 +16,7 @@ Vexil (Validated Exchange Language) is a typed schema language where the wire en
 
 **Deterministic encoding.** Same data always produces identical bytes. This enables BLAKE3 content addressing, deduplication, and replay detection. These are things Protobuf, Cap'n Proto, and FlatBuffers don't guarantee.
 
-**Multi-language.** Generate Rust, TypeScript, Go, and Python from the same `.vexil` schema. Rust and TypeScript have byte-identical output verified by compliance vectors; Go and Python lack that verification.
+**Multi-language.** Generate Rust, TypeScript, Go, and Python from the same `.vexil` schema. Rust and TypeScript have broad compliance-vector coverage; generated Go and Python exercise a representative shared wire matrix.
 
 ## Quick example
 

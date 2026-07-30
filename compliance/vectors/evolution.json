@@ -18,5 +18,25 @@
     "encoded_v2": "2a0000006300",
     "decoded_as_v1": { "x": 42 },
     "notes": "v1 decoder reads x, ignores trailing bytes (y=99)"
+  },
+  {
+    "name": "v1_encode_v2_decode_appended_optional_field",
+    "schema_v1": "namespace test.evo\nmessage M { x @0 : u32 }",
+    "schema_v2": "namespace test.evo\nmessage M { x @0 : u32  y @1 : optional<u16> }",
+    "type": "M",
+    "value_v1": { "x": 42 },
+    "encoded_v1": "2a000000",
+    "decoded_as_v2": { "x": 42, "y": null },
+    "notes": "An appended optional field decodes as absent from v1 bytes."
+  },
+  {
+    "name": "v2_encode_v1_decode_appended_optional_field",
+    "schema_v1": "namespace test.evo\nmessage M { x @0 : u32 }",
+    "schema_v2": "namespace test.evo\nmessage M { x @0 : u32  y @1 : optional<u16> }",
+    "type": "M",
+    "value_v2": { "x": 42, "y": 99 },
+    "encoded_v2": "2a000000016300",
+    "decoded_as_v1": { "x": 42 },
+    "notes": "A v1 decoder reads x and ignores the trailing optional-field bytes."
   }
 ]

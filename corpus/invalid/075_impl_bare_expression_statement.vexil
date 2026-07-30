@@ -1,0 +1,15 @@
+namespace test.impl_bare_expression_statement
+
+trait Inspectable {
+    fn inspect()
+}
+
+message Item {
+    ready @0 : bool
+}
+
+impl Inspectable for Item {
+    fn inspect() {
+        self.ready
+    }
+}

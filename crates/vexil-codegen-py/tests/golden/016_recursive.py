@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xa1, 0x25, 0xcb, 0x50, 0x29, 0x3e, 0xa3, 0x25, 0x60, 0x73, 0x08, 0x42, 0x52, 0xc5, 0xca, 0xf0, 0x83, 0xf5, 0xdd, 0xf7, 0x30, 0x18, 0xf8, 0x51, 0x8e, 0x54, 0xa9, 0xfd, 0xbe, 0xeb, 0x91, 0xae)
 
@@ -20,22 +20,29 @@ class TreeNode:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_i32(self.value)
         w.write_leb128(len(self.children))
         for item in self.children:
-            w.write_message(item)
+            item.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return TreeNode.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_i32()
         arr_len = r.read_leb128()
-        m.children: list[TreeNode] = []
+        m.children = []
         for _ in range(arr_len):
             _item: TreeNode = None  # type: ignore[assignment]
             _item = TreeNode.decode_from(r)
@@ -55,28 +62,39 @@ class LinkedList:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_string(self.value)
         w.write_bool(self.next is not None)
         w.flush_to_byte_boundary()
         if self.next is not None:
-            w.write_message(self.next)
+            self.next.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return LinkedList.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_string()
-        present = r.read_bool()
-        r.flush_to_byte_boundary()
-        if present:
-            m.next: LinkedList = None  # type: ignore[assignment]
-            m.next = LinkedList.decode_from(r)
-        else:
+        try:
+            present = r.read_bool()
+        except DecodeError:
             m.next = None
+        else:
+            r.flush_to_byte_boundary()
+            if present:
+                m.next: LinkedList = None  # type: ignore[assignment]
+                m.next = LinkedList.decode_from(r)
+            else:
+                m.next = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -91,18 +109,25 @@ class Expr:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        w.extend(self.kind.encode())
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        _encoded_union = self.kind.encode()
+        w.write_raw_bytes(_encoded_union, len(_encoded_union))
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Expr.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Expr.__new__(Expr)
-        _payload = r.read_bytes()
-        m.kind = decode_ExprKind(_payload)
+        m.kind = decode_ExprKind_from(r)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -130,7 +155,7 @@ class ExprKindLiteral(ExprKind):
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
@@ -144,29 +169,28 @@ class ExprKindBinary(ExprKind):
         w = _BitWriter()
         w.write_leb128(1)
         pw = _BitWriter()
-        pw.write_message(self.left)
+        self.left.encode_to(pw)
         pw.write_u8(self.op)
-        pw.write_message(self.right)
+        self.right.encode_to(pw)
         pw.flush_to_byte_boundary()
         payload = pw.finish()
         w.write_leb128(len(payload))
-        w.write_raw_bytes(payload)
+        w.write_raw_bytes(payload, len(payload))
         return w.finish()
 
 
-def decode_ExprKind(data: bytes) -> ExprKind:
-    r = _BitReader(data)
+def decode_ExprKind_from(r: _BitReader) -> ExprKind:
     r.flush_to_byte_boundary()
     disc = r.read_leb128()
     length = r.read_leb128()
     if disc == 0:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         value: int = None  # type: ignore[assignment]
         value = pr.read_i64()
         return ExprKindLiteral(value)
     elif disc == 1:
-        _payload = r.read_raw_bytes(length)
+        _payload = r.read_bytes(length)
         pr = _BitReader(_payload)
         left: Expr = None  # type: ignore[assignment]
         left = Expr.decode_from(pr)
@@ -177,4 +201,8 @@ def decode_ExprKind(data: bytes) -> ExprKind:
         return ExprKindBinary(left, op, right)
     else:
         raise ValueError(f"unknown ExprKind discriminant: {disc}")
+
+def decode_ExprKind(data: bytes) -> ExprKind:
+    r = _BitReader(data)
+    return decode_ExprKind_from(r)
 

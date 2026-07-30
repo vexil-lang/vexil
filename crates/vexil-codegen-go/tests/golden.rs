@@ -292,6 +292,52 @@ fn test_048_generic_trait_nested() {
 }
 
 #[test]
+fn test_047_trait_function_codegen_deferred() {
+    golden_test("047_trait_function_codegen_deferred");
+}
+
+#[test]
+fn test_049_trait_function_portable_body() {
+    golden_test("049_trait_function_portable_body");
+}
+
+#[test]
+fn trait_field_tags_do_not_change_generated_output() {
+    let first = "namespace test.trait_tags\ntrait Tagged { value @0 : i32 label @1 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let retagged = "namespace test.trait_tags\ntrait Tagged { value @9 : i32 label @9 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let first = vexil_lang::compile(first).compiled.expect("first schema");
+    let retagged = vexil_lang::compile(retagged)
+        .compiled
+        .expect("retagged schema");
+    assert_eq!(
+        vexil_codegen_go::generate(&first).expect("first output"),
+        vexil_codegen_go::generate(&retagged).expect("retagged output")
+    );
+}
+
+#[test]
+fn trait_function_unused_local() {
+    golden_source_test(
+        "trait_function_unused_local",
+        r#"
+namespace test.trait_function_unused_local
+trait Identity {
+    fn identity(input: i32) -> i32
+}
+message Counter {
+    value @0 : i32
+}
+impl Identity for Counter {
+    fn identity(input: i32) -> i32 {
+        let unused: i32 = input
+        return input
+    }
+}
+"#,
+    );
+}
+
+#[test]
 fn trait_only_generic() {
     golden_source_test(
         "trait_only_generic",

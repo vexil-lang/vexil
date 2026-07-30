@@ -15,6 +15,7 @@
 //! cloning is implemented, the corpus should be updated to exercise that path.
 
 use std::path::PathBuf;
+use vexil_lang::codegen::CodegenBackend;
 use vexil_lang::diagnostic::Severity;
 use vexil_lang::resolve::FilesystemLoader;
 
@@ -98,4 +99,72 @@ fn project_diamond() {
 #[test]
 fn project_mixed() {
     compile_and_generate("mixed", "mix.app", 3);
+}
+
+#[test]
+fn aliased_trait_project_compiles_natively() {
+    let project_dir = corpus_dir().join("trait_alias");
+    let root_path = project_dir.join("app/root.vexil");
+    let source = std::fs::read_to_string(&root_path).expect("read aliased trait root");
+    let loader = FilesystemLoader::new(vec![project_dir]);
+    let result =
+        vexil_lang::compile_project(&source, &root_path, &loader).expect("compile aliased project");
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != Severity::Error),
+        "{:#?}",
+        result.diagnostics
+    );
+    let files = vexil_codegen_rust::RustBackend
+        .generate_project(&result)
+        .expect("generate aliased Rust project");
+
+    let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("crates directory")
+        .parent()
+        .expect("workspace root")
+        .to_path_buf();
+    let runtime_path = workspace_root
+        .join("crates/vexil-runtime")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let temp =
+        std::env::temp_dir().join(format!("vexil-rust-alias-project-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp);
+    std::fs::create_dir_all(temp.join("src")).expect("create source directory");
+    for (relative, content) in files {
+        let destination = temp.join("src").join(relative);
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent).expect("create generated module directory");
+        }
+        std::fs::write(destination, content).expect("write generated Rust module");
+    }
+    std::fs::write(
+        temp.join("src/lib.rs"),
+        "pub mod traits { pub mod contracts; }\npub mod app { pub mod root; }\n",
+    )
+    .expect("write crate root");
+    std::fs::write(
+        temp.join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"vexil-alias-contract\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nvexil-runtime = {{ path = \"{runtime_path}\" }}\n"
+        ),
+    )
+    .expect("write Cargo manifest");
+
+    let output = std::process::Command::new("cargo")
+        .args(["clippy", "--", "-D", "warnings"])
+        .current_dir(&temp)
+        .env("CARGO_TARGET_DIR", temp.join("target"))
+        .output()
+        .expect("run native Rust check");
+    let _ = std::fs::remove_dir_all(&temp);
+    assert!(
+        output.status.success(),
+        "generated aliased Rust project failed Clippy:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

@@ -24,19 +24,49 @@ pub fn clone_types_into(
     declarations: &[TypeId],
     target: &mut TypeRegistry,
 ) -> HashMap<TypeId, TypeId> {
+    clone_types_into_with_bindings(source, declarations, target, true)
+}
+
+/// Clone declarations and their closure without creating visible source names.
+///
+/// Used by aliased imports, which bind only explicit `Alias.Member` spellings.
+pub(crate) fn clone_types_into_unbound(
+    source: &TypeRegistry,
+    declarations: &[TypeId],
+    target: &mut TypeRegistry,
+) -> HashMap<TypeId, TypeId> {
+    clone_types_into_with_bindings(source, declarations, target, false)
+}
+
+fn clone_types_into_with_bindings(
+    source: &TypeRegistry,
+    declarations: &[TypeId],
+    target: &mut TypeRegistry,
+    bind_declarations: bool,
+) -> HashMap<TypeId, TypeId> {
     // Phase 0: collect all transitively referenced TypeIds.
     let all_ids = collect_transitive_ids(source, declarations);
+    let declaration_set: HashSet<TypeId> = declarations.iter().copied().collect();
 
     // Phase 1: register stubs in target, building the id map.
     let mut id_map = HashMap::new();
     for &old_id in &all_ids {
         if let Some(def) = source.get(old_id) {
-            // Skip if already in target by name (diamond dedup).
             let name = type_def_name(def);
-            if let Some(existing_id) = target.lookup(name) {
+            let existing_origin = source
+                .origin(old_id)
+                .and_then(|(namespace, declaration)| target.find_origin(namespace, declaration));
+            if let Some(existing_id) = existing_origin {
                 id_map.insert(old_id, existing_id);
+            } else if bind_declarations && declaration_set.contains(&old_id) {
+                if let Some(existing_id) = target.lookup(name) {
+                    id_map.insert(old_id, existing_id);
+                } else {
+                    let new_id = target.register_stub(name.into());
+                    id_map.insert(old_id, new_id);
+                }
             } else {
-                let new_id = target.register_stub(name.into());
+                let new_id = target.register_unbound_stub();
                 id_map.insert(old_id, new_id);
             }
         }
@@ -49,7 +79,28 @@ pub fn clone_types_into(
                 if target.is_stub(new_id) {
                     let remapped = remap_type_def(def, &id_map);
                     target.fill_stub(new_id, remapped);
+                    target.clone_trait_fn_return_types(source, old_id, new_id);
+                    target.clone_origin(source, old_id, new_id);
                 }
+            }
+        }
+    }
+
+    if bind_declarations {
+        for &old_id in declarations {
+            if let (Some(def), Some(&new_id)) = (source.get(old_id), id_map.get(&old_id)) {
+                target.bind_name(type_def_name(def).into(), new_id);
+            }
+        }
+    }
+
+    for (&old_impl_id, &new_impl_id) in &id_map {
+        if let Some(span) = source.impl_trait_span(old_impl_id) {
+            target.set_impl_trait_span(new_impl_id, span);
+        }
+        if let Some(old_trait_id) = source.impl_trait_id(old_impl_id) {
+            if let Some(&new_trait_id) = id_map.get(&old_trait_id) {
+                target.set_impl_trait_id(new_impl_id, new_trait_id);
             }
         }
     }
@@ -80,6 +131,9 @@ fn collect_ids_recursive(
     }
     // Visit dependencies first (depth-first) so they get stubs before dependents.
     if let Some(def) = source.get(id) {
+        if let Some(trait_id) = source.impl_trait_id(id) {
+            collect_ids_recursive(source, trait_id, visited, order);
+        }
         for referenced_id in referenced_type_ids(def) {
             collect_ids_recursive(source, referenced_id, visited, order);
         }
@@ -120,6 +174,9 @@ fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
                 for p in &fn_def.params {
                     collect_type_ids_from_resolved(&p.ty, &mut ids);
                 }
+                if let Some(return_type) = &fn_def.return_type {
+                    collect_type_ids_from_resolved(return_type, &mut ids);
+                }
             }
         }
         TypeDef::Impl(i) => {
@@ -131,11 +188,26 @@ fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
                 for p in &fn_def.params {
                     collect_type_ids_from_resolved(&p.ty, &mut ids);
                 }
+                if let Some(return_type) = &fn_def.return_type {
+                    collect_type_ids_from_resolved(return_type, &mut ids);
+                }
+                collect_type_ids_from_fn_body(&fn_def.body, &mut ids);
             }
         }
         TypeDef::Enum(_) | TypeDef::Flags(_) | TypeDef::GenericAlias(_) => {}
     }
     ids
+}
+
+fn collect_type_ids_from_fn_body(body: &crate::ir::FnBody, ids: &mut Vec<TypeId>) {
+    let crate::ir::FnBody::Block(statements) = body else {
+        return;
+    };
+    for statement in statements {
+        if let crate::ir::Statement::Let { ty: Some(ty), .. } = statement {
+            collect_type_ids_from_resolved(ty, ids);
+        }
+    }
 }
 
 fn collect_type_ids_from_resolved(ty: &ResolvedType, ids: &mut Vec<TypeId>) {
@@ -410,11 +482,78 @@ fn remap_impl_def(i: &ImplDef, id_map: &HashMap<TypeId, TypeId>) -> ImplDef {
                     .return_type
                     .as_ref()
                     .map(|t| remap_resolved_type(t, id_map)),
-                body: f.body.clone(),
+                body: remap_fn_body(&f.body, id_map),
             })
             .collect(),
         annotations: i.annotations.clone(),
         span: i.span,
+    }
+}
+
+fn remap_fn_body(body: &crate::ir::FnBody, id_map: &HashMap<TypeId, TypeId>) -> crate::ir::FnBody {
+    match body {
+        crate::ir::FnBody::External => crate::ir::FnBody::External,
+        crate::ir::FnBody::Block(statements) => crate::ir::FnBody::Block(
+            statements
+                .iter()
+                .map(|statement| remap_statement(statement, id_map))
+                .collect(),
+        ),
+    }
+}
+
+fn remap_statement(
+    statement: &crate::ir::Statement,
+    id_map: &HashMap<TypeId, TypeId>,
+) -> crate::ir::Statement {
+    match statement {
+        crate::ir::Statement::Expr(expr) => crate::ir::Statement::Expr(remap_expr(expr)),
+        crate::ir::Statement::Let { name, ty, value } => crate::ir::Statement::Let {
+            name: name.clone(),
+            ty: ty.as_ref().map(|ty| remap_resolved_type(ty, id_map)),
+            value: remap_expr(value),
+        },
+        crate::ir::Statement::Return(value) => {
+            crate::ir::Statement::Return(value.as_ref().map(remap_expr))
+        }
+        crate::ir::Statement::Assign { target, value } => crate::ir::Statement::Assign {
+            target: remap_expr(target),
+            value: remap_expr(value),
+        },
+    }
+}
+
+fn remap_expr(expr: &crate::ir::Expr) -> crate::ir::Expr {
+    use crate::ir::Expr;
+    match expr {
+        Expr::Int(value) => Expr::Int(*value),
+        Expr::UInt(value) => Expr::UInt(*value),
+        Expr::Float(value) => Expr::Float(*value),
+        Expr::Bool(value) => Expr::Bool(*value),
+        Expr::String(value) => Expr::String(value.clone()),
+        Expr::Local(name) => Expr::Local(name.clone()),
+        Expr::SelfRef => Expr::SelfRef,
+        Expr::FieldAccess(receiver, field) => {
+            Expr::FieldAccess(Box::new(remap_expr(receiver)), field.clone())
+        }
+        Expr::Call(name, args) => Expr::Call(name.clone(), args.iter().map(remap_expr).collect()),
+        Expr::TraitMethodCall {
+            trait_name,
+            method_name,
+            receiver,
+            args,
+        } => Expr::TraitMethodCall {
+            trait_name: trait_name.clone(),
+            method_name: method_name.clone(),
+            receiver: Box::new(remap_expr(receiver)),
+            args: args.iter().map(remap_expr).collect(),
+        },
+        Expr::Binary(operator, left, right) => Expr::Binary(
+            *operator,
+            Box::new(remap_expr(left)),
+            Box::new(remap_expr(right)),
+        ),
+        Expr::Unary(operator, value) => Expr::Unary(*operator, Box::new(remap_expr(value))),
     }
 }
 
@@ -501,5 +640,140 @@ mod tests {
             second_map[&foo_id], existing_foo_id,
             "diamond dedup should reuse existing Foo"
         );
+    }
+
+    #[test]
+    fn remap_clones_trait_function_return_dependencies_transitively() {
+        let source = r#"
+namespace test.function_return
+message Leaf { value @0 : u32 }
+message Payload { leaf @0 : Leaf }
+trait Producer { fn produce() -> Payload }
+"#;
+        let result = crate::compile(source);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let compiled = result.compiled.expect("compiled schema");
+        let (trait_id, _) = compiled.find_type("Producer").expect("producer trait");
+        let (payload_id, _) = compiled.find_type("Payload").expect("payload message");
+        let (leaf_id, _) = compiled.find_type("Leaf").expect("leaf message");
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let id_map = clone_types_into(&compiled.registry, &[trait_id], &mut target);
+
+        assert_eq!(id_map.len(), 3);
+        assert!(id_map.contains_key(&payload_id));
+        assert!(id_map.contains_key(&leaf_id));
+        let Some(TypeDef::Trait(trait_def)) = target.get(id_map[&trait_id]) else {
+            panic!("expected remapped trait");
+        };
+        assert_eq!(
+            trait_def.functions[0].return_type,
+            Some(ResolvedType::Named(id_map[&payload_id]))
+        );
+    }
+
+    #[test]
+    fn remap_trait_function_return_diamond_reuses_existing_dependencies() {
+        let source = r#"
+namespace test.function_return_diamond
+message Leaf { value @0 : u32 }
+message Payload { leaf @0 : Leaf }
+trait Producer { fn produce() -> Payload }
+"#;
+        let compiled = crate::compile(source).compiled.expect("compiled schema");
+        let (trait_id, _) = compiled.find_type("Producer").expect("producer trait");
+        let (payload_id, _) = compiled.find_type("Payload").expect("payload message");
+        let (leaf_id, _) = compiled.find_type("Leaf").expect("leaf message");
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let first_map = clone_types_into(&compiled.registry, &[payload_id], &mut target);
+        let second_map = clone_types_into(&compiled.registry, &[trait_id], &mut target);
+
+        assert_eq!(second_map[&payload_id], first_map[&payload_id]);
+        assert_eq!(second_map[&leaf_id], first_map[&leaf_id]);
+        let Some(TypeDef::Trait(trait_def)) = target.get(second_map[&trait_id]) else {
+            panic!("expected remapped trait");
+        };
+        assert_eq!(
+            trait_def.functions[0].return_type,
+            Some(ResolvedType::Named(first_map[&payload_id]))
+        );
+    }
+
+    #[test]
+    fn remap_generic_trait_function_preserves_concrete_return_dependency() {
+        let source = r#"
+namespace test.generic_function_dependency
+message Failure { code @0 : u32 }
+trait Resolver<T> {
+    fn resolve(candidate: T) -> result<T, Failure>
+}
+"#;
+        let result = crate::compile(source);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let compiled = result.compiled.expect("compiled schema");
+        let (trait_id, _) = compiled.find_type("Resolver").expect("resolver trait");
+        let (failure_id, _) = compiled.find_type("Failure").expect("failure message");
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let first_map = clone_types_into(&compiled.registry, &[failure_id], &mut target);
+        let second_map = clone_types_into(&compiled.registry, &[trait_id], &mut target);
+
+        assert_eq!(second_map[&failure_id], first_map[&failure_id]);
+        let Some(TypeDef::Trait(trait_def)) = target.get(second_map[&trait_id]) else {
+            panic!("expected remapped trait");
+        };
+        let Some(ResolvedType::Result(ok, error)) = &trait_def.functions[0].return_type else {
+            panic!("expected result return type");
+        };
+        assert_eq!(**ok, ResolvedType::Named(crate::ir::POISON_TYPE_ID));
+        assert_eq!(**error, ResolvedType::Named(first_map[&failure_id]));
+    }
+
+    #[test]
+    fn remap_impl_function_return_and_local_annotation_types() {
+        let source = r#"
+namespace test.impl_function_types
+trait Producer { fn produce() -> Payload }
+message Payload { value @0 : bool }
+message Leaf { value @0 : u32 }
+message Host { value @0 : bool }
+impl Producer for Host {
+    fn produce() -> Payload {
+        let leaf: Leaf = self
+        return self
+    }
+}
+"#;
+        let compiled = crate::compile(source).compiled.expect("compiled schema");
+        let (payload_id, _) = compiled.find_type("Payload").expect("payload message");
+        let (leaf_id, _) = compiled.find_type("Leaf").expect("leaf message");
+        let (impl_id, _) = compiled
+            .registry
+            .iter()
+            .find(|(_, definition)| matches!(definition, TypeDef::Impl(_)))
+            .expect("impl definition");
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let id_map = clone_types_into(&compiled.registry, &[impl_id], &mut target);
+        let Some(TypeDef::Impl(implementation)) = target.get(id_map[&impl_id]) else {
+            panic!("expected remapped impl");
+        };
+
+        assert_eq!(
+            implementation.functions[0].return_type,
+            Some(ResolvedType::Named(id_map[&payload_id]))
+        );
+        let crate::ir::FnBody::Block(statements) = &implementation.functions[0].body else {
+            panic!("expected block body");
+        };
+        let crate::ir::Statement::Let {
+            ty: Some(local_type),
+            ..
+        } = &statements[0]
+        else {
+            panic!("expected typed local");
+        };
+        assert_eq!(*local_type, ResolvedType::Named(id_map[&leaf_id]));
     }
 }

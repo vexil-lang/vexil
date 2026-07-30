@@ -10,7 +10,8 @@ The Go runtime is available as the versioned module `github.com/vexil-lang/vexil
 go get github.com/vexil-lang/vexil/packages/runtime-go@v0.1.1
 ```
 
-The runtime exercises shared byte vectors. Verify generated Go output for your schemas before shipping a cross-language protocol.
+Generated Go and its runtime are exercised together against a representative
+shared wire matrix. This is not exhaustive for every schema or environment.
 
 ## Core types
 

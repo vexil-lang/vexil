@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x79, 0x11, 0xcd, 0x44, 0x04, 0x6d, 0x10, 0x7a, 0xf1, 0xf1, 0x82, 0x9b, 0x7b, 0x72, 0x7b, 0x36, 0x1c, 0x74, 0xbf, 0x08, 0x23, 0xb7, 0x7d, 0xec, 0x49, 0x18, 0xe9, 0xd4, 0xe0, 0xb3, 0x05, 0x67)
 SCHEMA_VERSION: str = "1.2.0"
@@ -20,15 +20,22 @@ class OldMessage:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return OldMessage.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = OldMessage.__new__(OldMessage)
         m.value = r.read_u32()
         r.flush_to_byte_boundary()
@@ -46,16 +53,23 @@ class Lifecycle:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_string(self.name)
         w.write_string(self.email)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Lifecycle.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Lifecycle.__new__(Lifecycle)
         m.name = r.read_string()
         m.email = r.read_string()
@@ -77,6 +91,10 @@ class Encoded:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_leb128(self.count)
         w.write_zigzag(self.delta)
         w.write_u64(self.offset)
@@ -85,11 +103,14 @@ class Encoded:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Encoded.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Encoded.__new__(Encoded)
         m.count = r.read_leb128()
         m.delta = r.read_zigzag()
@@ -110,17 +131,17 @@ class EncodedEncoder:
 
     def encode(self, val: Encoded) -> bytes:
         w = _BitWriter()
-        w.write_leb128(val.Count)
-        w.write_zigzag(val.Delta)
-        delta_offset = val.Offset - self._prev_offset
+        w.write_leb128(val.count)
+        w.write_zigzag(val.delta)
+        delta_offset = val.offset - self._prev_offset
         w.write_u64(delta_offset)
-        self._prev_offset = val.Offset
-        delta_smooth = val.Smooth - self._prev_smooth
+        self._prev_offset = val.offset
+        delta_smooth = val.smooth - self._prev_smooth
         w.write_leb128(delta_smooth)
-        self._prev_smooth = val.Smooth
-        delta_signed = val.Signed - self._prev_signed
+        self._prev_smooth = val.smooth
+        delta_signed = val.signed - self._prev_signed
         w.write_zigzag(delta_signed)
-        self._prev_signed = val.Signed
+        self._prev_signed = val.signed
         w.flush_to_byte_boundary()
         return w.finish()
 
@@ -139,20 +160,20 @@ class EncodedDecoder:
     def decode(self, data: bytes) -> Encoded:
         r = _BitReader(data)
         m = Encoded.__new__(Encoded)
-        m.Count = r.read_leb128()
-        m.Delta = r.read_zigzag()
+        m.count = r.read_leb128()
+        m.delta = r.read_zigzag()
         delta_offset = None
         delta_offset = r.read_u64()
-        m.Offset = self._prev_offset + delta_offset
-        self._prev_offset = m.Offset
+        m.offset = self._prev_offset + delta_offset
+        self._prev_offset = m.offset
         delta_smooth = None
         delta_smooth = r.read_leb128()
-        m.Smooth = self._prev_smooth + delta_smooth
-        self._prev_smooth = m.Smooth
+        m.smooth = self._prev_smooth + delta_smooth
+        self._prev_smooth = m.smooth
         delta_signed = None
         delta_signed = r.read_zigzag()
-        m.Signed = self._prev_signed + delta_signed
-        self._prev_signed = m.Signed
+        m.signed = self._prev_signed + delta_signed
+        self._prev_signed = m.signed
         r.flush_to_byte_boundary()
         return m
 
@@ -173,40 +194,48 @@ class Limited:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_string(self.body)
         w.write_leb128(len(self.tags))
         for item in self.tags:
             w.write_string(item)
         w.write_leb128(len(self.headers))
-        for map_k, map_v in self.headers.items():
+        for map_k in sorted(self.headers):
+            map_v = self.headers[map_k]
             w.write_string(map_k)
             w.write_string(map_v)
         w.write_bytes(self.data)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Limited.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Limited.__new__(Limited)
         m.body = r.read_string()
         arr_len = r.read_leb128()
-        m.tags: list[str] = []
+        m.tags = []
         for _ in range(arr_len):
             _item: str = None  # type: ignore[assignment]
             _item = r.read_string()
             m.tags.append(_item)
         map_len = r.read_leb128()
-        m.headers: dict[str, str] = {}
+        m.headers = {}
         for _ in range(map_len):
             _k: str = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
             _k = r.read_string()
             _v = r.read_string()
             m.headers[_k] = _v
-        m.data = r.read_bytes()
+        m.data = r.read_bytes(r.read_leb128())
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -221,15 +250,22 @@ class RenderCommand:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u8(self.op)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return RenderCommand.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = RenderCommand.__new__(RenderCommand)
         m.op = r.read_u8()
         r.flush_to_byte_boundary()
@@ -246,15 +282,22 @@ class Documented:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Documented.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Documented.__new__(Documented)
         m.value = r.read_u32()
         r.flush_to_byte_boundary()

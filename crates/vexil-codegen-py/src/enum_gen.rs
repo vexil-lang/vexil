@@ -20,10 +20,15 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
     // encode method
     w.line("def encode(self) -> bytes:");
     w.indent();
-    w.line(&format!(
-        "return _BitWriter().write_bits(int(self), {}).finish()",
-        en.wire_bits
-    ));
+    w.line("w = _BitWriter()");
+    w.line("self.encode_to(w)");
+    w.line("return w.finish()");
+    w.close_block();
+    w.blank();
+
+    // Writer-level methods are used when an enum is embedded in a message.
+    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.line(&format!("w.write_bits(int(self), {})", en.wire_bits));
     w.close_block();
     w.blank();
 
@@ -33,6 +38,12 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
     w.line("r = _BitReader(data)");
     w.line(&format!("v = r.read_bits({})", en.wire_bits));
     w.line(&format!("return {name}(v)"));
+    w.close_block();
+    w.blank();
+
+    w.line("@staticmethod");
+    w.open_block("def decode_from(r: _BitReader)");
+    w.line(&format!("return {name}(r.read_bits({}))", en.wire_bits));
     w.close_block();
     w.blank();
 

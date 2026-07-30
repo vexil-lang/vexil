@@ -14,7 +14,7 @@ use crate::ast::{
     Annotation, AnnotationValue, BinOpKind, CmpOp, ConfigDecl, ConstDecl, ConstExpr, Decl,
     EnumBacking, EnumBodyItem, EnumDecl, FlagsBodyItem, FlagsDecl, ImplDecl, ImplFnBody,
     ImportKind, MessageBodyItem, MessageDecl, MessageField, NewtypeDecl, PrimitiveType, Schema,
-    SemanticType, TypeExpr, UnionBodyItem, UnionDecl, WhereExpr, WhereOperand,
+    SemanticType, TraitDecl, TypeExpr, UnionBodyItem, UnionDecl, WhereExpr, WhereOperand,
 };
 use crate::diagnostic::{find_closest_match, Diagnostic, ErrorClass, Note};
 use crate::span::{Span, Spanned};
@@ -41,6 +41,7 @@ enum DeclKind {
 struct ValidationContext<'a> {
     decl_map: &'a HashMap<&'a SmolStr, (DeclKind, Span)>,
     imported_names: &'a HashSet<&'a SmolStr>,
+    has_imports: bool,
     has_wildcard_import: bool,
     newtype_inners: &'a HashMap<&'a SmolStr, &'a TypeExpr>,
     alias_targets: &'a HashMap<&'a SmolStr, &'a TypeExpr>,
@@ -114,7 +115,8 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
                 }
             }
             ImportKind::Aliased { .. } => {
-                // Aliased imports use Qualified types (Alias.Type), not Named.
+                // Qualified members are resolved against dependency identity
+                // during lowering.
             }
         }
     }
@@ -143,6 +145,7 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
     let ctx = ValidationContext {
         decl_map: &decl_map,
         imported_names: &imported_names,
+        has_imports: !schema.imports.is_empty(),
         has_wildcard_import,
         newtype_inners: &newtype_inners,
         alias_targets: &alias_targets,
@@ -168,7 +171,7 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
             Decl::Config(d) => check_config(d, &ctx, &mut diags),
             Decl::Alias(d) => check_alias(d, &ctx, &mut diags),
             Decl::Const(d) => check_const(d, &ctx, &mut diags),
-            Decl::Trait(_) => {} // trait validation during impl
+            Decl::Trait(d) => check_trait(d, &mut diags),
             Decl::Impl(d) => check_impl(d, &ctx, &mut diags),
         }
     }
@@ -1453,6 +1456,36 @@ fn eval_const_expr(
 // Impl validation
 // ---------------------------------------------------------------------------
 
+fn check_trait(trait_decl: &TraitDecl, diags: &mut Vec<Diagnostic>) {
+    let mut function_names = HashSet::new();
+    for function in &trait_decl.functions {
+        if !function_names.insert(function.name.node.as_str()) {
+            diags.push(Diagnostic::error(
+                function.name.span,
+                ErrorClass::TraitFnDuplicate,
+                format!(
+                    "duplicate function '{}' in trait '{}'",
+                    function.name.node, trait_decl.name.node
+                ),
+            ));
+        }
+        check_function_params(&function.params, diags);
+    }
+}
+
+fn check_function_params(params: &[crate::ast::FnParam], diags: &mut Vec<Diagnostic>) {
+    let mut names = HashSet::new();
+    for parameter in params {
+        if !names.insert(parameter.name.node.as_str()) {
+            diags.push(Diagnostic::error(
+                parameter.name.span,
+                ErrorClass::FnParamDuplicate,
+                format!("duplicate function parameter '{}'", parameter.name.node),
+            ));
+        }
+    }
+}
+
 fn check_impl(impl_decl: &ImplDecl, ctx: &ValidationContext<'_>, diags: &mut Vec<Diagnostic>) {
     let target_name = &impl_decl.target_type.node;
     let trait_name = &impl_decl.trait_name.node;
@@ -1466,18 +1499,20 @@ fn check_impl(impl_decl: &ImplDecl, ctx: &ValidationContext<'_>, diags: &mut Vec
         ));
     }
 
-    // Check: trait must exist and be a trait
-    match ctx.decl_map.get(trait_name) {
-        Some((DeclKind::Trait, _)) => {} // OK
-        Some((kind, _)) => {
-            diags.push(Diagnostic::error(
-                impl_decl.trait_name.span,
-                ErrorClass::UnknownType,
-                format!("'{trait_name}' is a {kind:?}, not a trait"),
-            ));
-        }
-        None => {
-            if !ctx.imported_names.contains(trait_name) {
+    // Imported trait lookup and kind checking happen during lowering, where
+    // dependency identity, alias membership, and wildcard ambiguity are
+    // available. Preserve the established single-schema diagnostic here.
+    if !ctx.has_imports {
+        match ctx.decl_map.get(trait_name) {
+            Some((DeclKind::Trait, _)) => {}
+            Some((kind, _)) => {
+                diags.push(Diagnostic::error(
+                    impl_decl.trait_name.span,
+                    ErrorClass::UnknownType,
+                    format!("'{trait_name}' is a {kind:?}, not a trait"),
+                ));
+            }
+            None => {
                 diags.push(Diagnostic::error(
                     impl_decl.trait_name.span,
                     ErrorClass::UnknownType,
@@ -1488,7 +1523,16 @@ fn check_impl(impl_decl: &ImplDecl, ctx: &ValidationContext<'_>, diags: &mut Vec
     }
 
     // Check: impl functions must have bodies (external functions are not allowed)
+    let mut function_names = HashSet::new();
     for func in &impl_decl.functions {
+        if !function_names.insert(func.name.node.as_str()) {
+            diags.push(Diagnostic::error(
+                func.name.span,
+                ErrorClass::ImplFnSignatureMismatch,
+                format!("duplicate implementation function '{}'", func.name.node),
+            ));
+        }
+        check_function_params(&func.params, diags);
         check_impl_fn(func, diags);
     }
 }

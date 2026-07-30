@@ -1732,9 +1732,31 @@ fn parse_fn_param(p: &mut Parser<'_>) -> FnParam {
 fn parse_impl_decl(annotations: Vec<Annotation>, p: &mut Parser<'_>) -> ImplDecl {
     p.advance(); // consume KwImpl
 
-    // Trait name: must be PascalCase
-    let trait_name = parse_decl_name(p)
+    // Trait name: either `Trait` or exactly one alias qualifier, `Alias.Trait`.
+    let mut trait_name = parse_decl_name(p)
         .unwrap_or_else(|| Spanned::new(SmolStr::new("__error"), Span::empty(p.current_offset())));
+    if p.at(&TokenKind::Dot) {
+        p.advance();
+        if let Some(member) = parse_decl_name(p) {
+            let start = trait_name.span.offset as usize;
+            let end = member.span.offset as usize + member.span.len as usize;
+            trait_name = Spanned::new(
+                SmolStr::new(format!("{}.{}", trait_name.node, member.node)),
+                Span::new(start, end.saturating_sub(start)),
+            );
+        }
+        if p.at(&TokenKind::Dot) {
+            p.emit(
+                trait_name.span,
+                ErrorClass::UnexpectedToken,
+                "impl trait path may contain exactly one alias qualifier",
+            );
+            while p.at(&TokenKind::Dot) {
+                p.advance();
+                let _ = parse_decl_name(p);
+            }
+        }
+    }
 
     // Optional type arguments for generic traits (e.g., `<u64>` in `impl Tagged<u64>`)
     let type_args = if p.at(&TokenKind::LAngle) {

@@ -27,6 +27,7 @@ jobs:
       ts_runtime: ${{ steps.classify.outputs.ts_runtime }}
       go_runtime: ${{ steps.classify.outputs.go_runtime }}
       schema: ${{ steps.classify.outputs.schema }}
+      generated_targets: ${{ steps.classify.outputs.generated_targets }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
@@ -41,11 +42,11 @@ jobs:
             echo "ts_runtime=true" >> "$GITHUB_OUTPUT"
             echo "go_runtime=true" >> "$GITHUB_OUTPUT"
             echo "schema=true" >> "$GITHUB_OUTPUT"
+            echo "generated_targets=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}"...HEAD)"
-          matches() { grep -Eq "$1" <<< "$changed"; }
 
           # Default to the complete Rust suite. Only changes known to be isolated
           # from the workspace may opt out; new build inputs stay fail-closed.
@@ -54,14 +55,9 @@ jobs:
           else
             rust=true
           fi
-          matches '^(packages/runtime-ts/|compliance/vectors/|\.github/workflows/ci\.yml)' && ts_runtime=true || ts_runtime=false
-          matches '^(packages/runtime-go/|compliance/vectors/|\.github/workflows/ci\.yml)' && go_runtime=true || go_runtime=false
-          matches '\.vexil$' && schema=true || schema=false
-
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
-          echo "ts_runtime=$ts_runtime" >> "$GITHUB_OUTPUT"
-          echo "go_runtime=$go_runtime" >> "$GITHUB_OUTPUT"
-          echo "schema=$schema" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$changed" |
+            bash .github/scripts/classify-generated-changes.sh >> "$GITHUB_OUTPUT"
 
   # Main-branch protection requires this stable gate. Without it, a failed
   # classifier could cause the dependent required jobs to be skipped.
@@ -178,6 +174,73 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+
+  # ── Generated target contract checks ───────────────────────────────────────
+  # Compiles function-bearing trait output with each target's native checker,
+  # including positive behavior/wire proofs and intentionally incomplete
+  # implementations that must be rejected.
+  generated-targets:
+    name: Generated target contracts
+    needs: changes
+    if: needs.changes.outputs.generated_targets == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "22.12.0"
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.22"
+
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.10"
+
+      - name: Install TypeScript runtime dependencies
+        working-directory: packages/runtime-ts
+        run: npm ci
+
+      - name: Install generated-code checker dependencies
+        working-directory: tools/generated-code-checks
+        run: npm ci --ignore-scripts
+
+      - name: Verify generator goldens
+        run: |
+          cargo test -p vexil-codegen-rust --test golden
+          cargo test -p vexil-codegen-ts --test golden
+          cargo test -p vexil-codegen-go --test golden
+          cargo test -p vexil-codegen-py --test golden
+
+      - name: Verify native Rust and Go contracts
+        run: |
+          cargo test -p vexil-codegen-rust --test compile_check trait
+          cargo test -p vexil-codegen-go --test compile_check trait
+
+      - name: Verify TypeScript and Python contracts
+        working-directory: tools/generated-code-checks
+        run: npm run check
+
+      - name: Verify generated Go and Python wire matrix
+        working-directory: tools/generated-code-checks
+        run: npm run check:wire
+
+      - name: Verify generated change classification
+        run: bash .github/scripts/test-classify-generated-changes.sh
 
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.

@@ -1,165 +1,381 @@
-//! Function body code generation for Rust backend.
-//!
-//! Emits Rust code for impl function bodies.
+use std::collections::HashSet;
 
-use vexil_lang::ir::{BinOp, Expr, FnBody, Statement, UnaryOp};
+use vexil_lang::ast::PrimitiveType;
+use vexil_lang::codegen::portable::{
+    PortableExpr, PortableExprKind, PortableFunction, PortableStatement,
+};
+use vexil_lang::ir::{BinOp, MessageDef, ResolvedType, TypeDef, TypeId, TypeRegistry, UnaryOp};
 
 use crate::emit::CodeWriter;
 
-/// Generate code for a function body.
-pub fn emit_fn_body(w: &mut CodeWriter, body: &FnBody) {
-    match body {
-        FnBody::External => {
-            // SAFETY: External functions are rejected at validation,
-            // so this branch should never be reached.
-            w.line("unreachable!()");
+/// Emit one checked portable impl function using the target message's Rust storage layout.
+pub fn emit_function(
+    w: &mut CodeWriter,
+    function: &PortableFunction,
+    registry: &TypeRegistry,
+    message: &MessageDef,
+    target_id: TypeId,
+    needs_box: &HashSet<(TypeId, usize)>,
+) {
+    let referenced_locals = referenced_locals(function);
+    let context = FunctionContext {
+        registry,
+        message,
+        target_id,
+        needs_box,
+    };
+    let params = function
+        .params
+        .iter()
+        .map(|parameter| {
+            format!(
+                "{}: {}",
+                binding_name(&parameter.name, &referenced_locals),
+                crate::types::rust_type(&parameter.ty, registry, &HashSet::new(), None,)
+            )
+        })
+        .collect::<Vec<_>>();
+    let return_type = function
+        .return_type
+        .as_ref()
+        .map(|ty| {
+            format!(
+                " -> {}",
+                crate::types::rust_type(ty, registry, &HashSet::new(), None,)
+            )
+        })
+        .unwrap_or_default();
+    let tail = if params.is_empty() {
+        String::new()
+    } else {
+        format!(", {}", params.join(", "))
+    };
+    w.line(&format!(
+        "fn {}(&mut self{tail}){return_type} {{",
+        function.name
+    ));
+    w.indent();
+    for (index, statement) in function.statements.iter().enumerate() {
+        emit_statement(
+            w,
+            statement,
+            &context,
+            &referenced_locals,
+            index + 1 == function.statements.len(),
+        );
+    }
+    w.dedent();
+    w.line("}");
+}
+
+fn emit_statement(
+    w: &mut CodeWriter,
+    statement: &PortableStatement,
+    context: &FunctionContext<'_>,
+    referenced_locals: &HashSet<String>,
+    is_last: bool,
+) {
+    match statement {
+        PortableStatement::Let { name, ty, value } => {
+            let ty = crate::types::rust_type(ty, context.registry, &HashSet::new(), None);
+            let name = binding_name(name, referenced_locals);
+            w.line(&format!(
+                "let {name}: {ty} = {};",
+                emit_expr(value, context)
+            ));
         }
-        FnBody::Block(stmts) => {
-            w.indent();
-            for stmt in stmts {
-                emit_statement(w, stmt);
+        PortableStatement::Return(Some(value)) if is_last => {
+            w.line(&emit_expr(value, context));
+        }
+        PortableStatement::Return(Some(value)) => {
+            w.line(&format!("return {};", emit_expr(value, context)));
+        }
+        PortableStatement::Return(None) if is_last => {}
+        PortableStatement::Return(None) => w.line("return;"),
+        PortableStatement::AssignSelfField { field, value } => {
+            let field_storage = context.field_storage(field);
+            if !field_storage.is_some_and(|storage| storage.is_boxed) {
+                if let PortableExprKind::Binary(operator, left, right) = &value.kind {
+                    if matches!(&left.kind, PortableExprKind::SelfField(name) if name == field)
+                        && matches!(operator, BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div)
+                    {
+                        w.line(&format!(
+                            "self.{field} {}= {};",
+                            binary_operator(*operator),
+                            emit_expr(right, context)
+                        ));
+                        return;
+                    }
+                }
             }
-            w.dedent();
+            let value = emit_expr(value, context);
+            let value = match field_storage {
+                Some(storage) if storage.is_boxed => into_storage(value, storage.ty),
+                _ => value,
+            };
+            w.line(&format!("self.{field} = {value};"));
         }
     }
 }
 
-/// Generate a simple Rust type string for basic types (used in let statements).
-fn simple_rust_type(ty: &vexil_lang::ir::ResolvedType) -> String {
-    use vexil_lang::ast::{PrimitiveType, SemanticType};
-    use vexil_lang::ir::ResolvedType;
+fn emit_expr(expression: &PortableExpr, context: &FunctionContext<'_>) -> String {
+    emit_expr_with_precedence(expression, context, 0)
+}
 
+fn emit_expr_with_precedence(
+    expression: &PortableExpr,
+    context: &FunctionContext<'_>,
+    parent_precedence: u8,
+) -> String {
+    match &expression.kind {
+        PortableExprKind::Int(value) => {
+            numeric_literal(&value.to_string(), &expression.ty, context.registry)
+        }
+        PortableExprKind::UInt(value) => {
+            numeric_literal(&value.to_string(), &expression.ty, context.registry)
+        }
+        PortableExprKind::Float(value) => {
+            let mut literal = value.to_string();
+            if !literal.contains(['.', 'e', 'E']) {
+                literal.push_str(".0");
+            }
+            numeric_literal(&literal, &expression.ty, context.registry)
+        }
+        PortableExprKind::Bool(value) => value.to_string(),
+        PortableExprKind::String(value) => format!("String::from({value:?})"),
+        PortableExprKind::Local(name) if is_rust_copy_type(&expression.ty, context.registry) => {
+            name.to_string()
+        }
+        PortableExprKind::Local(name) => format!("{name}.clone()"),
+        PortableExprKind::SelfRef => "self.clone()".to_string(),
+        PortableExprKind::SelfField(field) => {
+            if let Some(storage) = context
+                .field_storage(field)
+                .filter(|storage| storage.is_boxed)
+            {
+                from_storage(format!("self.{field}.clone()"), storage.ty)
+            } else if is_rust_copy_type(&expression.ty, context.registry) {
+                format!("self.{field}")
+            } else {
+                format!("self.{field}.clone()")
+            }
+        }
+        PortableExprKind::Binary(operator, left, right) => {
+            let precedence = binary_precedence(*operator);
+            let emitted = format!(
+                "{} {} {}",
+                emit_expr_with_precedence(left, context, precedence),
+                binary_operator(*operator),
+                emit_expr_with_precedence(right, context, precedence + 1)
+            );
+            if precedence < parent_precedence {
+                format!("({emitted})")
+            } else {
+                emitted
+            }
+        }
+        PortableExprKind::Unary(operator, value) => {
+            let precedence = 5;
+            let emitted = format!(
+                "{}{}",
+                unary_operator(*operator),
+                emit_expr_with_precedence(value, context, precedence)
+            );
+            if precedence < parent_precedence {
+                format!("({emitted})")
+            } else {
+                emitted
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FieldStorage<'a> {
+    ty: &'a ResolvedType,
+    is_boxed: bool,
+}
+
+struct FunctionContext<'a> {
+    registry: &'a TypeRegistry,
+    message: &'a MessageDef,
+    target_id: TypeId,
+    needs_box: &'a HashSet<(TypeId, usize)>,
+}
+
+impl<'a> FunctionContext<'a> {
+    fn field_storage(&self, name: &str) -> Option<FieldStorage<'a>> {
+        self.message
+            .fields
+            .iter()
+            .enumerate()
+            .find(|(_, field)| field.name == name)
+            .map(|(index, field)| FieldStorage {
+                ty: &field.resolved_type,
+                is_boxed: self.needs_box.contains(&(self.target_id, index)),
+            })
+    }
+}
+
+fn binding_name(name: &str, referenced_locals: &HashSet<String>) -> String {
+    if referenced_locals.contains(name) {
+        name.to_string()
+    } else {
+        format!("_{name}")
+    }
+}
+
+fn referenced_locals(function: &PortableFunction) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for statement in &function.statements {
+        match statement {
+            PortableStatement::Let { value, .. }
+            | PortableStatement::Return(Some(value))
+            | PortableStatement::AssignSelfField { value, .. } => {
+                collect_local_references(value, &mut names);
+            }
+            PortableStatement::Return(None) => {}
+        }
+    }
+    names
+}
+
+fn collect_local_references(expression: &PortableExpr, names: &mut HashSet<String>) {
+    match &expression.kind {
+        PortableExprKind::Local(name) => {
+            names.insert(name.to_string());
+        }
+        PortableExprKind::Binary(_, left, right) => {
+            collect_local_references(left, names);
+            collect_local_references(right, names);
+        }
+        PortableExprKind::Unary(_, value) => collect_local_references(value, names),
+        PortableExprKind::Int(_)
+        | PortableExprKind::UInt(_)
+        | PortableExprKind::Float(_)
+        | PortableExprKind::Bool(_)
+        | PortableExprKind::String(_)
+        | PortableExprKind::SelfRef
+        | PortableExprKind::SelfField(_) => {}
+    }
+}
+
+fn into_storage(value: String, ty: &ResolvedType) -> String {
     match ty {
-        ResolvedType::Primitive(p) => match p {
-            PrimitiveType::Bool => "bool".to_string(),
-            PrimitiveType::U8 => "u8".to_string(),
-            PrimitiveType::U16 => "u16".to_string(),
-            PrimitiveType::U32 => "u32".to_string(),
-            PrimitiveType::U64 => "u64".to_string(),
-            PrimitiveType::I8 => "i8".to_string(),
-            PrimitiveType::I16 => "i16".to_string(),
-            PrimitiveType::I32 => "i32".to_string(),
-            PrimitiveType::I64 => "i64".to_string(),
-            PrimitiveType::F32 => "f32".to_string(),
-            PrimitiveType::F64 => "f64".to_string(),
-            PrimitiveType::Fixed32 => "i32".to_string(),
-            PrimitiveType::Fixed64 => "i64".to_string(),
-            PrimitiveType::Void => "()".to_string(),
-        },
-        ResolvedType::Semantic(s) => match s {
-            SemanticType::String => "String".to_string(),
-            SemanticType::Bytes => "Vec<u8>".to_string(),
-            SemanticType::Rgb => "Rgb".to_string(),
-            SemanticType::Uuid => "[u8; 16]".to_string(),
-            SemanticType::Timestamp => "i64".to_string(),
-            SemanticType::Hash => "[u8; 32]".to_string(),
-        },
+        ResolvedType::Named(_) => format!("Box::new({value})"),
         ResolvedType::Optional(inner) => {
-            let inner_str = simple_rust_type(inner);
-            format!("Option<{}>", inner_str)
+            let mapped = into_storage("value".to_string(), inner);
+            if mapped == "Box::new(value)" {
+                format!("{value}.map(Box::new)")
+            } else if mapped == "value" {
+                value
+            } else {
+                format!("{value}.map(|value| {mapped})")
+            }
         }
-        ResolvedType::Array(inner) => {
-            let inner_str = simple_rust_type(inner);
-            format!("Vec<{}>", inner_str)
+        ResolvedType::Result(ok, err) => {
+            let mapped_ok = into_storage("value".to_string(), ok);
+            let mapped_err = into_storage("error".to_string(), err);
+            let value = if mapped_ok == "value" {
+                value
+            } else {
+                format!("{value}.map(|value| {mapped_ok})")
+            };
+            if mapped_err == "error" {
+                value
+            } else {
+                format!("{value}.map_err(|error| {mapped_err})")
+            }
         }
-        ResolvedType::FixedArray(inner, size) => {
-            let inner_str = simple_rust_type(inner);
-            format!("[{}; {}]", inner_str, size)
-        }
-        ResolvedType::Named(_) => "/* Named type */".to_string(),
-        _ => "/* Complex type */".to_string(),
+        _ => value,
     }
 }
 
-/// Generate code for a statement.
-fn emit_statement(w: &mut CodeWriter, stmt: &Statement) {
-    match stmt {
-        Statement::Expr(expr) => {
-            let code = emit_expr(expr);
-            w.line(&format!("{};", code));
-        }
-        Statement::Let { name, ty, value } => {
-            let val_code = emit_expr(value);
-            if let Some(t) = ty {
-                let ty_code = simple_rust_type(t);
-                w.line(&format!("let {}: {} = {};", name, ty_code, val_code));
+fn from_storage(value: String, ty: &ResolvedType) -> String {
+    match ty {
+        ResolvedType::Named(_) => format!("*{value}"),
+        ResolvedType::Optional(inner) => {
+            let mapped = from_storage("value".to_string(), inner);
+            if mapped == "*value" {
+                format!("{value}.map(|value| *value)")
+            } else if mapped == "value" {
+                value
             } else {
-                w.line(&format!("let {} = {};", name, val_code));
+                format!("{value}.map(|value| {mapped})")
             }
         }
-        Statement::Return(None) => {
-            w.line("return;");
+        ResolvedType::Result(ok, err) => {
+            let mapped_ok = from_storage("value".to_string(), ok);
+            let mapped_err = from_storage("error".to_string(), err);
+            let value = if mapped_ok == "value" {
+                value
+            } else {
+                format!("{value}.map(|value| {mapped_ok})")
+            };
+            if mapped_err == "error" {
+                value
+            } else {
+                format!("{value}.map_err(|error| {mapped_err})")
+            }
         }
-        Statement::Return(Some(expr)) => {
-            let val = emit_expr(expr);
-            w.line(&format!("return {};", val));
-        }
-        Statement::Assign { target, value } => {
-            let target_code = emit_expr(target);
-            let val_code = emit_expr(value);
-            w.line(&format!("{} = {};", target_code, val_code));
-        }
+        _ => value,
     }
 }
 
-/// Generate code for an expression.
-fn emit_expr(expr: &Expr) -> String {
-    match expr {
-        Expr::Int(v) => v.to_string(),
-        Expr::UInt(v) => v.to_string(),
-        Expr::Float(v) => v.to_string(),
-        Expr::Bool(v) => v.to_string(),
-        Expr::String(s) => format!("\"{}\".to_string()", s),
-        Expr::Local(name) => name.to_string(),
-        Expr::SelfRef => "self".to_string(),
-        Expr::FieldAccess(obj, field) => {
-            let obj_code = emit_expr(obj);
-            format!("{}.{}", obj_code, field)
+fn is_rust_copy_type(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
+    match ty {
+        ResolvedType::Primitive(_) | ResolvedType::SubByte(_) | ResolvedType::BitsInline(_) => true,
+        ResolvedType::Semantic(semantic) => !matches!(
+            semantic,
+            vexil_lang::ast::SemanticType::String | vexil_lang::ast::SemanticType::Bytes
+        ),
+        ResolvedType::Named(id) => matches!(
+            registry.get(*id),
+            Some(TypeDef::Enum(_) | TypeDef::Flags(_))
+        ),
+        ResolvedType::Optional(inner) | ResolvedType::FixedArray(inner, _) => {
+            is_rust_copy_type(inner, registry)
         }
-        Expr::Call(name, args) => {
-            let args_code: Vec<_> = args.iter().map(emit_expr).collect();
-            format!("{}({})", name, args_code.join(", "))
-        }
-        Expr::TraitMethodCall {
-            trait_name: _,
-            method_name,
-            receiver,
-            args,
-        } => {
-            // Static dispatch: generate direct call to impl function
-            // The receiver is passed as first argument for methods
-            let recv_code = emit_expr(receiver);
-            let args_code: Vec<_> = args.iter().map(emit_expr).collect();
-            if args_code.is_empty() {
-                format!("{}({})", method_name, recv_code)
-            } else {
-                format!("{}({}, {})", method_name, recv_code, args_code.join(", "))
-            }
-        }
-        Expr::Binary(op, lhs, rhs) => {
-            let op_str = match op {
-                BinOp::Add => "+",
-                BinOp::Sub => "-",
-                BinOp::Mul => "*",
-                BinOp::Div => "/",
-                BinOp::Eq => "==",
-                BinOp::Ne => "!=",
-                BinOp::Lt => "<",
-                BinOp::Le => "<=",
-                BinOp::Gt => ">",
-                BinOp::Ge => ">=",
-            };
-            let lhs_code = emit_expr(lhs);
-            let rhs_code = emit_expr(rhs);
-            format!("({} {} {})", lhs_code, op_str, rhs_code)
-        }
-        Expr::Unary(op, expr) => {
-            let op_str = match op {
-                UnaryOp::Neg => "-",
-                UnaryOp::Not => "!",
-            };
-            let expr_code = emit_expr(expr);
-            format!("{}{}", op_str, expr_code)
-        }
+        _ => false,
+    }
+}
+
+fn numeric_literal(value: &str, ty: &ResolvedType, registry: &TypeRegistry) -> String {
+    let suffix = crate::types::rust_type(ty, registry, &std::collections::HashSet::new(), None);
+    match ty {
+        ResolvedType::Primitive(PrimitiveType::Fixed32) => format!("{value}i32"),
+        ResolvedType::Primitive(PrimitiveType::Fixed64) => format!("{value}i64"),
+        _ => format!("{value}{suffix}"),
+    }
+}
+
+fn binary_operator(operator: BinOp) -> &'static str {
+    match operator {
+        BinOp::Add => "+",
+        BinOp::Sub => "-",
+        BinOp::Mul => "*",
+        BinOp::Div => "/",
+        BinOp::Eq => "==",
+        BinOp::Ne => "!=",
+        BinOp::Lt => "<",
+        BinOp::Le => "<=",
+        BinOp::Gt => ">",
+        BinOp::Ge => ">=",
+    }
+}
+
+fn binary_precedence(operator: BinOp) -> u8 {
+    match operator {
+        BinOp::Eq | BinOp::Ne => 1,
+        BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => 2,
+        BinOp::Add | BinOp::Sub => 3,
+        BinOp::Mul | BinOp::Div => 4,
+    }
+}
+
+fn unary_operator(operator: UnaryOp) -> &'static str {
+    match operator {
+        UnaryOp::Neg => "-",
+        UnaryOp::Not => "!",
     }
 }

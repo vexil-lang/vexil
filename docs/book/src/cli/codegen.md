@@ -36,4 +36,4 @@ vexilc codegen sensor.vexil --target python --output sensor.py
 - For schemas with imports, use [`build`](./build.md) instead
 - The generated code depends on the corresponding runtime library (`vexil-runtime` for Rust, `@vexil-lang/runtime` for TypeScript, `vexil-runtime` Go module, or `vexil_runtime` Python module)
 - Schema errors are reported before code generation begins
-- Field-only traits declared in the generated schema are supported in every target; trait functions and impl-function bodies are rejected with a code-generation diagnostic
+- Traits and the portable impl-function body subset are generated in every target; unsupported calls, assignments, types, and target-name collisions are reported before output

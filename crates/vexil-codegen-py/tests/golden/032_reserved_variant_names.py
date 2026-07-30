@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xaa, 0x41, 0xda, 0x90, 0xb9, 0xc2, 0xcb, 0xbb, 0x8d, 0x92, 0x3f, 0xbf, 0x43, 0xde, 0xe2, 0x73, 0xe8, 0xfd, 0x96, 0x6b, 0x8d, 0x0b, 0x0c, 0x60, 0x02, 0xb2, 0xeb, 0x1d, 0x8e, 0xcd, 0xe1, 0x7a)
 SCHEMA_VERSION: str = "1.0.0"
@@ -19,13 +19,22 @@ class ImageProtocol(int):
     KITTY = 2
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 2).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 2)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(2)
         return ImageProtocol(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return ImageProtocol(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"ImageProtocol({int(self)})"
@@ -39,13 +48,22 @@ class ParseResult(int):
     NONE = 3
 
     def encode(self) -> bytes:
-        return _BitWriter().write_bits(int(self), 2).finish()
+        w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
+        w.write_bits(int(self), 2)
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
         v = r.read_bits(2)
         return ParseResult(v)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
+        return ParseResult(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"ParseResult({int(self)})"

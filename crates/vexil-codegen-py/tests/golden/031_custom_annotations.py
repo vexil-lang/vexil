@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xb5, 0xa1, 0x57, 0x1c, 0xa4, 0x06, 0xbb, 0xc7, 0xaf, 0x52, 0x7f, 0x9d, 0xcd, 0x09, 0x62, 0x1e, 0x61, 0xbc, 0xa3, 0x89, 0x2e, 0xa7, 0xf3, 0x64, 0xba, 0x3c, 0x9b, 0x2f, 0x2e, 0xeb, 0x7f, 0xd7)
 SCHEMA_VERSION: str = "1.0.0"
@@ -21,16 +21,23 @@ class Alert:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u32(self.code)
         w.write_string(self.message)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Alert.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Alert.__new__(Alert)
         m.code = r.read_u32()
         m.message = r.read_string()
@@ -48,15 +55,22 @@ class Heartbeat:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u64(self.seq)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return Heartbeat.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = Heartbeat.__new__(Heartbeat)
         m.seq = r.read_u64()
         r.flush_to_byte_boundary()

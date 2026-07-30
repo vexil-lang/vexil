@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader
+from vexil_runtime import _BitWriter, _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x3c, 0xe1, 0x7c, 0x93, 0x58, 0x63, 0xae, 0xa0, 0x6f, 0x76, 0x53, 0xdc, 0xb8, 0x11, 0xe3, 0x87, 0x34, 0x2a, 0x85, 0x1c, 0x0a, 0xcd, 0xee, 0x7e, 0xa2, 0x86, 0x73, 0x7c, 0x3e, 0x03, 0xe7, 0x41)
 
@@ -38,6 +38,10 @@ class KeywordFields:
 
     def encode(self) -> bytes:
         w = _BitWriter()
+        self.encode_to(w)
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter):
         w.write_u8(self.flags)
         w.write_u16(self.type)
         w.write_bytes(self.hash)
@@ -61,15 +65,18 @@ class KeywordFields:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
-        return w.finish()
 
     @staticmethod
     def decode(data: bytes):
         r = _BitReader(data)
+        return KeywordFields.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader):
         m = KeywordFields.__new__(KeywordFields)
         m.flags = r.read_u8()
         m.type = r.read_u16()
-        m.hash = r.read_bytes()
+        m.hash = r.read_bytes(r.read_leb128())
         m.string = r.read_u32()
         m.message = r.read_u64()
         m.enum = r.read_u8()

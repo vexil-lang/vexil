@@ -1,0 +1,6 @@
+namespace traits.contracts
+
+trait Tagged<T> {
+    value @0 : T
+    fn reset()
+}

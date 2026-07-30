@@ -116,6 +116,16 @@ pub enum ErrorCode {
     E132, // Import name not found in namespace
     E133, // Impl function external (no body)
 
+    // Trait function errors (E140-E149)
+    E140, // Duplicate trait function
+    E141, // Duplicate function parameter
+    E142, // Missing impl function
+    E143, // Extra impl function
+    E144, // Impl function signature mismatch
+    E145, // Impl function body type mismatch
+    E146, // Impl function return mismatch
+    E147, // Invalid impl function assignment
+
     // Generic errors
     E999, // Unexpected token
 }
@@ -201,6 +211,14 @@ impl ErrorCode {
             ErrorCode::E131 => "E131",
             ErrorCode::E132 => "E132",
             ErrorCode::E133 => "E133",
+            ErrorCode::E140 => "E140",
+            ErrorCode::E141 => "E141",
+            ErrorCode::E142 => "E142",
+            ErrorCode::E143 => "E143",
+            ErrorCode::E144 => "E144",
+            ErrorCode::E145 => "E145",
+            ErrorCode::E146 => "E146",
+            ErrorCode::E147 => "E147",
             ErrorCode::E999 => "E999",
         }
     }
@@ -304,6 +322,14 @@ pub enum ErrorClass {
 
     // Impl
     ImplFnExternal,
+    TraitFnDuplicate,
+    FnParamDuplicate,
+    ImplFnMissing,
+    ImplFnExtra,
+    ImplFnSignatureMismatch,
+    ImplFnBodyTypeMismatch,
+    ImplFnReturnMismatch,
+    ImplFnAssignmentInvalid,
 
     // Generic
     UnexpectedToken,
@@ -404,6 +430,14 @@ impl ErrorClass {
 
             // Impl
             ErrorClass::ImplFnExternal => ErrorCode::E133,
+            ErrorClass::TraitFnDuplicate => ErrorCode::E140,
+            ErrorClass::FnParamDuplicate => ErrorCode::E141,
+            ErrorClass::ImplFnMissing => ErrorCode::E142,
+            ErrorClass::ImplFnExtra => ErrorCode::E143,
+            ErrorClass::ImplFnSignatureMismatch => ErrorCode::E144,
+            ErrorClass::ImplFnBodyTypeMismatch => ErrorCode::E145,
+            ErrorClass::ImplFnReturnMismatch => ErrorCode::E146,
+            ErrorClass::ImplFnAssignmentInvalid => ErrorCode::E147,
 
             // Generic
             ErrorClass::UnexpectedToken => ErrorCode::E999,

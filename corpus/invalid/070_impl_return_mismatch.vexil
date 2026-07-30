@@ -1,0 +1,15 @@
+namespace test.impl_return_mismatch
+
+trait Validatable {
+    fn score() -> i32
+}
+
+message Event {
+    score @0 : i32
+}
+
+impl Validatable for Event {
+    fn score() -> i32 {
+        return true
+    }
+}
