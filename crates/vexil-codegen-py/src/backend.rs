@@ -161,11 +161,9 @@ fn collect_named_ids_from_typedef(
                     }
                 }
             }
-            for (id, def) in registry.iter() {
-                if matches!(def, TypeDef::Trait(t) if t.name == impl_def.trait_name)
-                    && !declared.contains(&id)
-                {
-                    on_import(id);
+            if let Some((trait_id, _)) = registry.trait_for_impl(impl_def) {
+                if !declared.contains(&trait_id) {
+                    on_import(trait_id);
                 }
             }
         }
@@ -295,21 +293,53 @@ mod tests {
         let files = PythonBackend.generate_project(&result).unwrap();
 
         let left = project_file(&files, "left.py");
-        assert!(left.contains("from imports.base import *"), "{left}");
+        assert!(left.contains("from imports.base import Payload"), "{left}");
         assert!(
             left.contains("def left(self, input: Payload) -> Payload:"),
             "{left}"
         );
 
         let root = project_file(&files, "root.py");
-        assert!(root.contains("from imports.base import *"), "{root}");
-        assert!(root.contains("from imports.left import *"), "{root}");
-        assert!(root.contains("from imports.right import *"), "{root}");
+        assert!(root.contains("from imports.base import Payload"), "{root}");
+        assert!(
+            root.contains("from imports.left import LeftTransformer"),
+            "{root}"
+        );
+        assert!(
+            root.contains("from imports.right import RightTransformer"),
+            "{root}"
+        );
         assert!(
             root.contains("def left(self, input: Payload) -> Payload:"),
             "{root}"
         );
         assert_eq!(result.schemas.len(), 4);
+    }
+
+    #[test]
+    fn project_codegen_resolves_aliased_trait_to_bare_target_name() {
+        let result = aliased_trait_project();
+        let files = PythonBackend.generate_project(&result).unwrap();
+        let root = project_file(&files, "root.py");
+        assert!(
+            root.contains("from traits.contracts import Tagged"),
+            "{root}"
+        );
+        assert!(root.contains("-> Tagged[int]:"), "{root}");
+        assert!(!root.contains("-> Contracts.Tagged["), "{root}");
+    }
+
+    fn aliased_trait_project() -> ProjectResult {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "traits.contracts".into(),
+            "namespace traits.contracts\ntrait Tagged<T> { value @0 : T }".into(),
+        );
+        let root = "namespace app.root\nimport traits.contracts as Contracts\nmessage Event { value @0 : u64 }\nimpl Contracts.Tagged<u64> for Event { }";
+        let result =
+            vexil_lang::compile_project(root, &PathBuf::from("app/root.vexil"), &loader).unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        result
     }
 
     fn function_import_diamond() -> ProjectResult {
@@ -326,7 +356,7 @@ mod tests {
             "imports.right".into(),
             "namespace imports.right\nimport { Payload } from imports.base\ntrait RightTransformer { fn right(input: Payload) -> Payload }".into(),
         );
-        let root = "namespace imports.root\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
+        let root = "namespace imports.root\nimport { Payload } from imports.base\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
         let result =
             vexil_lang::compile_project(root, &PathBuf::from("imports/root.vexil"), &loader)
                 .unwrap();

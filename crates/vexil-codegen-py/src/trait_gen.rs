@@ -68,15 +68,19 @@ pub fn emit_impl_proof(w: &mut CodeWriter, impl_def: &ImplDef, registry: &TypeRe
         .iter()
         .map(|ty| crate::types::py_type(ty, registry))
         .collect::<Vec<_>>();
+    let trait_name = registry
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| definition.name.as_str())
+        .unwrap_or(impl_def.trait_name.as_str());
     let trait_ref = if args.is_empty() {
-        impl_def.trait_name.to_string()
+        trait_name.to_string()
     } else {
-        format!("{}[{}]", impl_def.trait_name, args.join(", "))
+        format!("{trait_name}[{}]", args.join(", "))
     };
     let proof_name = format!(
         "_vexil_assert_{}_implements_{}",
         target.replace('.', "_"),
-        impl_def.trait_name.replace('.', "_")
+        trait_name
     );
     w.line(&format!(
         "def {proof_name}(value: {target}) -> {trait_ref}:  # pyright: ignore[reportUnusedFunction]"

@@ -844,10 +844,29 @@ An impl declaration states that a type satisfies a trait.
 impl SensorData for TemperatureReading { }
 ```
 
-The trait name MUST be an unqualified reference to an existing trait
-declaration; an import alias cannot be used as an `impl` head. The target type
-MUST exist. The compiler SHOULD validate that the target type contains
-fields matching the trait's requirements (by name and type).
+The trait reference MUST be either an unqualified `Trait` or exactly one
+explicit import-alias qualifier, `Alias.Trait`. Namespace paths and additional
+qualifiers are invalid. Only `import namespace as Alias` creates a qualifier;
+qualification resolves within that alias and bypasses unqualified shadowing.
+The target type remains an unqualified name and MUST exist. The compiler SHOULD
+validate that the target type contains fields matching the trait's requirements
+(by name and type).
+
+Trait visibility follows the ordinary import rules with no implicit re-export:
+
+| Import form | Trait usable for a local impl | Imported impl record |
+| --- | --- | --- |
+| Direct named | Yes, unqualified | Never copied |
+| Unique wildcard | Yes, unqualified | Never copied |
+| Aliased | Yes, as `Alias.Trait` | Never copied |
+| Transitive only | No; the root MUST import it explicitly | Never copied |
+| Diamond, same origin | Yes when explicitly visible; origin is deduplicated | Emitted once in its defining schema |
+| Same spelling, distinct wildcard origins | Ambiguous on use | Never deduplicated silently |
+
+Local declarations and direct named imports take precedence over wildcard
+candidates. A direct named import resolves an otherwise ambiguous wildcard
+spelling. Project loading order does not make dependency-closure names visible,
+and importing a schema never copies or re-exports its impl declarations.
 
 Multiple traits MAY be implemented for the same type. The same trait
 MUST NOT be implemented more than once for the same type.

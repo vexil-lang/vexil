@@ -129,12 +129,12 @@ class FieldAnnotationsEncoder:
 
     def encode(self, val: FieldAnnotations) -> bytes:
         w = _BitWriter()
-        w.write_u32(val.A)
-        w.write_leb128(val.B)
-        w.write_string(val.C)
-        delta_d = val.D - self._prev_d
+        w.write_u32(val.a)
+        w.write_leb128(val.b)
+        w.write_string(val.c)
+        delta_d = val.d - self._prev_d
         w.write_i32(delta_d)
-        self._prev_d = val.D
+        self._prev_d = val.d
         w.flush_to_byte_boundary()
         return w.finish()
 
@@ -149,13 +149,13 @@ class FieldAnnotationsDecoder:
     def decode(self, data: bytes) -> FieldAnnotations:
         r = _BitReader(data)
         m = FieldAnnotations.__new__(FieldAnnotations)
-        m.A = r.read_u32()
-        m.B = r.read_leb128()
-        m.C = r.read_string()
+        m.a = r.read_u32()
+        m.b = r.read_leb128()
+        m.c = r.read_string()
         delta_d = None
         delta_d = r.read_i32()
-        m.D = self._prev_d + delta_d
-        self._prev_d = m.D
+        m.d = self._prev_d + delta_d
+        self._prev_d = m.d
         r.flush_to_byte_boundary()
         return m
 

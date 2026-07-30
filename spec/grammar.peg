@@ -232,7 +232,10 @@ fn-return
     = _ '->' _ type-expr
 
 impl-decl
-    = annotation* KW_IMPL __ upper-ident type-arg-list? __ KW_FOR __ upper-ident _ impl-body?
+    = annotation* KW_IMPL __ impl-trait-ref type-arg-list? __ KW_FOR __ upper-ident _ impl-body?
+
+impl-trait-ref
+    = upper-ident ('.' upper-ident)?
 
 type-arg-list
     = '<' _ type-expr (_ ',' _ type-expr)* _ '>'

@@ -394,13 +394,7 @@ fn find_trait<'a>(
 ) -> Result<(TypeId, &'a TraitDef), PortableFunctionError> {
     compiled
         .registry
-        .iter()
-        .find_map(|(id, definition)| match definition {
-            TypeDef::Trait(trait_def) if trait_def.name == impl_def.trait_name => {
-                Some((id, trait_def))
-            }
-            _ => None,
-        })
+        .trait_for_impl(impl_def)
         .ok_or_else(|| PortableFunctionError::UnknownTrait {
             trait_name: impl_def.trait_name.clone(),
         })

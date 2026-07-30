@@ -18,7 +18,7 @@ pub mod union_gen;
 
 pub use backend::PythonBackend;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use vexil_lang::codegen::portable::PortableFunction;
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
@@ -78,11 +78,19 @@ pub(crate) fn generate_with_imports(
     // Cross-module imports if needed
     if let Some(imports) = import_types {
         if !imports.is_empty() {
-            let mut paths: Vec<&String> = imports.values().collect();
-            paths.sort();
-            paths.dedup();
-            for path in paths {
-                w.line(&format!("from {path} import *"));
+            let mut modules: BTreeMap<&String, Vec<&String>> = BTreeMap::new();
+            for (name, path) in imports {
+                modules.entry(path).or_default().push(name);
+            }
+            for (path, names) in &mut modules {
+                names.sort();
+                names.dedup();
+                let names = names
+                    .iter()
+                    .map(|name| name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                w.line(&format!("from {path} import {names}"));
             }
             w.blank();
         }
@@ -438,7 +446,7 @@ mod tests {
             .find(|(path, _)| path.to_string_lossy().ends_with("root.py"))
             .map(|(_, code)| code)
             .unwrap();
-        assert!(root.contains("from proj.dep import *"), "{root}");
+        assert!(root.contains("from proj.dep import Tagged"), "{root}");
         assert!(root.contains("def retag(self, tag: int) -> int:"), "{root}");
         assert!(
             root.contains("def _vexil_assert_Event_implements_Tagged"),

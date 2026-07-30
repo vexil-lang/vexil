@@ -145,7 +145,8 @@ class MapKeyTest:
             w.write_i32(map_k)
             w.write_string(map_v)
         w.write_leb128(len(self.string_map))
-        for map_k, map_v in self.string_map.items():
+        for map_k in sorted(self.string_map):
+            map_v = self.string_map[map_k]
             w.write_string(map_k)
             w.write_u32(map_v)
         w.write_leb128(len(self.bytes_map))
@@ -182,7 +183,7 @@ class MapKeyTest:
         r = _BitReader(data)
         m = MapKeyTest.__new__(MapKeyTest)
         map_len = r.read_leb128()
-        m.bool_map: dict[bool, str] = {}
+        m.bool_map = {}
         for _ in range(map_len):
             _k: bool = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -190,7 +191,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.bool_map[_k] = _v
         map_len = r.read_leb128()
-        m.u8_map: dict[int, str] = {}
+        m.u8_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -198,7 +199,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.u8_map[_k] = _v
         map_len = r.read_leb128()
-        m.u32_map: dict[int, str] = {}
+        m.u32_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -206,7 +207,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.u32_map[_k] = _v
         map_len = r.read_leb128()
-        m.i32_map: dict[int, str] = {}
+        m.i32_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -214,7 +215,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.i32_map[_k] = _v
         map_len = r.read_leb128()
-        m.fixed_map: dict[int, str] = {}
+        m.fixed_map = {}
         for _ in range(map_len):
             _k: int = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -222,7 +223,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.fixed_map[_k] = _v
         map_len = r.read_leb128()
-        m.string_map: dict[str, int] = {}
+        m.string_map = {}
         for _ in range(map_len):
             _k: str = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
@@ -230,7 +231,7 @@ class MapKeyTest:
             _v = r.read_u32()
             m.string_map[_k] = _v
         map_len = r.read_leb128()
-        m.bytes_map: dict[bytes, int] = {}
+        m.bytes_map = {}
         for _ in range(map_len):
             _k: bytes = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
@@ -238,7 +239,7 @@ class MapKeyTest:
             _v = r.read_u32()
             m.bytes_map[_k] = _v
         map_len = r.read_leb128()
-        m.uuid_map: dict[bytes, str] = {}
+        m.uuid_map = {}
         for _ in range(map_len):
             _k: bytes = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -246,7 +247,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.uuid_map[_k] = _v
         map_len = r.read_leb128()
-        m.enum_map: dict[Status, str] = {}
+        m.enum_map = {}
         for _ in range(map_len):
             _k: Status = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -254,7 +255,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.enum_map[_k] = _v
         map_len = r.read_leb128()
-        m.flags_map: dict[Permissions, str] = {}
+        m.flags_map = {}
         for _ in range(map_len):
             _k: Permissions = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -262,7 +263,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.flags_map[_k] = _v
         map_len = r.read_leb128()
-        m.newtype_u32_map: dict[UserId, str] = {}
+        m.newtype_u32_map = {}
         for _ in range(map_len):
             _k: UserId = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -271,7 +272,7 @@ class MapKeyTest:
             _v = r.read_string()
             m.newtype_u32_map[_k] = _v
         map_len = r.read_leb128()
-        m.newtype_str_map: dict[Label, int] = {}
+        m.newtype_str_map = {}
         for _ in range(map_len):
             _k: Label = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]

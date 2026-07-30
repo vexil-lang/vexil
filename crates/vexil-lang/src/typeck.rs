@@ -642,47 +642,29 @@ fn walk_type_for_recursion(ty: &ResolvedType, direct: bool, state: &mut Recursio
 // Trait Conformance Checking
 // ---------------------------------------------------------------------------
 
-use smol_str::SmolStr;
-use std::collections::HashMap;
-
 use crate::ir::{ImplDef, TraitDef};
+use smol_str::SmolStr;
 
 /// Check that all impls in the schema conform to their traits.
 fn check_impl_conformance(compiled: &CompiledSchema, diags: &mut Vec<Diagnostic>) {
-    // Collect all traits and impls
-    let mut traits: HashMap<SmolStr, &TraitDef> = HashMap::new();
-    let mut impls: Vec<&ImplDef> = Vec::new();
-
-    for (_id, type_def) in compiled.registry.iter() {
-        if let TypeDef::Trait(t) = type_def {
-            traits.insert(t.name.clone(), t);
-        }
-    }
-    for (_, impl_def) in compiled.impls() {
-        impls.push(impl_def);
-    }
-
-    // Check each impl
-    for impl_def in impls {
-        check_single_impl_conformance(impl_def, &traits, compiled, diags);
+    for (impl_id, impl_def) in compiled.impls() {
+        let Some(trait_id) = compiled.registry.impl_trait_id(impl_id) else {
+            // Lowering owns the single primary lookup/kind diagnostic.
+            continue;
+        };
+        let Some(TypeDef::Trait(trait_def)) = compiled.registry.get(trait_id) else {
+            continue;
+        };
+        check_single_impl_conformance(impl_def, trait_def, compiled, diags);
     }
 }
 
 fn check_single_impl_conformance(
     impl_def: &ImplDef,
-    traits: &HashMap<SmolStr, &TraitDef>,
+    trait_def: &TraitDef,
     compiled: &CompiledSchema,
     diags: &mut Vec<Diagnostic>,
 ) {
-    let Some(trait_def) = traits.get(&impl_def.trait_name) else {
-        diags.push(Diagnostic::error(
-            impl_def.span,
-            ErrorClass::UnresolvedType,
-            format!("impl references unknown trait '{}'", impl_def.trait_name),
-        ));
-        return;
-    };
-
     if impl_def.type_args.len() != trait_def.type_params.len() {
         diags.push(Diagnostic::error(
             impl_def.span,
@@ -694,6 +676,7 @@ fn check_single_impl_conformance(
                 impl_def.type_args.len()
             ),
         ));
+        return;
     }
 
     // Check target type has all required trait fields

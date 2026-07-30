@@ -150,14 +150,18 @@ pub fn emit_impl_assertion(w: &mut CodeWriter, impl_def: &ImplDef, registry: &Ty
         .iter()
         .map(|t| crate::types::ts_type(t, registry))
         .collect::<Vec<_>>();
+    let trait_name = registry
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| definition.name.as_str())
+        .unwrap_or(impl_def.trait_name.as_str());
     let trait_ref = if args.is_empty() {
-        impl_def.trait_name.to_string()
+        trait_name.to_string()
     } else {
-        format!("{}<{}>", impl_def.trait_name, args.join(", "))
+        format!("{trait_name}<{}>", args.join(", "))
     };
     let target = crate::types::ts_type(&impl_def.target_type, registry);
     w.line(&format!(
         "type _{target}Implements{} = _VexilAssertAssignable<{target}, {trait_ref}>;",
-        impl_def.trait_name.replace('.', "_")
+        trait_name
     ));
 }

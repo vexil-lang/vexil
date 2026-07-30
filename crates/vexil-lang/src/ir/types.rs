@@ -4,7 +4,7 @@ use smol_str::SmolStr;
 use std::collections::HashMap;
 
 // Forward-declare TypeDef so TypeRegistry can reference it.
-use super::TypeDef;
+use super::{ImplDef, TraitDef, TypeDef};
 
 // ---------------------------------------------------------------------------
 // TypeId + TypeRegistry
@@ -40,6 +40,10 @@ pub struct TypeRegistry {
     /// Trait function IR keeps its stable resolved return field. This private
     /// side table retains generic return expressions for impl substitution.
     trait_fn_return_types: HashMap<(TypeId, SmolStr), crate::ast::TypeExpr>,
+    /// Stable declaration identity for imported and local definitions.
+    origins: HashMap<TypeId, (SmolStr, SmolStr)>,
+    /// Resolved trait identity for each local impl record.
+    impl_trait_ids: HashMap<TypeId, TypeId>,
 }
 
 impl Default for TypeRegistry {
@@ -57,6 +61,8 @@ impl TypeRegistry {
             alias_map: HashMap::new(),
             primitive_aliases: HashMap::new(),
             trait_fn_return_types: HashMap::new(),
+            origins: HashMap::new(),
+            impl_trait_ids: HashMap::new(),
         }
     }
 
@@ -73,6 +79,12 @@ impl TypeRegistry {
         let id = TypeId(self.types.len() as u32);
         self.types.push(None);
         self.by_name.insert(name, id);
+        id
+    }
+
+    pub(crate) fn register_unbound_stub(&mut self) -> TypeId {
+        let id = TypeId(self.types.len() as u32);
+        self.types.push(None);
         id
     }
 
@@ -94,6 +106,10 @@ impl TypeRegistry {
     /// The target TypeId must already exist in the registry.
     pub fn register_alias(&mut self, alias: SmolStr, target: TypeId) {
         self.alias_map.insert(alias, target);
+    }
+
+    pub(crate) fn bind_name(&mut self, name: SmolStr, target: TypeId) {
+        self.by_name.insert(name, target);
     }
 
     /// Register a primitive type alias.
@@ -190,6 +206,57 @@ impl TypeRegistry {
             .collect();
         for (name, ty) in entries {
             self.trait_fn_return_types.insert((target_id, name), ty);
+        }
+    }
+
+    pub(crate) fn set_origin(&mut self, id: TypeId, namespace: SmolStr, declaration: SmolStr) {
+        self.origins.insert(id, (namespace, declaration));
+    }
+
+    pub(crate) fn clone_origin(
+        &mut self,
+        source: &TypeRegistry,
+        source_id: TypeId,
+        target_id: TypeId,
+    ) {
+        if let Some((namespace, declaration)) = source.origins.get(&source_id) {
+            self.origins
+                .insert(target_id, (namespace.clone(), declaration.clone()));
+        }
+    }
+
+    pub(crate) fn find_origin(&self, namespace: &str, declaration: &str) -> Option<TypeId> {
+        self.origins
+            .iter()
+            .find_map(|(id, (ns, name))| (ns == namespace && name == declaration).then_some(*id))
+    }
+
+    /// Return the defining namespace and bare declaration name for a type.
+    pub fn origin(&self, id: TypeId) -> Option<(&str, &str)> {
+        self.origins
+            .get(&id)
+            .map(|(namespace, declaration)| (namespace.as_str(), declaration.as_str()))
+    }
+
+    pub(crate) fn set_impl_trait_id(&mut self, impl_id: TypeId, trait_id: TypeId) {
+        self.impl_trait_ids.insert(impl_id, trait_id);
+    }
+
+    /// Return the resolved trait identity associated with an impl record.
+    pub fn impl_trait_id(&self, impl_id: TypeId) -> Option<TypeId> {
+        self.impl_trait_ids.get(&impl_id).copied()
+    }
+
+    /// Resolve an impl reference to its persisted trait identity and definition.
+    pub fn trait_for_impl(&self, implementation: &ImplDef) -> Option<(TypeId, &TraitDef)> {
+        let impl_id = self.iter().find_map(|(id, definition)| match definition {
+            TypeDef::Impl(candidate) if std::ptr::eq(candidate, implementation) => Some(id),
+            _ => None,
+        })?;
+        let trait_id = self.impl_trait_id(impl_id)?;
+        match self.get(trait_id) {
+            Some(TypeDef::Trait(trait_def)) => Some((trait_id, trait_def)),
+            _ => None,
         }
     }
 }

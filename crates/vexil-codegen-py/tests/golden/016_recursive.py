@@ -35,7 +35,7 @@ class TreeNode:
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_i32()
         arr_len = r.read_leb128()
-        m.children: list[TreeNode] = []
+        m.children = []
         for _ in range(arr_len):
             _item: TreeNode = None  # type: ignore[assignment]
             _item = TreeNode.decode_from(r)

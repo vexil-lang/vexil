@@ -163,11 +163,9 @@ fn collect_named_ids_from_typedef(
                     }
                 }
             }
-            for (id, def) in registry.iter() {
-                if matches!(def, TypeDef::Trait(t) if t.name == impl_def.trait_name)
-                    && !declared.contains(&id)
-                {
-                    on_import(id);
+            if let Some((trait_id, _)) = registry.trait_for_impl(impl_def) {
+                if !declared.contains(&trait_id) {
+                    on_import(trait_id);
                 }
             }
         }
@@ -319,6 +317,33 @@ mod tests {
         assert_generated_project_compiles(&files);
     }
 
+    #[test]
+    fn project_codegen_resolves_aliased_trait_to_bare_target_name() {
+        let result = aliased_trait_project();
+        let files = GoBackend.generate_project(&result).unwrap();
+        let root = project_file(&files, "root.go");
+        assert!(root.contains("\"traits/contracts\""), "{root}");
+        assert!(
+            root.contains("var _ contracts.Tagged[uint64] = (*Event)(nil)"),
+            "{root}"
+        );
+        assert!(!root.contains("var _ Contracts.Tagged["), "{root}");
+        assert_aliased_project_compiles(&files);
+    }
+
+    fn aliased_trait_project() -> ProjectResult {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "traits.contracts".into(),
+            "namespace traits.contracts\ntrait Tagged<T> { value @0 : T }".into(),
+        );
+        let root = "namespace app.root\nimport traits.contracts as Contracts\nmessage Event { value @0 : u64 }\nimpl Contracts.Tagged<u64> for Event { }";
+        let result =
+            vexil_lang::compile_project(root, &PathBuf::from("app/root.vexil"), &loader).unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        result
+    }
+
     fn function_import_diamond() -> ProjectResult {
         let mut loader = InMemoryLoader::new();
         loader.schemas.insert(
@@ -333,7 +358,7 @@ mod tests {
             "imports.right".into(),
             "namespace imports.right\nimport { Payload } from imports.base\ntrait RightTransformer { fn right(input: Payload) -> Payload }".into(),
         );
-        let root = "namespace imports.root\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
+        let root = "namespace imports.root\nimport { Payload } from imports.base\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
         let result =
             vexil_lang::compile_project(root, &PathBuf::from("imports/root.vexil"), &loader)
                 .unwrap();
@@ -346,7 +371,7 @@ mod tests {
             .iter()
             .find(|(path, _)| path.to_string_lossy().ends_with(suffix))
             .map(|(_, code)| code.as_str())
-            .unwrap()
+            .unwrap_or_else(|| panic!("missing {suffix}; generated paths: {:?}", files.keys()))
     }
 
     fn assert_generated_project_compiles(files: &BTreeMap<PathBuf, String>) {
@@ -395,6 +420,51 @@ mod tests {
         assert!(
             output.status.success(),
             "generated project failed go test:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn assert_aliased_project_compiles(files: &BTreeMap<PathBuf, String>) {
+        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let runtime_path = workspace_root
+            .join("packages/runtime-go")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let temp = std::env::temp_dir().join("vexil-codegen-go-aliased-trait");
+        let _ = std::fs::remove_dir_all(&temp);
+        for (package, source) in [("contracts", "contracts.go"), ("root", "root.go")] {
+            let directory = temp.join(package);
+            std::fs::create_dir_all(&directory).unwrap();
+            std::fs::write(directory.join("generated.go"), project_file(files, source)).unwrap();
+        }
+        std::fs::write(
+            temp.join("go.mod"),
+            format!(
+                "module traits\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => {runtime_path}\n"
+            ),
+        )
+        .unwrap();
+        let output = std::process::Command::new("go")
+            .args(["test", "./..."])
+            .current_dir(&temp)
+            .output();
+        let _ = std::fs::remove_dir_all(&temp);
+        let output = match output {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                eprintln!("skipping generated project check: `go` executable not found");
+                return;
+            }
+            Err(error) => panic!("failed to run go test: {error}"),
+        };
+        assert!(
+            output.status.success(),
+            "generated aliased project failed go test:\n{}",
             String::from_utf8_lossy(&output.stderr)
         );
     }

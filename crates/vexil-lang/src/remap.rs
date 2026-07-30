@@ -24,19 +24,49 @@ pub fn clone_types_into(
     declarations: &[TypeId],
     target: &mut TypeRegistry,
 ) -> HashMap<TypeId, TypeId> {
+    clone_types_into_with_bindings(source, declarations, target, true)
+}
+
+/// Clone declarations and their closure without creating visible source names.
+///
+/// Used by aliased imports, which bind only explicit `Alias.Member` spellings.
+pub(crate) fn clone_types_into_unbound(
+    source: &TypeRegistry,
+    declarations: &[TypeId],
+    target: &mut TypeRegistry,
+) -> HashMap<TypeId, TypeId> {
+    clone_types_into_with_bindings(source, declarations, target, false)
+}
+
+fn clone_types_into_with_bindings(
+    source: &TypeRegistry,
+    declarations: &[TypeId],
+    target: &mut TypeRegistry,
+    bind_declarations: bool,
+) -> HashMap<TypeId, TypeId> {
     // Phase 0: collect all transitively referenced TypeIds.
     let all_ids = collect_transitive_ids(source, declarations);
+    let declaration_set: HashSet<TypeId> = declarations.iter().copied().collect();
 
     // Phase 1: register stubs in target, building the id map.
     let mut id_map = HashMap::new();
     for &old_id in &all_ids {
         if let Some(def) = source.get(old_id) {
-            // Skip if already in target by name (diamond dedup).
             let name = type_def_name(def);
-            if let Some(existing_id) = target.lookup(name) {
+            let existing_origin = source
+                .origin(old_id)
+                .and_then(|(namespace, declaration)| target.find_origin(namespace, declaration));
+            if let Some(existing_id) = existing_origin {
                 id_map.insert(old_id, existing_id);
+            } else if bind_declarations && declaration_set.contains(&old_id) {
+                if let Some(existing_id) = target.lookup(name) {
+                    id_map.insert(old_id, existing_id);
+                } else {
+                    let new_id = target.register_stub(name.into());
+                    id_map.insert(old_id, new_id);
+                }
             } else {
-                let new_id = target.register_stub(name.into());
+                let new_id = target.register_unbound_stub();
                 id_map.insert(old_id, new_id);
             }
         }
@@ -50,7 +80,24 @@ pub fn clone_types_into(
                     let remapped = remap_type_def(def, &id_map);
                     target.fill_stub(new_id, remapped);
                     target.clone_trait_fn_return_types(source, old_id, new_id);
+                    target.clone_origin(source, old_id, new_id);
                 }
+            }
+        }
+    }
+
+    if bind_declarations {
+        for &old_id in declarations {
+            if let (Some(def), Some(&new_id)) = (source.get(old_id), id_map.get(&old_id)) {
+                target.bind_name(type_def_name(def).into(), new_id);
+            }
+        }
+    }
+
+    for (&old_impl_id, &new_impl_id) in &id_map {
+        if let Some(old_trait_id) = source.impl_trait_id(old_impl_id) {
+            if let Some(&new_trait_id) = id_map.get(&old_trait_id) {
+                target.set_impl_trait_id(new_impl_id, new_trait_id);
             }
         }
     }
@@ -81,6 +128,9 @@ fn collect_ids_recursive(
     }
     // Visit dependencies first (depth-first) so they get stubs before dependents.
     if let Some(def) = source.get(id) {
+        if let Some(trait_id) = source.impl_trait_id(id) {
+            collect_ids_recursive(source, trait_id, visited, order);
+        }
         for referenced_id in referenced_type_ids(def) {
             collect_ids_recursive(source, referenced_id, visited, order);
         }

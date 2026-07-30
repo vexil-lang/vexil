@@ -110,17 +110,17 @@ class EncodedEncoder:
 
     def encode(self, val: Encoded) -> bytes:
         w = _BitWriter()
-        w.write_leb128(val.Count)
-        w.write_zigzag(val.Delta)
-        delta_offset = val.Offset - self._prev_offset
+        w.write_leb128(val.count)
+        w.write_zigzag(val.delta)
+        delta_offset = val.offset - self._prev_offset
         w.write_u64(delta_offset)
-        self._prev_offset = val.Offset
-        delta_smooth = val.Smooth - self._prev_smooth
+        self._prev_offset = val.offset
+        delta_smooth = val.smooth - self._prev_smooth
         w.write_leb128(delta_smooth)
-        self._prev_smooth = val.Smooth
-        delta_signed = val.Signed - self._prev_signed
+        self._prev_smooth = val.smooth
+        delta_signed = val.signed - self._prev_signed
         w.write_zigzag(delta_signed)
-        self._prev_signed = val.Signed
+        self._prev_signed = val.signed
         w.flush_to_byte_boundary()
         return w.finish()
 
@@ -139,20 +139,20 @@ class EncodedDecoder:
     def decode(self, data: bytes) -> Encoded:
         r = _BitReader(data)
         m = Encoded.__new__(Encoded)
-        m.Count = r.read_leb128()
-        m.Delta = r.read_zigzag()
+        m.count = r.read_leb128()
+        m.delta = r.read_zigzag()
         delta_offset = None
         delta_offset = r.read_u64()
-        m.Offset = self._prev_offset + delta_offset
-        self._prev_offset = m.Offset
+        m.offset = self._prev_offset + delta_offset
+        self._prev_offset = m.offset
         delta_smooth = None
         delta_smooth = r.read_leb128()
-        m.Smooth = self._prev_smooth + delta_smooth
-        self._prev_smooth = m.Smooth
+        m.smooth = self._prev_smooth + delta_smooth
+        self._prev_smooth = m.smooth
         delta_signed = None
         delta_signed = r.read_zigzag()
-        m.Signed = self._prev_signed + delta_signed
-        self._prev_signed = m.Signed
+        m.signed = self._prev_signed + delta_signed
+        self._prev_signed = m.signed
         r.flush_to_byte_boundary()
         return m
 
@@ -178,7 +178,8 @@ class Limited:
         for item in self.tags:
             w.write_string(item)
         w.write_leb128(len(self.headers))
-        for map_k, map_v in self.headers.items():
+        for map_k in sorted(self.headers):
+            map_v = self.headers[map_k]
             w.write_string(map_k)
             w.write_string(map_v)
         w.write_bytes(self.data)
@@ -193,13 +194,13 @@ class Limited:
         m = Limited.__new__(Limited)
         m.body = r.read_string()
         arr_len = r.read_leb128()
-        m.tags: list[str] = []
+        m.tags = []
         for _ in range(arr_len):
             _item: str = None  # type: ignore[assignment]
             _item = r.read_string()
             m.tags.append(_item)
         map_len = r.read_leb128()
-        m.headers: dict[str, str] = {}
+        m.headers = {}
         for _ in range(map_len):
             _k: str = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]

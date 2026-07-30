@@ -41,6 +41,7 @@ enum DeclKind {
 struct ValidationContext<'a> {
     decl_map: &'a HashMap<&'a SmolStr, (DeclKind, Span)>,
     imported_names: &'a HashSet<&'a SmolStr>,
+    has_imports: bool,
     has_wildcard_import: bool,
     newtype_inners: &'a HashMap<&'a SmolStr, &'a TypeExpr>,
     alias_targets: &'a HashMap<&'a SmolStr, &'a TypeExpr>,
@@ -114,7 +115,8 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
                 }
             }
             ImportKind::Aliased { .. } => {
-                // Aliased imports use Qualified types (Alias.Type), not Named.
+                // Qualified members are resolved against dependency identity
+                // during lowering.
             }
         }
     }
@@ -143,6 +145,7 @@ fn validate_impl(schema: &Schema, allow_reserved: bool) -> Vec<Diagnostic> {
     let ctx = ValidationContext {
         decl_map: &decl_map,
         imported_names: &imported_names,
+        has_imports: !schema.imports.is_empty(),
         has_wildcard_import,
         newtype_inners: &newtype_inners,
         alias_targets: &alias_targets,
@@ -1496,18 +1499,20 @@ fn check_impl(impl_decl: &ImplDecl, ctx: &ValidationContext<'_>, diags: &mut Vec
         ));
     }
 
-    // Check: trait must exist and be a trait
-    match ctx.decl_map.get(trait_name) {
-        Some((DeclKind::Trait, _)) => {} // OK
-        Some((kind, _)) => {
-            diags.push(Diagnostic::error(
-                impl_decl.trait_name.span,
-                ErrorClass::UnknownType,
-                format!("'{trait_name}' is a {kind:?}, not a trait"),
-            ));
-        }
-        None => {
-            if !ctx.imported_names.contains(trait_name) {
+    // Imported trait lookup and kind checking happen during lowering, where
+    // dependency identity, alias membership, and wildcard ambiguity are
+    // available. Preserve the established single-schema diagnostic here.
+    if !ctx.has_imports {
+        match ctx.decl_map.get(trait_name) {
+            Some((DeclKind::Trait, _)) => {}
+            Some((kind, _)) => {
+                diags.push(Diagnostic::error(
+                    impl_decl.trait_name.span,
+                    ErrorClass::UnknownType,
+                    format!("'{trait_name}' is a {kind:?}, not a trait"),
+                ));
+            }
+            None => {
                 diags.push(Diagnostic::error(
                     impl_decl.trait_name.span,
                     ErrorClass::UnknownType,

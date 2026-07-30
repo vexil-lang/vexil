@@ -85,6 +85,7 @@ Evolution vectors test backward/forward compatibility:
 | `sub_byte.json` | Sub-byte integer packing (`u1`, `u3`, `u5`, etc.) |
 | `enums.json` | Enum discriminants and bit-width selection |
 | `arrays_maps.json` | Variable-length arrays and maps |
+| `annotations.json` | `@varint` and `@zigzag` field encoding annotations |
 | `optionals.json` | Optional presence flags |
 | `messages.json` | Message field ordering and padding |
 | `unions.json` | Union discriminant + length prefix |

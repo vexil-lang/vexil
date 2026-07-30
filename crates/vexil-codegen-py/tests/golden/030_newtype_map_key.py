@@ -93,7 +93,7 @@ class UserProfile:
         _payload = r.read_bytes()
         m.id = UserId.decode(_payload)
         map_len = r.read_leb128()
-        m.friends: dict[UserId, str] = {}
+        m.friends = {}
         for _ in range(map_len):
             _k: UserId = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
@@ -102,7 +102,7 @@ class UserProfile:
             _v = r.read_string()
             m.friends[_k] = _v
         map_len = r.read_leb128()
-        m.tags: dict[Label, int] = {}
+        m.tags = {}
         for _ in range(map_len):
             _k: Label = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]

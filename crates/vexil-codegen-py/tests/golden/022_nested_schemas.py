@@ -94,7 +94,7 @@ class Canvas:
         m.bounds = Rect.decode_from(r)
         m.name = r.read_string()
         arr_len = r.read_leb128()
-        m.layers: list[Rect] = []
+        m.layers = []
         for _ in range(arr_len):
             _item: Rect = None  # type: ignore[assignment]
             _item = Rect.decode_from(r)

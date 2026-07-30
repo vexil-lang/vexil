@@ -204,11 +204,9 @@ fn collect_named_ids_from_typedef(
                     }
                 }
             }
-            for (id, def) in registry.iter() {
-                if matches!(def, TypeDef::Trait(t) if t.name == impl_def.trait_name)
-                    && !declared.contains(&id)
-                {
-                    on_import(id);
+            if let Some((trait_id, _)) = registry.trait_for_impl(impl_def) {
+                if !declared.contains(&trait_id) {
+                    on_import(trait_id);
                 }
             }
         }
@@ -364,6 +362,32 @@ mod tests {
         assert_eq!(result.schemas.len(), 4);
     }
 
+    #[test]
+    fn project_codegen_resolves_aliased_trait_to_bare_target_name() {
+        let result = aliased_trait_project();
+        let files = RustBackend.generate_project(&result).unwrap();
+        let root = project_file(&files, "root.rs");
+        assert!(
+            root.contains("use crate::traits::contracts::Tagged;"),
+            "{root}"
+        );
+        assert!(root.contains("impl Tagged<u64> for Event"), "{root}");
+        assert!(!root.contains("\nimpl Contracts.Tagged"), "{root}");
+    }
+
+    fn aliased_trait_project() -> ProjectResult {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "traits.contracts".into(),
+            "namespace traits.contracts\ntrait Tagged<T> { value @0 : T }".into(),
+        );
+        let root = "namespace app.root\nimport traits.contracts as Contracts\nmessage Event { value @0 : u64 }\nimpl Contracts.Tagged<u64> for Event { }";
+        let result =
+            vexil_lang::compile_project(root, &PathBuf::from("app/root.vexil"), &loader).unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        result
+    }
+
     fn function_import_diamond() -> ProjectResult {
         let mut loader = InMemoryLoader::new();
         loader.schemas.insert(
@@ -378,7 +402,7 @@ mod tests {
             "imports.right".into(),
             "namespace imports.right\nimport { Payload } from imports.base\ntrait RightTransformer { fn right(input: Payload) -> Payload }".into(),
         );
-        let root = "namespace imports.root\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
+        let root = "namespace imports.root\nimport { Payload } from imports.base\nimport { LeftTransformer } from imports.left\nimport { RightTransformer } from imports.right\nmessage Host { marker @0 : i32 }\nimpl LeftTransformer for Host { fn left(input: Payload) -> Payload { let staged: Payload = input return staged } }\nimpl RightTransformer for Host { fn right(input: Payload) -> Payload { return input } }";
         let result =
             vexil_lang::compile_project(root, &PathBuf::from("imports/root.vexil"), &loader)
                 .unwrap();

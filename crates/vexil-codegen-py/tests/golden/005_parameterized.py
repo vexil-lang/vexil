@@ -30,7 +30,8 @@ class Basic:
         for item in self.b:
             w.write_string(item)
         w.write_leb128(len(self.c))
-        for map_k, map_v in self.c.items():
+        for map_k in sorted(self.c):
+            map_v = self.c[map_k]
             w.write_string(map_k)
             w.write_u64(map_v)
         if self.d[0]:
@@ -56,13 +57,13 @@ class Basic:
         else:
             m.a = None
         arr_len = r.read_leb128()
-        m.b: list[str] = []
+        m.b = []
         for _ in range(arr_len):
             _item: str = None  # type: ignore[assignment]
             _item = r.read_string()
             m.b.append(_item)
         map_len = r.read_leb128()
-        m.c: dict[str, int] = {}
+        m.c = {}
         for _ in range(map_len):
             _k: str = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
@@ -111,7 +112,8 @@ class Nested:
             if item is not None:
                 w.write_u32(item)
         w.write_leb128(len(self.c))
-        for map_k, map_v in self.c.items():
+        for map_k in sorted(self.c):
+            map_v = self.c[map_k]
             w.write_string(map_k)
             w.write_leb128(len(map_v))
             for item in map_v:
@@ -158,7 +160,7 @@ class Nested:
         if present:
             m.a: list[str] = None  # type: ignore[assignment]
             arr_len = r.read_leb128()
-            m.a: list[str] = []
+            m.a = []
             for _ in range(arr_len):
                 _item: str = None  # type: ignore[assignment]
                 _item = r.read_string()
@@ -166,7 +168,7 @@ class Nested:
         else:
             m.a = None
         arr_len = r.read_leb128()
-        m.b: list[int | None] = []
+        m.b = []
         for _ in range(arr_len):
             _item: int | None = None  # type: ignore[assignment]
             present = r.read_bool()
@@ -178,7 +180,7 @@ class Nested:
                 _item = None
             m.b.append(_item)
         map_len = r.read_leb128()
-        m.c: dict[str, list[int]] = {}
+        m.c = {}
         for _ in range(map_len):
             _k: str = None  # type: ignore[assignment]
             _v: list[int] = None  # type: ignore[assignment]

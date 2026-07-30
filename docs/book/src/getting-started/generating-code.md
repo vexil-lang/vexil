@@ -47,9 +47,12 @@ vexilc build root.vexil --include ./schemas --output ./generated --target rust
 ```
 
 This resolves all imports, compiles in topological order, and generates one file per namespace.
-Project code generation has direct named-import coverage for a trait implemented
-by a local type. An aliased trait import cannot currently be used as an `impl`
-head because `impl Alias.Trait` is not valid Vexil syntax.
+Project code generation resolves traits imported directly by name, through a
+unique wildcard, or through one explicit alias qualifier such as
+`impl Contracts.Tagged<u64> for Event`. A trait reachable only through another
+schema's imports is not re-exported: the implementing schema must import it
+explicitly. Imported impl declarations remain in their defining schema and are
+not copied into consumers.
 
 ## Watch mode
 

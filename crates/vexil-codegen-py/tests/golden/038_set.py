@@ -32,7 +32,7 @@ class Tags:
         r = _BitReader(data)
         m = Tags.__new__(Tags)
         set_len = r.read_leb128()
-        m.names: set[str] = set()
+        m.names = set()
         for _ in range(set_len):
             _item: str = None  # type: ignore[assignment]
             _item = r.read_string()

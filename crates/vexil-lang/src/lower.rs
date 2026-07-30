@@ -37,6 +37,10 @@ struct LowerCtx {
     /// Maps type name → source namespace for wildcard imports.
     /// `None` means ambiguous (multiple wildcards provide this name).
     wildcard_origins: HashMap<SmolStr, Option<String>>,
+    /// Direct named import bindings, which outrank wildcard candidates.
+    explicit_import_names: HashSet<SmolStr>,
+    /// Aliases declared by explicit aliased imports.
+    import_aliases: HashSet<SmolStr>,
     /// Names from local declarations (populated during `register_declarations`).
     local_names: HashSet<SmolStr>,
     /// Evaluated constant values.
@@ -58,6 +62,8 @@ impl LowerCtx {
             diagnostics: Vec::new(),
             wildcard_imports: HashSet::new(),
             wildcard_origins: HashMap::new(),
+            explicit_import_names: HashSet::new(),
+            import_aliases: HashSet::new(),
             local_names: HashSet::new(),
             constants: HashMap::new(),
             const_decls: HashMap::new(),
@@ -86,9 +92,49 @@ pub fn lower_with_deps(
     deps: Option<&DependencyContext>,
 ) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
     let mut ctx = LowerCtx::new();
+    ctx.local_names.extend(
+        schema
+            .declarations
+            .iter()
+            .filter_map(|decl| match &decl.node {
+                Decl::Message(d) => Some(d.name.node.clone()),
+                Decl::Enum(d) => Some(d.name.node.clone()),
+                Decl::Flags(d) => Some(d.name.node.clone()),
+                Decl::Union(d) => Some(d.name.node.clone()),
+                Decl::Newtype(d) => Some(d.name.node.clone()),
+                Decl::Config(d) => Some(d.name.node.clone()),
+                Decl::Alias(d) => Some(d.name.node.clone()),
+                Decl::Trait(d) => Some(d.name.node.clone()),
+                Decl::Const(_) | Decl::Impl(_) => None,
+            }),
+    );
+    ctx.explicit_import_names.extend(
+        schema
+            .imports
+            .iter()
+            .filter_map(|import| match &import.node.kind {
+                ImportKind::Named { names } => Some(names),
+                _ => None,
+            })
+            .flatten()
+            .map(|name| name.node.clone()),
+    );
+    let namespace_key = schema
+        .namespace
+        .as_ref()
+        .map(|namespace| {
+            namespace
+                .node
+                .path
+                .iter()
+                .map(|segment| segment.node.as_str())
+                .collect::<Vec<_>>()
+                .join(".")
+        })
+        .unwrap_or_default();
 
     register_import_types(schema, &mut ctx, deps);
-    let decl_ids = register_declarations(schema, &mut ctx);
+    let decl_ids = register_declarations(schema, &namespace_key, &mut ctx);
 
     // First pass: lower non-alias, non-const, non-impl declarations
     let mut alias_decls: Vec<&crate::ast::AliasDecl> = Vec::new();
@@ -162,6 +208,9 @@ pub fn lower_with_deps(
     for (impl_decl, span, impl_id) in impl_slots {
         let impl_def = lower_impl(impl_decl, span, &mut ctx);
         ctx.registry.fill_stub(impl_id, TypeDef::Impl(impl_def));
+        if let Some(trait_id) = resolve_impl_trait(impl_decl, &mut ctx) {
+            ctx.registry.set_impl_trait_id(impl_id, trait_id);
+        }
     }
 
     // Third pass: evaluate constants after all types are resolved
@@ -238,11 +287,14 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                             });
                             match found {
                                 Some(&id) => {
-                                    crate::remap::clone_types_into(
+                                    let id_map = crate::remap::clone_types_into_unbound(
                                         &dep_compiled.registry,
                                         &[id],
                                         &mut ctx.registry,
                                     );
+                                    if let Some(&new_id) = id_map.get(&id) {
+                                        ctx.registry.bind_name(name.clone(), new_id);
+                                    }
                                 }
                                 None => {
                                     // Collect available export names for suggestions
@@ -311,7 +363,7 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                         }
                     }
                     ImportKind::Wildcard => {
-                        crate::remap::clone_types_into(
+                        let id_map = crate::remap::clone_types_into_unbound(
                             &dep_compiled.registry,
                             &dep_compiled.declarations,
                             &mut ctx.registry,
@@ -323,7 +375,16 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                 match ctx.wildcard_origins.get(&type_name) {
                                     None => {
                                         ctx.wildcard_origins
-                                            .insert(type_name, Some(ns_key.clone()));
+                                            .insert(type_name.clone(), Some(ns_key.clone()));
+                                        if !ctx.local_names.contains(type_name.as_str())
+                                            && !ctx
+                                                .explicit_import_names
+                                                .contains(type_name.as_str())
+                                        {
+                                            if let Some(&new_id) = id_map.get(&old_id) {
+                                                ctx.registry.bind_name(type_name, new_id);
+                                            }
+                                        }
                                     }
                                     Some(Some(existing_ns)) if *existing_ns != ns_key => {
                                         // Ambiguous: same name from different namespaces.
@@ -336,29 +397,41 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                         ctx.wildcard_imports.insert(SmolStr::new(&ns_key));
                     }
                     ImportKind::Aliased { alias } => {
-                        // Clone all types with proper ID remapping, then rename
-                        // to qualified "Alias.TypeName" form.
-                        let id_map = crate::remap::clone_types_into(
+                        if ctx.local_names.contains(&alias.node) {
+                            ctx.emit(
+                                alias.span,
+                                ErrorClass::UnresolvedType,
+                                format!(
+                                    "import alias '{}' conflicts with a local declaration",
+                                    alias.node
+                                ),
+                            );
+                            continue;
+                        }
+                        if !ctx.import_aliases.insert(alias.node.clone()) {
+                            ctx.emit(
+                                alias.span,
+                                ErrorClass::UnresolvedType,
+                                format!("duplicate import alias '{}'", alias.node),
+                            );
+                            continue;
+                        }
+                        let id_map = crate::remap::clone_types_into_unbound(
                             &dep_compiled.registry,
                             &dep_compiled.declarations,
                             &mut ctx.registry,
                         );
-                        // Collect renames first to avoid borrow conflicts.
-                        let renames: Vec<_> = id_map
-                            .values()
-                            .filter_map(|&new_id| {
-                                ctx.registry.get(new_id).map(|def| {
-                                    let orig = crate::remap::type_def_name(def).to_owned();
-                                    let qualified = format!("{}.{}", alias.node, orig);
-                                    (new_id, orig, qualified)
-                                })
-                            })
-                            .collect();
-                        for (new_id, orig, qualified) in renames {
-                            if let Some(def) = ctx.registry.get_mut(new_id) {
-                                set_type_name(def, SmolStr::new(&qualified));
+                        for &old_id in &dep_compiled.declarations {
+                            if let (Some(def), Some(&new_id)) =
+                                (dep_compiled.registry.get(old_id), id_map.get(&old_id))
+                            {
+                                let qualified = SmolStr::new(format!(
+                                    "{}.{}",
+                                    alias.node,
+                                    crate::remap::type_def_name(def)
+                                ));
+                                ctx.registry.register_alias(qualified, new_id);
                             }
-                            ctx.registry.rename(new_id, &orig, SmolStr::new(&qualified));
                         }
                     }
                 }
@@ -383,21 +456,7 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
     }
 }
 
-fn set_type_name(def: &mut TypeDef, name: SmolStr) {
-    match def {
-        TypeDef::Message(m) => m.name = name,
-        TypeDef::Enum(e) => e.name = name,
-        TypeDef::Flags(f) => f.name = name,
-        TypeDef::Union(u) => u.name = name,
-        TypeDef::Newtype(n) => n.name = name,
-        TypeDef::Config(c) => c.name = name,
-        TypeDef::GenericAlias(a) => a.name = name,
-        TypeDef::Trait(t) => t.name = name,
-        TypeDef::Impl(_) => {} // Impls don't have a simple name to set
-    }
-}
-
-fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
+fn register_declarations(schema: &Schema, namespace: &str, ctx: &mut LowerCtx) -> Vec<TypeId> {
     let mut ids = Vec::new();
     for decl_spanned in &schema.declarations {
         let name = match &decl_spanned.node {
@@ -424,7 +483,10 @@ fn register_declarations(schema: &Schema, ctx: &mut LowerCtx) -> Vec<TypeId> {
             annotations: ResolvedAnnotations::default(),
             wire_size: None,
         });
+        let declaration_name = name.clone();
         let id = ctx.registry.register(name, placeholder);
+        ctx.registry
+            .set_origin(id, SmolStr::new(namespace), declaration_name);
         ids.push(id);
     }
     ids
@@ -818,6 +880,87 @@ fn lower_trait(
 }
 
 /// Lower an impl declaration to IR.
+fn resolve_impl_trait(decl: &crate::ast::ImplDecl, ctx: &mut LowerCtx) -> Option<TypeId> {
+    let lookup = decl.trait_name.node.as_str();
+    if let Some((alias, member)) = lookup.split_once('.') {
+        if !ctx.import_aliases.contains(alias) {
+            ctx.emit(
+                decl.trait_name.span,
+                ErrorClass::UnresolvedType,
+                format!("unknown import alias '{alias}' in impl trait reference"),
+            );
+            return None;
+        }
+        let Some(id) = ctx.registry.lookup(lookup) else {
+            ctx.emit(
+                decl.trait_name.span,
+                ErrorClass::UnresolvedType,
+                format!("import alias '{alias}' has no member '{member}'"),
+            );
+            return None;
+        };
+        return match ctx.registry.get(id) {
+            Some(TypeDef::Trait(_)) => Some(id),
+            Some(_) => {
+                ctx.emit(
+                    decl.trait_name.span,
+                    ErrorClass::UnresolvedType,
+                    format!("'{lookup}' does not name a trait"),
+                );
+                None
+            }
+            None => {
+                ctx.emit(
+                    decl.trait_name.span,
+                    ErrorClass::UnresolvedType,
+                    format!("import alias '{alias}' has no member '{member}'"),
+                );
+                None
+            }
+        };
+    }
+
+    let wildcard_is_ambiguous = matches!(ctx.wildcard_origins.get(lookup), Some(None))
+        && !ctx.local_names.contains(lookup)
+        && !ctx.explicit_import_names.contains(lookup);
+    if wildcard_is_ambiguous {
+        ctx.emit(
+            decl.trait_name.span,
+            ErrorClass::UnresolvedType,
+            format!("trait name '{lookup}' is ambiguous across wildcard imports"),
+        );
+        return None;
+    }
+
+    let Some(id) = ctx.registry.lookup(lookup) else {
+        ctx.emit(
+            decl.trait_name.span,
+            ErrorClass::UnresolvedType,
+            format!("impl references unknown trait '{lookup}'"),
+        );
+        return None;
+    };
+    match ctx.registry.get(id) {
+        Some(TypeDef::Trait(_)) => Some(id),
+        Some(_) => {
+            ctx.emit(
+                decl.trait_name.span,
+                ErrorClass::UnresolvedType,
+                format!("'{lookup}' does not name a trait"),
+            );
+            None
+        }
+        None => {
+            ctx.emit(
+                decl.trait_name.span,
+                ErrorClass::UnresolvedType,
+                format!("impl references unknown trait '{lookup}'"),
+            );
+            None
+        }
+    }
+}
+
 fn lower_impl(decl: &crate::ast::ImplDecl, span: Span, ctx: &mut LowerCtx) -> crate::ir::ImplDef {
     let trait_name = decl.trait_name.node.clone();
     let target_type = resolve_impl_target(decl, ctx);

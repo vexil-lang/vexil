@@ -22,5 +22,13 @@
     "value": { "v": { "key": 42 } },
     "expected_bytes": "01036b65792a000000",
     "notes": "LEB128 count 1 + string('key', len 3) + u32 LE(42)"
+  },
+  {
+    "name": "map_two_string_entries_canonical_order",
+    "schema": "namespace test.mp\nmessage M { v @0 : map<string, u32> }",
+    "type": "M",
+    "value": { "v": { "z": 2, "a": 1 } },
+    "expected_bytes": "02016101000000017a02000000",
+    "notes": "Two entries supplied in reverse lexical order. The canonical wire order is key 'a' then key 'z'."
   }
 ]

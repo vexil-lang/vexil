@@ -3,7 +3,11 @@
 
 package annotations
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"sort"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0x79, 0x11, 0xcd, 0x44, 0x04, 0x6d, 0x10, 0x7a, 0xf1, 0xf1, 0x82, 0x9b, 0x7b, 0x72, 0x7b, 0x36, 0x1c, 0x74, 0xbf, 0x08, 0x23, 0xb7, 0x7d, 0xec, 0x49, 0x18, 0xe9, 0xd4, 0xe0, 0xb3, 0x05, 0x67}
 const SchemaVersion = "1.2.0"
@@ -258,7 +262,13 @@ func (m *Limited) Pack(w *vexil.BitWriter) error {
 		w.WriteString(item)
 	}
 	w.WriteLeb128(uint64(len(m.Headers)))
-	for mapK, mapV := range m.Headers {
+	mapKeysmHeaders := make([]string, 0, len(m.Headers))
+	for mapK := range m.Headers {
+		mapKeysmHeaders = append(mapKeysmHeaders, mapK)
+	}
+	sort.Strings(mapKeysmHeaders)
+	for _, mapK := range mapKeysmHeaders {
+		mapV := m.Headers[mapK]
 		w.WriteString(mapK)
 		w.WriteString(mapV)
 	}

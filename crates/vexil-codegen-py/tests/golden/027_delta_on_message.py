@@ -53,16 +53,16 @@ class TelemetryEncoder:
 
     def encode(self, val: Telemetry) -> bytes:
         w = _BitWriter()
-        delta_timestamp = val.Timestamp - self._prev_timestamp
+        delta_timestamp = val.timestamp - self._prev_timestamp
         w.write_zigzag(delta_timestamp)
-        self._prev_timestamp = val.Timestamp
-        delta_value = val.Value - self._prev_value
+        self._prev_timestamp = val.timestamp
+        delta_value = val.value - self._prev_value
         w.write_f32(delta_value)
-        self._prev_value = val.Value
-        w.write_string(val.Label)
-        delta_count = val.Count - self._prev_count
+        self._prev_value = val.value
+        w.write_string(val.label)
+        delta_count = val.count - self._prev_count
         w.write_leb128(delta_count)
-        self._prev_count = val.Count
+        self._prev_count = val.count
         w.flush_to_byte_boundary()
         return w.finish()
 
@@ -83,17 +83,17 @@ class TelemetryDecoder:
         m = Telemetry.__new__(Telemetry)
         delta_timestamp = None
         delta_timestamp = r.read_zigzag()
-        m.Timestamp = self._prev_timestamp + delta_timestamp
-        self._prev_timestamp = m.Timestamp
+        m.timestamp = self._prev_timestamp + delta_timestamp
+        self._prev_timestamp = m.timestamp
         delta_value = None
         delta_value = r.read_f32()
-        m.Value = self._prev_value + delta_value
-        self._prev_value = m.Value
-        m.Label = r.read_string()
+        m.value = self._prev_value + delta_value
+        self._prev_value = m.value
+        m.label = r.read_string()
         delta_count = None
         delta_count = r.read_leb128()
-        m.Count = self._prev_count + delta_count
-        self._prev_count = m.Count
+        m.count = self._prev_count + delta_count
+        self._prev_count = m.count
         r.flush_to_byte_boundary()
         return m
 

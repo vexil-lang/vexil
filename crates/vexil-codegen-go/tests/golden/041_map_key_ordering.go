@@ -3,7 +3,11 @@
 
 package map_key_ordering
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"sort"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0xf6, 0x28, 0xdf, 0x10, 0x8a, 0xab, 0x0d, 0x88, 0x79, 0x58, 0x8a, 0x9f, 0xe6, 0xf8, 0x5f, 0x4a, 0xb6, 0x27, 0x11, 0x96, 0xd4, 0x78, 0x05, 0xce, 0x3e, 0x33, 0x37, 0x5b, 0x81, 0x1d, 0x3e, 0xc9}
 const SchemaVersion = "1.0.0"
@@ -142,7 +146,13 @@ func (m *MapKeyTest) Pack(w *vexil.BitWriter) error {
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.StringMap)))
-	for mapK, mapV := range m.StringMap {
+	mapKeysmStringMap := make([]string, 0, len(m.StringMap))
+	for mapK := range m.StringMap {
+		mapKeysmStringMap = append(mapKeysmStringMap, mapK)
+	}
+	sort.Strings(mapKeysmStringMap)
+	for _, mapK := range mapKeysmStringMap {
+		mapV := m.StringMap[mapK]
 		w.WriteString(mapK)
 		w.WriteU32(mapV)
 	}

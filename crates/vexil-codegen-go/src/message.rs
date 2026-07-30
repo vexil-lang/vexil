@@ -344,7 +344,26 @@ fn emit_write_type(
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
-            w.open_block(&format!("for mapK, mapV := range {access}"));
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
+                // String keys have a canonical lexical order. Go deliberately
+                // randomizes map iteration, so encode through a sorted key slice.
+                let keys = format!(
+                    "mapKeys{}",
+                    access
+                        .chars()
+                        .filter(char::is_ascii_alphanumeric)
+                        .collect::<String>()
+                );
+                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
+                w.open_block(&format!("for mapK := range {access}"));
+                w.line(&format!("{keys} = append({keys}, mapK)"));
+                w.close_block();
+                w.line(&format!("sort.Strings({keys})"));
+                w.open_block(&format!("for _, mapK := range {keys}"));
+                w.line(&format!("mapV := {access}[mapK]"));
+            } else {
+                w.open_block(&format!("for mapK, mapV := range {access}"));
+            }
             emit_write_type(w, "mapK", k, registry, writer, err_return);
             emit_write_type(w, "mapV", v, registry, writer, err_return);
             w.close_block();

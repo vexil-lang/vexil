@@ -825,3 +825,11 @@ fn invalid_075_impl_bare_expression_statement() {
         ErrorClass::ImplFnBodyTypeMismatch,
     );
 }
+
+#[test]
+fn invalid_076_impl_trait_path_too_deep() {
+    parse_invalid(
+        "076_impl_trait_path_too_deep.vexil",
+        ErrorClass::UnexpectedToken,
+    );
+}

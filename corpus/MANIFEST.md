@@ -60,7 +60,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 048_generic_trait_nested.vexil | §4.9 | Generic trait with a nested `array<T>` field and concrete implementation |
 | 049_trait_function_portable_body.vexil | §4.9–4.10 | Generic trait functions with immutable local, arithmetic, receiver mutation, and value/void returns |
 
-## Invalid Corpus (75 files)
+## Invalid Corpus (76 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -139,6 +139,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 073_impl_invalid_assignment.vexil | §4.10 | Type | Impl body assigns to an immutable local rather than a receiver field |
 | 074_impl_body_type_mismatch.vexil | §4.10 | Type | Impl local annotation conflicts with the inferred expression type |
 | 075_impl_bare_expression_statement.vexil | §4.10 | Type | Impl body contains a bare expression statement |
+| 076_impl_trait_path_too_deep.vexil | §4.10 | Parse | Impl trait path contains more than one alias qualifier |
 
 ## Error class taxonomy
 
@@ -153,6 +154,9 @@ The following MUST NOT conditions are tested indirectly or require multi-file se
 - **Circular imports** (§6.2): Requires two files that import each other. Not testable as a single file.
 - **Duplicate namespace across compilation unit** (§2.2): Requires two files with the same namespace.
 - **Wildcard import conflict** (§2.7): Requires two imported schemas exporting the same name.
+- **Trait import visibility** (§2.7, §4.10): Direct, wildcard, aliased,
+  transitive, and diamond behavior is covered by `projects/trait_alias` and
+  compiler project tests.
 - **Version constraint mismatch** (§6.3): Requires an imported schema with a non-matching @version.
 
 These should be tested as multi-file integration tests in the reference implementation.

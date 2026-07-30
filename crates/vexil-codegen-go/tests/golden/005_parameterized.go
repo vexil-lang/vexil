@@ -3,7 +3,11 @@
 
 package parameterized
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"sort"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0xb2, 0x56, 0xf5, 0x41, 0xe5, 0x8d, 0xeb, 0x54, 0x58, 0x21, 0xa3, 0xbe, 0x87, 0x43, 0xaa, 0xaf, 0x16, 0xe2, 0x4a, 0x3b, 0xf4, 0xdf, 0xbc, 0x74, 0x43, 0x07, 0xae, 0x2e, 0x48, 0xd6, 0x5a, 0x3f}
 
@@ -27,7 +31,13 @@ func (m *Basic) Pack(w *vexil.BitWriter) error {
 		w.WriteString(item)
 	}
 	w.WriteLeb128(uint64(len(m.C)))
-	for mapK, mapV := range m.C {
+	mapKeysmC := make([]string, 0, len(m.C))
+	for mapK := range m.C {
+		mapKeysmC = append(mapKeysmC, mapK)
+	}
+	sort.Strings(mapKeysmC)
+	for _, mapK := range mapKeysmC {
+		mapV := m.C[mapK]
 		w.WriteString(mapK)
 		w.WriteU64(mapV)
 	}
@@ -165,7 +175,13 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		}
 	}
 	w.WriteLeb128(uint64(len(m.C)))
-	for mapK, mapV := range m.C {
+	mapKeysmC := make([]string, 0, len(m.C))
+	for mapK := range m.C {
+		mapKeysmC = append(mapKeysmC, mapK)
+	}
+	sort.Strings(mapKeysmC)
+	for _, mapK := range mapKeysmC {
+		mapV := m.C[mapK]
 		w.WriteString(mapK)
 		w.WriteLeb128(uint64(len(mapV)))
 		for _, item := range mapV {

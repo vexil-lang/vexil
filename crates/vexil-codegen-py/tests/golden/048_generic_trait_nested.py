@@ -38,7 +38,7 @@ class EventList:
         r = _BitReader(data)
         m = EventList.__new__(EventList)
         arr_len = r.read_leb128()
-        m.items: list[int] = []
+        m.items = []
         for _ in range(arr_len):
             _item: int = None  # type: ignore[assignment]
             _item = r.read_u64()

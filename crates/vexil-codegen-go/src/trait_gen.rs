@@ -100,11 +100,15 @@ pub fn emit_impl(
         .iter()
         .map(|t| crate::fn_body::go_type(t, registry, import_types))
         .collect::<Vec<_>>();
+    let bare_trait_name = registry
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| definition.name.as_str())
+        .unwrap_or(impl_def.trait_name.as_str());
     let trait_name = import_types
-        .and_then(|imports| imports.get(impl_def.trait_name.as_str()))
+        .and_then(|imports| imports.get(bare_trait_name))
         .and_then(|path| path.rsplit('/').next())
-        .map(|package| format!("{package}.{}", impl_def.trait_name))
-        .unwrap_or_else(|| impl_def.trait_name.to_string());
+        .map(|package| format!("{package}.{bare_trait_name}"))
+        .unwrap_or_else(|| bare_trait_name.to_string());
     let trait_ref = if args.is_empty() {
         trait_name
     } else {
@@ -125,11 +129,8 @@ fn trait_fields<'a>(
     registry: &'a TypeRegistry,
 ) -> Vec<&'a vexil_lang::ir::TraitFieldDef> {
     registry
-        .iter()
-        .find_map(|(_, def)| match def {
-            TypeDef::Trait(t) if t.name == impl_def.trait_name => Some(t.fields.iter().collect()),
-            _ => None,
-        })
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| definition.fields.iter().collect())
         .unwrap_or_default()
 }
 fn substituted_type(
@@ -139,11 +140,8 @@ fn substituted_type(
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> String {
     let params = registry
-        .iter()
-        .find_map(|(_, def)| match def {
-            TypeDef::Trait(t) if t.name == impl_def.trait_name => Some(&t.type_params),
-            _ => None,
-        })
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| &definition.type_params)
         .map(|params| params.as_slice())
         .unwrap_or(&[]);
     project_type(

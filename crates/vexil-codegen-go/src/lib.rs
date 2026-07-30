@@ -17,7 +17,8 @@ pub mod union_gen;
 
 pub use backend::GoBackend;
 
-use vexil_lang::ir::{CompiledSchema, TypeDef};
+use vexil_lang::ast::SemanticType;
+use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum CodegenError {
@@ -81,7 +82,13 @@ pub(crate) fn generate_with_imports(
     let has_cross_imports = import_types.is_some_and(|m| !m.is_empty());
 
     let needs_fmt = has_unions;
-    let needs_grouped = has_cross_imports || (has_codecs && needs_fmt);
+    let needs_sort = compiled.declarations.iter().any(|&id| {
+        compiled
+            .registry
+            .get(id)
+            .is_some_and(type_def_has_string_map)
+    });
+    let needs_grouped = has_cross_imports || (has_codecs && (needs_fmt || needs_sort));
 
     if has_codecs || has_cross_imports {
         if needs_grouped {
@@ -89,6 +96,9 @@ pub(crate) fn generate_with_imports(
             w.indent();
             if needs_fmt {
                 w.line("\"fmt\"");
+            }
+            if needs_sort {
+                w.line("\"sort\"");
             }
             if has_codecs {
                 w.blank();
@@ -172,6 +182,50 @@ pub(crate) fn generate_with_imports(
     }
 
     Ok(w.finish())
+}
+
+fn type_def_has_string_map(type_def: &TypeDef) -> bool {
+    fn contains_string_map(ty: &ResolvedType) -> bool {
+        match ty {
+            ResolvedType::Map(key, _) => {
+                matches!(key.as_ref(), ResolvedType::Semantic(SemanticType::String))
+            }
+            ResolvedType::Optional(inner)
+            | ResolvedType::Array(inner)
+            | ResolvedType::Set(inner)
+            | ResolvedType::FixedArray(inner, _)
+            | ResolvedType::Vec2(inner)
+            | ResolvedType::Vec3(inner)
+            | ResolvedType::Vec4(inner)
+            | ResolvedType::Quat(inner)
+            | ResolvedType::Mat3(inner)
+            | ResolvedType::Mat4(inner) => contains_string_map(inner),
+            ResolvedType::Result(ok, err) => contains_string_map(ok) || contains_string_map(err),
+            _ => false,
+        }
+    }
+
+    match type_def {
+        TypeDef::Message(message) => message
+            .fields
+            .iter()
+            .any(|field| contains_string_map(&field.resolved_type)),
+        TypeDef::Union(union) => union
+            .variants
+            .iter()
+            .flat_map(|variant| &variant.fields)
+            .any(|field| contains_string_map(&field.resolved_type)),
+        TypeDef::Newtype(newtype) => contains_string_map(&newtype.inner_type),
+        TypeDef::Config(config) => config
+            .fields
+            .iter()
+            .any(|field| contains_string_map(&field.resolved_type)),
+        TypeDef::Trait(trait_def) => trait_def
+            .fields
+            .iter()
+            .any(|field| contains_string_map(&field.ty)),
+        _ => false,
+    }
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.

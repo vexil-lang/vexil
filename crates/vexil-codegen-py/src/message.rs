@@ -246,7 +246,15 @@ fn emit_write_type(
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            w.open_block(&format!("for map_k, map_v in {access}.items()"));
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
+                // String keys have a canonical lexical order. Iterating a
+                // caller-owned dict would otherwise make the wire depend on
+                // insertion order.
+                w.open_block(&format!("for map_k in sorted({access})"));
+                w.line(&format!("map_v = {access}[map_k]"));
+            } else {
+                w.open_block(&format!("for map_k, map_v in {access}.items()"));
+            }
             emit_write_type(w, "map_k", k, registry, writer);
             emit_write_type(w, "map_v", v, registry, writer);
             w.close_block();
@@ -432,7 +440,7 @@ fn emit_read_type(
         ResolvedType::Array(inner) => {
             w.line(&format!("arr_len = {reader}.read_leb128()"));
             let inner_py = py_type(inner, registry);
-            w.line(&format!("{target}: list[{inner_py}] = []"));
+            emit_container_initializer(w, target, &format!("list[{inner_py}]"), "[]");
             w.open_block("for _ in range(arr_len)");
             w.line(&format!(
                 "_item: {inner_py} = None  # type: ignore[assignment]"
@@ -444,7 +452,7 @@ fn emit_read_type(
         ResolvedType::Set(inner) => {
             w.line(&format!("set_len = {reader}.read_leb128()"));
             let inner_py = py_type(inner, registry);
-            w.line(&format!("{target}: set[{inner_py}] = set()"));
+            emit_container_initializer(w, target, &format!("set[{inner_py}]"), "set()");
             w.open_block("for _ in range(set_len)");
             w.line(&format!(
                 "_item: {inner_py} = None  # type: ignore[assignment]"
@@ -468,7 +476,7 @@ fn emit_read_type(
             w.line(&format!("map_len = {reader}.read_leb128()"));
             let k_py = py_type(k, registry);
             let v_py = py_type(v, registry);
-            w.line(&format!("{target}: dict[{k_py}, {v_py}] = {{}}"));
+            emit_container_initializer(w, target, &format!("dict[{k_py}, {v_py}]"), "{}");
             w.open_block("for _ in range(map_len)");
             w.line(&format!("_k: {k_py} = None  # type: ignore[assignment]"));
             w.line(&format!("_v: {v_py} = None  # type: ignore[assignment]"));
@@ -498,6 +506,17 @@ fn emit_read_type(
             w.close_block();
         }
         _ => {}
+    }
+}
+
+/// Emit a typed local container initializer or an unannotated attribute
+/// assignment. Python only permits annotations on simple names, and message
+/// fields already carry their dataclass type annotations.
+fn emit_container_initializer(w: &mut CodeWriter, target: &str, ty: &str, value: &str) {
+    if target.contains('.') || target.contains('[') {
+        w.line(&format!("{target} = {value}"));
+    } else {
+        w.line(&format!("{target}: {ty} = {value}"));
     }
 }
 

@@ -85,10 +85,14 @@ pub fn emit_impl(
         .iter()
         .map(|ty| rust_type(ty, registry))
         .collect::<Vec<_>>();
+    let trait_name = registry
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| definition.name.as_str())
+        .unwrap_or(impl_def.trait_name.as_str());
     let trait_ref = if trait_args.is_empty() {
-        impl_def.trait_name.to_string()
+        trait_name.to_string()
     } else {
-        format!("{}<{}>", impl_def.trait_name, trait_args.join(", "))
+        format!("{trait_name}<{}>", trait_args.join(", "))
     };
     let target = rust_type(&impl_def.target_type, registry);
     let ResolvedType::Named(target_id) = &impl_def.target_type else {
@@ -122,12 +126,9 @@ fn trait_field_for_impl<'a>(
     name: &str,
     registry: &'a TypeRegistry,
 ) -> Option<&'a vexil_lang::ir::TraitFieldDef> {
-    registry.iter().find_map(|(_, def)| match def {
-        TypeDef::Trait(trait_def) if trait_def.name == impl_def.trait_name => {
-            trait_def.fields.iter().find(|f| f.name == name)
-        }
-        _ => None,
-    })
+    registry
+        .trait_for_impl(impl_def)
+        .and_then(|(_, trait_def)| trait_def.fields.iter().find(|f| f.name == name))
 }
 
 fn resolved_trait_field_type(
@@ -136,11 +137,8 @@ fn resolved_trait_field_type(
     registry: &TypeRegistry,
 ) -> String {
     let params = registry
-        .iter()
-        .find_map(|(_, def)| match def {
-            TypeDef::Trait(t) if t.name == impl_def.trait_name => Some(&t.type_params),
-            _ => None,
-        })
+        .trait_for_impl(impl_def)
+        .map(|(_, definition)| &definition.type_params)
         .map(|params| params.as_slice())
         .unwrap_or(&[]);
     project_type(
