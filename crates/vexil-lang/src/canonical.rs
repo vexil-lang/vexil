@@ -860,6 +860,31 @@ mod tests {
         assert_eq!(old_hash, new_hash);
     }
 
+    #[test]
+    fn trait_field_tags_are_wire_hash_inert() {
+        let first = r#"
+            namespace test.trait_tag_hash
+            trait Tagged {
+                value @0 : i32
+                label @1 : string
+            }
+            message Item { value @0 : i32 label @1 : string }
+            impl Tagged for Item { }
+        "#;
+        let retagged = r#"
+            namespace test.trait_tag_hash
+            trait Tagged {
+                value @99 : i32
+                label @99 : string
+            }
+            message Item { value @0 : i32 label @1 : string }
+            impl Tagged for Item { }
+        "#;
+        let first_hash = schema_hash(&crate::compile(first).compiled.unwrap());
+        let retagged_hash = schema_hash(&crate::compile(retagged).compiled.unwrap());
+        assert_eq!(first_hash, retagged_hash);
+    }
+
     fn corpus_path(name: &str) -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

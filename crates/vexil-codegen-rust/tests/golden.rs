@@ -185,6 +185,20 @@ fn trait_only_generic_map() {
 }
 
 #[test]
+fn trait_field_tags_do_not_change_generated_output() {
+    let first = "namespace test.trait_tags\ntrait Tagged { value @0 : i32 label @1 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let retagged = "namespace test.trait_tags\ntrait Tagged { value @9 : i32 label @9 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let first = vexil_lang::compile(first).compiled.expect("first schema");
+    let retagged = vexil_lang::compile(retagged)
+        .compiled
+        .expect("retagged schema");
+    assert_eq!(
+        vexil_codegen_rust::generate(&first).expect("first output"),
+        vexil_codegen_rust::generate(&retagged).expect("retagged output")
+    );
+}
+
+#[test]
 fn portable_function_rust_projection_is_ownership_and_storage_aware() {
     let result = vexil_lang::compile(
         r#"

@@ -795,8 +795,13 @@ trait SensorData {
 }
 ```
 
-Trait fields use the same syntax as message fields but carry no ordinals
-(traits have no wire encoding). A trait MAY also declare function signatures:
+Trait fields use the same tagged syntax as message fields, so every trait field
+MUST include exactly one numeric `@N` tag. The tag is source-level syntax only:
+its numeric value has no wire, conformance, declaration-ordering,
+canonical-hash, or compatibility meaning. In particular, implementations match
+trait fields by name and type, and changing, reordering, or repeating trait
+field tag values does not change that contract. A trait MAY also declare
+function signatures:
 
 ```vexil
 trait Validatable {

@@ -137,3 +137,17 @@ fn test_047_trait_function_codegen_deferred() {
 fn test_049_trait_function_portable_body() {
     golden_test("049_trait_function_portable_body");
 }
+
+#[test]
+fn trait_field_tags_do_not_change_generated_output() {
+    let first = "namespace test.trait_tags\ntrait Tagged { value @0 : i32 label @1 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let retagged = "namespace test.trait_tags\ntrait Tagged { value @9 : i32 label @9 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
+    let first = vexil_lang::compile(first).compiled.expect("first schema");
+    let retagged = vexil_lang::compile(retagged)
+        .compiled
+        .expect("retagged schema");
+    assert_eq!(
+        vexil_codegen_ts::generate(&first).expect("first output"),
+        vexil_codegen_ts::generate(&retagged).expect("retagged output")
+    );
+}

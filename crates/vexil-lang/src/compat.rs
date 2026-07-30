@@ -778,6 +778,29 @@ mod tests {
     }
 
     #[test]
+    fn trait_field_tag_changes_are_wire_compatible() {
+        let old = compile_schema(
+            r#"
+            namespace test.trait_tag_compat
+            trait Tagged { value @0 : i32 label @1 : string }
+            message Item { value @0 : i32 label @1 : string }
+            impl Tagged for Item { }
+        "#,
+        );
+        let new = compile_schema(
+            r#"
+            namespace test.trait_tag_compat
+            trait Tagged { value @7 : i32 label @7 : string }
+            message Item { value @0 : i32 label @1 : string }
+            impl Tagged for Item { }
+        "#,
+        );
+        let report = check(&old, &new);
+        assert_eq!(report.result, CompatResult::Compatible);
+        assert!(report.changes.is_empty(), "{:?}", report.changes);
+    }
+
+    #[test]
     fn field_added_is_minor() {
         let old = compile_schema(
             r#"
