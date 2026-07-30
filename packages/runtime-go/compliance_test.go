@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -90,6 +91,22 @@ func encodeField(t *testing.T, w *BitWriter, schema string, fieldName string, va
 		}
 	case "string":
 		w.WriteString(value.(string))
+	case "bytes":
+		values, ok := value.([]interface{})
+		if !ok {
+			t.Fatalf("bytes field %q has unexpected value %T", fieldName, value)
+		}
+		data := make([]byte, len(values))
+		for i, item := range values {
+			data[i] = byte(toFloat64(item))
+		}
+		w.WriteBytes(data)
+	case "Child":
+		child, ok := value.(map[string]interface{})
+		if !ok {
+			t.Fatalf("nested field %q has unexpected value %T", fieldName, value)
+		}
+		w.WriteU16(uint16(toFloat64(child["value"])))
 	default:
 		// Handle sub-byte types like u1, u3, u5, u6
 		if len(fieldType) >= 2 && fieldType[0] == 'u' {
@@ -335,9 +352,14 @@ func TestComplianceArraysMaps(t *testing.T) {
 			} else if m, ok := val.(map[string]interface{}); ok {
 				entries := len(m)
 				w.WriteLeb128(uint64(entries))
-				for k, val := range m {
+				keys := make([]string, 0, entries)
+				for key := range m {
+					keys = append(keys, key)
+				}
+				sort.Strings(keys)
+				for _, k := range keys {
 					w.WriteString(k)
-					w.WriteU32(uint32(toFloat64(val)))
+					w.WriteU32(uint32(toFloat64(m[k])))
 				}
 			}
 			got := w.Finish()
