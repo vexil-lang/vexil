@@ -418,5 +418,6 @@ pub struct TombstoneDef {
     pub ordinal: u32,
     pub reason: SmolStr,
     pub since: Option<SmolStr>,
+    /// Resolved original field type, retained as wire-inert history metadata.
     pub original_type: Option<ResolvedType>,
 }

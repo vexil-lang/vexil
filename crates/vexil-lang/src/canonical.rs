@@ -814,6 +814,47 @@ mod tests {
         assert!(form.contains("name @0 : string @removed(1, \"replaced by full_name\") @removed(2, \"no longer needed\", since: \"2.0\")"), "form was: {form}");
     }
 
+    #[test]
+    fn tombstone_original_type_is_canonical_hash_inert() {
+        let untyped = r#"
+            namespace t.tombstone_hash
+            message Evolving {
+                live @0 : u32
+                @removed(1, reason: "historical")
+                next @2 : u64
+            }
+        "#;
+        let typed_u32 = r#"
+            namespace t.tombstone_hash
+            message Evolving {
+                live @0 : u32
+                @removed(1, reason: "historical") : u32
+                next @2 : u64
+            }
+        "#;
+        let typed_string = r#"
+            namespace t.tombstone_hash
+            message Evolving {
+                live @0 : u32
+                @removed(1, reason: "historical") : string
+                next @2 : u64
+            }
+        "#;
+
+        let untyped = crate::compile(untyped).compiled.expect("untyped schema");
+        let typed_u32 = crate::compile(typed_u32)
+            .compiled
+            .expect("typed u32 schema");
+        let typed_string = crate::compile(typed_string)
+            .compiled
+            .expect("typed string schema");
+
+        assert_eq!(canonical_form(&untyped), canonical_form(&typed_u32));
+        assert_eq!(canonical_form(&untyped), canonical_form(&typed_string));
+        assert_eq!(schema_hash(&untyped), schema_hash(&typed_u32));
+        assert_eq!(schema_hash(&untyped), schema_hash(&typed_string));
+    }
+
     // -----------------------------------------------------------------------
     // Task 5: whitespace invariance + hash stability
     // -----------------------------------------------------------------------

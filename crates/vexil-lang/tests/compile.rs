@@ -96,6 +96,51 @@ message Item { value @0 : u32 }
     }
 }
 
+#[test]
+fn typed_tombstone_original_type_is_resolved_metadata() {
+    let source = r#"
+namespace test.tombstone_metadata
+message RemovedValue { value @0 : u32 }
+message Current {
+    live @0 : bool
+    @removed(1, reason: "historical") : array<optional<RemovedValue>>
+    next @2 : u64
+}
+"#;
+    let result = vexil_lang::compile(source);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    let compiled = result.compiled.expect("schema should compile");
+    let removed_value_id = compiled.declarations[0];
+    let current_id = compiled.declarations[1];
+    let TypeDef::Message(current) = compiled.registry.get(current_id).expect("current message")
+    else {
+        panic!("expected Current message");
+    };
+    assert_eq!(
+        current.tombstones[0].original_type,
+        Some(ResolvedType::Array(Box::new(ResolvedType::Optional(
+            Box::new(ResolvedType::Named(removed_value_id))
+        ))))
+    );
+}
+
+#[test]
+fn unresolved_tombstone_metadata_type_reports_diagnostic() {
+    let source = r#"
+namespace test.tombstone_metadata_error
+    message Current {
+        @removed(0, reason: "historical") : MissingType
+    }
+"#;
+    let result = vexil_lang::compile(source);
+    assert!(result.diagnostics.iter().any(|diagnostic| {
+        matches!(
+            diagnostic.class,
+            ErrorClass::UnknownType | ErrorClass::UnresolvedType
+        )
+    }));
+}
+
 /// Newtype inner type resolves to primitive.
 #[test]
 fn newtype_resolution() {

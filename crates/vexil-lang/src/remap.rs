@@ -8,9 +8,9 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ir::{
-    ConfigDef, ConfigFieldDef, FieldDef, FnParamDef, ImplDef, ImplFnDef, MessageDef, NewtypeDef,
-    ResolvedType, TraitDef, TraitFieldDef, TraitFnDef, TypeDef, TypeId, TypeRegistry, UnionDef,
-    UnionVariantDef,
+    ConfigDef, ConfigFieldDef, EnumDef, FieldDef, FlagsDef, FnParamDef, ImplDef, ImplFnDef,
+    MessageDef, NewtypeDef, ResolvedType, TombstoneDef, TraitDef, TraitFieldDef, TraitFnDef,
+    TypeDef, TypeId, TypeRegistry, UnionDef, UnionVariantDef,
 };
 
 /// Clone type definitions from `source` into `target`, assigning fresh `TypeId`s.
@@ -149,12 +149,15 @@ fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
             for f in &m.fields {
                 collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
             }
+            collect_type_ids_from_tombstones(&m.tombstones, &mut ids);
         }
         TypeDef::Union(u) => {
+            collect_type_ids_from_tombstones(&u.tombstones, &mut ids);
             for v in &u.variants {
                 for f in &v.fields {
                     collect_type_ids_from_resolved(&f.resolved_type, &mut ids);
                 }
+                collect_type_ids_from_tombstones(&v.tombstones, &mut ids);
             }
         }
         TypeDef::Newtype(n) => {
@@ -194,9 +197,19 @@ fn referenced_type_ids(def: &TypeDef) -> Vec<TypeId> {
                 collect_type_ids_from_fn_body(&fn_def.body, &mut ids);
             }
         }
-        TypeDef::Enum(_) | TypeDef::Flags(_) | TypeDef::GenericAlias(_) => {}
+        TypeDef::Enum(e) => collect_type_ids_from_tombstones(&e.tombstones, &mut ids),
+        TypeDef::Flags(f) => collect_type_ids_from_tombstones(&f.tombstones, &mut ids),
+        TypeDef::GenericAlias(_) => {}
     }
     ids
+}
+
+fn collect_type_ids_from_tombstones(tombstones: &[TombstoneDef], ids: &mut Vec<TypeId>) {
+    for tombstone in tombstones {
+        if let Some(original_type) = &tombstone.original_type {
+            collect_type_ids_from_resolved(original_type, ids);
+        }
+    }
 }
 
 fn collect_type_ids_from_fn_body(body: &crate::ir::FnBody, ids: &mut Vec<TypeId>) {
@@ -295,8 +308,8 @@ pub fn remap_type_def(def: &TypeDef, id_map: &HashMap<TypeId, TypeId>) -> TypeDe
         TypeDef::Union(u) => TypeDef::Union(remap_union_def(u, id_map)),
         TypeDef::Newtype(n) => TypeDef::Newtype(remap_newtype_def(n, id_map)),
         TypeDef::Config(c) => TypeDef::Config(remap_config_def(c, id_map)),
-        TypeDef::Enum(e) => TypeDef::Enum(e.clone()),
-        TypeDef::Flags(f) => TypeDef::Flags(f.clone()),
+        TypeDef::Enum(e) => TypeDef::Enum(remap_enum_def(e, id_map)),
+        TypeDef::Flags(f) => TypeDef::Flags(remap_flags_def(f, id_map)),
         TypeDef::GenericAlias(a) => TypeDef::GenericAlias(a.clone()),
         TypeDef::Trait(t) => TypeDef::Trait(remap_trait_def(t, id_map)),
         TypeDef::Impl(i) => TypeDef::Impl(remap_impl_def(i, id_map)),
@@ -334,6 +347,29 @@ fn remap_field_def(f: &FieldDef, id_map: &HashMap<TypeId, TypeId>) -> FieldDef {
     }
 }
 
+fn remap_tombstone_def(tombstone: &TombstoneDef, id_map: &HashMap<TypeId, TypeId>) -> TombstoneDef {
+    TombstoneDef {
+        span: tombstone.span,
+        ordinal: tombstone.ordinal,
+        reason: tombstone.reason.clone(),
+        since: tombstone.since.clone(),
+        original_type: tombstone
+            .original_type
+            .as_ref()
+            .map(|ty| remap_resolved_type(ty, id_map)),
+    }
+}
+
+fn remap_tombstones(
+    tombstones: &[TombstoneDef],
+    id_map: &HashMap<TypeId, TypeId>,
+) -> Vec<TombstoneDef> {
+    tombstones
+        .iter()
+        .map(|tombstone| remap_tombstone_def(tombstone, id_map))
+        .collect()
+}
+
 fn remap_message_def(m: &MessageDef, id_map: &HashMap<TypeId, TypeId>) -> MessageDef {
     MessageDef {
         name: m.name.clone(),
@@ -343,7 +379,7 @@ fn remap_message_def(m: &MessageDef, id_map: &HashMap<TypeId, TypeId>) -> Messag
             .iter()
             .map(|f| remap_field_def(f, id_map))
             .collect(),
-        tombstones: m.tombstones.clone(),
+        tombstones: remap_tombstones(&m.tombstones, id_map),
         annotations: m.annotations.clone(),
         wire_size: m.wire_size.clone(),
     }
@@ -362,7 +398,7 @@ fn remap_union_variant_def(
             .iter()
             .map(|f| remap_field_def(f, id_map))
             .collect(),
-        tombstones: v.tombstones.clone(),
+        tombstones: remap_tombstones(&v.tombstones, id_map),
         annotations: v.annotations.clone(),
     }
 }
@@ -376,9 +412,32 @@ fn remap_union_def(u: &UnionDef, id_map: &HashMap<TypeId, TypeId>) -> UnionDef {
             .iter()
             .map(|v| remap_union_variant_def(v, id_map))
             .collect(),
-        tombstones: u.tombstones.clone(),
+        tombstones: remap_tombstones(&u.tombstones, id_map),
         annotations: u.annotations.clone(),
         wire_size: u.wire_size.clone(),
+    }
+}
+
+fn remap_enum_def(e: &EnumDef, id_map: &HashMap<TypeId, TypeId>) -> EnumDef {
+    EnumDef {
+        name: e.name.clone(),
+        span: e.span,
+        backing: e.backing.clone(),
+        variants: e.variants.clone(),
+        tombstones: remap_tombstones(&e.tombstones, id_map),
+        annotations: e.annotations.clone(),
+        wire_bits: e.wire_bits,
+    }
+}
+
+fn remap_flags_def(f: &FlagsDef, id_map: &HashMap<TypeId, TypeId>) -> FlagsDef {
+    FlagsDef {
+        name: f.name.clone(),
+        span: f.span,
+        bits: f.bits.clone(),
+        tombstones: remap_tombstones(&f.tombstones, id_map),
+        annotations: f.annotations.clone(),
+        wire_bytes: f.wire_bytes,
     }
 }
 
@@ -640,6 +699,101 @@ mod tests {
             second_map[&foo_id], existing_foo_id,
             "diamond dedup should reuse existing Foo"
         );
+    }
+
+    #[test]
+    fn remap_transitively_clones_tombstone_metadata_types() {
+        let source = r#"
+namespace test.tombstone_remap
+message Leaf { value @0 : u32 }
+message Holder {
+    @removed(0, reason: "historical") : array<optional<Leaf>>
+}
+"#;
+        let compiled = crate::compile(source).compiled.expect("compiled schema");
+        let leaf_id = compiled.declarations[0];
+        let holder_id = compiled.declarations[1];
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let id_map = clone_types_into(&compiled.registry, &[holder_id], &mut target);
+
+        assert_eq!(id_map.len(), 2);
+        let Some(TypeDef::Message(holder)) = target.get(id_map[&holder_id]) else {
+            panic!("expected remapped Holder");
+        };
+        assert_eq!(
+            holder.tombstones[0].original_type,
+            Some(ResolvedType::Array(Box::new(ResolvedType::Optional(
+                Box::new(ResolvedType::Named(id_map[&leaf_id]))
+            ))))
+        );
+    }
+
+    #[test]
+    fn remap_tombstone_metadata_diamond_reuses_existing_dependency() {
+        let source = r#"
+namespace test.tombstone_diamond
+message Leaf { value @0 : u32 }
+message Holder { @removed(0, reason: "historical") : Leaf }
+"#;
+        let compiled = crate::compile(source).compiled.expect("compiled schema");
+        let leaf_id = compiled.declarations[0];
+        let holder_id = compiled.declarations[1];
+
+        let mut target = crate::ir::TypeRegistry::new();
+        let first_map = clone_types_into(&compiled.registry, &[leaf_id], &mut target);
+        let second_map = clone_types_into(&compiled.registry, &[holder_id], &mut target);
+
+        assert_eq!(second_map[&leaf_id], first_map[&leaf_id]);
+        let Some(TypeDef::Message(holder)) = target.get(second_map[&holder_id]) else {
+            panic!("expected remapped Holder");
+        };
+        assert_eq!(
+            holder.tombstones[0].original_type,
+            Some(ResolvedType::Named(first_map[&leaf_id]))
+        );
+    }
+
+    #[test]
+    fn remap_tombstone_metadata_on_enum_flags_and_union() {
+        let source = r#"
+namespace test.tombstone_shapes
+message Leaf { value @0 : u32 }
+enum HistoricalEnum {
+    Active @0
+    @removed(1, reason: "historical") : Leaf
+}
+flags HistoricalFlags {
+    Active @0
+    @removed(1, reason: "historical") : Leaf
+}
+union HistoricalUnion {
+    Active @0 { value @0 : u32 }
+    @removed(1, reason: "historical") : Leaf
+    Nested @2 { @removed(0, reason: "historical") : Leaf }
+}
+"#;
+        let compiled = crate::compile(source).compiled.expect("compiled schema");
+        let leaf_id = compiled.declarations[0];
+
+        for declaration_id in &compiled.declarations[1..] {
+            let mut target = crate::ir::TypeRegistry::new();
+            let id_map = clone_types_into(&compiled.registry, &[*declaration_id], &mut target);
+            let expected = Some(ResolvedType::Named(id_map[&leaf_id]));
+            match target.get(id_map[declaration_id]).expect("remapped type") {
+                TypeDef::Enum(definition) => {
+                    assert_eq!(definition.tombstones[0].original_type, expected)
+                }
+                TypeDef::Flags(definition) => {
+                    assert_eq!(definition.tombstones[0].original_type, expected)
+                }
+                TypeDef::Union(definition) => {
+                    assert_eq!(definition.tombstones[0].original_type, expected);
+                    assert_eq!(definition.variants[1].tombstones[0].original_type, expected);
+                }
+                other => panic!("unexpected remapped type: {other:?}"),
+            }
+        }
     }
 
     #[test]

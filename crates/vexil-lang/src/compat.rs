@@ -847,6 +847,70 @@ mod tests {
     }
 
     #[test]
+    fn tombstone_original_type_metadata_changes_are_no_change() {
+        let schemas = [
+            r#"
+                namespace test.tombstone_compat
+                message Point {
+                    x @0 : f32
+                    @removed(1, reason: "historical")
+                }
+            "#,
+            r#"
+                namespace test.tombstone_compat
+                message Point {
+                    x @0 : f32
+                    @removed(1, reason: "historical") : u32
+                }
+            "#,
+            r#"
+                namespace test.tombstone_compat
+                message Point {
+                    x @0 : f32
+                    @removed(1, reason: "historical") : string
+                }
+            "#,
+        ]
+        .map(compile_schema);
+
+        for old in &schemas {
+            for new in &schemas {
+                let report = check(old, new);
+                assert_eq!(report.result, CompatResult::Compatible);
+                assert_eq!(report.suggested_bump, BumpKind::Patch);
+                assert!(report.changes.is_empty(), "{:?}", report.changes);
+            }
+        }
+    }
+
+    #[test]
+    fn field_removed_with_typed_tombstone_is_still_major() {
+        let old = compile_schema(
+            r#"
+                namespace test.tombstone_removal
+                message Point { x @0 : f32 y @1 : u32 }
+            "#,
+        );
+        let new = compile_schema(
+            r#"
+                namespace test.tombstone_removal
+                message Point {
+                    x @0 : f32
+                    @removed(1, reason: "historical") : u32
+                }
+            "#,
+        );
+
+        let report = check(&old, &new);
+        assert_eq!(report.result, CompatResult::Breaking);
+        assert_eq!(report.suggested_bump, BumpKind::Major);
+        assert!(report
+            .changes
+            .iter()
+            .any(|change| change.kind == ChangeKind::FieldRemoved));
+    }
+
+    #[test]
     fn field_type_changed_is_major() {
         let old = compile_schema(
             r#"
