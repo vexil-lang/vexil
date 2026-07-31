@@ -151,6 +151,7 @@ class Config:
             raise ValueError(f"constraint violation for field 'port': value {self.port} violates constraint")
         _vexil_self_2e_port_optional = self.port
         w.write_bool(_vexil_self_2e_port_optional is not None)
+        w.flush_to_byte_boundary()
         if _vexil_self_2e_port_optional is not None:
             w.write_u16(_vexil_self_2e_port_optional)
         w.flush_to_byte_boundary()
@@ -174,6 +175,7 @@ class Config:
         except DecodeError:
             m.port = None
         else:
+            r.flush_to_byte_boundary()
             if _vexil_m_2e_port_present:
                 m.port = r.read_u16()
             else:

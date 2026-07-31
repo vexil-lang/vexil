@@ -33,6 +33,19 @@ fn canonical_sort_key_expr(ty: &ResolvedType, registry: &TypeRegistry, value: &s
     }
 }
 
+fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
+    match ty {
+        ResolvedType::Primitive(PrimitiveType::Bool) | ResolvedType::SubByte(_) => false,
+        ResolvedType::BitsInline(names) => names.len() >= 8,
+        ResolvedType::Named(id) => match registry.get(*id) {
+            Some(TypeDef::Enum(enum_def)) => enum_def.wire_bits >= 8,
+            _ => true,
+        },
+        ResolvedType::Optional(inner) => is_byte_aligned(inner, registry),
+        _ => true,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Constraint validation
 // ---------------------------------------------------------------------------
@@ -264,6 +277,9 @@ fn emit_write_type(
             let value = local_name(access, "optional");
             w.line(&format!("{value} = {access}"));
             w.line(&format!("{writer}.write_bool({value} is not None)"));
+            if is_byte_aligned(inner, registry) {
+                w.line(&format!("{writer}.flush_to_byte_boundary()"));
+            }
             w.open_block(&format!("if {value} is not None"));
             if optional_payload_needs_wrapper(inner) {
                 emit_write_type(w, &format!("{value}[0]"), inner, registry, writer);
@@ -489,6 +505,9 @@ fn emit_read_type(
             w.dedent();
             w.line("else:");
             w.indent();
+            if is_byte_aligned(inner, registry) {
+                w.line(&format!("{reader}.flush_to_byte_boundary()"));
+            }
             w.open_block(&format!("if {present}"));
             if optional_payload_needs_wrapper(inner) {
                 let value = local_name(target, "optional_value");
