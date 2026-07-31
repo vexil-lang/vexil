@@ -70,12 +70,38 @@ jobs:
   # classifier could cause the dependent required jobs to be skipped.
   ci-gate:
     name: CI gate
-    needs: changes
+    needs:
+      - changes
+      - test
+      - ts-runtime
+      - go-runtime
+      - generated-python
+      - msrv
+      - schema-compat
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require successful classification
-        run: test "${{ needs.changes.result }}" = "success"
+      - name: Require successful validation
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          TS_RUNTIME_RESULT: ${{ needs['ts-runtime'].result }}
+          GO_RUNTIME_RESULT: ${{ needs['go-runtime'].result }}
+          GENERATED_PYTHON_RESULT: ${{ needs['generated-python'].result }}
+          MSRV_RESULT: ${{ needs.msrv.result }}
+          SCHEMA_COMPAT_RESULT: ${{ needs['schema-compat'].result }}
+        run: |
+          test "$CHANGES_RESULT" = "success"
+          for result in \
+            "$TEST_RESULT" \
+            "$TS_RUNTIME_RESULT" \
+            "$GO_RUNTIME_RESULT" \
+            "$GENERATED_PYTHON_RESULT" \
+            "$MSRV_RESULT" \
+            "$SCHEMA_COMPAT_RESULT"
+          do
+            test "$result" = "success" || test "$result" = "skipped"
+          done
 
   # ── Cross-platform tests ────────────────────────────────────────────────────
   # Wire golden tests (wire_golden.rs) run on every platform/arch combination
@@ -275,8 +301,10 @@ jobs:
       - name: Compile generated Python
         run: python -m py_compile crates/vexil-codegen-py/tests/golden/*.py
 
-      - name: Exercise generated delta codecs
-        run: python crates/vexil-codegen-py/tests/delta_runtime_probe.py
+      - name: Exercise generated Python runtime probes
+        run: |
+          python crates/vexil-codegen-py/tests/delta_runtime_probe.py
+          python crates/vexil-codegen-py/tests/trait_runtime_probe.py
 
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.
