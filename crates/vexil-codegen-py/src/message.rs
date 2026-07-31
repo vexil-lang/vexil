@@ -6,7 +6,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::{py_ident, py_type};
+use crate::types::{optional_payload_needs_wrapper, py_ident, py_type};
 
 fn local_name(target: &str, suffix: &str) -> String {
     let mut stem = String::new();
@@ -240,9 +240,12 @@ fn emit_write_type(
             let value = local_name(access, "optional");
             w.line(&format!("{value} = {access}"));
             w.line(&format!("{writer}.write_bool({value} is not None)"));
-            w.line(&format!("{writer}.flush_to_byte_boundary()"));
             w.open_block(&format!("if {value} is not None"));
-            emit_present_value(w, &value, inner, registry, writer);
+            if optional_payload_needs_wrapper(inner) {
+                emit_write_type(w, &format!("{value}[0]"), inner, registry, writer);
+            } else {
+                emit_write_type(w, &value, inner, registry, writer);
+            }
             w.close_block();
         }
         ResolvedType::Array(inner) => {
@@ -311,26 +314,6 @@ fn emit_write_type(
             w.close_block();
         }
         _ => {}
-    }
-}
-
-/// Emit a value whose enclosing optional has already established presence.
-///
-/// Python collapses nested `T | None | None` annotations to `T | None`, so a
-/// non-`None` value means every nested optional layer is present on the wire.
-fn emit_present_value(
-    w: &mut CodeWriter,
-    access: &str,
-    ty: &ResolvedType,
-    registry: &TypeRegistry,
-    writer: &str,
-) {
-    if let ResolvedType::Optional(inner) = ty {
-        w.line(&format!("{writer}.write_bool(True)"));
-        w.line(&format!("{writer}.flush_to_byte_boundary()"));
-        emit_present_value(w, access, inner, registry, writer);
-    } else {
-        emit_write_type(w, access, ty, registry, writer);
     }
 }
 
@@ -476,9 +459,14 @@ fn emit_read_type(
             w.dedent();
             w.line("else:");
             w.indent();
-            w.line(&format!("{reader}.flush_to_byte_boundary()"));
             w.open_block(&format!("if {present}"));
-            emit_read_type(w, target, inner, registry, reader);
+            if optional_payload_needs_wrapper(inner) {
+                let value = local_name(target, "optional_value");
+                emit_read_type(w, &value, inner, registry, reader);
+                w.line(&format!("{target} = ({value},)"));
+            } else {
+                emit_read_type(w, target, inner, registry, reader);
+            }
             w.dedent();
             w.line("else:");
             w.indent();
@@ -657,7 +645,6 @@ fn emit_tombstone_read(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("_present = {reader}.read_bool()"));
-            w.line(&format!("{reader}.flush_to_byte_boundary()"));
             w.open_block("if _present");
             emit_tombstone_read(w, inner, registry, reader);
             w.close_block();

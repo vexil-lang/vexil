@@ -68,7 +68,6 @@ class LinkedList:
         w.write_string(self.value)
         _vexil_self_2e_next_optional = self.next
         w.write_bool(_vexil_self_2e_next_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_next_optional is not None:
             _vexil_self_2e_next_optional.encode_to(w)
         w.flush_to_byte_boundary()
@@ -89,7 +88,6 @@ class LinkedList:
         except DecodeError:
             m.next = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_next_present:
                 m.next = LinkedList.decode_from(r)
             else:

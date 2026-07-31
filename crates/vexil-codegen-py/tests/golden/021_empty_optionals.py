@@ -26,17 +26,14 @@ class WithOptionals:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_name_optional = self.name
         w.write_bool(_vexil_self_2e_name_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_name_optional is not None:
             w.write_string(_vexil_self_2e_name_optional)
         _vexil_self_2e_value_optional = self.value
         w.write_bool(_vexil_self_2e_value_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_value_optional is not None:
             w.write_u32(_vexil_self_2e_value_optional)
         _vexil_self_2e_flag_optional = self.flag
         w.write_bool(_vexil_self_2e_flag_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_flag_optional is not None:
             w.write_bool(_vexil_self_2e_flag_optional)
         w.flush_to_byte_boundary()
@@ -56,7 +53,6 @@ class WithOptionals:
         except DecodeError:
             m.name = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_name_present:
                 m.name = r.read_string()
             else:
@@ -66,7 +62,6 @@ class WithOptionals:
         except DecodeError:
             m.value = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_value_present:
                 m.value = r.read_u32()
             else:
@@ -76,7 +71,6 @@ class WithOptionals:
         except DecodeError:
             m.flag = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_flag_present:
                 m.flag = r.read_bool()
             else:
@@ -90,7 +84,7 @@ class WithOptionals:
 # ---------- NestedOptional ----------
 @dataclass
 class NestedOptional:
-    inner: int | None | None
+    inner: tuple[int | None] | None
     unknown: bytes = b""
 
     def encode(self) -> bytes:
@@ -101,11 +95,11 @@ class NestedOptional:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_inner_optional = self.inner
         w.write_bool(_vexil_self_2e_inner_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_inner_optional is not None:
-            w.write_bool(True)
-            w.flush_to_byte_boundary()
-            w.write_u32(_vexil_self_2e_inner_optional)
+            _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional = _vexil_self_2e_inner_optional[0]
+            w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional is not None)
+            if _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional is not None:
+                w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -123,18 +117,17 @@ class NestedOptional:
         except DecodeError:
             m.inner = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_inner_present:
                 try:
-                    _vexil_m_2e_inner_present = r.read_bool()
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present = r.read_bool()
                 except DecodeError:
-                    m.inner = None
+                    _vexil_m_2e_inner_optional_value = None
                 else:
-                    r.flush_to_byte_boundary()
-                    if _vexil_m_2e_inner_present:
-                        m.inner = r.read_u32()
+                    if _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present:
+                        _vexil_m_2e_inner_optional_value = r.read_u32()
                     else:
-                        m.inner = None
+                        _vexil_m_2e_inner_optional_value = None
+                m.inner = (_vexil_m_2e_inner_optional_value,)
             else:
                 m.inner = None
         r.flush_to_byte_boundary()
@@ -159,17 +152,14 @@ class AllEmpty:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_a_optional = self.a
         w.write_bool(_vexil_self_2e_a_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_a_optional is not None:
             w.write_string(_vexil_self_2e_a_optional)
         _vexil_self_2e_b_optional = self.b
         w.write_bool(_vexil_self_2e_b_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_b_optional is not None:
             w.write_u32(_vexil_self_2e_b_optional)
         _vexil_self_2e_c_optional = self.c
         w.write_bool(_vexil_self_2e_c_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_c_optional is not None:
             w.write_bool(_vexil_self_2e_c_optional)
         w.flush_to_byte_boundary()
@@ -189,7 +179,6 @@ class AllEmpty:
         except DecodeError:
             m.a = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_a_present:
                 m.a = r.read_string()
             else:
@@ -199,7 +188,6 @@ class AllEmpty:
         except DecodeError:
             m.b = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_b_present:
                 m.b = r.read_u32()
             else:
@@ -209,7 +197,6 @@ class AllEmpty:
         except DecodeError:
             m.c = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_c_present:
                 m.c = r.read_bool()
             else:

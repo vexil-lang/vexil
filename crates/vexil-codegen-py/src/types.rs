@@ -48,7 +48,11 @@ pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         },
         ResolvedType::Optional(inner) => {
             let inner_str = py_type(inner, registry);
-            format!("{inner_str} | None")
+            if optional_payload_needs_wrapper(inner) {
+                format!("tuple[{inner_str}] | None")
+            } else {
+                format!("{inner_str} | None")
+            }
         }
         ResolvedType::Array(inner) => {
             let inner_str = py_type(inner, registry);
@@ -90,6 +94,15 @@ pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         }
         _ => "object".to_string(),
     }
+}
+
+/// Python needs a one-tuple to distinguish an absent outer optional from a
+/// present payload whose value is itself `None`.
+pub fn optional_payload_needs_wrapper(ty: &ResolvedType) -> bool {
+    matches!(
+        ty,
+        ResolvedType::Primitive(PrimitiveType::Void) | ResolvedType::Optional(_)
+    )
 }
 
 fn primitive_type(p: &PrimitiveType) -> &'static str {

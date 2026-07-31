@@ -60,7 +60,6 @@ class SettingsV2:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_timeout_optional = self.timeout
         w.write_bool(_vexil_self_2e_timeout_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_timeout_optional is not None:
             w.write_u32(_vexil_self_2e_timeout_optional)
         w.write_string(self.name)
@@ -81,7 +80,6 @@ class SettingsV2:
         except DecodeError:
             m.timeout = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_timeout_present:
                 m.timeout = r.read_u32()
             else:
