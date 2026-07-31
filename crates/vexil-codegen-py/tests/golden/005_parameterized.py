@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal as _VexilLiteral
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xb2, 0x56, 0xf5, 0x41, 0xe5, 0x8d, 0xeb, 0x54, 0x58, 0x21, 0xa3, 0xbe, 0x87, 0x43, 0xaa, 0xaf, 0x16, 0xe2, 0x4a, 0x3b, 0xf4, 0xdf, 0xbc, 0x74, 0x43, 0x07, 0xae, 0x2e, 0x48, 0xd6, 0x5a, 0x3f)
 
@@ -17,79 +17,83 @@ class Basic:
     a: int | None
     b: list[str]
     c: dict[str, int]
-    d: tuple[bool, int | str]
+    d: tuple[_VexilLiteral[True], int] | tuple[_VexilLiteral[False], str]
     unknown: bytes = b""
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        w.write_bool(self.a is not None)
-        w.flush_to_byte_boundary()
-        if self.a is not None:
-            w.write_u32(self.a)
+    def encode_to(self, w: _BitWriter) -> None:
+        _vexil_self_2e_a_optional = self.a
+        w.write_bool(_vexil_self_2e_a_optional is not None)
+        if _vexil_self_2e_a_optional is not None:
+            w.write_u32(_vexil_self_2e_a_optional)
         w.write_leb128(len(self.b))
-        for item in self.b:
-            w.write_string(item)
+        for _vexil_self_2e_b_array_item in self.b:
+            w.write_string(_vexil_self_2e_b_array_item)
         w.write_leb128(len(self.c))
-        for map_k in sorted(self.c):
-            map_v = self.c[map_k]
-            w.write_string(map_k)
-            w.write_u64(map_v)
-        if self.d[0]:
+        for _vexil_self_2e_c_map_key in sorted(self.c):
+            _vexil_self_2e_c_map_value = self.c[_vexil_self_2e_c_map_key]
+            w.write_string(_vexil_self_2e_c_map_key)
+            w.write_u64(_vexil_self_2e_c_map_value)
+        _vexil_self_2e_d_result = self.d
+        if _vexil_self_2e_d_result[0] is True:
             w.write_bool(True)
-            w.write_u32(self.d[1])
+            w.write_u32(_vexil_self_2e_d_result[1])
         else:
             w.write_bool(False)
-            w.write_string(self.d[1])
+            w.write_string(_vexil_self_2e_d_result[1])
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Basic:
         r = _BitReader(data)
-        return Basic.decode_from(r)
+        try:
+            r.enter_nested()
+            return Basic.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Basic:
         m = Basic.__new__(Basic)
         try:
-            present = r.read_bool()
+            _vexil_m_2e_a_present = r.read_bool()
         except DecodeError:
             m.a = None
         else:
-            r.flush_to_byte_boundary()
-            if present:
-                m.a: int = None  # type: ignore[assignment]
+            if _vexil_m_2e_a_present:
                 m.a = r.read_u32()
             else:
                 m.a = None
-        arr_len = r.read_leb128()
-        m.b = []
-        for _ in range(arr_len):
-            _item: str = None  # type: ignore[assignment]
-            _item = r.read_string()
-            m.b.append(_item)
-        map_len = r.read_leb128()
-        m.c = {}
-        for _ in range(map_len):
-            _k: str = None  # type: ignore[assignment]
-            _v: int = None  # type: ignore[assignment]
-            _k = r.read_string()
-            _v = r.read_u64()
-            m.c[_k] = _v
-        is_ok = r.read_bool()
-        if is_ok:
-            _ok_val: int = None  # type: ignore[assignment]
-            _ok_val = r.read_u32()
-            m.d = (True, _ok_val)
+        _vexil_m_2e_b_array_length = r.read_leb128()
+        _vexil_m_2e_b_array_items: list[str] = []
+        for _ in range(_vexil_m_2e_b_array_length):
+            _vexil_m_2e_b_array_item = r.read_string()
+            _vexil_m_2e_b_array_items.append(_vexil_m_2e_b_array_item)
+        m.b = _vexil_m_2e_b_array_items
+        _vexil_m_2e_c_map_length = r.read_leb128()
+        _vexil_m_2e_c_map_items: dict[str, int] = {}
+        for _ in range(_vexil_m_2e_c_map_length):
+            _vexil_m_2e_c_map_key = r.read_string()
+            _vexil_m_2e_c_map_value = r.read_u64()
+            _vexil_m_2e_c_map_items[_vexil_m_2e_c_map_key] = _vexil_m_2e_c_map_value
+        m.c = _vexil_m_2e_c_map_items
+        _vexil_m_2e_d_result_is_ok = r.read_bool()
+        if _vexil_m_2e_d_result_is_ok:
+            _vexil_m_2e_d_result_ok = r.read_u32()
+            m.d = (True, _vexil_m_2e_d_result_ok)
         else:
-            _err_val: str = None  # type: ignore[assignment]
-            _err_val = r.read_string()
-            m.d = (False, _err_val)
+            _vexil_m_2e_d_result_err = r.read_string()
+            m.d = (False, _vexil_m_2e_d_result_err)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -102,178 +106,178 @@ class Nested:
     a: list[str] | None
     b: list[int | None]
     c: dict[str, list[int]]
-    d: tuple[bool, None | str]
-    e: tuple[bool, str | None]
-    f: tuple[bool, None | None]
-    g: tuple[bool, list[str] | dict[int, str]] | None
+    d: tuple[_VexilLiteral[True], None] | tuple[_VexilLiteral[False], str]
+    e: tuple[_VexilLiteral[True], str] | tuple[_VexilLiteral[False], None]
+    f: tuple[_VexilLiteral[True], None] | tuple[_VexilLiteral[False], None]
+    g: tuple[_VexilLiteral[True], list[str]] | tuple[_VexilLiteral[False], dict[int, str]] | None
     unknown: bytes = b""
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        w.write_bool(self.a is not None)
-        w.flush_to_byte_boundary()
-        if self.a is not None:
-            w.write_leb128(len(self.a))
-            for item in self.a:
-                w.write_string(item)
+    def encode_to(self, w: _BitWriter) -> None:
+        _vexil_self_2e_a_optional = self.a
+        w.write_bool(_vexil_self_2e_a_optional is not None)
+        if _vexil_self_2e_a_optional is not None:
+            w.write_leb128(len(_vexil_self_2e_a_optional))
+            for _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_optional_array_item in _vexil_self_2e_a_optional:
+                w.write_string(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_optional_array_item)
         w.write_leb128(len(self.b))
-        for item in self.b:
-            w.write_bool(item is not None)
-            w.flush_to_byte_boundary()
-            if item is not None:
-                w.write_u32(item)
+        for _vexil_self_2e_b_array_item in self.b:
+            _vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional = _vexil_self_2e_b_array_item
+            w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional is not None)
+            if _vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional is not None:
+                w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional)
         w.write_leb128(len(self.c))
-        for map_k in sorted(self.c):
-            map_v = self.c[map_k]
-            w.write_string(map_k)
-            w.write_leb128(len(map_v))
-            for item in map_v:
-                w.write_u8(item)
-        if self.d[0]:
+        for _vexil_self_2e_c_map_key in sorted(self.c):
+            _vexil_self_2e_c_map_value = self.c[_vexil_self_2e_c_map_key]
+            w.write_string(_vexil_self_2e_c_map_key)
+            w.write_leb128(len(_vexil_self_2e_c_map_value))
+            for _vexil__5f_vexil_5f_self_5f_2e_5f_c_5f_map_5f_value_array_item in _vexil_self_2e_c_map_value:
+                w.write_u8(_vexil__5f_vexil_5f_self_5f_2e_5f_c_5f_map_5f_value_array_item)
+        _vexil_self_2e_d_result = self.d
+        if _vexil_self_2e_d_result[0] is True:
             w.write_bool(True)
         else:
             w.write_bool(False)
-            w.write_string(self.d[1])
-        if self.e[0]:
+            w.write_string(_vexil_self_2e_d_result[1])
+        _vexil_self_2e_e_result = self.e
+        if _vexil_self_2e_e_result[0] is True:
             w.write_bool(True)
-            w.write_string(self.e[1])
+            w.write_string(_vexil_self_2e_e_result[1])
         else:
             w.write_bool(False)
-        if self.f[0]:
+        _vexil_self_2e_f_result = self.f
+        if _vexil_self_2e_f_result[0] is True:
             w.write_bool(True)
         else:
             w.write_bool(False)
-        w.write_bool(self.g is not None)
-        w.flush_to_byte_boundary()
-        if self.g is not None:
-            if self.g[0]:
+        _vexil_self_2e_g_optional = self.g
+        w.write_bool(_vexil_self_2e_g_optional is not None)
+        if _vexil_self_2e_g_optional is not None:
+            _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result = _vexil_self_2e_g_optional
+            if _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[0] is True:
                 w.write_bool(True)
-                w.write_leb128(len(self.g[1]))
-                for item in self.g[1]:
-                    w.write_string(item)
+                w.write_leb128(len(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]))
+                for _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__array_item in _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]:
+                    w.write_string(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__array_item)
             else:
                 w.write_bool(False)
-                w.write_leb128(len(self.g[1]))
-                for map_k, map_v in self.g[1].items():
-                    w.write_u32(map_k)
-                    w.write_string(map_v)
+                w.write_leb128(len(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]))
+                for _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key, _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value in _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1].items():
+                    w.write_u32(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key)
+                    w.write_string(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Nested:
         r = _BitReader(data)
-        return Nested.decode_from(r)
+        try:
+            r.enter_nested()
+            return Nested.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Nested:
         m = Nested.__new__(Nested)
         try:
-            present = r.read_bool()
+            _vexil_m_2e_a_present = r.read_bool()
         except DecodeError:
             m.a = None
         else:
-            r.flush_to_byte_boundary()
-            if present:
-                m.a: list[str] = None  # type: ignore[assignment]
-                arr_len = r.read_leb128()
-                m.a = []
-                for _ in range(arr_len):
-                    _item: str = None  # type: ignore[assignment]
-                    _item = r.read_string()
-                    m.a.append(_item)
+            if _vexil_m_2e_a_present:
+                _vexil_m_2e_a_array_length = r.read_leb128()
+                _vexil_m_2e_a_array_items: list[str] = []
+                for _ in range(_vexil_m_2e_a_array_length):
+                    _vexil_m_2e_a_array_item = r.read_string()
+                    _vexil_m_2e_a_array_items.append(_vexil_m_2e_a_array_item)
+                m.a = _vexil_m_2e_a_array_items
             else:
                 m.a = None
-        arr_len = r.read_leb128()
-        m.b = []
-        for _ in range(arr_len):
-            _item: int | None = None  # type: ignore[assignment]
+        _vexil_m_2e_b_array_length = r.read_leb128()
+        _vexil_m_2e_b_array_items: list[int | None] = []
+        for _ in range(_vexil_m_2e_b_array_length):
             try:
-                present = r.read_bool()
+                _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present = r.read_bool()
             except DecodeError:
-                _item = None
+                _vexil_m_2e_b_array_item = None
             else:
-                r.flush_to_byte_boundary()
-                if present:
-                    _item: int = None  # type: ignore[assignment]
-                    _item = r.read_u32()
+                if _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present:
+                    _vexil_m_2e_b_array_item = r.read_u32()
                 else:
-                    _item = None
-            m.b.append(_item)
-        map_len = r.read_leb128()
-        m.c = {}
-        for _ in range(map_len):
-            _k: str = None  # type: ignore[assignment]
-            _v: list[int] = None  # type: ignore[assignment]
-            _k = r.read_string()
-            arr_len = r.read_leb128()
-            _v: list[int] = []
-            for _ in range(arr_len):
-                _item: int = None  # type: ignore[assignment]
-                _item = r.read_u8()
-                _v.append(_item)
-            m.c[_k] = _v
-        is_ok = r.read_bool()
-        if is_ok:
-            _ok_val: None = None  # type: ignore[assignment]
-            m.d = (True, _ok_val)
+                    _vexil_m_2e_b_array_item = None
+            _vexil_m_2e_b_array_items.append(_vexil_m_2e_b_array_item)
+        m.b = _vexil_m_2e_b_array_items
+        _vexil_m_2e_c_map_length = r.read_leb128()
+        _vexil_m_2e_c_map_items: dict[str, list[int]] = {}
+        for _ in range(_vexil_m_2e_c_map_length):
+            _vexil_m_2e_c_map_key = r.read_string()
+            _vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_length = r.read_leb128()
+            _vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_items: list[int] = []
+            for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_length):
+                _vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_item = r.read_u8()
+                _vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_items.append(_vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_item)
+            _vexil_m_2e_c_map_value = _vexil__5f_vexil_5f_m_5f_2e_5f_c_5f_map_5f_value_array_items
+            _vexil_m_2e_c_map_items[_vexil_m_2e_c_map_key] = _vexil_m_2e_c_map_value
+        m.c = _vexil_m_2e_c_map_items
+        _vexil_m_2e_d_result_is_ok = r.read_bool()
+        if _vexil_m_2e_d_result_is_ok:
+            _vexil_m_2e_d_result_ok = None
+            m.d = (True, _vexil_m_2e_d_result_ok)
         else:
-            _err_val: str = None  # type: ignore[assignment]
-            _err_val = r.read_string()
-            m.d = (False, _err_val)
-        is_ok = r.read_bool()
-        if is_ok:
-            _ok_val: str = None  # type: ignore[assignment]
-            _ok_val = r.read_string()
-            m.e = (True, _ok_val)
+            _vexil_m_2e_d_result_err = r.read_string()
+            m.d = (False, _vexil_m_2e_d_result_err)
+        _vexil_m_2e_e_result_is_ok = r.read_bool()
+        if _vexil_m_2e_e_result_is_ok:
+            _vexil_m_2e_e_result_ok = r.read_string()
+            m.e = (True, _vexil_m_2e_e_result_ok)
         else:
-            _err_val: None = None  # type: ignore[assignment]
-            m.e = (False, _err_val)
-        is_ok = r.read_bool()
-        if is_ok:
-            _ok_val: None = None  # type: ignore[assignment]
-            m.f = (True, _ok_val)
+            _vexil_m_2e_e_result_err = None
+            m.e = (False, _vexil_m_2e_e_result_err)
+        _vexil_m_2e_f_result_is_ok = r.read_bool()
+        if _vexil_m_2e_f_result_is_ok:
+            _vexil_m_2e_f_result_ok = None
+            m.f = (True, _vexil_m_2e_f_result_ok)
         else:
-            _err_val: None = None  # type: ignore[assignment]
-            m.f = (False, _err_val)
+            _vexil_m_2e_f_result_err = None
+            m.f = (False, _vexil_m_2e_f_result_err)
         try:
-            present = r.read_bool()
+            _vexil_m_2e_g_present = r.read_bool()
         except DecodeError:
             m.g = None
         else:
-            r.flush_to_byte_boundary()
-            if present:
-                m.g: tuple[bool, list[str] | dict[int, str]] = None  # type: ignore[assignment]
-                is_ok = r.read_bool()
-                if is_ok:
-                    _ok_val: list[str] = None  # type: ignore[assignment]
-                    arr_len = r.read_leb128()
-                    _ok_val: list[str] = []
-                    for _ in range(arr_len):
-                        _item: str = None  # type: ignore[assignment]
-                        _item = r.read_string()
-                        _ok_val.append(_item)
-                    m.g = (True, _ok_val)
+            if _vexil_m_2e_g_present:
+                _vexil_m_2e_g_result_is_ok = r.read_bool()
+                if _vexil_m_2e_g_result_is_ok:
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length = r.read_leb128()
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items: list[str] = []
+                    for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length):
+                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_item = r.read_string()
+                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items.append(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_item)
+                    _vexil_m_2e_g_result_ok = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items
+                    m.g = (True, _vexil_m_2e_g_result_ok)
                 else:
-                    _err_val: dict[int, str] = None  # type: ignore[assignment]
-                    map_len = r.read_leb128()
-                    _err_val: dict[int, str] = {}
-                    for _ in range(map_len):
-                        _k: int = None  # type: ignore[assignment]
-                        _v: str = None  # type: ignore[assignment]
-                        _k = r.read_u32()
-                        _v = r.read_string()
-                        _err_val[_k] = _v
-                    m.g = (False, _err_val)
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_length = r.read_leb128()
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items: dict[int, str] = {}
+                    for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_length):
+                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_key = r.read_u32()
+                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_value = r.read_string()
+                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items[_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_key] = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_value
+                    _vexil_m_2e_g_result_err = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items
+                    m.g = (False, _vexil_m_2e_g_result_err)
             else:
                 m.g = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "Basic", "Nested"]

@@ -119,9 +119,10 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             w.line("const payloadBytes = r.readRawBytes(len);");
             w.line("const pr = new BitReader(payloadBytes);");
             for field in &variant.fields {
+                let local = format!("_vexilField{}", field.ordinal);
                 emit_read(
                     w,
-                    field.name.as_str(),
+                    &local,
                     &field.resolved_type,
                     &field.encoding,
                     registry,
@@ -129,8 +130,11 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
                 );
             }
             w.line("pr.flushToByteBoundary();");
-            let field_assigns: Vec<String> =
-                variant.fields.iter().map(|f| f.name.to_string()).collect();
+            let field_assigns: Vec<String> = variant
+                .fields
+                .iter()
+                .map(|field| format!("{}: _vexilField{}", field.name, field.ordinal))
+                .collect();
             w.line(&format!(
                 "return {{ tag: '{vname}' as const, {} }};",
                 field_assigns.join(", ")

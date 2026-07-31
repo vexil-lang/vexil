@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x86, 0x3c, 0x08, 0x4e, 0x75, 0x4f, 0x2a, 0xdf, 0x37, 0x16, 0x57, 0x6e, 0xe8, 0xfa, 0xd1, 0x44, 0xd1, 0xfb, 0xb4, 0xe7, 0xce, 0x9a, 0x1e, 0xa8, 0x6c, 0x80, 0x95, 0x96, 0xe9, 0x25, 0x78, 0x1e)
 
@@ -19,33 +18,41 @@ class Tags:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.names))
-        for item in sorted(self.names):
-            w.write_string(item)
+        for _vexil_self_2e_names_set_item in sorted(self.names):
+            w.write_string(_vexil_self_2e_names_set_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Tags:
         r = _BitReader(data)
-        return Tags.decode_from(r)
+        try:
+            r.enter_nested()
+            return Tags.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Tags:
         m = Tags.__new__(Tags)
-        set_len = r.read_leb128()
-        m.names = set()
-        for _ in range(set_len):
-            _item: str = None  # type: ignore[assignment]
-            _item = r.read_string()
-            m.names.add(_item)
+        _vexil_m_2e_names_set_length = r.read_leb128()
+        _vexil_m_2e_names_set_items: set[str] = set()
+        for _ in range(_vexil_m_2e_names_set_length):
+            _vexil_m_2e_names_set_item = r.read_string()
+            _vexil_m_2e_names_set_items.add(_vexil_m_2e_names_set_item)
+        m.names = _vexil_m_2e_names_set_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "Tags"]

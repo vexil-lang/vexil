@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x39, 0xb0, 0x6f, 0xca, 0x22, 0x4d, 0x88, 0x38, 0x78, 0xf8, 0x98, 0xaf, 0x9a, 0x78, 0x83, 0x90, 0x14, 0x32, 0x7e, 0x02, 0x1f, 0x50, 0x44, 0x0b, 0xa7, 0xf3, 0xee, 0xc0, 0xd8, 0x9e, 0x64, 0x99)
 
@@ -24,10 +23,14 @@ class AllSemantic:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.a)
         w.write_bytes(self.b)
         w.write_u8(self.c[0])
@@ -41,24 +44,29 @@ class AllSemantic:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> AllSemantic:
         r = _BitReader(data)
-        return AllSemantic.decode_from(r)
+        try:
+            r.enter_nested()
+            return AllSemantic.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> AllSemantic:
         m = AllSemantic.__new__(AllSemantic)
         m.a = r.read_string()
-        m.b = r.read_bytes(r.read_leb128())
-        r = r.read_u8()
-        g = r.read_u8()
-        b = r.read_u8()
-        m.c = (r, g, b)
-        m.d = r.read_raw_bytes(16)
+        _vexil_m_2e_b_length = r.read_leb128()
+        m.b = r.read_bytes(_vexil_m_2e_b_length)
+        _vexil_m_2e_c_red = r.read_u8()
+        _vexil_m_2e_c_green = r.read_u8()
+        _vexil_m_2e_c_blue = r.read_u8()
+        m.c = (_vexil_m_2e_c_red, _vexil_m_2e_c_green, _vexil_m_2e_c_blue)
+        m.d = r.read_bytes(16)
         m.e = r.read_i64()
-        m.f = r.read_raw_bytes(32)
+        m.f = r.read_bytes(32)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "AllSemantic"]

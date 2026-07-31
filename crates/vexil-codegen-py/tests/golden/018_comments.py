@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xe6, 0x4c, 0x04, 0xab, 0xea, 0xe9, 0xc8, 0x5a, 0xc2, 0x27, 0x20, 0xe6, 0xf8, 0x3b, 0x27, 0x24, 0x6f, 0xcb, 0x78, 0xc3, 0x4d, 0x7c, 0xf8, 0x64, 0x2c, 0x82, 0x94, 0x0f, 0x5f, 0x52, 0x87, 0x11)
 
@@ -20,10 +19,14 @@ class Foo:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.x)
         w.write_string(self.y)
         w.flush_to_byte_boundary()
@@ -31,12 +34,16 @@ class Foo:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Foo:
         r = _BitReader(data)
-        return Foo.decode_from(r)
+        try:
+            r.enter_nested()
+            return Foo.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Foo:
         m = Foo.__new__(Foo)
         m.x = r.read_u32()
         m.y = r.read_string()
@@ -56,19 +63,20 @@ class Bar(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 1)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Bar:
         r = _BitReader(data)
-        v = r.read_bits(1)
-        return Bar(v)
+        return Bar.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return Bar(r.read_bits(1))
+    def decode_from(r: _BitReader) -> Bar:
+        v = r.read_bits(1)
+        return Bar(v)
 
     def __repr__(self) -> str:
         return f"Bar({int(self)})"
 
+__all__ = ["dataclass", "SCHEMA_HASH", "Foo", "Bar"]

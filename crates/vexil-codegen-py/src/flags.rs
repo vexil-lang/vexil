@@ -24,7 +24,7 @@ pub fn emit_flags(w: &mut CodeWriter, flags: &FlagsDef, _registry: &TypeRegistry
     w.close_block();
     w.blank();
 
-    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.open_block("def encode_to(self, w: _BitWriter) -> None");
     match wire_bytes {
         1 => w.line("w.write_u8(int(self))"),
         2 => w.line("w.write_u16(int(self))"),
@@ -36,8 +36,14 @@ pub fn emit_flags(w: &mut CodeWriter, flags: &FlagsDef, _registry: &TypeRegistry
 
     // decode static method
     w.line("@staticmethod");
-    w.open_block("def decode(data: bytes)");
+    w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
+    w.line(&format!("return {name}.decode_from(r)"));
+    w.close_block();
+    w.blank();
+
+    w.line("@staticmethod");
+    w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
     match wire_bytes {
         1 => w.line("v = r.read_u8()"),
         2 => w.line("v = r.read_u16()"),
@@ -45,17 +51,6 @@ pub fn emit_flags(w: &mut CodeWriter, flags: &FlagsDef, _registry: &TypeRegistry
         _ => w.line("v = r.read_u64()"),
     }
     w.line(&format!("return {name}(v)"));
-    w.close_block();
-    w.blank();
-
-    w.line("@staticmethod");
-    w.open_block("def decode_from(r: _BitReader)");
-    match wire_bytes {
-        1 => w.line(&format!("return {name}(r.read_u8())")),
-        2 => w.line(&format!("return {name}(r.read_u16())")),
-        4 => w.line(&format!("return {name}(r.read_u32())")),
-        _ => w.line(&format!("return {name}(r.read_u64())")),
-    }
     w.close_block();
     w.blank();
 

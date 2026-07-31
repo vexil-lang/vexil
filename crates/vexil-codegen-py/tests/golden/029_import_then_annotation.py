@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x03, 0x68, 0x60, 0x1b, 0x85, 0xfb, 0x96, 0x37, 0x59, 0x20, 0x76, 0xed, 0x0e, 0xc6, 0x12, 0x75, 0xf0, 0xf7, 0x51, 0x0f, 0x4d, 0xc9, 0x6e, 0x9e, 0xde, 0x37, 0x16, 0x96, 0xb1, 0x98, 0x3e, 0xfa)
 SCHEMA_VERSION: str = "1.0.0"
@@ -20,26 +19,34 @@ class Annotated:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.x)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Annotated:
         r = _BitReader(data)
-        return Annotated.decode_from(r)
+        try:
+            r.enter_nested()
+            return Annotated.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Annotated:
         m = Annotated.__new__(Annotated)
         m.x = r.read_u32()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "SCHEMA_VERSION", "Annotated"]

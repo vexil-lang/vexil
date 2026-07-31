@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xc8, 0x5a, 0xa7, 0x6a, 0x4f, 0xf4, 0x12, 0x1b, 0x4f, 0xbd, 0x1a, 0xb4, 0x28, 0xa8, 0x64, 0x39, 0xe7, 0x6e, 0x33, 0x0f, 0xb7, 0x41, 0x6f, 0xf2, 0x06, 0x66, 0x86, 0x33, 0x5a, 0x04, 0x05, 0xc7)
 
@@ -20,26 +19,50 @@ class Container:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        self.item.encode_to(w)
-        self.meta.encode_to(w)
+    def encode_to(self, w: _BitWriter) -> None:
+        try:
+            w.enter_nested()
+            self.item.encode_to(w)
+        finally:
+            w.leave_nested()
+        try:
+            w.enter_nested()
+            self.meta.encode_to(w)
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Container:
         r = _BitReader(data)
-        return Container.decode_from(r)
+        try:
+            r.enter_nested()
+            return Container.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Container:
         m = Container.__new__(Container)
-        m.item = Item.decode_from(r)
-        m.meta = Metadata.decode_from(r)
+        try:
+            r.enter_nested()
+            m.item = Item.decode_from(r)
+        finally:
+            r.leave_nested()
+        try:
+            r.enter_nested()
+            m.meta = Metadata.decode_from(r)
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -55,10 +78,14 @@ class Item:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.name)
         w.write_u64(self.value)
         w.flush_to_byte_boundary()
@@ -66,12 +93,16 @@ class Item:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Item:
         r = _BitReader(data)
-        return Item.decode_from(r)
+        try:
+            r.enter_nested()
+            return Item.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Item:
         m = Item.__new__(Item)
         m.name = r.read_string()
         m.value = r.read_u64()
@@ -90,10 +121,14 @@ class Metadata:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i64(self.created)
         w.write_string(self.author)
         w.flush_to_byte_boundary()
@@ -101,12 +136,16 @@ class Metadata:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Metadata:
         r = _BitReader(data)
-        return Metadata.decode_from(r)
+        try:
+            r.enter_nested()
+            return Metadata.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Metadata:
         m = Metadata.__new__(Metadata)
         m.created = r.read_i64()
         m.author = r.read_string()
@@ -114,4 +153,4 @@ class Metadata:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "Container", "Item", "Metadata"]

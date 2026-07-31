@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xf8, 0xb1, 0xdc, 0x0f, 0x53, 0xff, 0x64, 0x6e, 0xd7, 0x81, 0xc9, 0xf7, 0x39, 0x2a, 0x31, 0x85, 0xe6, 0x21, 0xa7, 0xd7, 0x2a, 0xc8, 0x70, 0x9f, 0x25, 0xd1, 0x21, 0x89, 0xa4, 0x69, 0x71, 0x3a)
 SCHEMA_VERSION: str = "1.0.0"
@@ -21,10 +20,14 @@ class HeaderV1:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.kind)
         w.write_u8(self.status)
         w.flush_to_byte_boundary()
@@ -32,12 +35,16 @@ class HeaderV1:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> HeaderV1:
         r = _BitReader(data)
-        return HeaderV1.decode_from(r)
+        try:
+            r.enter_nested()
+            return HeaderV1.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> HeaderV1:
         m = HeaderV1.__new__(HeaderV1)
         m.kind = r.read_u8()
         m.status = r.read_u8()
@@ -57,10 +64,14 @@ class HeaderV2:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.kind)
         w.write_u8(self.status)
         w.write_u16(self.flags)
@@ -69,12 +80,16 @@ class HeaderV2:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> HeaderV2:
         r = _BitReader(data)
-        return HeaderV2.decode_from(r)
+        try:
+            r.enter_nested()
+            return HeaderV2.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> HeaderV2:
         m = HeaderV2.__new__(HeaderV2)
         m.kind = r.read_u8()
         m.status = r.read_u8()
@@ -83,4 +98,4 @@ class HeaderV2:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "SCHEMA_VERSION", "HeaderV1", "HeaderV2"]

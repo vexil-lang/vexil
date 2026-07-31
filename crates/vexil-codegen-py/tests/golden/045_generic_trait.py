@@ -3,19 +3,19 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x16, 0x42, 0x5b, 0xff, 0xc9, 0xdf, 0xc2, 0xaf, 0x53, 0x92, 0x98, 0xc8, 0x88, 0x87, 0xa9, 0xa8, 0xb0, 0xeb, 0xa0, 0xa3, 0x1b, 0xfd, 0x4e, 0x5d, 0xb4, 0xc2, 0xd3, 0xce, 0xad, 0x22, 0x3b, 0xfd)
-T = TypeVar("T")
+_VexilTypeParam_T = TypeVar("_VexilTypeParam_T")
 
 
 # ---------- Tagged ----------
 @runtime_checkable
-class Tagged(Protocol[T]):
-    tag: T
+class Tagged(Protocol[_VexilTypeParam_T]):
+    tag: _VexilTypeParam_T
     label: str
 
 # ---------- Event ----------
@@ -27,10 +27,14 @@ class Event:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.tag)
         w.write_string(self.label)
         w.flush_to_byte_boundary()
@@ -38,12 +42,16 @@ class Event:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Event:
         r = _BitReader(data)
-        return Event.decode_from(r)
+        try:
+            r.enter_nested()
+            return Event.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Event:
         m = Event.__new__(Event)
         m.tag = r.read_u64()
         m.label = r.read_string()
@@ -56,3 +64,5 @@ class Event:
 if TYPE_CHECKING:
     def _vexil_assert_Event_implements_Tagged(value: Event) -> Tagged[int]:  # pyright: ignore[reportUnusedFunction]
         return value
+
+__all__ = ["dataclass", "TYPE_CHECKING", "Protocol", "TypeVar", "runtime_checkable", "SCHEMA_HASH", "Tagged", "Event"]

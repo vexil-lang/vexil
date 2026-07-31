@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x99, 0x52, 0xae, 0x70, 0x6e, 0x9b, 0xdc, 0x5d, 0x2d, 0x89, 0x5e, 0xc4, 0x65, 0x9d, 0x40, 0x0b, 0xc3, 0xd4, 0xb8, 0xc7, 0x49, 0x0b, 0xc0, 0x32, 0x8f, 0xce, 0xfc, 0x99, 0x47, 0xc9, 0x0f, 0x1d)
 
@@ -19,24 +18,32 @@ class Header:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Header:
         r = _BitReader(data)
-        return Header.decode_from(r)
+        try:
+            r.enter_nested()
+            return Header.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Header:
         m = Header.__new__(Header)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "Header"]

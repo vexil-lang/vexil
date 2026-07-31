@@ -44,6 +44,8 @@ Fields are packed in ordinal order with LSB-first bit packing. Sub-byte fields (
 
 ## Unknown fields
 
-Every generated message struct has an `_unknown` field that captures trailing bytes from newer schema versions. When a v1 decoder reads v2-encoded data, the extra bytes are preserved. Re-encoding includes them, enabling forward-compatible round-tripping with no data loss.
+A v1 decoder reading v2-encoded data reads its known fields and ignores any trailing bytes. Decoding never fails because a newer encoder appended fields.
+
+Generated message types carry target-specific storage for unknown bytes, but decoders do not populate it -- the storage is empty after every decode. Vexil does not currently provide lossless unknown-field round-tripping.
 
 See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

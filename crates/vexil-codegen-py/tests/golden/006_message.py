@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xbc, 0x60, 0xb5, 0xe9, 0x66, 0x24, 0x00, 0x12, 0xd3, 0x08, 0xec, 0xcb, 0xc0, 0x03, 0x0c, 0x3b, 0xc4, 0xf2, 0x7e, 0xb2, 0xc9, 0x41, 0xf6, 0x0b, 0x38, 0x90, 0x91, 0xfe, 0xd3, 0xc5, 0x29, 0x61)
 
@@ -18,21 +17,29 @@ class Empty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Empty:
         r = _BitReader(data)
-        return Empty.decode_from(r)
+        try:
+            r.enter_nested()
+            return Empty.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Empty:
         m = Empty.__new__(Empty)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -50,10 +57,14 @@ class WithGaps:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.first)
         w.write_u32(self.third)
         w.write_string(self.tenth)
@@ -62,12 +73,16 @@ class WithGaps:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithGaps:
         r = _BitReader(data)
-        return WithGaps.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithGaps.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithGaps:
         m = WithGaps.__new__(WithGaps)
         m.first = r.read_u32()
         m.third = r.read_u32()
@@ -86,22 +101,30 @@ class Annotated:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.version)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Annotated:
         r = _BitReader(data)
-        return Annotated.decode_from(r)
+        try:
+            r.enter_nested()
+            return Annotated.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Annotated:
         m = Annotated.__new__(Annotated)
         m.version = r.read_u8()
         r.flush_to_byte_boundary()
@@ -121,10 +144,14 @@ class FieldAnnotations:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.a)
         w.write_leb128(self.b)
         w.write_string(self.c)
@@ -134,12 +161,16 @@ class FieldAnnotations:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> FieldAnnotations:
         r = _BitReader(data)
-        return FieldAnnotations.decode_from(r)
+        try:
+            r.enter_nested()
+            return FieldAnnotations.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> FieldAnnotations:
         m = FieldAnnotations.__new__(FieldAnnotations)
         m.a = r.read_u32()
         m.b = r.read_leb128()
@@ -190,3 +221,4 @@ class FieldAnnotationsDecoder:
     def reset(self):
         self._prev_d = 0
 
+__all__ = ["dataclass", "SCHEMA_HASH", "Empty", "WithGaps", "Annotated", "FieldAnnotations", "FieldAnnotationsEncoder", "FieldAnnotationsDecoder"]

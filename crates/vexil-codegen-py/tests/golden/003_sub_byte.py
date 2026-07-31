@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xa9, 0xc6, 0x2a, 0x4b, 0xfc, 0xfb, 0x2a, 0xa6, 0x5a, 0xe5, 0x6e, 0xd3, 0x03, 0x51, 0xc4, 0xca, 0xaf, 0x02, 0x47, 0x4b, 0x04, 0xdb, 0x21, 0x05, 0xb5, 0x3c, 0x1e, 0xb0, 0x36, 0x31, 0xd2, 0x5b)
 
@@ -31,10 +30,14 @@ class SubByteUnsigned:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(self.a, 1)
         w.write_bits(self.b, 2)
         w.write_bits(self.c, 3)
@@ -53,12 +56,16 @@ class SubByteUnsigned:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SubByteUnsigned:
         r = _BitReader(data)
-        return SubByteUnsigned.decode_from(r)
+        try:
+            r.enter_nested()
+            return SubByteUnsigned.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SubByteUnsigned:
         m = SubByteUnsigned.__new__(SubByteUnsigned)
         m.a = r.read_bits(1)
         m.b = r.read_bits(2)
@@ -98,10 +105,14 @@ class SubByteSigned:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(self.a, 2)
         w.write_bits(self.b, 3)
         w.write_bits(self.c, 4)
@@ -119,12 +130,16 @@ class SubByteSigned:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SubByteSigned:
         r = _BitReader(data)
-        return SubByteSigned.decode_from(r)
+        try:
+            r.enter_nested()
+            return SubByteSigned.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SubByteSigned:
         m = SubByteSigned.__new__(SubByteSigned)
         m.a = r.read_bits(2)
         m.b = r.read_bits(3)
@@ -142,4 +157,4 @@ class SubByteSigned:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "SubByteUnsigned", "SubByteSigned"]

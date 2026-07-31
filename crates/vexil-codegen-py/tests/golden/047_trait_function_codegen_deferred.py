@@ -2,11 +2,7 @@
 # Source: test.trait_function_codegen_deferred
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable
-
-# Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from typing import Protocol, runtime_checkable
 
 SCHEMA_HASH: tuple[int, ...] = (0x54, 0x9d, 0xee, 0xd5, 0x4d, 0x03, 0x4f, 0xe3, 0x64, 0xf4, 0xbf, 0x5d, 0x32, 0x70, 0x7e, 0xfa, 0x55, 0x9f, 0x93, 0x36, 0xcd, 0xc4, 0xde, 0x47, 0x45, 0x87, 0x8a, 0x45, 0xfc, 0x2b, 0xa2, 0x68)
 
@@ -14,4 +10,7 @@ SCHEMA_HASH: tuple[int, ...] = (0x54, 0x9d, 0xee, 0xd5, 0x4d, 0x03, 0x4f, 0xe3, 
 # ---------- Validatable ----------
 @runtime_checkable
 class Validatable(Protocol):
-    def validate(self) -> bool: ...
+    def validate(self) -> bool:
+        raise NotImplementedError
+
+__all__ = ["Protocol", "runtime_checkable", "SCHEMA_HASH", "Validatable"]

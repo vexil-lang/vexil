@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x07, 0x20, 0xc0, 0x79, 0x18, 0xe4, 0x24, 0xcf, 0xdb, 0xde, 0x48, 0xe0, 0xdb, 0x86, 0xb5, 0xb2, 0x2e, 0x55, 0x23, 0x7f, 0xf9, 0x9c, 0xe5, 0xd7, 0x95, 0x14, 0x35, 0x9e, 0x8f, 0xab, 0x99, 0x67)
 
@@ -22,10 +21,14 @@ class Telemetry:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_zigzag(self.timestamp)
         w.write_f32(self.value)
         w.write_string(self.label)
@@ -35,12 +38,16 @@ class Telemetry:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Telemetry:
         r = _BitReader(data)
-        return Telemetry.decode_from(r)
+        try:
+            r.enter_nested()
+            return Telemetry.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Telemetry:
         m = Telemetry.__new__(Telemetry)
         m.timestamp = r.read_zigzag()
         m.value = r.read_f32()
@@ -109,3 +116,4 @@ class TelemetryDecoder:
         self._prev_value = 0.0
         self._prev_count = 0
 
+__all__ = ["dataclass", "SCHEMA_HASH", "Telemetry", "TelemetryEncoder", "TelemetryDecoder"]

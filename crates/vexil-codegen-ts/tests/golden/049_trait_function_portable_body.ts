@@ -63,4 +63,4 @@ export function decodeCounter(r: BitReader): Counter {
 }
 
 
-type _CounterImplementsAdjustable = _VexilAssertAssignable<Counter, Adjustable<number>>;
+export type _CounterImplementsAdjustable = _VexilAssertAssignable<Counter, Adjustable<number>>;

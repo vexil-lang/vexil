@@ -13,7 +13,7 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.blank();
 
     // __init__
-    w.open_block("def __init__(self, value)");
+    w.open_block(&format!("def __init__(self, value: {inner_py}) -> None"));
     w.line(&format!("self.value: {inner_py} = value"));
     w.close_block();
     w.blank();
@@ -27,7 +27,7 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.close_block();
     w.blank();
 
-    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.open_block("def encode_to(self, w: _BitWriter) -> None");
     emit_write(w, "self.value", &nt.inner_type, &default_enc, registry, "w");
     w.close_block();
     w.blank();
@@ -36,19 +36,12 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.line("@staticmethod");
     w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
-    w.line(&format!(
-        "inner: {inner_py} = None  # type: ignore[assignment]"
-    ));
-    emit_read(w, "inner", &nt.inner_type, &default_enc, registry, "r");
-    w.line(&format!("return {name}(inner)"));
+    w.line(&format!("return {name}.decode_from(r)"));
     w.close_block();
     w.blank();
 
     w.line("@staticmethod");
     w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
-    w.line(&format!(
-        "inner: {inner_py} = None  # type: ignore[assignment]"
-    ));
     emit_read(w, "inner", &nt.inner_type, &default_enc, registry, "r");
     w.line(&format!("return {name}(inner)"));
     w.close_block();
@@ -62,7 +55,7 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.blank();
 
     // __eq__
-    w.open_block("def __eq__(self, other)");
+    w.open_block("def __eq__(self, other: object) -> bool");
     w.line(&format!(
         "return isinstance(other, {name}) and self.value == other.value"
     ));

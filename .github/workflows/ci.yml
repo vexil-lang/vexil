@@ -26,6 +26,8 @@ jobs:
       rust: ${{ steps.classify.outputs.rust }}
       ts_runtime: ${{ steps.classify.outputs.ts_runtime }}
       go_runtime: ${{ steps.classify.outputs.go_runtime }}
+      py_codegen: ${{ steps.classify.outputs.py_codegen }}
+      generated_static: ${{ steps.classify.outputs.generated_static }}
       schema: ${{ steps.classify.outputs.schema }}
       generated_targets: ${{ steps.classify.outputs.generated_targets }}
     steps:
@@ -41,6 +43,8 @@ jobs:
             echo "rust=true" >> "$GITHUB_OUTPUT"
             echo "ts_runtime=true" >> "$GITHUB_OUTPUT"
             echo "go_runtime=true" >> "$GITHUB_OUTPUT"
+            echo "py_codegen=true" >> "$GITHUB_OUTPUT"
+            echo "generated_static=true" >> "$GITHUB_OUTPUT"
             echo "schema=true" >> "$GITHUB_OUTPUT"
             echo "generated_targets=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -56,6 +60,16 @@ jobs:
             rust=true
           fi
           echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          if grep -Eq '^(crates/vexil-codegen-py/|crates/vexil-lang/|packages/runtime-py/|corpus/valid/|\.github/workflows/ci\.yml)' <<< "$changed"; then
+            echo "py_codegen=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "py_codegen=false" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -Eq '^(crates/vexil-codegen-(py|ts)/|crates/vexil-lang/|packages/runtime-(py|ts)/|corpus/(valid|projects)/|tools/generated-code-checks/|\.github/workflows/ci\.yml)' <<< "$changed"; then
+            echo "generated_static=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "generated_static=false" >> "$GITHUB_OUTPUT"
+          fi
           printf '%s\n' "$changed" |
             bash .github/scripts/classify-generated-changes.sh >> "$GITHUB_OUTPUT"
 
@@ -63,12 +77,44 @@ jobs:
   # classifier could cause the dependent required jobs to be skipped.
   ci-gate:
     name: CI gate
-    needs: changes
+    needs:
+      - changes
+      - test
+      - ts-runtime
+      - go-runtime
+      - generated-python
+      - generated-targets
+      - generated-static
+      - msrv
+      - schema-compat
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require successful classification
-        run: test "${{ needs.changes.result }}" = "success"
+      - name: Require successful validation
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          TS_RUNTIME_RESULT: ${{ needs['ts-runtime'].result }}
+          GO_RUNTIME_RESULT: ${{ needs['go-runtime'].result }}
+          GENERATED_PYTHON_RESULT: ${{ needs['generated-python'].result }}
+          GENERATED_TARGETS_RESULT: ${{ needs['generated-targets'].result }}
+          GENERATED_STATIC_RESULT: ${{ needs['generated-static'].result }}
+          MSRV_RESULT: ${{ needs.msrv.result }}
+          SCHEMA_COMPAT_RESULT: ${{ needs['schema-compat'].result }}
+        run: |
+          test "$CHANGES_RESULT" = "success"
+          for result in \
+            "$TEST_RESULT" \
+            "$TS_RUNTIME_RESULT" \
+            "$GO_RUNTIME_RESULT" \
+            "$GENERATED_PYTHON_RESULT" \
+            "$GENERATED_TARGETS_RESULT" \
+            "$GENERATED_STATIC_RESULT" \
+            "$MSRV_RESULT" \
+            "$SCHEMA_COMPAT_RESULT"
+          do
+            test "$result" = "success" || test "$result" = "skipped"
+          done
 
   # ── Cross-platform tests ────────────────────────────────────────────────────
   # Wire golden tests (wire_golden.rs) run on every platform/arch combination
@@ -241,6 +287,78 @@ jobs:
 
       - name: Verify generated change classification
         run: bash .github/scripts/test-classify-generated-changes.sh
+
+  # ── Generated Python validation ─────────────────────────────────────────────
+  # Rust golden tests prove text stability; this gate also asks Python to parse
+  # every golden and runs focused generated-code probes against the real runtime.
+  generated-python:
+    name: Generated Python
+    needs: changes
+    if: needs.changes.outputs.py_codegen == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - name: Generate and compare Python goldens
+        run: cargo test -p vexil-codegen-py
+
+      - name: Compile generated Python
+        run: python -m py_compile crates/vexil-codegen-py/tests/golden/*.py
+
+      - name: Exercise generated Python runtime probes
+        run: |
+          python crates/vexil-codegen-py/tests/delta_runtime_probe.py
+          python crates/vexil-codegen-py/tests/optional_runtime_probe.py
+          python crates/vexil-codegen-py/tests/recursion_runtime_probe.py
+          python crates/vexil-codegen-py/tests/tombstone_runtime_probe.py
+          python crates/vexil-codegen-py/tests/trait_runtime_probe.py
+
+  # Native static checkers validate generated target code against the checked-in
+  # runtimes. The lockfile pins both tools so local and CI diagnostics agree.
+  generated-static:
+    name: Generated static checks
+    needs: changes
+    if: needs.changes.outputs.generated_static == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: tools/generated-code-checks/package-lock.json
+
+      - name: Install pinned static checkers
+        working-directory: tools/generated-code-checks
+        run: npm ci --ignore-scripts
+
+      - name: Generate and compare target goldens
+        env:
+          VEXIL_TSC: ${{ github.workspace }}/tools/generated-code-checks/node_modules/.bin/tsc
+        run: cargo test -p vexil-codegen-py -p vexil-codegen-ts
+
+      - name: Check generated Python with strict Pyright
+        working-directory: tools/generated-code-checks
+        run: npm run check:python
+
+      - name: Check generated TypeScript with native tsc
+        working-directory: tools/generated-code-checks
+        run: npm run check:typescript
 
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.

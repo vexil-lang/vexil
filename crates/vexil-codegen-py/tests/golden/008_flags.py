@@ -2,11 +2,9 @@
 # Source: test.flags
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x90, 0xa6, 0xac, 0x06, 0xc5, 0xfe, 0x85, 0x72, 0xb5, 0x2e, 0x26, 0x8b, 0xe5, 0xef, 0xcf, 0xd9, 0x40, 0x98, 0xb9, 0x29, 0x6e, 0xab, 0x66, 0xe5, 0x2e, 0x4c, 0x44, 0x96, 0x31, 0x82, 0x5a, 0xa3)
 
@@ -23,18 +21,18 @@ class Permissions(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Permissions:
         r = _BitReader(data)
-        v = r.read_u8()
-        return Permissions(v)
+        return Permissions.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return Permissions(r.read_u8())
+    def decode_from(r: _BitReader) -> Permissions:
+        v = r.read_u8()
+        return Permissions(v)
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -54,18 +52,18 @@ class WideFlags(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WideFlags:
         r = _BitReader(data)
-        v = r.read_u64()
-        return WideFlags(v)
+        return WideFlags.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return WideFlags(r.read_u64())
+    def decode_from(r: _BitReader) -> WideFlags:
+        v = r.read_u64()
+        return WideFlags(v)
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -86,18 +84,18 @@ class FileMode(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> FileMode:
         r = _BitReader(data)
-        v = r.read_u8()
-        return FileMode(v)
+        return FileMode.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return FileMode(r.read_u8())
+    def decode_from(r: _BitReader) -> FileMode:
+        v = r.read_u8()
+        return FileMode(v)
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -105,3 +103,4 @@ class FileMode(int):
     def __repr__(self) -> str:
         return f"FileMode({int(self)})"
 
+__all__ = ["SCHEMA_HASH", "Permissions", "WideFlags", "FileMode"]

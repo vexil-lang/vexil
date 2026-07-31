@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x79, 0x11, 0xcd, 0x44, 0x04, 0x6d, 0x10, 0x7a, 0xf1, 0xf1, 0x82, 0x9b, 0x7b, 0x72, 0x7b, 0x36, 0x1c, 0x74, 0xbf, 0x08, 0x23, 0xb7, 0x7d, 0xec, 0x49, 0x18, 0xe9, 0xd4, 0xe0, 0xb3, 0x05, 0x67)
 SCHEMA_VERSION: str = "1.2.0"
@@ -20,22 +19,30 @@ class OldMessage:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> OldMessage:
         r = _BitReader(data)
-        return OldMessage.decode_from(r)
+        try:
+            r.enter_nested()
+            return OldMessage.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> OldMessage:
         m = OldMessage.__new__(OldMessage)
         m.value = r.read_u32()
         r.flush_to_byte_boundary()
@@ -53,10 +60,14 @@ class Lifecycle:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.name)
         w.write_string(self.email)
         w.flush_to_byte_boundary()
@@ -64,12 +75,16 @@ class Lifecycle:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Lifecycle:
         r = _BitReader(data)
-        return Lifecycle.decode_from(r)
+        try:
+            r.enter_nested()
+            return Lifecycle.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Lifecycle:
         m = Lifecycle.__new__(Lifecycle)
         m.name = r.read_string()
         m.email = r.read_string()
@@ -91,10 +106,14 @@ class Encoded:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(self.count)
         w.write_zigzag(self.delta)
         w.write_u64(self.offset)
@@ -105,12 +124,16 @@ class Encoded:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Encoded:
         r = _BitReader(data)
-        return Encoded.decode_from(r)
+        try:
+            r.enter_nested()
+            return Encoded.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Encoded:
         m = Encoded.__new__(Encoded)
         m.count = r.read_leb128()
         m.delta = r.read_zigzag()
@@ -194,48 +217,56 @@ class Limited:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.body)
         w.write_leb128(len(self.tags))
-        for item in self.tags:
-            w.write_string(item)
+        for _vexil_self_2e_tags_array_item in self.tags:
+            w.write_string(_vexil_self_2e_tags_array_item)
         w.write_leb128(len(self.headers))
-        for map_k in sorted(self.headers):
-            map_v = self.headers[map_k]
-            w.write_string(map_k)
-            w.write_string(map_v)
+        for _vexil_self_2e_headers_map_key in sorted(self.headers):
+            _vexil_self_2e_headers_map_value = self.headers[_vexil_self_2e_headers_map_key]
+            w.write_string(_vexil_self_2e_headers_map_key)
+            w.write_string(_vexil_self_2e_headers_map_value)
         w.write_bytes(self.data)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Limited:
         r = _BitReader(data)
-        return Limited.decode_from(r)
+        try:
+            r.enter_nested()
+            return Limited.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Limited:
         m = Limited.__new__(Limited)
         m.body = r.read_string()
-        arr_len = r.read_leb128()
-        m.tags = []
-        for _ in range(arr_len):
-            _item: str = None  # type: ignore[assignment]
-            _item = r.read_string()
-            m.tags.append(_item)
-        map_len = r.read_leb128()
-        m.headers = {}
-        for _ in range(map_len):
-            _k: str = None  # type: ignore[assignment]
-            _v: str = None  # type: ignore[assignment]
-            _k = r.read_string()
-            _v = r.read_string()
-            m.headers[_k] = _v
-        m.data = r.read_bytes(r.read_leb128())
+        _vexil_m_2e_tags_array_length = r.read_leb128()
+        _vexil_m_2e_tags_array_items: list[str] = []
+        for _ in range(_vexil_m_2e_tags_array_length):
+            _vexil_m_2e_tags_array_item = r.read_string()
+            _vexil_m_2e_tags_array_items.append(_vexil_m_2e_tags_array_item)
+        m.tags = _vexil_m_2e_tags_array_items
+        _vexil_m_2e_headers_map_length = r.read_leb128()
+        _vexil_m_2e_headers_map_items: dict[str, str] = {}
+        for _ in range(_vexil_m_2e_headers_map_length):
+            _vexil_m_2e_headers_map_key = r.read_string()
+            _vexil_m_2e_headers_map_value = r.read_string()
+            _vexil_m_2e_headers_map_items[_vexil_m_2e_headers_map_key] = _vexil_m_2e_headers_map_value
+        m.headers = _vexil_m_2e_headers_map_items
+        _vexil_m_2e_data_length = r.read_leb128()
+        m.data = r.read_bytes(_vexil_m_2e_data_length)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -250,22 +281,30 @@ class RenderCommand:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.op)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> RenderCommand:
         r = _BitReader(data)
-        return RenderCommand.decode_from(r)
+        try:
+            r.enter_nested()
+            return RenderCommand.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> RenderCommand:
         m = RenderCommand.__new__(RenderCommand)
         m.op = r.read_u8()
         r.flush_to_byte_boundary()
@@ -282,26 +321,34 @@ class Documented:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Documented:
         r = _BitReader(data)
-        return Documented.decode_from(r)
+        try:
+            r.enter_nested()
+            return Documented.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Documented:
         m = Documented.__new__(Documented)
         m.value = r.read_u32()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "SCHEMA_VERSION", "OldMessage", "Lifecycle", "Encoded", "EncodedEncoder", "EncodedDecoder", "Limited", "RenderCommand", "Documented"]

@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x7c, 0x63, 0xe0, 0x11, 0xba, 0x5b, 0x99, 0xab, 0x88, 0x41, 0x02, 0xf3, 0x55, 0xed, 0x30, 0x4a, 0xd3, 0x38, 0xbe, 0x28, 0x8e, 0x69, 0xac, 0x3e, 0xdf, 0x8b, 0x61, 0x99, 0x49, 0x20, 0x41, 0x01)
 
@@ -30,10 +29,14 @@ class AllPrimitives:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bool(self.a)
         w.write_u8(self.b)
         w.write_u16(self.c)
@@ -50,12 +53,16 @@ class AllPrimitives:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> AllPrimitives:
         r = _BitReader(data)
-        return AllPrimitives.decode_from(r)
+        try:
+            r.enter_nested()
+            return AllPrimitives.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> AllPrimitives:
         m = AllPrimitives.__new__(AllPrimitives)
         m.a = r.read_bool()
         m.b = r.read_u8()
@@ -68,8 +75,9 @@ class AllPrimitives:
         m.i = r.read_i64()
         m.j = r.read_f32()
         m.k = r.read_f64()
+        m.l = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "AllPrimitives"]

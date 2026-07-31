@@ -1,15 +1,13 @@
 {
-  "include": [
-    "../../crates/vexil-codegen-py/tests/golden/045_generic_trait.py",
-    "../../crates/vexil-codegen-py/tests/golden/047_trait_function_codegen_deferred.py",
-    "../../crates/vexil-codegen-py/tests/golden/048_generic_trait_nested.py",
-    "../../crates/vexil-codegen-py/tests/golden/049_trait_function_portable_body.py"
-  ],
-  "extraPaths": [
-    "../../packages/runtime-py"
-  ],
+  "include": ["../../crates/vexil-codegen-py/tests/golden"],
+  "exclude": ["**/__pycache__"],
+  "typeCheckingMode": "strict",
   "pythonVersion": "3.10",
-  "reportPrivateUsage": "none",
-  "reportUnusedImport": "none",
-  "typeCheckingMode": "strict"
+  "pythonPlatform": "Linux",
+  "executionEnvironments": [
+    {
+      "root": "../../crates/vexil-codegen-py/tests/golden",
+      "extraPaths": ["../../packages/runtime-py"]
+    }
+  ]
 }

@@ -42,4 +42,4 @@ export function decodeEvent(r: BitReader): Event {
 }
 
 
-type _EventImplementsTagged = _VexilAssertAssignable<Event, Tagged<bigint>>;
+export type _EventImplementsTagged = _VexilAssertAssignable<Event, Tagged<bigint>>;

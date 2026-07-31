@@ -3,19 +3,19 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x47, 0xe1, 0xbb, 0xd9, 0xad, 0x5a, 0x99, 0x4e, 0xbc, 0xbd, 0x7a, 0xc1, 0xad, 0x0a, 0xae, 0x13, 0x99, 0x05, 0x87, 0x87, 0x89, 0x04, 0xa6, 0xf8, 0xb9, 0x2e, 0xa1, 0xb9, 0x78, 0x7f, 0x36, 0x86)
-T = TypeVar("T")
+_VexilTypeParam_T = TypeVar("_VexilTypeParam_T")
 
 
 # ---------- Container ----------
 @runtime_checkable
-class Container(Protocol[T]):
-    items: list[T]
+class Container(Protocol[_VexilTypeParam_T]):
+    items: list[_VexilTypeParam_T]
 
 # ---------- EventList ----------
 @dataclass
@@ -25,31 +25,39 @@ class EventList:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.items))
-        for item in self.items:
-            w.write_u64(item)
+        for _vexil_self_2e_items_array_item in self.items:
+            w.write_u64(_vexil_self_2e_items_array_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> EventList:
         r = _BitReader(data)
-        return EventList.decode_from(r)
+        try:
+            r.enter_nested()
+            return EventList.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> EventList:
         m = EventList.__new__(EventList)
-        arr_len = r.read_leb128()
-        m.items = []
-        for _ in range(arr_len):
-            _item: int = None  # type: ignore[assignment]
-            _item = r.read_u64()
-            m.items.append(_item)
+        _vexil_m_2e_items_array_length = r.read_leb128()
+        _vexil_m_2e_items_array_items: list[int] = []
+        for _ in range(_vexil_m_2e_items_array_length):
+            _vexil_m_2e_items_array_item = r.read_u64()
+            _vexil_m_2e_items_array_items.append(_vexil_m_2e_items_array_item)
+        m.items = _vexil_m_2e_items_array_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -59,3 +67,5 @@ class EventList:
 if TYPE_CHECKING:
     def _vexil_assert_EventList_implements_Container(value: EventList) -> Container[int]:  # pyright: ignore[reportUnusedFunction]
         return value
+
+__all__ = ["dataclass", "TYPE_CHECKING", "Protocol", "TypeVar", "runtime_checkable", "SCHEMA_HASH", "Container", "EventList"]

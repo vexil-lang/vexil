@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x3c, 0xe1, 0x7c, 0x93, 0x58, 0x63, 0xae, 0xa0, 0x6f, 0x76, 0x53, 0xdc, 0xb8, 0x11, 0xe3, 0x87, 0x34, 0x2a, 0x85, 0x1c, 0x0a, 0xcd, 0xee, 0x7e, 0xa2, 0x86, 0x73, 0x7c, 0x3e, 0x03, 0xe7, 0x41)
 
@@ -22,14 +21,14 @@ class KeywordFields:
     enum: int
     union: int
     config: bool
-    import: int
+    _vexil_import: int
     namespace: str
     array: int
     map: int
     result: int
     optional: int
-    from: int
-    as: int
+    _vexil_from: int
+    _vexil_as: int
     void: int
     none: int
     true: int
@@ -38,10 +37,14 @@ class KeywordFields:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.flags)
         w.write_u16(self.type)
         w.write_bytes(self.hash)
@@ -50,14 +53,14 @@ class KeywordFields:
         w.write_u8(self.enum)
         w.write_u8(self.union)
         w.write_bool(self.config)
-        w.write_u32(self.import)
+        w.write_u32(self._vexil_import)
         w.write_string(self.namespace)
         w.write_u8(self.array)
         w.write_u8(self.map)
         w.write_u8(self.result)
         w.write_u8(self.optional)
-        w.write_u8(self.from)
-        w.write_u8(self.as)
+        w.write_u8(self._vexil_from)
+        w.write_u8(self._vexil_as)
         w.write_u8(self.void)
         w.write_u8(self.none)
         w.write_u8(self.true)
@@ -67,29 +70,34 @@ class KeywordFields:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> KeywordFields:
         r = _BitReader(data)
-        return KeywordFields.decode_from(r)
+        try:
+            r.enter_nested()
+            return KeywordFields.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> KeywordFields:
         m = KeywordFields.__new__(KeywordFields)
         m.flags = r.read_u8()
         m.type = r.read_u16()
-        m.hash = r.read_bytes(r.read_leb128())
+        _vexil_m_2e_hash_length = r.read_leb128()
+        m.hash = r.read_bytes(_vexil_m_2e_hash_length)
         m.string = r.read_u32()
         m.message = r.read_u64()
         m.enum = r.read_u8()
         m.union = r.read_u8()
         m.config = r.read_bool()
-        m.import = r.read_u32()
+        m._vexil_import = r.read_u32()
         m.namespace = r.read_string()
         m.array = r.read_u8()
         m.map = r.read_u8()
         m.result = r.read_u8()
         m.optional = r.read_u8()
-        m.from = r.read_u8()
-        m.as = r.read_u8()
+        m._vexil_from = r.read_u8()
+        m._vexil_as = r.read_u8()
         m.void = r.read_u8()
         m.none = r.read_u8()
         m.true = r.read_u8()
@@ -98,4 +106,4 @@ class KeywordFields:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "KeywordFields"]

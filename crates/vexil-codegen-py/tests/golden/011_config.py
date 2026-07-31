@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xb8, 0x14, 0xe7, 0xba, 0x3c, 0xac, 0xbf, 0xb6, 0xa4, 0xb8, 0xe2, 0xb1, 0x38, 0x37, 0xef, 0xa9, 0x67, 0x83, 0x81, 0xb1, 0x6f, 0x68, 0x3a, 0xf8, 0xc0, 0x75, 0x30, 0x79, 0x2b, 0x8b, 0x7c, 0x6e)
 
@@ -23,18 +22,18 @@ class LogLevel(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> LogLevel:
         r = _BitReader(data)
-        v = r.read_bits(2)
-        return LogLevel(v)
+        return LogLevel.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return LogLevel(r.read_bits(2))
+    def decode_from(r: _BitReader) -> LogLevel:
+        v = r.read_bits(2)
+        return LogLevel(v)
 
     def __repr__(self) -> str:
         return f"LogLevel({int(self)})"
@@ -71,3 +70,4 @@ class WithArrays:
 class Nested:
     level: LogLevel
 
+__all__ = ["dataclass", "SCHEMA_HASH", "LogLevel", "ServerConfig", "WithOptional", "WithArrays", "Nested"]

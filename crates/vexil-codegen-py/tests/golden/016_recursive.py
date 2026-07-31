@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xa1, 0x25, 0xcb, 0x50, 0x29, 0x3e, 0xa3, 0x25, 0x60, 0x73, 0x08, 0x42, 0x52, 0xc5, 0xca, 0xf0, 0x83, 0xf5, 0xdd, 0xf7, 0x30, 0x18, 0xf8, 0x51, 0x8e, 0x54, 0xa9, 0xfd, 0xbe, 0xeb, 0x91, 0xae)
 
@@ -20,33 +19,49 @@ class TreeNode:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.value)
         w.write_leb128(len(self.children))
-        for item in self.children:
-            item.encode_to(w)
+        for _vexil_self_2e_children_array_item in self.children:
+            try:
+                w.enter_nested()
+                _vexil_self_2e_children_array_item.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> TreeNode:
         r = _BitReader(data)
-        return TreeNode.decode_from(r)
+        try:
+            r.enter_nested()
+            return TreeNode.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> TreeNode:
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_i32()
-        arr_len = r.read_leb128()
-        m.children = []
-        for _ in range(arr_len):
-            _item: TreeNode = None  # type: ignore[assignment]
-            _item = TreeNode.decode_from(r)
-            m.children.append(_item)
+        _vexil_m_2e_children_array_length = r.read_leb128()
+        _vexil_m_2e_children_array_items: list[TreeNode] = []
+        for _ in range(_vexil_m_2e_children_array_length):
+            try:
+                r.enter_nested()
+                _vexil_m_2e_children_array_item = TreeNode.decode_from(r)
+            finally:
+                r.leave_nested()
+            _vexil_m_2e_children_array_items.append(_vexil_m_2e_children_array_item)
+        m.children = _vexil_m_2e_children_array_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -62,37 +77,51 @@ class LinkedList:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.value)
-        w.write_bool(self.next is not None)
-        w.flush_to_byte_boundary()
-        if self.next is not None:
-            self.next.encode_to(w)
+        _vexil_self_2e_next_optional = self.next
+        w.write_bool(_vexil_self_2e_next_optional is not None)
+        if _vexil_self_2e_next_optional is not None:
+            try:
+                w.enter_nested()
+                _vexil_self_2e_next_optional.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> LinkedList:
         r = _BitReader(data)
-        return LinkedList.decode_from(r)
+        try:
+            r.enter_nested()
+            return LinkedList.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> LinkedList:
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_string()
         try:
-            present = r.read_bool()
+            _vexil_m_2e_next_present = r.read_bool()
         except DecodeError:
             m.next = None
         else:
-            r.flush_to_byte_boundary()
-            if present:
-                m.next: LinkedList = None  # type: ignore[assignment]
-                m.next = LinkedList.decode_from(r)
+            if _vexil_m_2e_next_present:
+                try:
+                    r.enter_nested()
+                    m.next = LinkedList.decode_from(r)
+                finally:
+                    r.leave_nested()
             else:
                 m.next = None
         r.flush_to_byte_boundary()
@@ -109,25 +138,40 @@ class Expr:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        _encoded_union = self.kind.encode()
-        w.write_raw_bytes(_encoded_union, len(_encoded_union))
+    def encode_to(self, w: _BitWriter) -> None:
+        try:
+            w.enter_nested()
+            self.kind.encode_to(w)
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Expr:
         r = _BitReader(data)
-        return Expr.decode_from(r)
+        try:
+            r.enter_nested()
+            return Expr.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Expr:
         m = Expr.__new__(Expr)
-        m.kind = decode_ExprKind_from(r)
+        try:
+            r.enter_nested()
+            m.kind = decode_ExprKind_from(r)
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -138,25 +182,25 @@ class Expr:
 class ExprKind:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ExprKindLiteral(ExprKind):
     def __init__(self, value: int):
         self.value = value
 
-    def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_i64(self.value)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_i64(self.value)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
 
 
 class ExprKindBinary(ExprKind):
@@ -165,44 +209,55 @@ class ExprKindBinary(ExprKind):
         self.op = op
         self.right = right
 
-    def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        self.left.encode_to(pw)
-        pw.write_u8(self.op)
-        self.right.encode_to(pw)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        try:
+            _vexil_payload_writer.enter_nested()
+            self.left.encode_to(_vexil_payload_writer)
+        finally:
+            _vexil_payload_writer.leave_nested()
+        _vexil_payload_writer.write_u8(self.op)
+        try:
+            _vexil_payload_writer.enter_nested()
+            self.right.encode_to(_vexil_payload_writer)
+        finally:
+            _vexil_payload_writer.leave_nested()
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
 
 
-def decode_ExprKind_from(r: _BitReader) -> ExprKind:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        value: int = None  # type: ignore[assignment]
-        value = pr.read_i64()
-        return ExprKindLiteral(value)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        left: Expr = None  # type: ignore[assignment]
-        left = Expr.decode_from(pr)
-        op: int = None  # type: ignore[assignment]
-        op = pr.read_u8()
-        right: Expr = None  # type: ignore[assignment]
-        right = Expr.decode_from(pr)
-        return ExprKindBinary(left, op, right)
+def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0 = _vexil_payload_reader.read_i64()
+        return ExprKindLiteral(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        try:
+            _vexil_payload_reader.enter_nested()
+            _vexil_field_0 = Expr.decode_from(_vexil_payload_reader)
+        finally:
+            _vexil_payload_reader.leave_nested()
+        _vexil_field_1 = _vexil_payload_reader.read_u8()
+        try:
+            _vexil_payload_reader.enter_nested()
+            _vexil_field_2 = Expr.decode_from(_vexil_payload_reader)
+        finally:
+            _vexil_payload_reader.leave_nested()
+        return ExprKindBinary(_vexil_field_0, _vexil_field_1, _vexil_field_2)
     else:
-        raise ValueError(f"unknown ExprKind discriminant: {disc}")
+        raise ValueError(f"unknown ExprKind discriminant: {_vexil_discriminant}")
 
 def decode_ExprKind(data: bytes) -> ExprKind:
-    r = _BitReader(data)
-    return decode_ExprKind_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_ExprKind_from(_vexil_reader)
 
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "TreeNode", "LinkedList", "Expr", "ExprKind", "ExprKindLiteral", "ExprKindBinary", "decode_ExprKind_from", "decode_ExprKind"]

@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": false,
+    "types": [],
+    "baseUrl": "../..",
+    "paths": {
+      "@vexil-lang/runtime": ["packages/runtime-ts/src/index.ts"]
+    }
+  },
+  "include": ["../../crates/vexil-codegen-ts/tests/golden/*.ts"]
+}

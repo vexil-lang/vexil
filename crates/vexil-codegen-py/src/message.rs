@@ -6,7 +6,19 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::py_type;
+use crate::types::{optional_payload_needs_wrapper, py_ident, py_type};
+
+fn local_name(target: &str, suffix: &str) -> String {
+    let mut stem = String::new();
+    for ch in target.chars() {
+        if ch.is_ascii_alphanumeric() {
+            stem.push(ch);
+        } else {
+            stem.push_str(&format!("_{:x}_", ch as u32));
+        }
+    }
+    format!("_vexil_{stem}_{suffix}")
+}
 
 // ---------------------------------------------------------------------------
 // Constraint validation
@@ -203,6 +215,8 @@ fn emit_write_type(
                 },
                 None => "Unknown".to_string(),
             };
+            w.open_block("try");
+            w.line(&format!("{writer}.enter_nested()"));
             match registry.get(*id) {
                 Some(TypeDef::Message(_)) => {
                     w.line(&format!("{access}.encode_to({writer})"));
@@ -214,10 +228,7 @@ fn emit_write_type(
                     w.line(&format!("{access}.encode_to({writer})"));
                 }
                 Some(TypeDef::Union(_)) => {
-                    w.line(&format!("_encoded_union = {access}.encode()"));
-                    w.line(&format!(
-                        "{writer}.write_raw_bytes(_encoded_union, len(_encoded_union))"
-                    ));
+                    w.line(&format!("{access}.encode_to({writer})"));
                 }
                 Some(TypeDef::Newtype(_)) => {
                     w.line(&format!("{access}.encode_to({writer})"));
@@ -226,55 +237,63 @@ fn emit_write_type(
                     w.line(&format!("# Unknown type: {type_name}"));
                 }
             }
+            w.dedent();
+            w.line("finally:");
+            w.indent();
+            w.line(&format!("{writer}.leave_nested()"));
+            w.close_block();
         }
         ResolvedType::Optional(inner) => {
-            w.line(&format!("{writer}.write_bool({access} is not None)"));
-            w.line(&format!("{writer}.flush_to_byte_boundary()"));
-            w.open_block(&format!("if {access} is not None"));
-            match inner.as_ref() {
-                ResolvedType::Named(_) => {
-                    emit_write_type(w, access, inner, registry, writer);
-                }
-                _ => {
-                    emit_write_type(w, access, inner, registry, writer);
-                }
+            let value = local_name(access, "optional");
+            w.line(&format!("{value} = {access}"));
+            w.line(&format!("{writer}.write_bool({value} is not None)"));
+            w.open_block(&format!("if {value} is not None"));
+            if optional_payload_needs_wrapper(inner) {
+                emit_write_type(w, &format!("{value}[0]"), inner, registry, writer);
+            } else {
+                emit_write_type(w, &value, inner, registry, writer);
             }
             w.close_block();
         }
         ResolvedType::Array(inner) => {
+            let item = local_name(access, "array_item");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            w.open_block(&format!("for item in {access}"));
-            emit_write_type(w, "item", inner, registry, writer);
+            w.open_block(&format!("for {item} in {access}"));
+            emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }
         ResolvedType::Map(k, v) => {
+            let map_k = local_name(access, "map_key");
+            let map_v = local_name(access, "map_value");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
             if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
                 // String keys have a canonical lexical order. Iterating a
                 // caller-owned dict would otherwise make the wire depend on
                 // insertion order.
-                w.open_block(&format!("for map_k in sorted({access})"));
-                w.line(&format!("map_v = {access}[map_k]"));
+                w.open_block(&format!("for {map_k} in sorted({access})"));
+                w.line(&format!("{map_v} = {access}[{map_k}]"));
             } else {
-                w.open_block(&format!("for map_k, map_v in {access}.items()"));
+                w.open_block(&format!("for {map_k}, {map_v} in {access}.items()"));
             }
-            emit_write_type(w, "map_k", k, registry, writer);
-            emit_write_type(w, "map_v", v, registry, writer);
+            emit_write_type(w, &map_k, k, registry, writer);
+            emit_write_type(w, &map_v, v, registry, writer);
             w.close_block();
         }
         ResolvedType::Set(inner) => {
+            let item = local_name(access, "set_item");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
             if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                w.open_block(&format!("for item in sorted({access})"));
+                w.open_block(&format!("for {item} in sorted({access})"));
             } else {
-                w.open_block(&format!("for item in {access}"));
+                w.open_block(&format!("for {item} in {access}"));
             }
-            emit_write_type(w, "item", inner, registry, writer);
+            emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }
         ResolvedType::FixedArray(inner, _size) => {
-            w.open_block(&format!("for item in {access}"));
-            emit_write_type(w, "item", inner, registry, writer);
+            let item = local_name(access, "fixed_item");
+            w.open_block(&format!("for {item} in {access}"));
+            emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }
         ResolvedType::Vec2(inner)
@@ -283,19 +302,22 @@ fn emit_write_type(
         | ResolvedType::Quat(inner)
         | ResolvedType::Mat3(inner)
         | ResolvedType::Mat4(inner) => {
-            w.open_block(&format!("for item in {access}"));
-            emit_write_type(w, "item", inner, registry, writer);
+            let item = local_name(access, "geometric_item");
+            w.open_block(&format!("for {item} in {access}"));
+            emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }
         ResolvedType::Result(ok, err_ty) => {
-            w.open_block(&format!("if {access}[0]"));
+            let value = local_name(access, "result");
+            w.line(&format!("{value} = {access}"));
+            w.open_block(&format!("if {value}[0] is True"));
             w.line(&format!("{writer}.write_bool(True)"));
-            emit_write_type(w, &format!("{access}[1]"), ok, registry, writer);
+            emit_write_type(w, &format!("{value}[1]"), ok, registry, writer);
             w.dedent();
             w.line("else:");
             w.indent();
             w.line(&format!("{writer}.write_bool(False)"));
-            emit_write_type(w, &format!("{access}[1]"), err_ty, registry, writer);
+            emit_write_type(w, &format!("{value}[1]"), err_ty, registry, writer);
             w.close_block();
         }
         _ => {}
@@ -362,6 +384,7 @@ fn emit_read_type(
                 PrimitiveType::Fixed32 => "read_i32",
                 PrimitiveType::Fixed64 => "read_i64",
                 PrimitiveType::Void => {
+                    w.line(&format!("{target} = None"));
                     return;
                 }
             };
@@ -376,24 +399,27 @@ fn emit_read_type(
                 w.line(&format!("{target} = {reader}.read_string()"));
             }
             SemanticType::Bytes => {
-                w.line(&format!(
-                    "{target} = {reader}.read_bytes({reader}.read_leb128())"
-                ));
+                let length = local_name(target, "length");
+                w.line(&format!("{length} = {reader}.read_leb128()"));
+                w.line(&format!("{target} = {reader}.read_bytes({length})"));
             }
             SemanticType::Rgb => {
-                w.line(&format!("r = {reader}.read_u8()"));
-                w.line(&format!("g = {reader}.read_u8()"));
-                w.line(&format!("b = {reader}.read_u8()"));
-                w.line(&format!("{target} = (r, g, b)"));
+                let red = local_name(target, "red");
+                let green = local_name(target, "green");
+                let blue = local_name(target, "blue");
+                w.line(&format!("{red} = {reader}.read_u8()"));
+                w.line(&format!("{green} = {reader}.read_u8()"));
+                w.line(&format!("{blue} = {reader}.read_u8()"));
+                w.line(&format!("{target} = ({red}, {green}, {blue})"));
             }
             SemanticType::Uuid => {
-                w.line(&format!("{target} = {reader}.read_raw_bytes(16)"));
+                w.line(&format!("{target} = {reader}.read_bytes(16)"));
             }
             SemanticType::Timestamp => {
                 w.line(&format!("{target} = {reader}.read_i64()"));
             }
             SemanticType::Hash => {
-                w.line(&format!("{target} = {reader}.read_raw_bytes(32)"));
+                w.line(&format!("{target} = {reader}.read_bytes(32)"));
             }
         },
         ResolvedType::Named(id) => {
@@ -408,6 +434,8 @@ fn emit_read_type(
                 },
                 None => "Unknown".to_string(),
             };
+            w.open_block("try");
+            w.line(&format!("{reader}.enter_nested()"));
             match registry.get(*id) {
                 Some(TypeDef::Message(_)) => {
                     w.line(&format!("{target} = {type_name}.decode_from({reader})"));
@@ -428,10 +456,16 @@ fn emit_read_type(
                     w.line(&format!("# Unknown type: {type_name}"));
                 }
             }
+            w.dedent();
+            w.line("finally:");
+            w.indent();
+            w.line(&format!("{reader}.leave_nested()"));
+            w.close_block();
         }
         ResolvedType::Optional(inner) => {
+            let present = local_name(target, "present");
             w.open_block("try");
-            w.line(&format!("present = {reader}.read_bool()"));
+            w.line(&format!("{present} = {reader}.read_bool()"));
             w.close_block();
             w.line("except DecodeError:");
             w.indent();
@@ -439,13 +473,14 @@ fn emit_read_type(
             w.dedent();
             w.line("else:");
             w.indent();
-            w.line(&format!("{reader}.flush_to_byte_boundary()"));
-            w.open_block("if present");
-            let inner_py = py_type(inner, registry);
-            w.line(&format!(
-                "{target}: {inner_py} = None  # type: ignore[assignment]"
-            ));
-            emit_read_type(w, target, inner, registry, reader);
+            w.open_block(&format!("if {present}"));
+            if optional_payload_needs_wrapper(inner) {
+                let value = local_name(target, "optional_value");
+                emit_read_type(w, &value, inner, registry, reader);
+                w.line(&format!("{target} = ({value},)"));
+            } else {
+                emit_read_type(w, target, inner, registry, reader);
+            }
             w.dedent();
             w.line("else:");
             w.indent();
@@ -454,92 +489,98 @@ fn emit_read_type(
             w.dedent();
         }
         ResolvedType::Array(inner) => {
-            w.line(&format!("arr_len = {reader}.read_leb128()"));
+            let length = local_name(target, "array_length");
+            let items = local_name(target, "array_items");
+            let item = local_name(target, "array_item");
+            w.line(&format!("{length} = {reader}.read_leb128()"));
             let inner_py = py_type(inner, registry);
-            emit_container_initializer(w, target, &format!("list[{inner_py}]"), "[]");
-            w.open_block("for _ in range(arr_len)");
-            w.line(&format!(
-                "_item: {inner_py} = None  # type: ignore[assignment]"
-            ));
-            emit_read_type(w, "_item", inner, registry, reader);
-            w.line(&format!("{target}.append(_item)"));
+            w.line(&format!("{items}: list[{inner_py}] = []"));
+            w.open_block(&format!("for _ in range({length})"));
+            emit_read_type(w, &item, inner, registry, reader);
+            w.line(&format!("{items}.append({item})"));
             w.close_block();
+            w.line(&format!("{target} = {items}"));
         }
         ResolvedType::Set(inner) => {
-            w.line(&format!("set_len = {reader}.read_leb128()"));
+            let length = local_name(target, "set_length");
+            let items = local_name(target, "set_items");
+            let item = local_name(target, "set_item");
+            w.line(&format!("{length} = {reader}.read_leb128()"));
             let inner_py = py_type(inner, registry);
-            emit_container_initializer(w, target, &format!("set[{inner_py}]"), "set()");
-            w.open_block("for _ in range(set_len)");
-            w.line(&format!(
-                "_item: {inner_py} = None  # type: ignore[assignment]"
-            ));
-            emit_read_type(w, "_item", inner, registry, reader);
-            w.line(&format!("{target}.add(_item)"));
+            w.line(&format!("{items}: set[{inner_py}] = set()"));
+            w.open_block(&format!("for _ in range({length})"));
+            emit_read_type(w, &item, inner, registry, reader);
+            w.line(&format!("{items}.add({item})"));
             w.close_block();
+            w.line(&format!("{target} = {items}"));
         }
         ResolvedType::FixedArray(inner, size) => {
             let inner_py = py_type(inner, registry);
-            let suffix = target
-                .chars()
-                .filter(char::is_ascii_alphanumeric)
-                .collect::<String>();
-            let items = format!("_fixed_items_{suffix}");
-            let item = format!("_fixed_item_{suffix}");
+            let items = local_name(target, "fixed_items");
+            let item = local_name(target, "fixed_item");
             w.line(&format!("{items}: list[{inner_py}] = []"));
             w.open_block(&format!("for _ in range({size})"));
-            w.line(&format!(
-                "{item}: {inner_py} = None  # type: ignore[assignment]"
-            ));
             emit_read_type(w, &item, inner, registry, reader);
             w.line(&format!("{items}.append({item})"));
             w.close_block();
             w.line(&format!("{target} = tuple({items})"));
         }
         ResolvedType::Map(k, v) => {
-            w.line(&format!("map_len = {reader}.read_leb128()"));
+            let length = local_name(target, "map_length");
+            let items = local_name(target, "map_items");
+            let key = local_name(target, "map_key");
+            let value = local_name(target, "map_value");
+            w.line(&format!("{length} = {reader}.read_leb128()"));
             let k_py = py_type(k, registry);
             let v_py = py_type(v, registry);
-            emit_container_initializer(w, target, &format!("dict[{k_py}, {v_py}]"), "{}");
-            w.open_block("for _ in range(map_len)");
-            w.line(&format!("_k: {k_py} = None  # type: ignore[assignment]"));
-            w.line(&format!("_v: {v_py} = None  # type: ignore[assignment]"));
-            emit_read_type(w, "_k", k, registry, reader);
-            emit_read_type(w, "_v", v, registry, reader);
-            w.line(&format!("{target}[_k] = _v"));
+            w.line(&format!("{items}: dict[{k_py}, {v_py}] = {{}}"));
+            w.open_block(&format!("for _ in range({length})"));
+            emit_read_type(w, &key, k, registry, reader);
+            emit_read_type(w, &value, v, registry, reader);
+            w.line(&format!("{items}[{key}] = {value}"));
             w.close_block();
+            w.line(&format!("{target} = {items}"));
         }
         ResolvedType::Result(ok, err_ty) => {
-            w.line(&format!("is_ok = {reader}.read_bool()"));
-            let ok_py = py_type(ok, registry);
-            let err_py = py_type(err_ty, registry);
-            w.open_block("if is_ok");
-            w.line(&format!(
-                "_ok_val: {ok_py} = None  # type: ignore[assignment]"
-            ));
-            emit_read_type(w, "_ok_val", ok, registry, reader);
-            w.line(&format!("{target} = (True, _ok_val)"));
+            let is_ok = local_name(target, "result_is_ok");
+            let ok_value = local_name(target, "result_ok");
+            let err_value = local_name(target, "result_err");
+            w.line(&format!("{is_ok} = {reader}.read_bool()"));
+            w.open_block(&format!("if {is_ok}"));
+            emit_read_type(w, &ok_value, ok, registry, reader);
+            w.line(&format!("{target} = (True, {ok_value})"));
             w.dedent();
             w.line("else:");
             w.indent();
-            w.line(&format!(
-                "_err_val: {err_py} = None  # type: ignore[assignment]"
-            ));
-            emit_read_type(w, "_err_val", err_ty, registry, reader);
-            w.line(&format!("{target} = (False, _err_val)"));
+            emit_read_type(w, &err_value, err_ty, registry, reader);
+            w.line(&format!("{target} = (False, {err_value})"));
             w.close_block();
         }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            let size = match ty {
+                ResolvedType::Vec2(_) => 2,
+                ResolvedType::Vec3(_) => 3,
+                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
+                ResolvedType::Mat3(_) => 9,
+                ResolvedType::Mat4(_) => 16,
+                _ => unreachable!(),
+            };
+            let inner_py = py_type(inner, registry);
+            let items = local_name(target, "geometric_items");
+            let item = local_name(target, "geometric_item");
+            w.line(&format!("{items}: list[{inner_py}] = []"));
+            w.open_block(&format!("for _ in range({size})"));
+            emit_read_type(w, &item, inner, registry, reader);
+            w.line(&format!("{items}.append({item})"));
+            w.close_block();
+            w.line(&format!("{target} = tuple({items})"));
+        }
         _ => {}
-    }
-}
-
-/// Emit a typed local container initializer or an unannotated attribute
-/// assignment. Python only permits annotations on simple names, and message
-/// fields already carry their dataclass type annotations.
-fn emit_container_initializer(w: &mut CodeWriter, target: &str, ty: &str, value: &str) {
-    if target.contains('.') || target.contains('[') {
-        w.line(&format!("{target} = {value}"));
-    } else {
-        w.line(&format!("{target}: {ty} = {value}"));
     }
 }
 
@@ -581,7 +622,9 @@ fn emit_tombstone_read(
             let read_expr = match s {
                 SemanticType::String => format!("_ = {reader}.read_string()"),
                 SemanticType::Bytes => {
-                    format!("_ = {reader}.read_bytes({reader}.read_leb128())")
+                    w.line(&format!("_vexil_tombstone_length = {reader}.read_leb128()"));
+                    w.line(&format!("_ = {reader}.read_bytes(_vexil_tombstone_length)"));
+                    return;
                 }
                 SemanticType::Rgb => {
                     w.line(&format!("_ = {reader}.read_u8()"));
@@ -589,9 +632,9 @@ fn emit_tombstone_read(
                     w.line(&format!("_ = {reader}.read_u8()"));
                     return;
                 }
-                SemanticType::Uuid => format!("_ = {reader}.read_raw_bytes(16)"),
+                SemanticType::Uuid => format!("_ = {reader}.read_bytes(16)"),
                 SemanticType::Timestamp => format!("_ = {reader}.read_i64()"),
-                SemanticType::Hash => format!("_ = {reader}.read_raw_bytes(32)"),
+                SemanticType::Hash => format!("_ = {reader}.read_bytes(32)"),
             };
             w.line(&read_expr);
         }
@@ -607,19 +650,33 @@ fn emit_tombstone_read(
                 },
                 None => "Unknown".to_string(),
             };
-            w.line(&format!("_tmp = {type_name}.__new__({type_name})"));
-            w.line(&format!("_tmp.decode_from({reader})"));
+            w.open_block("try");
+            w.line(&format!("{reader}.enter_nested()"));
+            if matches!(registry.get(*id), Some(TypeDef::Union(_))) {
+                w.line(&format!("_ = decode_{type_name}_from({reader})"));
+            } else {
+                w.line(&format!("_ = {type_name}.decode_from({reader})"));
+            }
+            w.dedent();
+            w.line("finally:");
+            w.indent();
+            w.line(&format!("{reader}.leave_nested()"));
+            w.close_block();
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("_present = {reader}.read_bool()"));
-            w.line(&format!("{reader}.flush_to_byte_boundary()"));
             w.open_block("if _present");
             emit_tombstone_read(w, inner, registry, reader);
             w.close_block();
         }
-        ResolvedType::Array(inner) => {
+        ResolvedType::Array(inner) | ResolvedType::Set(inner) => {
             w.line(&format!("_len = {reader}.read_leb128()"));
             w.open_block("for _ in range(_len)");
+            emit_tombstone_read(w, inner, registry, reader);
+            w.close_block();
+        }
+        ResolvedType::FixedArray(inner, size) => {
+            w.open_block(&format!("for _ in range({size})"));
             emit_tombstone_read(w, inner, registry, reader);
             w.close_block();
         }
@@ -639,6 +696,27 @@ fn emit_tombstone_read(
             w.indent();
             emit_tombstone_read(w, err_ty, registry, reader);
             w.close_block();
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            let size = match ty {
+                ResolvedType::Vec2(_) => 2,
+                ResolvedType::Vec3(_) => 3,
+                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
+                ResolvedType::Mat3(_) => 9,
+                ResolvedType::Mat4(_) => 16,
+                _ => unreachable!(),
+            };
+            w.open_block(&format!("for _ in range({size})"));
+            emit_tombstone_read(w, inner, registry, reader);
+            w.close_block();
+        }
+        ResolvedType::BitsInline(names) => {
+            w.line(&format!("_ = {reader}.read_bits({})", names.len()));
         }
         _ => {}
     }
@@ -661,7 +739,7 @@ pub fn emit_message(
     w.open_block(&format!("class {name}"));
     for field in &msg.fields {
         let py_ty = py_type(&field.resolved_type, registry);
-        let field_name = &field.name;
+        let field_name = py_ident(field.name.as_str());
         w.line(&format!("{field_name}: {py_ty}"));
     }
     w.line("unknown: bytes = b\"\"");
@@ -674,14 +752,21 @@ pub fn emit_message(
     // encode method
     w.open_block("def encode(self) -> bytes");
     w.line("w = _BitWriter()");
+    w.open_block("try");
+    w.line("w.enter_nested()");
     w.line("self.encode_to(w)");
+    w.dedent();
+    w.line("finally:");
+    w.indent();
+    w.line("w.leave_nested()");
+    w.close_block();
     w.line("return w.finish()");
     w.close_block();
     w.blank();
 
-    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.open_block("def encode_to(self, w: _BitWriter) -> None");
     for field in &msg.fields {
-        let field_name = &field.name;
+        let field_name = py_ident(field.name.as_str());
         let access = format!("self.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
@@ -705,14 +790,21 @@ pub fn emit_message(
 
     // decode static method
     w.line("@staticmethod");
-    w.open_block("def decode(data: bytes)");
+    w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
+    w.open_block("try");
+    w.line("r.enter_nested()");
     w.line(&format!("return {name}.decode_from(r)"));
+    w.dedent();
+    w.line("finally:");
+    w.indent();
+    w.line("r.leave_nested()");
+    w.close_block();
     w.close_block();
     w.blank();
 
     w.line("@staticmethod");
-    w.open_block("def decode_from(r: _BitReader)");
+    w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
     w.line(&format!("m = {name}.__new__({name})"));
 
     enum DecodeAction<'a> {
@@ -733,7 +825,7 @@ pub fn emit_message(
     for (_ord, action) in actions.iter() {
         match action {
             DecodeAction::Field(field) => {
-                let field_name = &field.name;
+                let field_name = py_ident(field.name.as_str());
                 let target = format!("m.{field_name}");
                 emit_read(
                     w,
@@ -776,7 +868,7 @@ pub fn emit_config(w: &mut CodeWriter, cfg: &ConfigDef, registry: &TypeRegistry)
     w.open_block(&format!("class {name}"));
     for field in &cfg.fields {
         let py_ty = py_type(&field.resolved_type, registry);
-        let field_name = &field.name;
+        let field_name = py_ident(field.name.as_str());
         w.line(&format!("{field_name}: {py_ty}"));
     }
     w.close_block();

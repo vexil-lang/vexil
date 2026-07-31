@@ -49,6 +49,30 @@ pub(crate) fn generate_with_imports(
     import_types: Option<&std::collections::HashMap<String, String>>,
 ) -> Result<String, CodegenError> {
     let impl_functions = prepare_trait_functions(compiled)?;
+    let has_traits = compiled
+        .declarations
+        .iter()
+        .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
+    let has_impls = compiled.impls().next().is_some();
+    let trait_type_params: std::collections::BTreeSet<String> = compiled
+        .declarations
+        .iter()
+        .filter_map(|&id| match compiled.registry.get(id) {
+            Some(TypeDef::Trait(trait_def)) => Some(trait_def),
+            _ => None,
+        })
+        .flat_map(|trait_def| {
+            trait_def
+                .type_params
+                .iter()
+                .map(|param| param.name.node.to_string())
+        })
+        .collect();
+
+    // Emit declarations first so runtime imports can be driven by what the
+    // generated code actually references.
+    let body = emit_declarations(compiled, &impl_functions, has_impls)?;
+    let runtime_imports = required_runtime_imports(&body);
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -59,20 +83,34 @@ pub(crate) fn generate_with_imports(
 
     // Imports
     w.line("from __future__ import annotations");
-    w.line("from dataclasses import dataclass");
-    let has_traits = compiled
-        .declarations
-        .iter()
-        .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
-    let has_impls = compiled.impls().next().is_some();
-    if has_traits || has_impls {
-        w.line("from typing import TYPE_CHECKING, Optional, Protocol, TypeVar, runtime_checkable");
-    } else {
-        w.line("from typing import Optional");
+    if body.contains("@dataclass") {
+        w.line("from dataclasses import dataclass");
     }
-    w.blank();
-    w.line("# Runtime support (to be provided by vexil Python runtime)");
-    w.line("from vexil_runtime import _BitWriter, _BitReader, DecodeError");
+    let mut typing_imports = Vec::new();
+    if has_impls {
+        typing_imports.push("TYPE_CHECKING");
+    }
+    if body.contains("_VexilLiteral") {
+        typing_imports.push("Literal as _VexilLiteral");
+    }
+    if has_traits {
+        typing_imports.push("Protocol");
+        if !trait_type_params.is_empty() {
+            typing_imports.push("TypeVar");
+        }
+        typing_imports.push("runtime_checkable");
+    }
+    if !typing_imports.is_empty() {
+        w.line(&format!("from typing import {}", typing_imports.join(", ")));
+    }
+    if !runtime_imports.is_empty() {
+        w.blank();
+        w.line("# Runtime support (to be provided by vexil Python runtime)");
+        w.line(&format!(
+            "from vexil_runtime import {}",
+            runtime_imports.join(", ")
+        ));
+    }
     w.blank();
 
     // Cross-module imports if needed
@@ -110,23 +148,105 @@ pub(crate) fn generate_with_imports(
         w.line(&format!("SCHEMA_VERSION: str = \"{version}\""));
     }
 
-    if has_traits {
-        for (_, trait_def) in compiled.registry.iter().filter_map(|(_, def)| match def {
-            TypeDef::Trait(t) => Some(((), t)),
-            _ => None,
-        }) {
-            for param in &trait_def.type_params {
-                w.line(&format!(
-                    "{} = TypeVar(\"{}\")",
-                    param.name.node, param.name.node
-                ));
-            }
+    if !trait_type_params.is_empty() {
+        for param in trait_type_params {
+            let ident = types::py_type_param_ident(&param);
+            w.line(&format!("{ident} = TypeVar(\"{ident}\")"));
         }
     }
 
     w.blank();
 
-    // Emit each declared type
+    let generated = format!("{}{body}", w.finish());
+    let public_exports = explicit_public_exports(&generated)
+        .into_iter()
+        .map(|name| format!("\"{name}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Ok(format!(
+        "{}\n\n__all__ = [{public_exports}]\n",
+        generated.trim_end(),
+    ))
+}
+
+/// Recover Python's default wildcard exports from the generated module.
+///
+/// Emitting the same names as a literal `__all__` makes the public surface
+/// explicit to static analyzers without hiding generated declarations or
+/// imports that Python previously exported implicitly.
+fn explicit_public_exports(source: &str) -> Vec<String> {
+    let mut exports = Vec::new();
+
+    for line in source.lines() {
+        if line.is_empty()
+            || line.starts_with(char::is_whitespace)
+            || line.starts_with('#')
+            || line.starts_with('@')
+        {
+            continue;
+        }
+
+        if let Some(import) = line.strip_prefix("from ") {
+            let Some((module, bindings)) = import.split_once(" import ") else {
+                continue;
+            };
+            if module == "__future__" {
+                continue;
+            }
+            for binding in bindings.split(", ") {
+                let name = binding
+                    .rsplit_once(" as ")
+                    .map_or(binding, |(_, alias)| alias);
+                push_public_export(&mut exports, name);
+            }
+            continue;
+        }
+
+        if let Some(declaration) = line
+            .strip_prefix("class ")
+            .or_else(|| line.strip_prefix("def "))
+        {
+            let name = declaration
+                .split(['(', ':'])
+                .next()
+                .unwrap_or_default()
+                .trim();
+            push_public_export(&mut exports, name);
+            continue;
+        }
+
+        if let Some((binding, _)) = line.split_once('=') {
+            let name = binding.split(':').next().unwrap_or_default().trim();
+            if !name.is_empty()
+                && name
+                    .chars()
+                    .all(|character| character == '_' || character.is_alphanumeric())
+            {
+                push_public_export(&mut exports, name);
+            }
+        }
+    }
+
+    exports
+}
+
+fn push_public_export(exports: &mut Vec<String>, name: &str) {
+    if !name.starts_with('_') && !exports.iter().any(|existing| existing == name) {
+        exports.push(name.to_string());
+    }
+}
+
+/// Emit the body: one section per declared type.
+///
+/// Produced before the header so that import emission can be driven by the
+/// symbols the generated code actually references.
+fn emit_declarations(
+    compiled: &CompiledSchema,
+    impl_functions: &HashMap<TypeId, Vec<PortableFunction>>,
+    has_impls: bool,
+) -> Result<String, CodegenError> {
+    let mut w = emit::CodeWriter::new();
+
     for &type_id in &compiled.declarations {
         let typedef =
             compiled
@@ -182,12 +302,22 @@ pub(crate) fn generate_with_imports(
         w.dedent();
     }
 
-    let generated = w.finish();
-    if has_traits {
-        Ok(format!("{}\n", generated.trim_end()))
-    } else {
-        Ok(generated)
-    }
+    Ok(w.finish())
+}
+
+/// Runtime symbols the generated body references, in a stable order.
+///
+/// A trait-only or alias-only schema emits no codec, so it needs no runtime
+/// import at all.
+fn required_runtime_imports(body: &str) -> Vec<&'static str> {
+    [
+        ("_BitWriter", "BitWriter as _BitWriter"),
+        ("_BitReader", "BitReader as _BitReader"),
+        ("DecodeError", "DecodeError"),
+    ]
+    .into_iter()
+    .filter_map(|(symbol, import)| body.contains(symbol).then_some(import))
+    .collect()
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.
@@ -360,6 +490,9 @@ mod tests {
         assert!(code.contains("def encode(self)"));
         assert!(code.contains("@staticmethod"));
         assert!(code.contains("def decode(data: bytes)"));
+        assert!(code.contains(
+            "from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader"
+        ));
     }
 
     #[test]
@@ -391,6 +524,35 @@ mod tests {
         .unwrap();
         let generated = generate(&compiled).expect("function signature generates");
         assert!(generated.contains("def validate(self) -> bool:"));
+    }
+
+    #[test]
+    fn protocol_methods_have_explicit_abstract_bodies() {
+        let compiled = vexil_lang::compile(
+            "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
+        )
+        .compiled
+        .expect("schema compiles");
+        let generated = generate(&compiled).expect("function signature generates");
+
+        assert!(
+            generated
+                .contains("    def validate(self) -> bool:\n        raise NotImplementedError"),
+            "protocol method should not use a no-effect ellipsis statement:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn generated_modules_preserve_default_public_exports_explicitly() {
+        let compiled = vexil_lang::compile("namespace test.exports\nmessage Value { n @0 : u8 }")
+            .compiled
+            .expect("schema compiles");
+        let generated = generate(&compiled).expect("module generates");
+
+        assert!(
+            generated.ends_with("__all__ = [\"dataclass\", \"SCHEMA_HASH\", \"Value\"]\n"),
+            "generated module should explicitly preserve Python's default public exports:\n{generated}"
+        );
     }
 
     #[test]
@@ -451,6 +613,103 @@ mod tests {
         assert!(
             root.contains("def _vexil_assert_Event_implements_Tagged"),
             "{root}"
+        );
+    }
+
+    #[test]
+    fn conflicting_field_names_are_escaped_injectively() {
+        let compiled = vexil_lang::compile(
+            "namespace test.kw\nmessage Kw { from @0 : u32  from_ @1 : u8  self @2 : bool  unknown @3 : bytes }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        for escaped in ["_vexil_from", "_vexil_self", "_vexil_unknown"] {
+            assert!(
+                code.contains(&format!("    {escaped}: ")),
+                "missing escaped field declaration {escaped} in:\n{code}"
+            );
+        }
+        assert!(code.contains("    from_: int"), "{code}");
+        assert!(
+            code.contains("self._vexil_from") && code.contains("m._vexil_from ="),
+            "codecs must use the escaped keyword:\n{code}"
+        );
+        assert!(
+            code.contains("self.from_") && code.contains("m.from_ ="),
+            "ordinary trailing-underscore name must remain unchanged:\n{code}"
+        );
+        assert!(
+            code.contains("    unknown: bytes = b\"\"")
+                && code.contains("    _vexil_unknown: bytes"),
+            "authored unknown field and generated storage must stay distinct:\n{code}"
+        );
+    }
+
+    #[test]
+    fn union_decode_locals_cannot_collide_with_authored_fields() {
+        let compiled = vexil_lang::compile(
+            "namespace test.union_names\nunion Value { Named @0 { self @0 : u8  pr @1 : u16 } }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        assert!(
+            code.contains("def __init__(self, _vexil_self: int, pr: int)"),
+            "{code}"
+        );
+        assert!(
+            code.contains("_vexil_payload_reader = _BitReader(_vexil_payload)"),
+            "{code}"
+        );
+        assert!(
+            code.contains("return ValueNamed(_vexil_field_0, _vexil_field_1)"),
+            "{code}"
+        );
+        assert!(!code.contains("\n        pr = _BitReader"), "{code}");
+    }
+
+    #[test]
+    fn non_keyword_field_names_are_left_alone() {
+        let compiled =
+            vexil_lang::compile("namespace test.kw2\nmessage Ok { match @0 : u32  hash @1 : u8 }")
+                .compiled
+                .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        // `match` is a soft keyword and `hash` a builtin; both are valid identifiers.
+        assert!(code.contains("    match: "), "{code}");
+        assert!(code.contains("    hash: "), "{code}");
+        assert!(!code.contains("match_"), "{code}");
+    }
+
+    #[test]
+    fn nested_fixed_array_annotation_has_no_embedded_comment() {
+        let compiled =
+            vexil_lang::compile("namespace test.fa\nmessage N { a @0 : array<array<u8, 4>, 3> }")
+                .compiled
+                .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
+        // A `#` inside a type annotation comments out the rest of the line.
+        for line in code.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some(hash_at) = line.find('#') {
+                assert!(
+                    line[..hash_at].trim_end().ends_with(']')
+                        || !line[..hash_at].contains("tuple["),
+                    "type annotation contains an embedded comment: {line}"
+                );
+            }
+        }
+        assert!(
+            code.contains("tuple[tuple[int, ...], ...]"),
+            "nested fixed array should nest cleanly:\n{code}"
         );
     }
 }

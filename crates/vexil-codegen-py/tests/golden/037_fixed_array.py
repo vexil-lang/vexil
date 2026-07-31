@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x06, 0xd9, 0x95, 0xe1, 0xc7, 0x2a, 0xef, 0xec, 0x68, 0x94, 0xe9, 0x71, 0x21, 0x92, 0x96, 0x74, 0xb6, 0xaa, 0xb0, 0x66, 0x4b, 0x64, 0x27, 0x91, 0x85, 0x34, 0x22, 0x3e, 0xdc, 0xeb, 0x60, 0x31)
 
@@ -23,62 +22,73 @@ class Basic:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        for item in self.a:
-            w.write_u8(item)
-        for item in self.b:
-            w.write_u32(item)
-        for item in self.c:
-            w.write_f64(item)
-        for item in self.d:
-            w.write_string(item)
-        for item in self.e:
-            item.encode_to(w)
+    def encode_to(self, w: _BitWriter) -> None:
+        for _vexil_self_2e_a_fixed_item in self.a:
+            w.write_u8(_vexil_self_2e_a_fixed_item)
+        for _vexil_self_2e_b_fixed_item in self.b:
+            w.write_u32(_vexil_self_2e_b_fixed_item)
+        for _vexil_self_2e_c_fixed_item in self.c:
+            w.write_f64(_vexil_self_2e_c_fixed_item)
+        for _vexil_self_2e_d_fixed_item in self.d:
+            w.write_string(_vexil_self_2e_d_fixed_item)
+        for _vexil_self_2e_e_fixed_item in self.e:
+            try:
+                w.enter_nested()
+                _vexil_self_2e_e_fixed_item.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Basic:
         r = _BitReader(data)
-        return Basic.decode_from(r)
+        try:
+            r.enter_nested()
+            return Basic.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Basic:
         m = Basic.__new__(Basic)
-        _fixed_items_ma: list[int] = []
+        _vexil_m_2e_a_fixed_items: list[int] = []
         for _ in range(4):
-            _fixed_item_ma: int = None  # type: ignore[assignment]
-            _fixed_item_ma = r.read_u8()
-            _fixed_items_ma.append(_fixed_item_ma)
-        m.a = tuple(_fixed_items_ma)
-        _fixed_items_mb: list[int] = []
+            _vexil_m_2e_a_fixed_item = r.read_u8()
+            _vexil_m_2e_a_fixed_items.append(_vexil_m_2e_a_fixed_item)
+        m.a = tuple(_vexil_m_2e_a_fixed_items)
+        _vexil_m_2e_b_fixed_items: list[int] = []
         for _ in range(8):
-            _fixed_item_mb: int = None  # type: ignore[assignment]
-            _fixed_item_mb = r.read_u32()
-            _fixed_items_mb.append(_fixed_item_mb)
-        m.b = tuple(_fixed_items_mb)
-        _fixed_items_mc: list[float] = []
+            _vexil_m_2e_b_fixed_item = r.read_u32()
+            _vexil_m_2e_b_fixed_items.append(_vexil_m_2e_b_fixed_item)
+        m.b = tuple(_vexil_m_2e_b_fixed_items)
+        _vexil_m_2e_c_fixed_items: list[float] = []
         for _ in range(16):
-            _fixed_item_mc: float = None  # type: ignore[assignment]
-            _fixed_item_mc = r.read_f64()
-            _fixed_items_mc.append(_fixed_item_mc)
-        m.c = tuple(_fixed_items_mc)
-        _fixed_items_md: list[str] = []
+            _vexil_m_2e_c_fixed_item = r.read_f64()
+            _vexil_m_2e_c_fixed_items.append(_vexil_m_2e_c_fixed_item)
+        m.c = tuple(_vexil_m_2e_c_fixed_items)
+        _vexil_m_2e_d_fixed_items: list[str] = []
         for _ in range(3):
-            _fixed_item_md: str = None  # type: ignore[assignment]
-            _fixed_item_md = r.read_string()
-            _fixed_items_md.append(_fixed_item_md)
-        m.d = tuple(_fixed_items_md)
-        _fixed_items_me: list[Point] = []
+            _vexil_m_2e_d_fixed_item = r.read_string()
+            _vexil_m_2e_d_fixed_items.append(_vexil_m_2e_d_fixed_item)
+        m.d = tuple(_vexil_m_2e_d_fixed_items)
+        _vexil_m_2e_e_fixed_items: list[Point] = []
         for _ in range(5):
-            _fixed_item_me: Point = None  # type: ignore[assignment]
-            _fixed_item_me = Point.decode_from(r)
-            _fixed_items_me.append(_fixed_item_me)
-        m.e = tuple(_fixed_items_me)
+            try:
+                r.enter_nested()
+                _vexil_m_2e_e_fixed_item = Point.decode_from(r)
+            finally:
+                r.leave_nested()
+            _vexil_m_2e_e_fixed_items.append(_vexil_m_2e_e_fixed_item)
+        m.e = tuple(_vexil_m_2e_e_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -94,10 +104,14 @@ class Point:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_f32(self.x)
         w.write_f32(self.y)
         w.flush_to_byte_boundary()
@@ -105,12 +119,16 @@ class Point:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Point:
         r = _BitReader(data)
-        return Point.decode_from(r)
+        try:
+            r.enter_nested()
+            return Point.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Point:
         m = Point.__new__(Point)
         m.x = r.read_f32()
         m.y = r.read_f32()
@@ -128,36 +146,42 @@ class Nested:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        for item in self.a:
-            for item in item:
-                w.write_u8(item)
+    def encode_to(self, w: _BitWriter) -> None:
+        for _vexil_self_2e_a_fixed_item in self.a:
+            for _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_fixed_item in _vexil_self_2e_a_fixed_item:
+                w.write_u8(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_fixed_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Nested:
         r = _BitReader(data)
-        return Nested.decode_from(r)
+        try:
+            r.enter_nested()
+            return Nested.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Nested:
         m = Nested.__new__(Nested)
-        _fixed_items_ma: list[tuple[int, ...]] = []
+        _vexil_m_2e_a_fixed_items: list[tuple[int, ...]] = []
         for _ in range(3):
-            _fixed_item_ma: tuple[int, ...] = None  # type: ignore[assignment]
-            _fixed_items_fixeditemma: list[int] = []
+            _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_fixed_items: list[int] = []
             for _ in range(4):
-                _fixed_item_fixeditemma: int = None  # type: ignore[assignment]
-                _fixed_item_fixeditemma = r.read_u8()
-                _fixed_items_fixeditemma.append(_fixed_item_fixeditemma)
-            _fixed_item_ma = tuple(_fixed_items_fixeditemma)
-            _fixed_items_ma.append(_fixed_item_ma)
-        m.a = tuple(_fixed_items_ma)
+                _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_fixed_item = r.read_u8()
+                _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_fixed_items.append(_vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_fixed_item)
+            _vexil_m_2e_a_fixed_item = tuple(_vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_fixed_items)
+            _vexil_m_2e_a_fixed_items.append(_vexil_m_2e_a_fixed_item)
+        m.a = tuple(_vexil_m_2e_a_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -172,43 +196,48 @@ class WithOptional:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        for item in self.a:
-            w.write_bool(item is not None)
-            w.flush_to_byte_boundary()
-            if item is not None:
-                w.write_u32(item)
+    def encode_to(self, w: _BitWriter) -> None:
+        for _vexil_self_2e_a_fixed_item in self.a:
+            _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional = _vexil_self_2e_a_fixed_item
+            w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional is not None)
+            if _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional is not None:
+                w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithOptional:
         r = _BitReader(data)
-        return WithOptional.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithOptional.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithOptional:
         m = WithOptional.__new__(WithOptional)
-        _fixed_items_ma: list[int | None] = []
+        _vexil_m_2e_a_fixed_items: list[int | None] = []
         for _ in range(10):
-            _fixed_item_ma: int | None = None  # type: ignore[assignment]
             try:
-                present = r.read_bool()
+                _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present = r.read_bool()
             except DecodeError:
-                _fixed_item_ma = None
+                _vexil_m_2e_a_fixed_item = None
             else:
-                r.flush_to_byte_boundary()
-                if present:
-                    _fixed_item_ma: int = None  # type: ignore[assignment]
-                    _fixed_item_ma = r.read_u32()
+                if _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present:
+                    _vexil_m_2e_a_fixed_item = r.read_u32()
                 else:
-                    _fixed_item_ma = None
-            _fixed_items_ma.append(_fixed_item_ma)
-        m.a = tuple(_fixed_items_ma)
+                    _vexil_m_2e_a_fixed_item = None
+            _vexil_m_2e_a_fixed_items.append(_vexil_m_2e_a_fixed_item)
+        m.a = tuple(_vexil_m_2e_a_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -223,25 +252,40 @@ class WithUnion:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        _encoded_union = self.data.encode()
-        w.write_raw_bytes(_encoded_union, len(_encoded_union))
+    def encode_to(self, w: _BitWriter) -> None:
+        try:
+            w.enter_nested()
+            self.data.encode_to(w)
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithUnion:
         r = _BitReader(data)
-        return WithUnion.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithUnion.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithUnion:
         m = WithUnion.__new__(WithUnion)
-        m.data = decode_Data_from(r)
+        try:
+            r.enter_nested()
+            m.data = decode_Data_from(r)
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -252,77 +296,71 @@ class WithUnion:
 class Data:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class DataFixedInts(Data):
     def __init__(self, values: tuple[int, ...]):
         self.values = values
 
-    def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        for item in self.values:
-            pw.write_i32(item)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        for _vexil_self_2e_values_fixed_item in self.values:
+            _vexil_payload_writer.write_i32(_vexil_self_2e_values_fixed_item)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
 
 
 class DataFixedBytes(Data):
     def __init__(self, bytes: tuple[int, ...]):
         self.bytes = bytes
 
-    def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        for item in self.bytes:
-            pw.write_u8(item)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        for _vexil_self_2e_bytes_fixed_item in self.bytes:
+            _vexil_payload_writer.write_u8(_vexil_self_2e_bytes_fixed_item)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
 
 
-def decode_Data_from(r: _BitReader) -> Data:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        values: tuple[int, ...] = None  # type: ignore[assignment]
-        _fixed_items_values: list[int] = []
+def decode_Data_from(_vexil_reader: _BitReader) -> Data:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil__5f_vexil_5f_field_5f_0_fixed_items: list[int] = []
         for _ in range(4):
-            _fixed_item_values: int = None  # type: ignore[assignment]
-            _fixed_item_values = pr.read_i32()
-            _fixed_items_values.append(_fixed_item_values)
-        values = tuple(_fixed_items_values)
-        return DataFixedInts(values)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        bytes: tuple[int, ...] = None  # type: ignore[assignment]
-        _fixed_items_bytes: list[int] = []
+            _vexil__5f_vexil_5f_field_5f_0_fixed_item = _vexil_payload_reader.read_i32()
+            _vexil__5f_vexil_5f_field_5f_0_fixed_items.append(_vexil__5f_vexil_5f_field_5f_0_fixed_item)
+        _vexil_field_0 = tuple(_vexil__5f_vexil_5f_field_5f_0_fixed_items)
+        return DataFixedInts(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil__5f_vexil_5f_field_5f_0_fixed_items: list[int] = []
         for _ in range(32):
-            _fixed_item_bytes: int = None  # type: ignore[assignment]
-            _fixed_item_bytes = pr.read_u8()
-            _fixed_items_bytes.append(_fixed_item_bytes)
-        bytes = tuple(_fixed_items_bytes)
-        return DataFixedBytes(bytes)
+            _vexil__5f_vexil_5f_field_5f_0_fixed_item = _vexil_payload_reader.read_u8()
+            _vexil__5f_vexil_5f_field_5f_0_fixed_items.append(_vexil__5f_vexil_5f_field_5f_0_fixed_item)
+        _vexil_field_0 = tuple(_vexil__5f_vexil_5f_field_5f_0_fixed_items)
+        return DataFixedBytes(_vexil_field_0)
     else:
-        raise ValueError(f"unknown Data discriminant: {disc}")
+        raise ValueError(f"unknown Data discriminant: {_vexil_discriminant}")
 
 def decode_Data(data: bytes) -> Data:
-    r = _BitReader(data)
-    return decode_Data_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_Data_from(_vexil_reader)
 
 
 # ---------- EdgeCases ----------
@@ -335,48 +373,53 @@ class EdgeCases:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        for item in self.single:
-            w.write_u8(item)
-        for item in self.large:
-            w.write_u8(item)
-        for item in self.hex_sized:
-            w.write_u16(item)
+    def encode_to(self, w: _BitWriter) -> None:
+        for _vexil_self_2e_single_fixed_item in self.single:
+            w.write_u8(_vexil_self_2e_single_fixed_item)
+        for _vexil_self_2e_large_fixed_item in self.large:
+            w.write_u8(_vexil_self_2e_large_fixed_item)
+        for _vexil_self_2e_hex_5f_sized_fixed_item in self.hex_sized:
+            w.write_u16(_vexil_self_2e_hex_5f_sized_fixed_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> EdgeCases:
         r = _BitReader(data)
-        return EdgeCases.decode_from(r)
+        try:
+            r.enter_nested()
+            return EdgeCases.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> EdgeCases:
         m = EdgeCases.__new__(EdgeCases)
-        _fixed_items_msingle: list[int] = []
+        _vexil_m_2e_single_fixed_items: list[int] = []
         for _ in range(1):
-            _fixed_item_msingle: int = None  # type: ignore[assignment]
-            _fixed_item_msingle = r.read_u8()
-            _fixed_items_msingle.append(_fixed_item_msingle)
-        m.single = tuple(_fixed_items_msingle)
-        _fixed_items_mlarge: list[int] = []
+            _vexil_m_2e_single_fixed_item = r.read_u8()
+            _vexil_m_2e_single_fixed_items.append(_vexil_m_2e_single_fixed_item)
+        m.single = tuple(_vexil_m_2e_single_fixed_items)
+        _vexil_m_2e_large_fixed_items: list[int] = []
         for _ in range(1024):
-            _fixed_item_mlarge: int = None  # type: ignore[assignment]
-            _fixed_item_mlarge = r.read_u8()
-            _fixed_items_mlarge.append(_fixed_item_mlarge)
-        m.large = tuple(_fixed_items_mlarge)
-        _fixed_items_mhexsized: list[int] = []
+            _vexil_m_2e_large_fixed_item = r.read_u8()
+            _vexil_m_2e_large_fixed_items.append(_vexil_m_2e_large_fixed_item)
+        m.large = tuple(_vexil_m_2e_large_fixed_items)
+        _vexil_m_2e_hex_5f_sized_fixed_items: list[int] = []
         for _ in range(16):
-            _fixed_item_mhexsized: int = None  # type: ignore[assignment]
-            _fixed_item_mhexsized = r.read_u16()
-            _fixed_items_mhexsized.append(_fixed_item_mhexsized)
-        m.hex_sized = tuple(_fixed_items_mhexsized)
+            _vexil_m_2e_hex_5f_sized_fixed_item = r.read_u16()
+            _vexil_m_2e_hex_5f_sized_fixed_items.append(_vexil_m_2e_hex_5f_sized_fixed_item)
+        m.hex_sized = tuple(_vexil_m_2e_hex_5f_sized_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "Basic", "Point", "Nested", "WithOptional", "WithUnion", "Data", "DataFixedInts", "DataFixedBytes", "decode_Data_from", "decode_Data", "EdgeCases"]

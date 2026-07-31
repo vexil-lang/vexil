@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xb5, 0xa1, 0x57, 0x1c, 0xa4, 0x06, 0xbb, 0xc7, 0xaf, 0x52, 0x7f, 0x9d, 0xcd, 0x09, 0x62, 0x1e, 0x61, 0xbc, 0xa3, 0x89, 0x2e, 0xa7, 0xf3, 0x64, 0xba, 0x3c, 0x9b, 0x2f, 0x2e, 0xeb, 0x7f, 0xd7)
 SCHEMA_VERSION: str = "1.0.0"
@@ -21,10 +20,14 @@ class Alert:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.code)
         w.write_string(self.message)
         w.flush_to_byte_boundary()
@@ -32,12 +35,16 @@ class Alert:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Alert:
         r = _BitReader(data)
-        return Alert.decode_from(r)
+        try:
+            r.enter_nested()
+            return Alert.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Alert:
         m = Alert.__new__(Alert)
         m.code = r.read_u32()
         m.message = r.read_string()
@@ -55,26 +62,34 @@ class Heartbeat:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.seq)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Heartbeat:
         r = _BitReader(data)
-        return Heartbeat.decode_from(r)
+        try:
+            r.enter_nested()
+            return Heartbeat.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Heartbeat:
         m = Heartbeat.__new__(Heartbeat)
         m.seq = r.read_u64()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "SCHEMA_VERSION", "Alert", "Heartbeat"]

@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x15, 0x74, 0x87, 0x60, 0xbd, 0xa3, 0x4d, 0xc8, 0x66, 0x49, 0x67, 0x0d, 0xa0, 0x01, 0x75, 0x3c, 0xf5, 0xdb, 0x64, 0x23, 0xef, 0xa8, 0x97, 0x6a, 0xe4, 0x74, 0x5a, 0xb5, 0x85, 0xd7, 0x4d, 0x0b)
 
@@ -21,10 +20,14 @@ class SensorReading:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.temperature)
         w.write_i64(self.pressure)
         w.write_leb128(self.delta_temp)
@@ -33,12 +36,16 @@ class SensorReading:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SensorReading:
         r = _BitReader(data)
-        return SensorReading.decode_from(r)
+        try:
+            r.enter_nested()
+            return SensorReading.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SensorReading:
         m = SensorReading.__new__(SensorReading)
         m.temperature = r.read_i32()
         m.pressure = r.read_i64()
@@ -47,4 +54,4 @@ class SensorReading:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "SensorReading"]

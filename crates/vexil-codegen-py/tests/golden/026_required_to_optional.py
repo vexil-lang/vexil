@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0x26, 0x17, 0x33, 0xb3, 0x2d, 0x8b, 0x2f, 0xf3, 0x27, 0x2f, 0xf2, 0x60, 0xc8, 0xb1, 0xb2, 0x99, 0xa6, 0xea, 0x63, 0xeb, 0xcf, 0xd8, 0xee, 0x99, 0x90, 0xe8, 0x3c, 0xb6, 0x88, 0x83, 0x6b, 0xd3)
 
@@ -20,10 +19,14 @@ class SettingsV1:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.timeout)
         w.write_string(self.name)
         w.flush_to_byte_boundary()
@@ -31,12 +34,16 @@ class SettingsV1:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SettingsV1:
         r = _BitReader(data)
-        return SettingsV1.decode_from(r)
+        try:
+            r.enter_nested()
+            return SettingsV1.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SettingsV1:
         m = SettingsV1.__new__(SettingsV1)
         m.timeout = r.read_u32()
         m.name = r.read_string()
@@ -55,35 +62,41 @@ class SettingsV2:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        w.write_bool(self.timeout is not None)
-        w.flush_to_byte_boundary()
-        if self.timeout is not None:
-            w.write_u32(self.timeout)
+    def encode_to(self, w: _BitWriter) -> None:
+        _vexil_self_2e_timeout_optional = self.timeout
+        w.write_bool(_vexil_self_2e_timeout_optional is not None)
+        if _vexil_self_2e_timeout_optional is not None:
+            w.write_u32(_vexil_self_2e_timeout_optional)
         w.write_string(self.name)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SettingsV2:
         r = _BitReader(data)
-        return SettingsV2.decode_from(r)
+        try:
+            r.enter_nested()
+            return SettingsV2.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SettingsV2:
         m = SettingsV2.__new__(SettingsV2)
         try:
-            present = r.read_bool()
+            _vexil_m_2e_timeout_present = r.read_bool()
         except DecodeError:
             m.timeout = None
         else:
-            r.flush_to_byte_boundary()
-            if present:
-                m.timeout: int = None  # type: ignore[assignment]
+            if _vexil_m_2e_timeout_present:
                 m.timeout = r.read_u32()
             else:
                 m.timeout = None
@@ -92,4 +105,4 @@ class SettingsV2:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "SettingsV1", "SettingsV2"]

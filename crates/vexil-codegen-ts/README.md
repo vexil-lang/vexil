@@ -30,9 +30,11 @@ let files: Vec<(PathBuf, String)> = TypeScriptBackend.generate_project(&project)
 
 For each message: a TypeScript interface, an `encode*` function, and a `decode*` function. Enums become string literal union types. Flags become numeric constants with bitwise helpers. Unions become discriminated unions. For `@delta` messages: a stateful encoder/decoder class pair.
 
-Cross-file imports use relative paths. Namespace directories get `index.ts`
-files with named namespace exports, avoiding collisions between per-schema
-symbols such as `SCHEMA_HASH`.
+Cross-file imports use relative paths. Namespace directories get barrel
+`index.ts` files that expose each child as a namespace object named
+`<child>Schema` (for example, `typesSchema`). Namespaced exports keep each
+schema's `SCHEMA_HASH` and `SCHEMA_VERSION` distinct while retaining every
+generated export under the barrel.
 
 ## Wire compatibility
 

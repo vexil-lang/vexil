@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xea, 0xf3, 0xe6, 0x0a, 0x27, 0xa7, 0xed, 0x56, 0x7c, 0xf6, 0xd7, 0x08, 0x9b, 0x74, 0x29, 0xd4, 0xd2, 0xad, 0x95, 0x7a, 0xfb, 0xe7, 0x08, 0x80, 0x18, 0x01, 0x5e, 0x8d, 0x0d, 0x96, 0xf7, 0xd2)
 
@@ -19,22 +18,30 @@ class Escapes:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.a)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Escapes:
         r = _BitReader(data)
-        return Escapes.decode_from(r)
+        try:
+            r.enter_nested()
+            return Escapes.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Escapes:
         m = Escapes.__new__(Escapes)
         m.a = r.read_string()
         r.flush_to_byte_boundary()
@@ -51,26 +58,34 @@ class EmptyDoc:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.b)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> EmptyDoc:
         r = _BitReader(data)
-        return EmptyDoc.decode_from(r)
+        try:
+            r.enter_nested()
+            return EmptyDoc.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> EmptyDoc:
         m = EmptyDoc.__new__(EmptyDoc)
         m.b = r.read_u8()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "Escapes", "EmptyDoc"]

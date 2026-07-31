@@ -9,14 +9,17 @@ fn golden_test(corpus_name: &str) {
         .parent()
         .unwrap()
         .join("corpus/valid");
-    let golden_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
-
     let source_path = corpus_dir.join(format!("{corpus_name}.vexil"));
-    let golden_path = golden_dir.join(format!("{corpus_name}.py"));
-
     let source = fs::read_to_string(&source_path)
         .unwrap_or_else(|e| panic!("cannot read {}: {e}", source_path.display()));
-    let result = vexil_lang::compile(&source);
+    golden_source_test(corpus_name, &source);
+}
+
+fn golden_source_test(test_name: &str, source: &str) {
+    let golden_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    let golden_path = golden_dir.join(format!("{test_name}.py"));
+
+    let result = vexil_lang::compile(source);
     assert!(
         !result
             .diagnostics
@@ -46,7 +49,7 @@ fn golden_test(corpus_name: &str) {
 
     if generated != expected {
         let diff = simple_diff(&expected, &generated);
-        panic!("Golden file mismatch for {corpus_name}:\n{diff}");
+        panic!("Golden file mismatch for {test_name}:\n{diff}");
     }
 }
 
@@ -111,6 +114,57 @@ fn test_027_delta_on_message() {
 #[test]
 fn test_028_typed_tombstone() {
     golden_test("028_typed_tombstone");
+}
+
+#[test]
+fn typed_tombstone_shapes() {
+    golden_source_test(
+        "typed_tombstone_shapes",
+        r#"namespace test.typed.tombstone.shapes
+
+message LegacyShapes {
+    @removed(0, reason: "bytes payload removed") : bytes
+    @removed(1, reason: "set payload removed") : set<u16>
+    @removed(2, reason: "fixed array payload removed") : array<u8, 3>
+    @removed(3, reason: "geometric payload removed") : vec3<f32>
+    @removed(4, reason: "inline bits payload removed") : bits { read, write, execute }
+    current @5 : u32
+}
+"#,
+    );
+}
+
+#[test]
+fn reader_helpers_are_declared_once_per_type() {
+    let source = r#"namespace test.reader.helpers
+
+enum Status {
+    Ok @0
+}
+
+flags Mode {
+    Read @0
+}
+
+newtype Identifier : u64
+"#;
+    let result = vexil_lang::compile(source);
+    assert!(
+        !result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Error),
+        "compilation errors: {:?}",
+        result.diagnostics
+    );
+    let compiled = result.compiled.expect("no compiled schema");
+    let generated = vexil_codegen_py::generate(&compiled).expect("codegen failed");
+
+    assert_eq!(
+        generated.matches("    def decode_from(").count(),
+        3,
+        "each generated enum, flags, and newtype must declare one reader helper:\n{generated}"
+    );
 }
 
 #[test]
@@ -309,5 +363,29 @@ fn trait_field_tags_do_not_change_generated_output() {
     assert_eq!(
         vexil_codegen_py::generate(&first).expect("first output"),
         vexil_codegen_py::generate(&retagged).expect("retagged output")
+    );
+}
+
+#[test]
+fn trait_only_non_generic() {
+    golden_source_test(
+        "trait_only_non_generic",
+        "namespace test.trait_only\ntrait Named {\n    name @0 : string\n}",
+    );
+}
+
+#[test]
+fn identifier_conflicts() {
+    golden_source_test(
+        "identifier_conflicts",
+        "namespace test.identifier_conflicts\nconfig Settings {\n    self : u8 = 0\n    unknown : u8 = 0\n    from : u8 = 0\n}\ntrait Fields {\n    self @0 : u8\n    unknown @1 : u8\n}\nmessage Collision {\n    from @0 : u8\n    from_ @1 : u8\n    self @2 : u8\n    unknown @3 : bytes\n}\nunion Choice {\n    Named @0 { self @0 : u8  pr @1 : u16 }\n}",
+    );
+}
+
+#[test]
+fn generic_trait_type_param_conflicts() {
+    golden_source_test(
+        "generic_trait_type_param_conflicts",
+        "namespace test.generic_trait_conflicts\ntrait Wrapper<Protocol> {\n    value @0 : Protocol\n}",
     );
 }

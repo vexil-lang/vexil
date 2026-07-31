@@ -3,10 +3,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x23, 0x9b, 0xc3, 0x16, 0x2d, 0xc1, 0xc8, 0x3d, 0x4a, 0x09, 0x6b, 0xb2, 0x03, 0xf1, 0xb3, 0x14, 0x3a, 0x4a, 0xbc, 0x27, 0xbb, 0xe4, 0x88, 0xee, 0x2b, 0x99, 0xf8, 0x68, 0x1f, 0x9b, 0x6e, 0x06)
 
@@ -20,10 +19,14 @@ class Config:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.name)
         w.write_u64(self.timeout_ms)
         w.flush_to_byte_boundary()
@@ -31,12 +34,16 @@ class Config:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Config:
         r = _BitReader(data)
-        return Config.decode_from(r)
+        try:
+            r.enter_nested()
+            return Config.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Config:
         m = Config.__new__(Config)
         m.name = r.read_string()
         # discard @removed ordinal 1
@@ -46,4 +53,4 @@ class Config:
         m.unknown = b""
         return m
 
-
+__all__ = ["dataclass", "SCHEMA_HASH", "Config"]

@@ -161,7 +161,7 @@ pub fn emit_impl_assertion(w: &mut CodeWriter, impl_def: &ImplDef, registry: &Ty
     };
     let target = crate::types::ts_type(&impl_def.target_type, registry);
     w.line(&format!(
-        "type _{target}Implements{} = _VexilAssertAssignable<{target}, {trait_ref}>;",
-        trait_name
+        "export type _{target}Implements{} = _VexilAssertAssignable<{target}, {trait_ref}>;",
+        trait_name.replace('.', "_")
     ));
 }

@@ -2,11 +2,9 @@
 # Source: test.enums
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x8a, 0xc5, 0x25, 0xce, 0x0a, 0xec, 0xba, 0x7a, 0xf1, 0x28, 0xaf, 0x30, 0xbc, 0x21, 0x43, 0xe0, 0xfa, 0x59, 0x1b, 0x4a, 0x62, 0xf6, 0xd7, 0x19, 0x90, 0x74, 0xe9, 0xca, 0x84, 0x9e, 0x34, 0x68)
 
@@ -23,18 +21,18 @@ class Direction(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Direction:
         r = _BitReader(data)
-        v = r.read_bits(2)
-        return Direction(v)
+        return Direction.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return Direction(r.read_bits(2))
+    def decode_from(r: _BitReader) -> Direction:
+        v = r.read_bits(2)
+        return Direction(v)
 
     def __repr__(self) -> str:
         return f"Direction({int(self)})"
@@ -52,18 +50,18 @@ class ClientKind(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 8)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> ClientKind:
         r = _BitReader(data)
-        v = r.read_bits(8)
-        return ClientKind(v)
+        return ClientKind.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return ClientKind(r.read_bits(8))
+    def decode_from(r: _BitReader) -> ClientKind:
+        v = r.read_bits(8)
+        return ClientKind(v)
 
     def __repr__(self) -> str:
         return f"ClientKind({int(self)})"
@@ -80,18 +78,18 @@ class HardwareStatus(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 16)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> HardwareStatus:
         r = _BitReader(data)
-        v = r.read_bits(16)
-        return HardwareStatus(v)
+        return HardwareStatus.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return HardwareStatus(r.read_bits(16))
+    def decode_from(r: _BitReader) -> HardwareStatus:
+        v = r.read_bits(16)
+        return HardwareStatus(v)
 
     def __repr__(self) -> str:
         return f"HardwareStatus({int(self)})"
@@ -107,18 +105,18 @@ class Sparse(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 32)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Sparse:
         r = _BitReader(data)
-        v = r.read_bits(32)
-        return Sparse(v)
+        return Sparse.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return Sparse(r.read_bits(32))
+    def decode_from(r: _BitReader) -> Sparse:
+        v = r.read_bits(32)
+        return Sparse(v)
 
     def __repr__(self) -> str:
         return f"Sparse({int(self)})"
@@ -134,19 +132,20 @@ class Lifecycle(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Lifecycle:
         r = _BitReader(data)
-        v = r.read_bits(2)
-        return Lifecycle(v)
+        return Lifecycle.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
-        return Lifecycle(r.read_bits(2))
+    def decode_from(r: _BitReader) -> Lifecycle:
+        v = r.read_bits(2)
+        return Lifecycle(v)
 
     def __repr__(self) -> str:
         return f"Lifecycle({int(self)})"
 
+__all__ = ["SCHEMA_HASH", "Direction", "ClientKind", "HardwareStatus", "Sparse", "Lifecycle"]

@@ -1,13 +1,17 @@
 {
-  "name": "vexil-generated-code-checks",
+  "name": "@vexil-lang/generated-code-checks",
   "private": true,
+  "version": "0.0.0",
   "scripts": {
-    "check": "npm --prefix ../../packages/runtime-ts run build && npm run check:typescript && npm run check:python",
-    "check:python": "node check-python.mjs",
-    "check:typescript": "node check-typescript.mjs",
+    "check": "npm --prefix ../../packages/runtime-ts run build && npm run check:typescript:contracts && npm run check:python:contracts && npm run check:typescript && npm run check:python",
+    "check:python": "pyright -p pyrightconfig.json",
+    "check:python:contracts": "node check-python.mjs",
+    "check:typescript": "tsc -p tsconfig.json",
+    "check:typescript:contracts": "node check-typescript.mjs",
     "check:wire": "node check-generated-wire.mjs"
   },
   "devDependencies": {
-    "pyright": "1.1.411"
+    "pyright": "1.1.411",
+    "typescript": "5.9.3"
   }
 }

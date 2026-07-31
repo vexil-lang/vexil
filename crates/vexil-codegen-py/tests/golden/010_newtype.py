@@ -2,11 +2,9 @@
 # Source: test.newtypes
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Optional
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import _BitWriter, _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xc1, 0x54, 0xec, 0x4c, 0xc3, 0xc5, 0xab, 0x25, 0x76, 0xbb, 0x9e, 0x8b, 0x17, 0xea, 0x74, 0xd1, 0x1f, 0x81, 0x5e, 0x44, 0x18, 0x08, 0x3e, 0x3e, 0xa7, 0xe9, 0x7a, 0xc5, 0xdc, 0x0d, 0xbc, 0x17)
 
@@ -14,7 +12,7 @@ SCHEMA_HASH: tuple[int, ...] = (0xc1, 0x54, 0xec, 0x4c, 0xc3, 0xc5, 0xab, 0x25, 
 # ---------- SessionId ----------
 class SessionId:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -22,33 +20,30 @@ class SessionId:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.value)
 
     @staticmethod
     def decode(data: bytes) -> SessionId:
         r = _BitReader(data)
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_u64()
-        return SessionId(inner)
+        return SessionId.decode_from(r)
 
     @staticmethod
     def decode_from(r: _BitReader) -> SessionId:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return SessionId(inner)
 
     def __repr__(self) -> str:
         return f"SessionId({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, SessionId) and self.value == other.value
 
 
 # ---------- PaneId ----------
 class PaneId:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -56,33 +51,30 @@ class PaneId:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.value)
 
     @staticmethod
     def decode(data: bytes) -> PaneId:
         r = _BitReader(data)
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_u64()
-        return PaneId(inner)
+        return PaneId.decode_from(r)
 
     @staticmethod
     def decode_from(r: _BitReader) -> PaneId:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return PaneId(inner)
 
     def __repr__(self) -> str:
         return f"PaneId({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, PaneId) and self.value == other.value
 
 
 # ---------- ExitCode ----------
 class ExitCode:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -90,33 +82,30 @@ class ExitCode:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.value)
 
     @staticmethod
     def decode(data: bytes) -> ExitCode:
         r = _BitReader(data)
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_i32()
-        return ExitCode(inner)
+        return ExitCode.decode_from(r)
 
     @staticmethod
     def decode_from(r: _BitReader) -> ExitCode:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_i32()
         return ExitCode(inner)
 
     def __repr__(self) -> str:
         return f"ExitCode({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, ExitCode) and self.value == other.value
 
 
 # ---------- Name ----------
 class Name:
 
-    def __init__(self, value):
+    def __init__(self, value: str) -> None:
         self.value: str = value
 
     def encode(self) -> bytes:
@@ -124,33 +113,30 @@ class Name:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Name:
         r = _BitReader(data)
-        inner: str = None  # type: ignore[assignment]
-        inner = r.read_string()
-        return Name(inner)
+        return Name.decode_from(r)
 
     @staticmethod
     def decode_from(r: _BitReader) -> Name:
-        inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Name(inner)
 
     def __repr__(self) -> str:
         return f"Name({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Name) and self.value == other.value
 
 
 # ---------- Payload ----------
 class Payload:
 
-    def __init__(self, value):
+    def __init__(self, value: bytes) -> None:
         self.value: bytes = value
 
     def encode(self) -> bytes:
@@ -158,33 +144,31 @@ class Payload:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bytes(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Payload:
         r = _BitReader(data)
-        inner: bytes = None  # type: ignore[assignment]
-        inner = r.read_bytes(r.read_leb128())
-        return Payload(inner)
+        return Payload.decode_from(r)
 
     @staticmethod
     def decode_from(r: _BitReader) -> Payload:
-        inner: bytes = None  # type: ignore[assignment]
-        inner = r.read_bytes(r.read_leb128())
+        _vexil_inner_length = r.read_leb128()
+        inner = r.read_bytes(_vexil_inner_length)
         return Payload(inner)
 
     def __repr__(self) -> str:
         return f"Payload({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Payload) and self.value == other.value
 
 
 # ---------- Color ----------
 class Color:
 
-    def __init__(self, value):
+    def __init__(self, value: tuple[int, int, int]) -> None:
         self.value: tuple[int, int, int] = value
 
     def encode(self) -> bytes:
@@ -192,7 +176,7 @@ class Color:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.value[0])
         w.write_u8(self.value[1])
         w.write_u8(self.value[2])
@@ -200,25 +184,20 @@ class Color:
     @staticmethod
     def decode(data: bytes) -> Color:
         r = _BitReader(data)
-        inner: tuple[int, int, int] = None  # type: ignore[assignment]
-        r = r.read_u8()
-        g = r.read_u8()
-        b = r.read_u8()
-        inner = (r, g, b)
-        return Color(inner)
+        return Color.decode_from(r)
 
     @staticmethod
     def decode_from(r: _BitReader) -> Color:
-        inner: tuple[int, int, int] = None  # type: ignore[assignment]
-        r = r.read_u8()
-        g = r.read_u8()
-        b = r.read_u8()
-        inner = (r, g, b)
+        _vexil_inner_red = r.read_u8()
+        _vexil_inner_green = r.read_u8()
+        _vexil_inner_blue = r.read_u8()
+        inner = (_vexil_inner_red, _vexil_inner_green, _vexil_inner_blue)
         return Color(inner)
 
     def __repr__(self) -> str:
         return f"Color({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Color) and self.value == other.value
 
+__all__ = ["SCHEMA_HASH", "SessionId", "PaneId", "ExitCode", "Name", "Payload", "Color"]
