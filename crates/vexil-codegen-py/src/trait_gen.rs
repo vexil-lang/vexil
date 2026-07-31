@@ -2,6 +2,7 @@ use vexil_lang::ast::{PrimitiveType, TypeExpr};
 use vexil_lang::ir::{CompiledSchema, ImplDef, ResolvedType, TraitDef, TypeId, TypeRegistry};
 
 use crate::emit::CodeWriter;
+use crate::types::py_type_param_ident;
 
 pub fn emit_trait(
     w: &mut CodeWriter,
@@ -11,6 +12,10 @@ pub fn emit_trait(
 ) -> Result<(), crate::CodegenError> {
     let registry = &compiled.registry;
     let params = &trait_def.type_params;
+    let type_param_names: std::collections::BTreeSet<&str> = params
+        .iter()
+        .map(|param| param.name.node.as_str())
+        .collect();
     let generic = if params.is_empty() {
         String::new()
     } else {
@@ -18,7 +23,7 @@ pub fn emit_trait(
             "[{}]",
             params
                 .iter()
-                .map(|p| p.name.node.as_str())
+                .map(|param| py_type_param_ident(param.name.node.as_str()))
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -33,7 +38,7 @@ pub fn emit_trait(
     }
     w.indent();
     for field in &trait_def.fields {
-        let ty = project_type(&field.unresolved_ty, registry);
+        let ty = project_type(&field.unresolved_ty, registry, &type_param_names);
         w.line(&format!(
             "{}: {ty}",
             crate::types::py_ident(field.name.as_str())
@@ -93,40 +98,64 @@ pub fn emit_impl_proof(w: &mut CodeWriter, impl_def: &ImplDef, registry: &TypeRe
     w.dedent();
 }
 
-fn project_type(expr: &TypeExpr, registry: &TypeRegistry) -> String {
+fn project_type(
+    expr: &TypeExpr,
+    registry: &TypeRegistry,
+    type_params: &std::collections::BTreeSet<&str>,
+) -> String {
     match expr {
         TypeExpr::Primitive(p) => crate::types::py_type(&ResolvedType::Primitive(*p), registry),
         TypeExpr::SubByte(s) => crate::types::py_type(&ResolvedType::SubByte(*s), registry),
         TypeExpr::Semantic(s) => crate::types::py_type(&ResolvedType::Semantic(*s), registry),
+        TypeExpr::Named(name) if type_params.contains(name.as_str()) => {
+            py_type_param_ident(name.as_str())
+        }
         TypeExpr::Named(name) => name.to_string(),
         TypeExpr::Qualified(namespace, name) => format!("{namespace}.{name}"),
         TypeExpr::Generic(name, arg) => {
-            format!("{}[{}]", name, project_type(&arg.node, registry))
+            format!(
+                "{}[{}]",
+                name,
+                project_type(&arg.node, registry, type_params)
+            )
         }
         TypeExpr::Optional(inner) => {
-            format!("{} | None", project_type(&inner.node, registry))
+            format!(
+                "{} | None",
+                project_type(&inner.node, registry, type_params)
+            )
         }
-        TypeExpr::Array(inner) => format!("list[{}]", project_type(&inner.node, registry)),
+        TypeExpr::Array(inner) => {
+            format!("list[{}]", project_type(&inner.node, registry, type_params))
+        }
         TypeExpr::FixedArray(inner, _) => {
-            format!("tuple[{}, ...]", project_type(&inner.node, registry))
+            format!(
+                "tuple[{}, ...]",
+                project_type(&inner.node, registry, type_params)
+            )
         }
-        TypeExpr::Set(inner) => format!("set[{}]", project_type(&inner.node, registry)),
+        TypeExpr::Set(inner) => {
+            format!("set[{}]", project_type(&inner.node, registry, type_params))
+        }
         TypeExpr::Map(key, value) => format!(
             "dict[{}, {}]",
-            project_type(&key.node, registry),
-            project_type(&value.node, registry)
+            project_type(&key.node, registry, type_params),
+            project_type(&value.node, registry, type_params)
         ),
         TypeExpr::Result(ok, err) => format!(
             "tuple[bool, {} | {}]",
-            project_type(&ok.node, registry),
-            project_type(&err.node, registry)
+            project_type(&ok.node, registry, type_params),
+            project_type(&err.node, registry, type_params)
         ),
         TypeExpr::Vec2(inner)
         | TypeExpr::Vec3(inner)
         | TypeExpr::Vec4(inner)
         | TypeExpr::Quat(inner)
         | TypeExpr::Mat3(inner)
-        | TypeExpr::Mat4(inner) => format!("tuple[{}, ...]", project_type(&inner.node, registry)),
+        | TypeExpr::Mat4(inner) => format!(
+            "tuple[{}, ...]",
+            project_type(&inner.node, registry, type_params)
+        ),
         TypeExpr::BitsInline(_) => "int".to_string(),
     }
 }

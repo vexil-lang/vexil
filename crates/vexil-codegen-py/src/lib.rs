@@ -147,7 +147,8 @@ pub(crate) fn generate_with_imports(
 
     if !trait_type_params.is_empty() {
         for param in trait_type_params {
-            w.line(&format!("{param} = TypeVar(\"{param}\")"));
+            let ident = types::py_type_param_ident(&param);
+            w.line(&format!("{ident} = TypeVar(\"{param}\")"));
         }
     }
 

@@ -330,3 +330,11 @@ fn identifier_conflicts() {
         "namespace test.identifier_conflicts\nconfig Settings {\n    self : u8 = 0\n    unknown : u8 = 0\n    from : u8 = 0\n}\ntrait Fields {\n    self @0 : u8\n    unknown @1 : u8\n}\nmessage Collision {\n    from @0 : u8\n    from_ @1 : u8\n    self @2 : u8\n    unknown @3 : bytes\n}\nunion Choice {\n    Named @0 { self @0 : u8  pr @1 : u16 }\n}",
     );
 }
+
+#[test]
+fn generic_trait_type_param_conflicts() {
+    golden_source_test(
+        "generic_trait_type_param_conflicts",
+        "namespace test.generic_trait_conflicts\ntrait Wrapper<Protocol> {\n    value @0 : Protocol\n}",
+    );
+}

@@ -27,6 +27,15 @@ pub fn py_ident(name: &str) -> String {
     }
 }
 
+/// Render a Vexil generic parameter in a generator-owned Python namespace.
+///
+/// Type parameters are module-level `TypeVar` bindings. Prefixing every one
+/// prevents collisions with imported typing helpers, generated declarations,
+/// and other authored upper-case names.
+pub fn py_type_param_ident(name: &str) -> String {
+    format!("_VexilTypeParam_{name}")
+}
+
 /// Convert a ResolvedType to its Python type annotation string.
 pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
     match ty {
