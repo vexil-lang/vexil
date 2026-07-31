@@ -279,8 +279,8 @@ fn valid_048_generic_trait_nested() {
 }
 
 #[test]
-fn valid_047_trait_function_codegen_deferred() {
-    parse_valid("047_trait_function_codegen_deferred.vexil");
+fn valid_047_trait_function_signature() {
+    parse_valid("047_trait_function_signature.vexil");
 }
 
 #[test]

@@ -132,8 +132,8 @@ fn test_048_generic_trait_nested() {
 }
 
 #[test]
-fn test_047_trait_function_codegen_deferred() {
-    golden_test("047_trait_function_codegen_deferred");
+fn test_047_trait_function_signature() {
+    golden_test("047_trait_function_signature");
 }
 
 #[test]

@@ -38,7 +38,7 @@ fn valid_corpus_compiles() {
         "027_delta_on_message.vexil",
         "028_typed_tombstone.vexil",
         "046_field_doc_placement.vexil",
-        "047_trait_function_codegen_deferred.vexil",
+        "047_trait_function_signature.vexil",
         "048_generic_trait_nested.vexil",
     ];
     for file in &valid_files {

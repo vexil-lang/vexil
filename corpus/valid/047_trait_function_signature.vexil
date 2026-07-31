@@ -1,4 +1,4 @@
-namespace test.trait_function_codegen_deferred
+namespace test.trait_function_signature
 
 trait Validatable {
     fn validate() -> bool

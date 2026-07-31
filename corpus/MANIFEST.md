@@ -56,7 +56,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
 | 045_generic_trait.vexil | §4.9 | Generic trait impl with type arguments (`impl Tagged<u64>`) |
 | 046_field_doc_placement.vexil | §5.2, §13.2 | Line-leading and inline trailing field `@doc` ownership |
-| 047_trait_function_codegen_deferred.vexil | §4.9 | Function-bearing trait signature accepted and projected by all reference generators |
+| 047_trait_function_signature.vexil | §4.9 | Function-bearing trait signature accepted and projected by all reference generators |
 | 048_generic_trait_nested.vexil | §4.9 | Generic trait with a nested `array<T>` field and concrete implementation |
 | 049_trait_function_portable_body.vexil | §4.9–4.10 | Generic trait functions with immutable local, arithmetic, receiver mutation, and value/void returns |
 
