@@ -65,7 +65,7 @@ jobs:
           else
             echo "py_codegen=false" >> "$GITHUB_OUTPUT"
           fi
-          if grep -Eq '^(crates/vexil-codegen-(py|ts)/|crates/vexil-lang/|packages/runtime-(py|ts)/|corpus/valid/|tools/generated-code-checks/|\.github/workflows/ci\.yml)' <<< "$changed"; then
+          if grep -Eq '^(crates/vexil-codegen-(py|ts)/|crates/vexil-lang/|packages/runtime-(py|ts)/|corpus/(valid|projects)/|tools/generated-code-checks/|\.github/workflows/ci\.yml)' <<< "$changed"; then
             echo "generated_static=true" >> "$GITHUB_OUTPUT"
           else
             echo "generated_static=false" >> "$GITHUB_OUTPUT"
@@ -290,7 +290,7 @@ jobs:
 
   # ── Generated Python validation ─────────────────────────────────────────────
   # Rust golden tests prove text stability; this gate also asks Python to parse
-  # every golden and runs a stateful delta round trip against the real runtime.
+  # every golden and runs focused generated-code probes against the real runtime.
   generated-python:
     name: Generated Python
     needs: changes
@@ -317,6 +317,9 @@ jobs:
       - name: Exercise generated Python runtime probes
         run: |
           python crates/vexil-codegen-py/tests/delta_runtime_probe.py
+          python crates/vexil-codegen-py/tests/optional_runtime_probe.py
+          python crates/vexil-codegen-py/tests/recursion_runtime_probe.py
+          python crates/vexil-codegen-py/tests/tombstone_runtime_probe.py
           python crates/vexil-codegen-py/tests/trait_runtime_probe.py
 
   # Native static checkers validate generated target code against the checked-in
@@ -340,12 +343,14 @@ jobs:
           cache: npm
           cache-dependency-path: tools/generated-code-checks/package-lock.json
 
-      - name: Generate and compare target goldens
-        run: cargo test -p vexil-codegen-py -p vexil-codegen-ts
-
       - name: Install pinned static checkers
         working-directory: tools/generated-code-checks
         run: npm ci --ignore-scripts
+
+      - name: Generate and compare target goldens
+        env:
+          VEXIL_TSC: ${{ github.workspace }}/tools/generated-code-checks/node_modules/.bin/tsc
+        run: cargo test -p vexil-codegen-py -p vexil-codegen-ts
 
       - name: Check generated Python with strict Pyright
         working-directory: tools/generated-code-checks
