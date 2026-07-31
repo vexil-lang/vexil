@@ -584,9 +584,6 @@ fn emit_read_type(
     }
 }
 
-/// Emit a typed local container initializer or an unannotated attribute
-/// assignment. Python only permits annotations on simple names, and message
-/// fields already carry their dataclass type annotations.
 // ---------------------------------------------------------------------------
 // emit_tombstone_read - read and discard (for backwards compatibility)
 // ---------------------------------------------------------------------------
