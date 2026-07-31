@@ -163,22 +163,22 @@ export function decodeExprKind(r: BitReader): ExprKind {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const value = pr.readI64();
+      const _vexilField0 = pr.readI64();
       pr.flushToByteBoundary();
-      return { tag: 'Literal' as const, value };
+      return { tag: 'Literal' as const, value: _vexilField0 };
     }
     case 1: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
       pr.enterNested();
-      const left = decodeExpr(pr);
+      const _vexilField0 = decodeExpr(pr);
       pr.leaveNested();
-      const op = pr.readU8();
+      const _vexilField1 = pr.readU8();
       pr.enterNested();
-      const right = decodeExpr(pr);
+      const _vexilField2 = decodeExpr(pr);
       pr.leaveNested();
       pr.flushToByteBoundary();
-      return { tag: 'Binary' as const, left, op, right };
+      return { tag: 'Binary' as const, left: _vexilField0, op: _vexilField1, right: _vexilField2 };
     }
     default: {
       throw new Error(`Unknown ExprKind discriminant: ${disc}`);

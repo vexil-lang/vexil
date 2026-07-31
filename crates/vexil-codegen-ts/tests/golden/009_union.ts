@@ -62,17 +62,17 @@ export function decodeShape(r: BitReader): Shape {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const radius = pr.readF32();
+      const _vexilField0 = pr.readF32();
       pr.flushToByteBoundary();
-      return { tag: 'Circle' as const, radius };
+      return { tag: 'Circle' as const, radius: _vexilField0 };
     }
     case 1: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const width = pr.readF32();
-      const height = pr.readF32();
+      const _vexilField0 = pr.readF32();
+      const _vexilField1 = pr.readF32();
       pr.flushToByteBoundary();
-      return { tag: 'Rectangle' as const, width, height };
+      return { tag: 'Rectangle' as const, width: _vexilField0, height: _vexilField1 };
     }
     case 2: {
       r.readRawBytes(len);
@@ -156,18 +156,18 @@ export function decodeColor(r: BitReader): Color {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const code = pr.readU8();
+      const _vexilField0 = pr.readU8();
       pr.flushToByteBoundary();
-      return { tag: 'Ansi' as const, code };
+      return { tag: 'Ansi' as const, code: _vexilField0 };
     }
     case 1: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const r = pr.readU8();
-      const g = pr.readU8();
-      const b = pr.readU8();
+      const _vexilField0 = pr.readU8();
+      const _vexilField1 = pr.readU8();
+      const _vexilField2 = pr.readU8();
       pr.flushToByteBoundary();
-      return { tag: 'Rgb' as const, r, g, b };
+      return { tag: 'Rgb' as const, r: _vexilField0, g: _vexilField1, b: _vexilField2 };
     }
     case 2: {
       r.readRawBytes(len);
@@ -229,17 +229,17 @@ export function decodeEvent(r: BitReader): Event {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const x = pr.readU16();
-      const y = pr.readU16();
+      const _vexilField0 = pr.readU16();
+      const _vexilField1 = pr.readU16();
       pr.flushToByteBoundary();
-      return { tag: 'Click' as const, x, y };
+      return { tag: 'Click' as const, x: _vexilField0, y: _vexilField1 };
     }
     case 2: {
       const payloadBytes = r.readRawBytes(len);
       const pr = new BitReader(payloadBytes);
-      const delta = pr.readI16();
+      const _vexilField0 = pr.readI16();
       pr.flushToByteBoundary();
-      return { tag: 'Scroll' as const, delta };
+      return { tag: 'Scroll' as const, delta: _vexilField0 };
     }
     default: {
       throw new Error(`Unknown Event discriminant: ${disc}`);
