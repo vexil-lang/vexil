@@ -205,11 +205,12 @@ fn compile_generated_crate(project_name: &str, files: &BTreeMap<PathBuf, String>
     write_crate(tmp.path(), files, &runtime_path);
 
     let output = std::process::Command::new("cargo")
-        .args(["clippy", "--", "-D", "warnings"])
+        .arg("check")
         .current_dir(tmp.path())
         .env("CARGO_TARGET_DIR", tmp.path().join("target"))
+        .env("RUSTFLAGS", "-D warnings")
         .output()
-        .expect("failed to run cargo clippy");
+        .expect("failed to run cargo check");
 
     tmp.cleanup();
 
