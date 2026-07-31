@@ -41,6 +41,9 @@ class UserId:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, UserId) and self.value == other.value
 
+    def __hash__(self) -> int:
+        return hash(self.value)
+
 
 # ---------- Label ----------
 class Label:
@@ -71,6 +74,9 @@ class Label:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Label) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
 
 # ---------- UserProfile ----------

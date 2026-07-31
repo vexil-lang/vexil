@@ -39,6 +39,9 @@ class SessionId:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, SessionId) and self.value == other.value
 
+    def __hash__(self) -> int:
+        return hash(self.value)
+
 
 # ---------- PaneId ----------
 class PaneId:
@@ -69,6 +72,9 @@ class PaneId:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, PaneId) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
 
 # ---------- ExitCode ----------
@@ -101,6 +107,9 @@ class ExitCode:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, ExitCode) and self.value == other.value
 
+    def __hash__(self) -> int:
+        return hash(self.value)
+
 
 # ---------- Name ----------
 class Name:
@@ -131,6 +140,9 @@ class Name:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Name) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
 
 # ---------- Payload ----------
@@ -163,6 +175,9 @@ class Payload:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Payload) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
 
 # ---------- Color ----------
@@ -199,5 +214,8 @@ class Color:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Color) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
 __all__ = ["SCHEMA_HASH", "SessionId", "PaneId", "ExitCode", "Name", "Payload", "Color"]
