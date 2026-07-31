@@ -11,9 +11,9 @@
     "name": "fixed32_one",
     "schema": "namespace test.fx\nmessage M { v @0 : fixed32 }",
     "type": "M",
-    "value": { "v": 1 },
-    "expected_bytes": "00000001",
-    "notes": "fixed32 Q16.16 1.0 = 0x00010000 but raw value is 1 as i32 on wire... actually 1.0 = 65536 in fixed32 wire encoding"
+    "value": { "v": 65536 },
+    "expected_bytes": "00000100",
+    "notes": "fixed32 Q16.16 1.0 has raw signed value 65536 (0x00010000), encoded little-endian"
   },
   {
     "name": "fixed64_zero",
