@@ -216,7 +216,7 @@ func (m *Config) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Port != nil)
 	w.FlushToByteBoundary()
 	if m.Port != nil {
-		w.WriteU16(*m.Port)
+		w.WriteU16((*m.Port))
 	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {

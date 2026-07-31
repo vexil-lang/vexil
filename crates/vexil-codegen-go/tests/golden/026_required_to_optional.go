@@ -56,7 +56,7 @@ func (m *SettingsV2) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Timeout != nil)
 	w.FlushToByteBoundary()
 	if m.Timeout != nil {
-		w.WriteU32(*m.Timeout)
+		w.WriteU32((*m.Timeout))
 	}
 	w.WriteString(m.Name)
 	w.FlushToByteBoundary()

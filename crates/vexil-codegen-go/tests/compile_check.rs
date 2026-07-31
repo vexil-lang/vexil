@@ -282,3 +282,11 @@ fn bytes_map_keys_compile() {
 fn transparent_alias_fields_compile() {
     check_compiles("034_type_alias");
 }
+
+#[test]
+fn optional_container_access_compiles() {
+    check_source_compiles(
+        "optional-container-access",
+        "namespace test.optional_container\nmessage M { value @0 : optional<map<u8, set<u16>>> }",
+    );
+}

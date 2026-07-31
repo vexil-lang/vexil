@@ -19,16 +19,16 @@ func (m *WithOptionals) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Name != nil)
 	w.FlushToByteBoundary()
 	if m.Name != nil {
-		w.WriteString(*m.Name)
+		w.WriteString((*m.Name))
 	}
 	w.WriteBool(m.Value != nil)
 	w.FlushToByteBoundary()
 	if m.Value != nil {
-		w.WriteU32(*m.Value)
+		w.WriteU32((*m.Value))
 	}
 	w.WriteBool(m.Flag != nil)
 	if m.Flag != nil {
-		w.WriteBool(*m.Flag)
+		w.WriteBool((*m.Flag))
 	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
@@ -113,10 +113,10 @@ func (m *NestedOptional) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Inner != nil)
 	w.FlushToByteBoundary()
 	if m.Inner != nil {
-		w.WriteBool(*m.Inner != nil)
+		w.WriteBool((*m.Inner) != nil)
 		w.FlushToByteBoundary()
-		if *m.Inner != nil {
-			w.WriteU32(**m.Inner)
+		if (*m.Inner) != nil {
+			w.WriteU32((*(*m.Inner)))
 		}
 	}
 	w.FlushToByteBoundary()
@@ -178,16 +178,16 @@ func (m *AllEmpty) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
 	w.FlushToByteBoundary()
 	if m.A != nil {
-		w.WriteString(*m.A)
+		w.WriteString((*m.A))
 	}
 	w.WriteBool(m.B != nil)
 	w.FlushToByteBoundary()
 	if m.B != nil {
-		w.WriteU32(*m.B)
+		w.WriteU32((*m.B))
 	}
 	w.WriteBool(m.C != nil)
 	if m.C != nil {
-		w.WriteBool(*m.C)
+		w.WriteBool((*m.C))
 	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {

@@ -388,7 +388,7 @@ fn emit_write_type(
                     emit_write_type(w, access, inner, registry, writer, err_return);
                 }
                 _ => {
-                    let deref = format!("*{access}");
+                    let deref = format!("(*{access})");
                     emit_write_type(w, &deref, inner, registry, writer, err_return);
                 }
             }

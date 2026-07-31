@@ -197,7 +197,7 @@ func (m *WithOptional) Pack(w *vexil.BitWriter) error {
 		w.WriteBool(item != nil)
 		w.FlushToByteBoundary()
 		if item != nil {
-			w.WriteU32(*item)
+			w.WriteU32((*item))
 		}
 	}
 	w.FlushToByteBoundary()

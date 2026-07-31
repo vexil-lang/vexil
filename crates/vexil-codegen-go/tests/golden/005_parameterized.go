@@ -24,7 +24,7 @@ func (m *Basic) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
 	w.FlushToByteBoundary()
 	if m.A != nil {
-		w.WriteU32(*m.A)
+		w.WriteU32((*m.A))
 	}
 	w.WriteLeb128(uint64(len(m.B)))
 	for _, item := range m.B {
@@ -167,8 +167,8 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
 	w.FlushToByteBoundary()
 	if m.A != nil {
-		w.WriteLeb128(uint64(len(*m.A)))
-		for _, item := range *m.A {
+		w.WriteLeb128(uint64(len((*m.A))))
+		for _, item := range (*m.A) {
 			w.WriteString(item)
 		}
 	}
@@ -177,7 +177,7 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		w.WriteBool(item != nil)
 		w.FlushToByteBoundary()
 		if item != nil {
-			w.WriteU32(*item)
+			w.WriteU32((*item))
 		}
 	}
 	w.WriteLeb128(uint64(len(m.C)))
@@ -216,24 +216,24 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.G != nil)
 	w.FlushToByteBoundary()
 	if m.G != nil {
-		if *m.G.Ok != nil {
+		if (*m.G).Ok != nil {
 			w.WriteBool(true)
-			w.WriteLeb128(uint64(len(**m.G.Ok)))
-			for _, item := range **m.G.Ok {
+			w.WriteLeb128(uint64(len(*(*m.G).Ok)))
+			for _, item := range *(*m.G).Ok {
 				w.WriteString(item)
 			}
 		} else {
 			w.WriteBool(false)
-			w.WriteLeb128(uint64(len(**m.G.Err)))
-			mapKeysmGErr := make([]uint32, 0, len(**m.G.Err))
-			for key := range **m.G.Err {
+			w.WriteLeb128(uint64(len(*(*m.G).Err)))
+			mapKeysmGErr := make([]uint32, 0, len(*(*m.G).Err))
+			for key := range *(*m.G).Err {
 				mapKeysmGErr = append(mapKeysmGErr, key)
 			}
 			sort.Slice(mapKeysmGErr, func(i, j int) bool {
 				return mapKeysmGErr[i] < mapKeysmGErr[j]
 			})
 			for _, mapK := range mapKeysmGErr {
-				mapV := **m.G.Err[mapK]
+				mapV := *(*m.G).Err[mapK]
 				w.WriteU32(mapK)
 				w.WriteString(mapV)
 			}
