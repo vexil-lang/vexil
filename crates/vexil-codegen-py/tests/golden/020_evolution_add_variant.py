@@ -24,15 +24,15 @@ class ShapeV1Circle(ShapeV1):
         self.radius = radius
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_f32(self.radius)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.radius)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ShapeV1Rect(ShapeV1):
@@ -41,42 +41,42 @@ class ShapeV1Rect(ShapeV1):
         self.h = h
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        pw.write_f32(self.w)
-        pw.write_f32(self.h)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.w)
+        _vexil_payload_writer.write_f32(self.h)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
-def decode_ShapeV1_from(r: _BitReader) -> ShapeV1:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        radius: float = None  # type: ignore[assignment]
-        radius = pr.read_f32()
-        return ShapeV1Circle(radius)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        w: float = None  # type: ignore[assignment]
-        w = pr.read_f32()
-        h: float = None  # type: ignore[assignment]
-        h = pr.read_f32()
-        return ShapeV1Rect(w, h)
+def decode_ShapeV1_from(_vexil_reader: _BitReader) -> ShapeV1:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        return ShapeV1Circle(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        _vexil_field_1: float = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_f32()
+        return ShapeV1Rect(_vexil_field_0, _vexil_field_1)
     else:
-        raise ValueError(f"unknown ShapeV1 discriminant: {disc}")
+        raise ValueError(f"unknown ShapeV1 discriminant: {_vexil_discriminant}")
 
 def decode_ShapeV1(data: bytes) -> ShapeV1:
-    r = _BitReader(data)
-    return decode_ShapeV1_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_ShapeV1_from(_vexil_reader)
 
 
 # ---------- ShapeV2 ----------
@@ -93,15 +93,15 @@ class ShapeV2Circle(ShapeV2):
         self.radius = radius
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_f32(self.radius)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.radius)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ShapeV2Rect(ShapeV2):
@@ -110,16 +110,16 @@ class ShapeV2Rect(ShapeV2):
         self.h = h
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        pw.write_f32(self.w)
-        pw.write_f32(self.h)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.w)
+        _vexil_payload_writer.write_f32(self.h)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ShapeV2Triangle(ShapeV2):
@@ -128,48 +128,48 @@ class ShapeV2Triangle(ShapeV2):
         self.height = height
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(2)
-        pw = _BitWriter()
-        pw.write_f32(self.base)
-        pw.write_f32(self.height)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(2)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.base)
+        _vexil_payload_writer.write_f32(self.height)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
-def decode_ShapeV2_from(r: _BitReader) -> ShapeV2:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        radius: float = None  # type: ignore[assignment]
-        radius = pr.read_f32()
-        return ShapeV2Circle(radius)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        w: float = None  # type: ignore[assignment]
-        w = pr.read_f32()
-        h: float = None  # type: ignore[assignment]
-        h = pr.read_f32()
-        return ShapeV2Rect(w, h)
-    elif disc == 2:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        base: float = None  # type: ignore[assignment]
-        base = pr.read_f32()
-        height: float = None  # type: ignore[assignment]
-        height = pr.read_f32()
-        return ShapeV2Triangle(base, height)
+def decode_ShapeV2_from(_vexil_reader: _BitReader) -> ShapeV2:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        return ShapeV2Circle(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        _vexil_field_1: float = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_f32()
+        return ShapeV2Rect(_vexil_field_0, _vexil_field_1)
+    elif _vexil_discriminant == 2:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        _vexil_field_1: float = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_f32()
+        return ShapeV2Triangle(_vexil_field_0, _vexil_field_1)
     else:
-        raise ValueError(f"unknown ShapeV2 discriminant: {disc}")
+        raise ValueError(f"unknown ShapeV2 discriminant: {_vexil_discriminant}")
 
 def decode_ShapeV2(data: bytes) -> ShapeV2:
-    r = _BitReader(data)
-    return decode_ShapeV2_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_ShapeV2_from(_vexil_reader)
 

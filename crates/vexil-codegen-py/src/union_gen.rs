@@ -59,13 +59,13 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         // _encode_variant
         let ordinal = variant.ordinal;
         w.open_block("def _encode_variant(self) -> bytes");
-        w.line("w = _BitWriter()");
-        w.line(&format!("w.write_leb128({ordinal})"));
+        w.line("_vexil_writer = _BitWriter()");
+        w.line(&format!("_vexil_writer.write_leb128({ordinal})"));
 
         if variant.fields.is_empty() {
-            w.line("w.write_leb128(0)");
+            w.line("_vexil_writer.write_leb128(0)");
         } else {
-            w.line("pw = _BitWriter()");
+            w.line("_vexil_payload_writer = _BitWriter()");
             for field in &variant.fields {
                 let access = format!("self.{}", py_ident(field.name.as_str()));
                 emit_write(
@@ -74,15 +74,15 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
                     &field.resolved_type,
                     &field.encoding,
                     registry,
-                    "pw",
+                    "_vexil_payload_writer",
                 );
             }
-            w.line("pw.flush_to_byte_boundary()");
-            w.line("payload = pw.finish()");
-            w.line("w.write_leb128(len(payload))");
-            w.line("w.write_raw_bytes(payload, len(payload))");
+            w.line("_vexil_payload_writer.flush_to_byte_boundary()");
+            w.line("_vexil_payload = _vexil_payload_writer.finish()");
+            w.line("_vexil_writer.write_leb128(len(_vexil_payload))");
+            w.line("_vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))");
         }
-        w.line("return w.finish()");
+        w.line("return _vexil_writer.finish()");
         w.close_block();
         w.blank();
 
@@ -92,10 +92,12 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
     // Reader-level decode lets messages consume one union value without
     // guessing its size. The byte-array convenience wrapper follows below.
-    w.open_block(&format!("def decode_{name}_from(r: _BitReader) -> {name}"));
-    w.line("r.flush_to_byte_boundary()");
-    w.line("disc = r.read_leb128()");
-    w.line("length = r.read_leb128()");
+    w.open_block(&format!(
+        "def decode_{name}_from(_vexil_reader: _BitReader) -> {name}"
+    ));
+    w.line("_vexil_reader.flush_to_byte_boundary()");
+    w.line("_vexil_discriminant = _vexil_reader.read_leb128()");
+    w.line("_vexil_length = _vexil_reader.read_leb128()");
 
     for variant in &un.variants {
         let vname = variant.name.as_str();
@@ -103,20 +105,20 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         let ordinal = variant.ordinal;
 
         if ordinal == 0 {
-            w.open_block(&format!("if disc == {ordinal}"));
+            w.open_block(&format!("if _vexil_discriminant == {ordinal}"));
         } else {
-            w.open_block(&format!("elif disc == {ordinal}"));
+            w.open_block(&format!("elif _vexil_discriminant == {ordinal}"));
         }
 
         if variant.fields.is_empty() {
             w.line(&format!("return {class_name}()"));
         } else {
-            w.line("_payload = r.read_bytes(length)");
-            w.line("pr = _BitReader(_payload)");
+            w.line("_vexil_payload = _vexil_reader.read_bytes(_vexil_length)");
+            w.line("_vexil_payload_reader = _BitReader(_vexil_payload)");
             // Read each field into locals
             for field in &variant.fields {
                 let py_ty = py_type(&field.resolved_type, registry);
-                let ident = py_ident(field.name.as_str());
+                let ident = format!("_vexil_field_{}", field.ordinal);
                 w.line(&format!(
                     "{ident}: {py_ty} = None  # type: ignore[assignment]"
                 ));
@@ -126,13 +128,13 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
                     &field.resolved_type,
                     &field.encoding,
                     registry,
-                    "pr",
+                    "_vexil_payload_reader",
                 );
             }
             let field_names: Vec<String> = variant
                 .fields
                 .iter()
-                .map(|f| py_ident(f.name.as_str()))
+                .map(|field| format!("_vexil_field_{}", field.ordinal))
                 .collect();
             w.line(&format!("return {class_name}({})", field_names.join(", ")));
         }
@@ -142,7 +144,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     // default case
     w.open_block("else");
     w.line(&format!(
-        "raise ValueError(f\"unknown {name} discriminant: {{disc}}\")"
+        "raise ValueError(f\"unknown {name} discriminant: {{_vexil_discriminant}}\")"
     ));
     w.close_block();
 
@@ -150,8 +152,8 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     w.blank();
 
     w.open_block(&format!("def decode_{name}(data: bytes) -> {name}"));
-    w.line("r = _BitReader(data)");
-    w.line(&format!("return decode_{name}_from(r)"));
+    w.line("_vexil_reader = _BitReader(data)");
+    w.line(&format!("return decode_{name}_from(_vexil_reader)"));
     w.close_block();
     w.blank();
 }

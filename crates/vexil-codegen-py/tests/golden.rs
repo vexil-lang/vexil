@@ -322,3 +322,11 @@ fn trait_only_non_generic() {
         "namespace test.trait_only\ntrait Named {\n    name @0 : string\n}",
     );
 }
+
+#[test]
+fn identifier_conflicts() {
+    golden_source_test(
+        "identifier_conflicts",
+        "namespace test.identifier_conflicts\nconfig Settings {\n    self : u8 = 0\n    unknown : u8 = 0\n    from : u8 = 0\n}\ntrait Fields {\n    self @0 : u8\n    unknown @1 : u8\n}\nmessage Collision {\n    from @0 : u8\n    from_ @1 : u8\n    self @2 : u8\n    unknown @3 : bytes\n}\nunion Choice {\n    Named @0 { self @0 : u8  pr @1 : u16 }\n}",
+    );
+}

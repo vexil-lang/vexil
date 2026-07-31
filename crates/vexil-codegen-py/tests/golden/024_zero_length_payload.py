@@ -88,10 +88,10 @@ class EventPing(Event):
         pass
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        w.write_leb128(0)
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_writer.write_leb128(0)
+        return _vexil_writer.finish()
 
 
 class EventPong(Event):
@@ -99,10 +99,10 @@ class EventPong(Event):
         pass
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        w.write_leb128(0)
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_writer.write_leb128(0)
+        return _vexil_writer.finish()
 
 
 class EventData(Event):
@@ -110,35 +110,35 @@ class EventData(Event):
         self.payload = payload
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(2)
-        pw = _BitWriter()
-        pw.write_bytes(self.payload)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(2)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_bytes(self.payload)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
-def decode_Event_from(r: _BitReader) -> Event:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
+def decode_Event_from(_vexil_reader: _BitReader) -> Event:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
         return EventPing()
-    elif disc == 1:
+    elif _vexil_discriminant == 1:
         return EventPong()
-    elif disc == 2:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        payload: bytes = None  # type: ignore[assignment]
-        payload = pr.read_bytes(pr.read_leb128())
-        return EventData(payload)
+    elif _vexil_discriminant == 2:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: bytes = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_bytes(_vexil_payload_reader.read_leb128())
+        return EventData(_vexil_field_0)
     else:
-        raise ValueError(f"unknown Event discriminant: {disc}")
+        raise ValueError(f"unknown Event discriminant: {_vexil_discriminant}")
 
 def decode_Event(data: bytes) -> Event:
-    r = _BitReader(data)
-    return decode_Event_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_Event_from(_vexil_reader)
 

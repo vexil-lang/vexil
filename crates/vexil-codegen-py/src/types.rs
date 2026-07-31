@@ -12,14 +12,16 @@ const PY_KEYWORDS: &[&str] = &[
     "with", "yield",
 ];
 
-/// Render a Vexil field or variant name as a valid Python identifier.
+/// Render a Vexil field name as an injective, valid Python identifier.
 ///
 /// Vexil permits names that are Python reserved words (see corpus
-/// `014_keywords_as_fields`). Those are given a trailing underscore, following
-/// the PEP 8 convention for keyword conflicts. Every other name is unchanged.
+/// `014_keywords_as_fields`). It also permits `self` and `unknown`, which
+/// conflict with generated method parameters and message unknown-byte storage.
+/// Conflicting names use an underscore-prefixed namespace that authored Vexil
+/// field names cannot occupy, so names such as `from` and `from_` stay distinct.
 pub fn py_ident(name: &str) -> String {
-    if PY_KEYWORDS.contains(&name) {
-        format!("{name}_")
+    if PY_KEYWORDS.contains(&name) || matches!(name, "self" | "unknown") {
+        format!("_vexil_{name}")
     } else {
         name.to_string()
     }

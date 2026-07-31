@@ -261,16 +261,16 @@ class DataFixedInts(Data):
         self.values = values
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
         for item in self.values:
-            pw.write_i32(item)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+            _vexil_payload_writer.write_i32(item)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class DataFixedBytes(Data):
@@ -278,50 +278,50 @@ class DataFixedBytes(Data):
         self.bytes = bytes
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
         for item in self.bytes:
-            pw.write_u8(item)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+            _vexil_payload_writer.write_u8(item)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
-def decode_Data_from(r: _BitReader) -> Data:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        values: tuple[int, ...] = None  # type: ignore[assignment]
-        _fixed_items_values: list[int] = []
+def decode_Data_from(_vexil_reader: _BitReader) -> Data:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: tuple[int, ...] = None  # type: ignore[assignment]
+        _fixed_items_vexilfield0: list[int] = []
         for _ in range(4):
-            _fixed_item_values: int = None  # type: ignore[assignment]
-            _fixed_item_values = pr.read_i32()
-            _fixed_items_values.append(_fixed_item_values)
-        values = tuple(_fixed_items_values)
-        return DataFixedInts(values)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        bytes: tuple[int, ...] = None  # type: ignore[assignment]
-        _fixed_items_bytes: list[int] = []
+            _fixed_item_vexilfield0: int = None  # type: ignore[assignment]
+            _fixed_item_vexilfield0 = _vexil_payload_reader.read_i32()
+            _fixed_items_vexilfield0.append(_fixed_item_vexilfield0)
+        _vexil_field_0 = tuple(_fixed_items_vexilfield0)
+        return DataFixedInts(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: tuple[int, ...] = None  # type: ignore[assignment]
+        _fixed_items_vexilfield0: list[int] = []
         for _ in range(32):
-            _fixed_item_bytes: int = None  # type: ignore[assignment]
-            _fixed_item_bytes = pr.read_u8()
-            _fixed_items_bytes.append(_fixed_item_bytes)
-        bytes = tuple(_fixed_items_bytes)
-        return DataFixedBytes(bytes)
+            _fixed_item_vexilfield0: int = None  # type: ignore[assignment]
+            _fixed_item_vexilfield0 = _vexil_payload_reader.read_u8()
+            _fixed_items_vexilfield0.append(_fixed_item_vexilfield0)
+        _vexil_field_0 = tuple(_fixed_items_vexilfield0)
+        return DataFixedBytes(_vexil_field_0)
     else:
-        raise ValueError(f"unknown Data discriminant: {disc}")
+        raise ValueError(f"unknown Data discriminant: {_vexil_discriminant}")
 
 def decode_Data(data: bytes) -> Data:
-    r = _BitReader(data)
-    return decode_Data_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_Data_from(_vexil_reader)
 
 
 # ---------- EdgeCases ----------

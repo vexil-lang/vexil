@@ -506,32 +506,58 @@ mod tests {
     }
 
     #[test]
-    fn reserved_python_keywords_are_escaped_in_field_names() {
+    fn conflicting_field_names_are_escaped_injectively() {
         let compiled = vexil_lang::compile(
-            "namespace test.kw\nmessage Kw { from @0 : u32  import @1 : u8  as @2 : bool }",
+            "namespace test.kw\nmessage Kw { from @0 : u32  from_ @1 : u8  self @2 : bool  unknown @3 : bytes }",
         )
         .compiled
         .expect("schema compiles");
         let code = generate(&compiled).expect("codegen succeeds");
 
-        // Declaration, encode access, and decode target must all agree.
-        for escaped in ["from_", "import_", "as_"] {
+        for escaped in ["_vexil_from", "_vexil_self", "_vexil_unknown"] {
             assert!(
                 code.contains(&format!("    {escaped}: ")),
                 "missing escaped field declaration {escaped} in:\n{code}"
             );
         }
+        assert!(code.contains("    from_: int"), "{code}");
         assert!(
-            code.contains("self.from_"),
-            "encode must use from_:\n{code}"
+            code.contains("self._vexil_from") && code.contains("m._vexil_from ="),
+            "codecs must use the escaped keyword:\n{code}"
         );
-        assert!(code.contains("m.from_ ="), "decode must use from_:\n{code}");
+        assert!(
+            code.contains("self.from_") && code.contains("m.from_ ="),
+            "ordinary trailing-underscore name must remain unchanged:\n{code}"
+        );
+        assert!(
+            code.contains("    unknown: bytes = b\"\"")
+                && code.contains("    _vexil_unknown: bytes"),
+            "authored unknown field and generated storage must stay distinct:\n{code}"
+        );
+    }
 
-        // A bare keyword as an identifier is a Python syntax error.
+    #[test]
+    fn union_decode_locals_cannot_collide_with_authored_fields() {
+        let compiled = vexil_lang::compile(
+            "namespace test.union_names\nunion Value { Named @0 { self @0 : u8  pr @1 : u16 } }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("codegen succeeds");
+
         assert!(
-            !code.contains("self.from ") && !code.contains("m.from ="),
-            "bare `from` left in generated code:\n{code}"
+            code.contains("def __init__(self, _vexil_self: int, pr: int)"),
+            "{code}"
         );
+        assert!(
+            code.contains("_vexil_payload_reader = _BitReader(_vexil_payload)"),
+            "{code}"
+        );
+        assert!(
+            code.contains("return ValueNamed(_vexil_field_0, _vexil_field_1)"),
+            "{code}"
+        );
+        assert!(!code.contains("\n        pr = _BitReader"), "{code}");
     }
 
     #[test]

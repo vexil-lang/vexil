@@ -23,15 +23,15 @@ class ShapeCircle(Shape):
         self.radius = radius
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_f32(self.radius)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.radius)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ShapeRectangle(Shape):
@@ -40,16 +40,16 @@ class ShapeRectangle(Shape):
         self.height = height
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        pw.write_f32(self.width)
-        pw.write_f32(self.height)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_f32(self.width)
+        _vexil_payload_writer.write_f32(self.height)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ShapePoint(Shape):
@@ -57,38 +57,38 @@ class ShapePoint(Shape):
         pass
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(2)
-        w.write_leb128(0)
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(2)
+        _vexil_writer.write_leb128(0)
+        return _vexil_writer.finish()
 
 
-def decode_Shape_from(r: _BitReader) -> Shape:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        radius: float = None  # type: ignore[assignment]
-        radius = pr.read_f32()
-        return ShapeCircle(radius)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        width: float = None  # type: ignore[assignment]
-        width = pr.read_f32()
-        height: float = None  # type: ignore[assignment]
-        height = pr.read_f32()
-        return ShapeRectangle(width, height)
-    elif disc == 2:
+def decode_Shape_from(_vexil_reader: _BitReader) -> Shape:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        return ShapeCircle(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: float = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_f32()
+        _vexil_field_1: float = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_f32()
+        return ShapeRectangle(_vexil_field_0, _vexil_field_1)
+    elif _vexil_discriminant == 2:
         return ShapePoint()
     else:
-        raise ValueError(f"unknown Shape discriminant: {disc}")
+        raise ValueError(f"unknown Shape discriminant: {_vexil_discriminant}")
 
 def decode_Shape(data: bytes) -> Shape:
-    r = _BitReader(data)
-    return decode_Shape_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_Shape_from(_vexil_reader)
 
 
 # ---------- Color ----------
@@ -105,15 +105,15 @@ class ColorAnsi(Color):
         self.code = code
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_u8(self.code)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_u8(self.code)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ColorRgb(Color):
@@ -123,17 +123,17 @@ class ColorRgb(Color):
         self.b = b
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        pw.write_u8(self.r)
-        pw.write_u8(self.g)
-        pw.write_u8(self.b)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_u8(self.r)
+        _vexil_payload_writer.write_u8(self.g)
+        _vexil_payload_writer.write_u8(self.b)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ColorReset(Color):
@@ -141,40 +141,40 @@ class ColorReset(Color):
         pass
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(2)
-        w.write_leb128(0)
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(2)
+        _vexil_writer.write_leb128(0)
+        return _vexil_writer.finish()
 
 
-def decode_Color_from(r: _BitReader) -> Color:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        code: int = None  # type: ignore[assignment]
-        code = pr.read_u8()
-        return ColorAnsi(code)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        r: int = None  # type: ignore[assignment]
-        r = pr.read_u8()
-        g: int = None  # type: ignore[assignment]
-        g = pr.read_u8()
-        b: int = None  # type: ignore[assignment]
-        b = pr.read_u8()
-        return ColorRgb(r, g, b)
-    elif disc == 2:
+def decode_Color_from(_vexil_reader: _BitReader) -> Color:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: int = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_u8()
+        return ColorAnsi(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: int = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_u8()
+        _vexil_field_1: int = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_u8()
+        _vexil_field_2: int = None  # type: ignore[assignment]
+        _vexil_field_2 = _vexil_payload_reader.read_u8()
+        return ColorRgb(_vexil_field_0, _vexil_field_1, _vexil_field_2)
+    elif _vexil_discriminant == 2:
         return ColorReset()
     else:
-        raise ValueError(f"unknown Color discriminant: {disc}")
+        raise ValueError(f"unknown Color discriminant: {_vexil_discriminant}")
 
 def decode_Color(data: bytes) -> Color:
-    r = _BitReader(data)
-    return decode_Color_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_Color_from(_vexil_reader)
 
 
 # ---------- Event ----------
@@ -192,16 +192,16 @@ class EventClick(Event):
         self.y = y
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_u16(self.x)
-        pw.write_u16(self.y)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_u16(self.x)
+        _vexil_payload_writer.write_u16(self.y)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class EventScroll(Event):
@@ -209,39 +209,39 @@ class EventScroll(Event):
         self.delta = delta
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(2)
-        pw = _BitWriter()
-        pw.write_i16(self.delta)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(2)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_i16(self.delta)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
-def decode_Event_from(r: _BitReader) -> Event:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        x: int = None  # type: ignore[assignment]
-        x = pr.read_u16()
-        y: int = None  # type: ignore[assignment]
-        y = pr.read_u16()
-        return EventClick(x, y)
-    elif disc == 2:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        delta: int = None  # type: ignore[assignment]
-        delta = pr.read_i16()
-        return EventScroll(delta)
+def decode_Event_from(_vexil_reader: _BitReader) -> Event:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: int = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_u16()
+        _vexil_field_1: int = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_u16()
+        return EventClick(_vexil_field_0, _vexil_field_1)
+    elif _vexil_discriminant == 2:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: int = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_i16()
+        return EventScroll(_vexil_field_0)
     else:
-        raise ValueError(f"unknown Event discriminant: {disc}")
+        raise ValueError(f"unknown Event discriminant: {_vexil_discriminant}")
 
 def decode_Event(data: bytes) -> Event:
-    r = _BitReader(data)
-    return decode_Event_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_Event_from(_vexil_reader)
 

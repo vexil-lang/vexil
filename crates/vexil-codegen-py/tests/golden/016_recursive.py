@@ -147,15 +147,15 @@ class ExprKindLiteral(ExprKind):
         self.value = value
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(0)
-        pw = _BitWriter()
-        pw.write_i64(self.value)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(0)
+        _vexil_payload_writer = _BitWriter()
+        _vexil_payload_writer.write_i64(self.value)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
 class ExprKindBinary(ExprKind):
@@ -165,43 +165,43 @@ class ExprKindBinary(ExprKind):
         self.right = right
 
     def _encode_variant(self) -> bytes:
-        w = _BitWriter()
-        w.write_leb128(1)
-        pw = _BitWriter()
-        self.left.encode_to(pw)
-        pw.write_u8(self.op)
-        self.right.encode_to(pw)
-        pw.flush_to_byte_boundary()
-        payload = pw.finish()
-        w.write_leb128(len(payload))
-        w.write_raw_bytes(payload, len(payload))
-        return w.finish()
+        _vexil_writer = _BitWriter()
+        _vexil_writer.write_leb128(1)
+        _vexil_payload_writer = _BitWriter()
+        self.left.encode_to(_vexil_payload_writer)
+        _vexil_payload_writer.write_u8(self.op)
+        self.right.encode_to(_vexil_payload_writer)
+        _vexil_payload_writer.flush_to_byte_boundary()
+        _vexil_payload = _vexil_payload_writer.finish()
+        _vexil_writer.write_leb128(len(_vexil_payload))
+        _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
+        return _vexil_writer.finish()
 
 
-def decode_ExprKind_from(r: _BitReader) -> ExprKind:
-    r.flush_to_byte_boundary()
-    disc = r.read_leb128()
-    length = r.read_leb128()
-    if disc == 0:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        value: int = None  # type: ignore[assignment]
-        value = pr.read_i64()
-        return ExprKindLiteral(value)
-    elif disc == 1:
-        _payload = r.read_bytes(length)
-        pr = _BitReader(_payload)
-        left: Expr = None  # type: ignore[assignment]
-        left = Expr.decode_from(pr)
-        op: int = None  # type: ignore[assignment]
-        op = pr.read_u8()
-        right: Expr = None  # type: ignore[assignment]
-        right = Expr.decode_from(pr)
-        return ExprKindBinary(left, op, right)
+def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:
+    _vexil_reader.flush_to_byte_boundary()
+    _vexil_discriminant = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128()
+    if _vexil_discriminant == 0:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: int = None  # type: ignore[assignment]
+        _vexil_field_0 = _vexil_payload_reader.read_i64()
+        return ExprKindLiteral(_vexil_field_0)
+    elif _vexil_discriminant == 1:
+        _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
+        _vexil_payload_reader = _BitReader(_vexil_payload)
+        _vexil_field_0: Expr = None  # type: ignore[assignment]
+        _vexil_field_0 = Expr.decode_from(_vexil_payload_reader)
+        _vexil_field_1: int = None  # type: ignore[assignment]
+        _vexil_field_1 = _vexil_payload_reader.read_u8()
+        _vexil_field_2: Expr = None  # type: ignore[assignment]
+        _vexil_field_2 = Expr.decode_from(_vexil_payload_reader)
+        return ExprKindBinary(_vexil_field_0, _vexil_field_1, _vexil_field_2)
     else:
-        raise ValueError(f"unknown ExprKind discriminant: {disc}")
+        raise ValueError(f"unknown ExprKind discriminant: {_vexil_discriminant}")
 
 def decode_ExprKind(data: bytes) -> ExprKind:
-    r = _BitReader(data)
-    return decode_ExprKind_from(r)
+    _vexil_reader = _BitReader(data)
+    return decode_ExprKind_from(_vexil_reader)
 
