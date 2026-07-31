@@ -173,7 +173,7 @@ impl ${aliased ? "Contracts.Tagged" : "Tagged"}<u64> for Event { }
 const genericField = join(goldenDir, "045_generic_trait.py");
 const nestedGeneric = join(goldenDir, "048_generic_trait_nested.py");
 const functionBearing = join(goldenDir, "049_trait_function_portable_body.py");
-const functionSignature = join(goldenDir, "047_trait_function_codegen_deferred.py");
+const functionSignature = join(goldenDir, "047_trait_function_signature.py");
 
 for (const [label, source] of [
   ["generic trait field output", genericField],
