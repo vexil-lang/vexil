@@ -369,6 +369,16 @@ fn emit_write_type(
             emit_write_type(w, "item", inner, registry, writer, err_return);
             w.close_block();
         }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            w.open_block(&format!("for _, item := range {access}"));
+            emit_write_type(w, "item", inner, registry, writer, err_return);
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
             if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
