@@ -156,3 +156,5 @@ class SubByteSigned:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+__all__ = ["dataclass", "SCHEMA_HASH", "SubByteUnsigned", "SubByteSigned"]

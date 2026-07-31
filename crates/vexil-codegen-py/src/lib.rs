@@ -158,7 +158,82 @@ pub(crate) fn generate_with_imports(
     w.blank();
 
     let generated = format!("{}{body}", w.finish());
-    Ok(format!("{}\n", generated.trim_end()))
+    let public_exports = explicit_public_exports(&generated)
+        .into_iter()
+        .map(|name| format!("\"{name}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Ok(format!(
+        "{}\n\n__all__ = [{public_exports}]\n",
+        generated.trim_end(),
+    ))
+}
+
+/// Recover Python's default wildcard exports from the generated module.
+///
+/// Emitting the same names as a literal `__all__` makes the public surface
+/// explicit to static analyzers without hiding generated declarations or
+/// imports that Python previously exported implicitly.
+fn explicit_public_exports(source: &str) -> Vec<String> {
+    let mut exports = Vec::new();
+
+    for line in source.lines() {
+        if line.is_empty()
+            || line.starts_with(char::is_whitespace)
+            || line.starts_with('#')
+            || line.starts_with('@')
+        {
+            continue;
+        }
+
+        if let Some(import) = line.strip_prefix("from ") {
+            let Some((module, bindings)) = import.split_once(" import ") else {
+                continue;
+            };
+            if module == "__future__" {
+                continue;
+            }
+            for binding in bindings.split(", ") {
+                let name = binding
+                    .rsplit_once(" as ")
+                    .map_or(binding, |(_, alias)| alias);
+                push_public_export(&mut exports, name);
+            }
+            continue;
+        }
+
+        if let Some(declaration) = line
+            .strip_prefix("class ")
+            .or_else(|| line.strip_prefix("def "))
+        {
+            let name = declaration
+                .split(['(', ':'])
+                .next()
+                .unwrap_or_default()
+                .trim();
+            push_public_export(&mut exports, name);
+            continue;
+        }
+
+        if let Some((binding, _)) = line.split_once('=') {
+            let name = binding.split(':').next().unwrap_or_default().trim();
+            if !name.is_empty()
+                && name
+                    .chars()
+                    .all(|character| character == '_' || character.is_alphanumeric())
+            {
+                push_public_export(&mut exports, name);
+            }
+        }
+    }
+
+    exports
+}
+
+fn push_public_export(exports: &mut Vec<String>, name: &str) {
+    if !name.starts_with('_') && !exports.iter().any(|existing| existing == name) {
+        exports.push(name.to_string());
+    }
 }
 
 /// Emit the body: one section per declared type.
@@ -449,6 +524,35 @@ mod tests {
         .unwrap();
         let generated = generate(&compiled).expect("function signature generates");
         assert!(generated.contains("def validate(self) -> bool:"));
+    }
+
+    #[test]
+    fn protocol_methods_have_explicit_abstract_bodies() {
+        let compiled = vexil_lang::compile(
+            "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",
+        )
+        .compiled
+        .expect("schema compiles");
+        let generated = generate(&compiled).expect("function signature generates");
+
+        assert!(
+            generated
+                .contains("    def validate(self) -> bool:\n        raise NotImplementedError"),
+            "protocol method should not use a no-effect ellipsis statement:\n{generated}"
+        );
+    }
+
+    #[test]
+    fn generated_modules_preserve_default_public_exports_explicitly() {
+        let compiled = vexil_lang::compile("namespace test.exports\nmessage Value { n @0 : u8 }")
+            .compiled
+            .expect("schema compiles");
+        let generated = generate(&compiled).expect("module generates");
+
+        assert!(
+            generated.ends_with("__all__ = [\"dataclass\", \"SCHEMA_HASH\", \"Value\"]\n"),
+            "generated module should explicitly preserve Python's default public exports:\n{generated}"
+        );
     }
 
     #[test]

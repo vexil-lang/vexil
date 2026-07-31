@@ -220,3 +220,5 @@ class FieldAnnotationsDecoder:
 
     def reset(self):
         self._prev_d = 0
+
+__all__ = ["dataclass", "SCHEMA_HASH", "Empty", "WithGaps", "Annotated", "FieldAnnotations", "FieldAnnotationsEncoder", "FieldAnnotationsDecoder"]

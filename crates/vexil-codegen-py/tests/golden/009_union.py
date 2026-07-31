@@ -224,3 +224,5 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
 def decode_Event(data: bytes) -> Event:
     _vexil_reader = _BitReader(data)
     return decode_Event_from(_vexil_reader)
+
+__all__ = ["SCHEMA_HASH", "Shape", "ShapeCircle", "ShapeRectangle", "ShapePoint", "decode_Shape_from", "decode_Shape", "Color", "ColorAnsi", "ColorRgb", "ColorReset", "decode_Color_from", "decode_Color", "Event", "EventClick", "EventScroll", "decode_Event_from", "decode_Event"]

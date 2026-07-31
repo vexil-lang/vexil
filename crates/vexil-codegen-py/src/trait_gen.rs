@@ -59,11 +59,13 @@ pub fn emit_trait(
             .filter(|ty| !matches!(ty, TypeExpr::Primitive(PrimitiveType::Void)))
             .map(|ty| project_type(ty, registry, &type_param_names))
             .unwrap_or_else(|| "None".to_string());
-        w.line(&format!(
-            "def {}({}) -> {return_type}: ...",
+        w.open_block(&format!(
+            "def {}({}) -> {return_type}",
             function.name,
             function_params.join(", ")
         ));
+        w.line("raise NotImplementedError");
+        w.close_block();
     }
     w.dedent();
     Ok(())

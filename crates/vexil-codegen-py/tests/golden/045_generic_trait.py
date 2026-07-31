@@ -64,3 +64,5 @@ class Event:
 if TYPE_CHECKING:
     def _vexil_assert_Event_implements_Tagged(value: Event) -> Tagged[int]:  # pyright: ignore[reportUnusedFunction]
         return value
+
+__all__ = ["dataclass", "TYPE_CHECKING", "Protocol", "TypeVar", "runtime_checkable", "SCHEMA_HASH", "Tagged", "Event"]

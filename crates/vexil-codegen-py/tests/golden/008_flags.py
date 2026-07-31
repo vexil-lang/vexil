@@ -102,3 +102,5 @@ class FileMode(int):
 
     def __repr__(self) -> str:
         return f"FileMode({int(self)})"
+
+__all__ = ["SCHEMA_HASH", "Permissions", "WideFlags", "FileMode"]

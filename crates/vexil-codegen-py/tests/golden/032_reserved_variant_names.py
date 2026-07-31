@@ -65,3 +65,5 @@ class ParseResult(int):
 
     def __repr__(self) -> str:
         return f"ParseResult({int(self)})"
+
+__all__ = ["SCHEMA_HASH", "SCHEMA_VERSION", "ImageProtocol", "ParseResult"]

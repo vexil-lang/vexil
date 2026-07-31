@@ -336,6 +336,16 @@ mod tests {
             root.contains("def left(self, input: Payload) -> Payload:"),
             "{root}"
         );
+        let exports = root
+            .lines()
+            .find(|line| line.starts_with("__all__ = "))
+            .expect("generated project module declares public exports");
+        for imported in ["Payload", "LeftTransformer", "RightTransformer"] {
+            assert!(
+                exports.contains(&format!("\"{imported}\"")),
+                "imported name {imported} missing from project exports: {exports}"
+            );
+        }
         assert_eq!(result.schemas.len(), 4);
     }
 

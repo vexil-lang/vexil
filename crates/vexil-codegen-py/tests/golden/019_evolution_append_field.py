@@ -97,3 +97,5 @@ class HeaderV2:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+__all__ = ["dataclass", "SCHEMA_HASH", "SCHEMA_VERSION", "HeaderV1", "HeaderV2"]

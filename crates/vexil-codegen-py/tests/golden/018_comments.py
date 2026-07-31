@@ -78,3 +78,5 @@ class Bar(int):
 
     def __repr__(self) -> str:
         return f"Bar({int(self)})"
+
+__all__ = ["dataclass", "SCHEMA_HASH", "Foo", "Bar"]

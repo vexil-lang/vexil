@@ -69,3 +69,5 @@ class WithArrays:
 @dataclass
 class Nested:
     level: LogLevel
+
+__all__ = ["dataclass", "SCHEMA_HASH", "LogLevel", "ServerConfig", "WithOptional", "WithArrays", "Nested"]

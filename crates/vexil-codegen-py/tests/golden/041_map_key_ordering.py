@@ -344,3 +344,5 @@ class MapKeyTest:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+__all__ = ["dataclass", "SCHEMA_HASH", "SCHEMA_VERSION", "Status", "Permissions", "UserId", "Label", "MapKeyTest"]

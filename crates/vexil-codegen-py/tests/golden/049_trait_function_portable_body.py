@@ -16,9 +16,12 @@ _VexilTypeParam_T = TypeVar("_VexilTypeParam_T")
 @runtime_checkable
 class Adjustable(Protocol[_VexilTypeParam_T]):
     value: _VexilTypeParam_T
-    def adjust(self, delta: _VexilTypeParam_T) -> _VexilTypeParam_T: ...
-    def reset(self) -> None: ...
-    def snapshot(self) -> Counter: ...
+    def adjust(self, delta: _VexilTypeParam_T) -> _VexilTypeParam_T:
+        raise NotImplementedError
+    def reset(self) -> None:
+        raise NotImplementedError
+    def snapshot(self) -> Counter:
+        raise NotImplementedError
 
 # ---------- Counter ----------
 @dataclass
@@ -75,3 +78,5 @@ class Counter:
 if TYPE_CHECKING:
     def _vexil_assert_Counter_implements_Adjustable(value: Counter) -> Adjustable[int]:  # pyright: ignore[reportUnusedFunction]
         return value
+
+__all__ = ["dataclass", "TYPE_CHECKING", "Protocol", "TypeVar", "runtime_checkable", "SCHEMA_HASH", "Adjustable", "Counter"]

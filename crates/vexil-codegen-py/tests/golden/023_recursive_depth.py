@@ -127,3 +127,5 @@ class LinkedList:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "TreeNode", "LinkedList"]

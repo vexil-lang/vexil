@@ -421,3 +421,5 @@ class EdgeCases:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "Basic", "Point", "Nested", "WithOptional", "WithUnion", "Data", "DataFixedInts", "DataFixedBytes", "decode_Data_from", "decode_Data", "EdgeCases"]

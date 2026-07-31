@@ -147,3 +147,5 @@ class Lifecycle(int):
 
     def __repr__(self) -> str:
         return f"Lifecycle({int(self)})"
+
+__all__ = ["SCHEMA_HASH", "Direction", "ClientKind", "HardwareStatus", "Sparse", "Lifecycle"]

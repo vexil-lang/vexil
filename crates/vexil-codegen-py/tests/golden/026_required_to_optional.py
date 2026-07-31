@@ -104,3 +104,5 @@ class SettingsV2:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
+
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "SettingsV1", "SettingsV2"]

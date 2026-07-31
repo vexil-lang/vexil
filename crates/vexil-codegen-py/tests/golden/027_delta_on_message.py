@@ -115,3 +115,5 @@ class TelemetryDecoder:
         self._prev_timestamp = 0
         self._prev_value = 0.0
         self._prev_count = 0
+
+__all__ = ["dataclass", "SCHEMA_HASH", "Telemetry", "TelemetryEncoder", "TelemetryDecoder"]

@@ -259,3 +259,5 @@ def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:
 def decode_ExprKind(data: bytes) -> ExprKind:
     _vexil_reader = _BitReader(data)
     return decode_ExprKind_from(_vexil_reader)
+
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "TreeNode", "LinkedList", "Expr", "ExprKind", "ExprKindLiteral", "ExprKindBinary", "decode_ExprKind_from", "decode_ExprKind"]

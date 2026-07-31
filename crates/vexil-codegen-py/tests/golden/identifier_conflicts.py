@@ -118,3 +118,5 @@ def decode_Choice_from(_vexil_reader: _BitReader) -> Choice:
 def decode_Choice(data: bytes) -> Choice:
     _vexil_reader = _BitReader(data)
     return decode_Choice_from(_vexil_reader)
+
+__all__ = ["dataclass", "Protocol", "runtime_checkable", "SCHEMA_HASH", "Settings", "Fields", "Collision", "Choice", "ChoiceNamed", "decode_Choice_from", "decode_Choice"]

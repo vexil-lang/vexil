@@ -10,4 +10,7 @@ SCHEMA_HASH: tuple[int, ...] = (0x54, 0x9d, 0xee, 0xd5, 0x4d, 0x03, 0x4f, 0xe3, 
 # ---------- Validatable ----------
 @runtime_checkable
 class Validatable(Protocol):
-    def validate(self) -> bool: ...
+    def validate(self) -> bool:
+        raise NotImplementedError
+
+__all__ = ["Protocol", "runtime_checkable", "SCHEMA_HASH", "Validatable"]

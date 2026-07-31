@@ -11,3 +11,5 @@ SCHEMA_HASH: tuple[int, ...] = (0x5b, 0xff, 0x64, 0x9a, 0x81, 0x9a, 0x21, 0x7c, 
 @runtime_checkable
 class Named(Protocol):
     name: str
+
+__all__ = ["Protocol", "runtime_checkable", "SCHEMA_HASH", "Named"]
