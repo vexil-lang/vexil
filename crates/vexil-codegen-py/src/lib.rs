@@ -54,6 +54,20 @@ pub(crate) fn generate_with_imports(
         .iter()
         .any(|&id| matches!(compiled.registry.get(id), Some(TypeDef::Trait(_))));
     let has_impls = compiled.impls().next().is_some();
+    let trait_type_params: std::collections::BTreeSet<String> = compiled
+        .declarations
+        .iter()
+        .filter_map(|&id| match compiled.registry.get(id) {
+            Some(TypeDef::Trait(trait_def)) => Some(trait_def),
+            _ => None,
+        })
+        .flat_map(|trait_def| {
+            trait_def
+                .type_params
+                .iter()
+                .map(|param| param.name.node.to_string())
+        })
+        .collect();
 
     // Emit declarations first so runtime imports can be driven by what the
     // generated code actually references.
@@ -77,7 +91,11 @@ pub(crate) fn generate_with_imports(
         typing_imports.push("TYPE_CHECKING");
     }
     if has_traits {
-        typing_imports.extend(["Protocol", "TypeVar", "runtime_checkable"]);
+        typing_imports.push("Protocol");
+        if !trait_type_params.is_empty() {
+            typing_imports.push("TypeVar");
+        }
+        typing_imports.push("runtime_checkable");
     }
     if !typing_imports.is_empty() {
         w.line(&format!("from typing import {}", typing_imports.join(", ")));
@@ -127,17 +145,9 @@ pub(crate) fn generate_with_imports(
         w.line(&format!("SCHEMA_VERSION: str = \"{version}\""));
     }
 
-    if has_traits {
-        for (_, trait_def) in compiled.registry.iter().filter_map(|(_, def)| match def {
-            TypeDef::Trait(t) => Some(((), t)),
-            _ => None,
-        }) {
-            for param in &trait_def.type_params {
-                w.line(&format!(
-                    "{} = TypeVar(\"{}\")",
-                    param.name.node, param.name.node
-                ));
-            }
+    if !trait_type_params.is_empty() {
+        for param in trait_type_params {
+            w.line(&format!("{param} = TypeVar(\"{param}\")"));
         }
     }
 
