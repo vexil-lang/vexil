@@ -62,10 +62,9 @@ pub(crate) fn generate_with_imports(
 ) -> Result<String, CodegenError> {
     let impl_functions = prepare_trait_functions(compiled)?;
 
-    // Emit declarations first so the runtime import can be driven by what the
-    // generated code actually references.
-    let body = emit_declarations(compiled, &impl_functions)?;
-    let runtime_imports = required_runtime_imports(&body);
+    // Emit declarations first so their structural requirements can drive the
+    // runtime import without scanning generated source text.
+    let declarations = emit_declarations(compiled, &impl_functions)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -76,6 +75,7 @@ pub(crate) fn generate_with_imports(
     let mut emitted_import = false;
 
     // Runtime import — omitted entirely when no codec is emitted.
+    let runtime_imports = declarations.runtime_imports.symbols();
     if !runtime_imports.is_empty() {
         w.blank();
         w.line(&format!(
@@ -129,18 +129,47 @@ pub(crate) fn generate_with_imports(
         w.line("type _VexilAssertAssignable<T extends U, U> = T;");
     }
 
-    Ok(format!("{}{body}", w.finish()))
+    Ok(format!("{}{}", w.finish(), declarations.code))
+}
+
+#[derive(Default)]
+struct RuntimeImports {
+    bit_reader: bool,
+    bit_writer: bool,
+}
+
+impl RuntimeImports {
+    fn require_codec(&mut self) {
+        self.bit_reader = true;
+        self.bit_writer = true;
+    }
+
+    fn symbols(&self) -> Vec<&'static str> {
+        let mut symbols = Vec::new();
+        if self.bit_reader {
+            symbols.push("BitReader");
+        }
+        if self.bit_writer {
+            symbols.push("BitWriter");
+        }
+        symbols
+    }
+}
+
+struct EmittedDeclarations {
+    code: String,
+    runtime_imports: RuntimeImports,
 }
 
 /// Emit the body: one section per declared type, then any impl assertions.
 ///
-/// Produced before the header so that import emission can be driven by the
-/// symbols the generated code actually references.
+/// Produced before the header so declaration structure can drive imports.
 fn emit_declarations(
     compiled: &CompiledSchema,
     impl_functions: &HashMap<TypeId, Vec<PortableFunction>>,
-) -> Result<String, CodegenError> {
+) -> Result<EmittedDeclarations, CodegenError> {
     let mut w = emit::CodeWriter::new();
+    let mut runtime_imports = RuntimeImports::default();
 
     for &type_id in &compiled.declarations {
         let typedef =
@@ -158,6 +187,7 @@ fn emit_declarations(
 
         match typedef {
             TypeDef::Message(msg) => {
+                runtime_imports.require_codec();
                 let functions = impl_functions
                     .get(&type_id)
                     .map(Vec::as_slice)
@@ -166,15 +196,19 @@ fn emit_declarations(
                 delta::emit_delta(&mut w, msg, &compiled.registry);
             }
             TypeDef::Enum(en) => {
+                runtime_imports.require_codec();
                 enum_gen::emit_enum(&mut w, en, &compiled.registry);
             }
             TypeDef::Flags(fl) => {
+                runtime_imports.require_codec();
                 flags::emit_flags(&mut w, fl, &compiled.registry);
             }
             TypeDef::Union(un) => {
+                runtime_imports.require_codec();
                 union_gen::emit_union(&mut w, un, &compiled.registry);
             }
             TypeDef::Newtype(nt) => {
+                runtime_imports.require_codec();
                 newtype::emit_newtype(&mut w, nt, &compiled.registry);
             }
             TypeDef::Config(cfg) => {
@@ -192,18 +226,10 @@ fn emit_declarations(
         trait_gen::emit_impl_assertion(&mut w, impl_def, &compiled.registry);
     }
 
-    Ok(w.finish())
-}
-
-/// Runtime symbols the generated body references, in a stable order.
-///
-/// A trait-only schema emits interfaces and type guards but no codec, so it
-/// needs no runtime import at all.
-fn required_runtime_imports(body: &str) -> Vec<&'static str> {
-    ["BitReader", "BitWriter"]
-        .into_iter()
-        .filter(|symbol| body.contains(symbol))
-        .collect()
+    Ok(EmittedDeclarations {
+        code: w.finish(),
+        runtime_imports,
+    })
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.

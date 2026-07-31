@@ -164,3 +164,13 @@ fn trait_only_generic_map() {
         "namespace test.trait_only_map\ntrait Lookup<T> {\n    values @0 : map<string, T>\n}",
     );
 }
+
+/// Trait names that happen to match runtime symbols must not manufacture an
+/// import when the schema emits no codec.
+#[test]
+fn trait_names_codec_symbols() {
+    golden_source_test(
+        "trait_names_codec_symbols",
+        "namespace test.trait_codec_names\ntrait BitReader {\n    value @0 : u32\n}\ntrait BitWriter {\n    value @0 : u32\n}",
+    );
+}
