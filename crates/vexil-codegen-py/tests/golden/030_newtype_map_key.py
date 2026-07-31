@@ -14,7 +14,7 @@ SCHEMA_VERSION: str = "1.0.0"
 # ---------- UserId ----------
 class UserId:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -44,14 +44,14 @@ class UserId:
     def __repr__(self) -> str:
         return f"UserId({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, UserId) and self.value == other.value
 
 
 # ---------- Label ----------
 class Label:
 
-    def __init__(self, value):
+    def __init__(self, value: str) -> None:
         self.value: str = value
 
     def encode(self) -> bytes:
@@ -81,7 +81,7 @@ class Label:
     def __repr__(self) -> str:
         return f"Label({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Label) and self.value == other.value
 
 

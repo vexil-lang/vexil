@@ -13,7 +13,7 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.blank();
 
     // __init__
-    w.open_block("def __init__(self, value)");
+    w.open_block(&format!("def __init__(self, value: {inner_py}) -> None"));
     w.line(&format!("self.value: {inner_py} = value"));
     w.close_block();
     w.blank();
@@ -65,7 +65,7 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.blank();
 
     // __eq__
-    w.open_block("def __eq__(self, other)");
+    w.open_block("def __eq__(self, other: object) -> bool");
     w.line(&format!(
         "return isinstance(other, {name}) and self.value == other.value"
     ));

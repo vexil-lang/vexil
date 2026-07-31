@@ -12,7 +12,7 @@ SCHEMA_HASH: tuple[int, ...] = (0xc1, 0x54, 0xec, 0x4c, 0xc3, 0xc5, 0xab, 0x25, 
 # ---------- SessionId ----------
 class SessionId:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -42,14 +42,14 @@ class SessionId:
     def __repr__(self) -> str:
         return f"SessionId({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, SessionId) and self.value == other.value
 
 
 # ---------- PaneId ----------
 class PaneId:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -79,14 +79,14 @@ class PaneId:
     def __repr__(self) -> str:
         return f"PaneId({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, PaneId) and self.value == other.value
 
 
 # ---------- ExitCode ----------
 class ExitCode:
 
-    def __init__(self, value):
+    def __init__(self, value: int) -> None:
         self.value: int = value
 
     def encode(self) -> bytes:
@@ -116,14 +116,14 @@ class ExitCode:
     def __repr__(self) -> str:
         return f"ExitCode({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, ExitCode) and self.value == other.value
 
 
 # ---------- Name ----------
 class Name:
 
-    def __init__(self, value):
+    def __init__(self, value: str) -> None:
         self.value: str = value
 
     def encode(self) -> bytes:
@@ -153,14 +153,14 @@ class Name:
     def __repr__(self) -> str:
         return f"Name({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Name) and self.value == other.value
 
 
 # ---------- Payload ----------
 class Payload:
 
-    def __init__(self, value):
+    def __init__(self, value: bytes) -> None:
         self.value: bytes = value
 
     def encode(self) -> bytes:
@@ -192,14 +192,14 @@ class Payload:
     def __repr__(self) -> str:
         return f"Payload({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Payload) and self.value == other.value
 
 
 # ---------- Color ----------
 class Color:
 
-    def __init__(self, value):
+    def __init__(self, value: tuple[int, int, int]) -> None:
         self.value: tuple[int, int, int] = value
 
     def encode(self) -> bytes:
@@ -237,6 +237,6 @@ class Color:
     def __repr__(self) -> str:
         return f"Color({self.value!r})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Color) and self.value == other.value
 
