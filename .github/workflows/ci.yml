@@ -27,6 +27,7 @@ jobs:
       ts_runtime: ${{ steps.classify.outputs.ts_runtime }}
       go_runtime: ${{ steps.classify.outputs.go_runtime }}
       py_codegen: ${{ steps.classify.outputs.py_codegen }}
+      generated_static: ${{ steps.classify.outputs.generated_static }}
       schema: ${{ steps.classify.outputs.schema }}
       generated_targets: ${{ steps.classify.outputs.generated_targets }}
     steps:
@@ -43,6 +44,7 @@ jobs:
             echo "ts_runtime=true" >> "$GITHUB_OUTPUT"
             echo "go_runtime=true" >> "$GITHUB_OUTPUT"
             echo "py_codegen=true" >> "$GITHUB_OUTPUT"
+            echo "generated_static=true" >> "$GITHUB_OUTPUT"
             echo "schema=true" >> "$GITHUB_OUTPUT"
             echo "generated_targets=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -63,6 +65,11 @@ jobs:
           else
             echo "py_codegen=false" >> "$GITHUB_OUTPUT"
           fi
+          if grep -Eq '^(crates/vexil-codegen-(py|ts)/|crates/vexil-lang/|packages/runtime-(py|ts)/|corpus/valid/|tools/generated-code-checks/|\.github/workflows/ci\.yml)' <<< "$changed"; then
+            echo "generated_static=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "generated_static=false" >> "$GITHUB_OUTPUT"
+          fi
           printf '%s\n' "$changed" |
             bash .github/scripts/classify-generated-changes.sh >> "$GITHUB_OUTPUT"
 
@@ -76,6 +83,8 @@ jobs:
       - ts-runtime
       - go-runtime
       - generated-python
+      - generated-targets
+      - generated-static
       - msrv
       - schema-compat
     if: always()
@@ -88,6 +97,8 @@ jobs:
           TS_RUNTIME_RESULT: ${{ needs['ts-runtime'].result }}
           GO_RUNTIME_RESULT: ${{ needs['go-runtime'].result }}
           GENERATED_PYTHON_RESULT: ${{ needs['generated-python'].result }}
+          GENERATED_TARGETS_RESULT: ${{ needs['generated-targets'].result }}
+          GENERATED_STATIC_RESULT: ${{ needs['generated-static'].result }}
           MSRV_RESULT: ${{ needs.msrv.result }}
           SCHEMA_COMPAT_RESULT: ${{ needs['schema-compat'].result }}
         run: |
@@ -97,6 +108,8 @@ jobs:
             "$TS_RUNTIME_RESULT" \
             "$GO_RUNTIME_RESULT" \
             "$GENERATED_PYTHON_RESULT" \
+            "$GENERATED_TARGETS_RESULT" \
+            "$GENERATED_STATIC_RESULT" \
             "$MSRV_RESULT" \
             "$SCHEMA_COMPAT_RESULT"
           do
@@ -305,6 +318,42 @@ jobs:
         run: |
           python crates/vexil-codegen-py/tests/delta_runtime_probe.py
           python crates/vexil-codegen-py/tests/trait_runtime_probe.py
+
+  # Native static checkers validate generated target code against the checked-in
+  # runtimes. The lockfile pins both tools so local and CI diagnostics agree.
+  generated-static:
+    name: Generated static checks
+    needs: changes
+    if: needs.changes.outputs.generated_static == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: tools/generated-code-checks/package-lock.json
+
+      - name: Generate and compare target goldens
+        run: cargo test -p vexil-codegen-py -p vexil-codegen-ts
+
+      - name: Install pinned static checkers
+        working-directory: tools/generated-code-checks
+        run: npm ci --ignore-scripts
+
+      - name: Check generated Python with strict Pyright
+        working-directory: tools/generated-code-checks
+        run: npm run check:python
+
+      - name: Check generated TypeScript with native tsc
+        working-directory: tools/generated-code-checks
+        run: npm run check:typescript
 
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.
