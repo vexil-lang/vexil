@@ -3,7 +3,11 @@
 
 package newtype_map_key
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"sort"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0x18, 0xfd, 0xc9, 0xe0, 0x68, 0x83, 0x2d, 0x02, 0x03, 0x88, 0x9a, 0x40, 0x58, 0x69, 0xe8, 0xd5, 0xf3, 0xc4, 0x44, 0xec, 0x31, 0xe3, 0x08, 0x0b, 0x7b, 0x3b, 0x56, 0x02, 0x9d, 0xc1, 0x41, 0x81}
 const SchemaVersion = "1.0.0"
@@ -61,12 +65,28 @@ type UserProfile struct {
 func (m *UserProfile) Pack(w *vexil.BitWriter) error {
 	PackUserId(m.ID, w)
 	w.WriteLeb128(uint64(len(m.Friends)))
-	for mapK, mapV := range m.Friends {
+	mapKeysmFriends := make([]UserId, 0, len(m.Friends))
+	for key := range m.Friends {
+		mapKeysmFriends = append(mapKeysmFriends, key)
+	}
+	sort.Slice(mapKeysmFriends, func(i, j int) bool {
+		return mapKeysmFriends[i] < mapKeysmFriends[j]
+	})
+	for _, mapK := range mapKeysmFriends {
+		mapV := m.Friends[mapK]
 		PackUserId(mapK, w)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.Tags)))
-	for mapK, mapV := range m.Tags {
+	mapKeysmTags := make([]Label, 0, len(m.Tags))
+	for key := range m.Tags {
+		mapKeysmTags = append(mapKeysmTags, key)
+	}
+	sort.Slice(mapKeysmTags, func(i, j int) bool {
+		return mapKeysmTags[i] < mapKeysmTags[j]
+	})
+	for _, mapK := range mapKeysmTags {
+		mapV := m.Tags[mapK]
 		PackLabel(mapK, w)
 		w.WriteU32(mapV)
 	}

@@ -103,7 +103,8 @@ class UserProfile:
         finally:
             w.leave_nested()
         w.write_leb128(len(self.friends))
-        for _vexil_self_2e_friends_map_key, _vexil_self_2e_friends_map_value in self.friends.items():
+        for _vexil_self_2e_friends_map_key in sorted(self.friends, key=lambda _vexil_self_2e_friends_map_key: _vexil_self_2e_friends_map_key.value):
+            _vexil_self_2e_friends_map_value = self.friends[_vexil_self_2e_friends_map_key]
             try:
                 w.enter_nested()
                 _vexil_self_2e_friends_map_key.encode_to(w)
@@ -111,7 +112,8 @@ class UserProfile:
                 w.leave_nested()
             w.write_string(_vexil_self_2e_friends_map_value)
         w.write_leb128(len(self.tags))
-        for _vexil_self_2e_tags_map_key, _vexil_self_2e_tags_map_value in self.tags.items():
+        for _vexil_self_2e_tags_map_key in sorted(self.tags, key=lambda _vexil_self_2e_tags_map_key: _vexil_self_2e_tags_map_key.value):
+            _vexil_self_2e_tags_map_value = self.tags[_vexil_self_2e_tags_map_key]
             try:
                 w.enter_nested()
                 _vexil_self_2e_tags_map_key.encode_to(w)

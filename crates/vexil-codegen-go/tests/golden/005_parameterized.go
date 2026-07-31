@@ -32,10 +32,12 @@ func (m *Basic) Pack(w *vexil.BitWriter) error {
 	}
 	w.WriteLeb128(uint64(len(m.C)))
 	mapKeysmC := make([]string, 0, len(m.C))
-	for mapK := range m.C {
-		mapKeysmC = append(mapKeysmC, mapK)
+	for key := range m.C {
+		mapKeysmC = append(mapKeysmC, key)
 	}
-	sort.Strings(mapKeysmC)
+	sort.Slice(mapKeysmC, func(i, j int) bool {
+		return mapKeysmC[i] < mapKeysmC[j]
+	})
 	for _, mapK := range mapKeysmC {
 		mapV := m.C[mapK]
 		w.WriteString(mapK)
@@ -180,10 +182,12 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 	}
 	w.WriteLeb128(uint64(len(m.C)))
 	mapKeysmC := make([]string, 0, len(m.C))
-	for mapK := range m.C {
-		mapKeysmC = append(mapKeysmC, mapK)
+	for key := range m.C {
+		mapKeysmC = append(mapKeysmC, key)
 	}
-	sort.Strings(mapKeysmC)
+	sort.Slice(mapKeysmC, func(i, j int) bool {
+		return mapKeysmC[i] < mapKeysmC[j]
+	})
 	for _, mapK := range mapKeysmC {
 		mapV := m.C[mapK]
 		w.WriteString(mapK)
@@ -221,7 +225,15 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		} else {
 			w.WriteBool(false)
 			w.WriteLeb128(uint64(len(**m.G.Err)))
-			for mapK, mapV := range **m.G.Err {
+			mapKeysmGErr := make([]uint32, 0, len(**m.G.Err))
+			for key := range **m.G.Err {
+				mapKeysmGErr = append(mapKeysmGErr, key)
+			}
+			sort.Slice(mapKeysmGErr, func(i, j int) bool {
+				return mapKeysmGErr[i] < mapKeysmGErr[j]
+			})
+			for _, mapK := range mapKeysmGErr {
+				mapV := **m.G.Err[mapK]
 				w.WriteU32(mapK)
 				w.WriteString(mapV)
 			}

@@ -29,6 +29,59 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     }
 }
 
+fn canonical_less_expr(
+    ty: &ResolvedType,
+    registry: &TypeRegistry,
+    left: &str,
+    right: &str,
+) -> String {
+    match ty {
+        ResolvedType::Primitive(PrimitiveType::Bool) => format!("!{left} && {right}"),
+        ResolvedType::Semantic(SemanticType::Uuid) => {
+            format!("string({left}[:]) < string({right}[:])")
+        }
+        ResolvedType::Named(id) => match registry.get(*id) {
+            Some(TypeDef::Newtype(newtype)) => {
+                canonical_less_expr(&newtype.inner_type, registry, left, right)
+            }
+            _ => format!("{left} < {right}"),
+        },
+        _ => format!("{left} < {right}"),
+    }
+}
+
+fn emit_sorted_collection_keys(
+    w: &mut CodeWriter,
+    access: &str,
+    key_type: &ResolvedType,
+    registry: &TypeRegistry,
+    prefix: &str,
+) -> String {
+    let keys = format!(
+        "{prefix}{}",
+        access
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect::<String>()
+    );
+    let key_go = go_collection_key_type(key_type, registry);
+    w.line(&format!("{keys} := make([]{key_go}, 0, len({access}))"));
+    w.open_block(&format!("for key := range {access}"));
+    w.line(&format!("{keys} = append({keys}, key)"));
+    w.close_block();
+    w.open_block(&format!("sort.Slice({keys}, func(i, j int) bool"));
+    let less = canonical_less_expr(
+        key_type,
+        registry,
+        &format!("{keys}[i]"),
+        &format!("{keys}[j]"),
+    );
+    w.line(&format!("return {less}"));
+    w.dedent();
+    w.line("})");
+    keys
+}
+
 // ---------------------------------------------------------------------------
 // Primitive bits helper
 // ---------------------------------------------------------------------------
@@ -349,23 +402,8 @@ fn emit_write_type(
         }
         ResolvedType::Set(inner) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
-            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                let keys = format!(
-                    "setKeys{}",
-                    access
-                        .chars()
-                        .filter(char::is_ascii_alphanumeric)
-                        .collect::<String>()
-                );
-                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
-                w.open_block(&format!("for item := range {access}"));
-                w.line(&format!("{keys} = append({keys}, item)"));
-                w.close_block();
-                w.line(&format!("sort.Strings({keys})"));
-                w.open_block(&format!("for _, item := range {keys}"));
-            } else {
-                w.open_block(&format!("for item := range {access}"));
-            }
+            let keys = emit_sorted_collection_keys(w, access, inner, registry, "setKeys");
+            w.open_block(&format!("for _, item := range {keys}"));
             let item_access =
                 if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
                     "[]byte(item)"
@@ -392,26 +430,9 @@ fn emit_write_type(
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
-            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                // String keys have a canonical lexical order. Go deliberately
-                // randomizes map iteration, so encode through a sorted key slice.
-                let keys = format!(
-                    "mapKeys{}",
-                    access
-                        .chars()
-                        .filter(char::is_ascii_alphanumeric)
-                        .collect::<String>()
-                );
-                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
-                w.open_block(&format!("for mapK := range {access}"));
-                w.line(&format!("{keys} = append({keys}, mapK)"));
-                w.close_block();
-                w.line(&format!("sort.Strings({keys})"));
-                w.open_block(&format!("for _, mapK := range {keys}"));
-                w.line(&format!("mapV := {access}[mapK]"));
-            } else {
-                w.open_block(&format!("for mapK, mapV := range {access}"));
-            }
+            let keys = emit_sorted_collection_keys(w, access, k, registry, "mapKeys");
+            w.open_block(&format!("for _, mapK := range {keys}"));
+            w.line(&format!("mapV := {access}[mapK]"));
             let key_access = if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
                 "[]byte(mapK)"
             } else {

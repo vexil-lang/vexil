@@ -20,6 +20,19 @@ fn local_name(target: &str, suffix: &str) -> String {
     format!("_vexil_{stem}_{suffix}")
 }
 
+fn canonical_sort_key_expr(ty: &ResolvedType, registry: &TypeRegistry, value: &str) -> String {
+    match ty {
+        ResolvedType::Named(id) => match registry.get(*id) {
+            Some(TypeDef::Newtype(newtype)) => {
+                canonical_sort_key_expr(&newtype.inner_type, registry, &format!("{value}.value"))
+            }
+            Some(TypeDef::Enum(_) | TypeDef::Flags(_)) => format!("int({value})"),
+            _ => value.to_string(),
+        },
+        _ => value.to_string(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Constraint validation
 // ---------------------------------------------------------------------------
@@ -270,15 +283,11 @@ fn emit_write_type(
             let map_k = local_name(access, "map_key");
             let map_v = local_name(access, "map_value");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                // String keys have a canonical lexical order. Iterating a
-                // caller-owned dict would otherwise make the wire depend on
-                // insertion order.
-                w.open_block(&format!("for {map_k} in sorted({access})"));
-                w.line(&format!("{map_v} = {access}[{map_k}]"));
-            } else {
-                w.open_block(&format!("for {map_k}, {map_v} in {access}.items()"));
-            }
+            let sort_key = canonical_sort_key_expr(k, registry, &map_k);
+            w.open_block(&format!(
+                "for {map_k} in sorted({access}, key=lambda {map_k}: {sort_key})"
+            ));
+            w.line(&format!("{map_v} = {access}[{map_k}]"));
             emit_write_type(w, &map_k, k, registry, writer);
             emit_write_type(w, &map_v, v, registry, writer);
             w.close_block();
@@ -286,11 +295,10 @@ fn emit_write_type(
         ResolvedType::Set(inner) => {
             let item = local_name(access, "set_item");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                w.open_block(&format!("for {item} in sorted({access})"));
-            } else {
-                w.open_block(&format!("for {item} in {access}"));
-            }
+            let sort_key = canonical_sort_key_expr(inner, registry, &item);
+            w.open_block(&format!(
+                "for {item} in sorted({access}, key=lambda {item}: {sort_key})"
+            ));
             emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }

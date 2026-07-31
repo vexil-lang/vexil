@@ -263,10 +263,12 @@ func (m *Limited) Pack(w *vexil.BitWriter) error {
 	}
 	w.WriteLeb128(uint64(len(m.Headers)))
 	mapKeysmHeaders := make([]string, 0, len(m.Headers))
-	for mapK := range m.Headers {
-		mapKeysmHeaders = append(mapKeysmHeaders, mapK)
+	for key := range m.Headers {
+		mapKeysmHeaders = append(mapKeysmHeaders, key)
 	}
-	sort.Strings(mapKeysmHeaders)
+	sort.Slice(mapKeysmHeaders, func(i, j int) bool {
+		return mapKeysmHeaders[i] < mapKeysmHeaders[j]
+	})
 	for _, mapK := range mapKeysmHeaders {
 		mapV := m.Headers[mapK]
 		w.WriteString(mapK)

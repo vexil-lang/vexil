@@ -38,7 +38,7 @@ class Basic:
         for _vexil_self_2e_b_array_item in self.b:
             w.write_string(_vexil_self_2e_b_array_item)
         w.write_leb128(len(self.c))
-        for _vexil_self_2e_c_map_key in sorted(self.c):
+        for _vexil_self_2e_c_map_key in sorted(self.c, key=lambda _vexil_self_2e_c_map_key: _vexil_self_2e_c_map_key):
             _vexil_self_2e_c_map_value = self.c[_vexil_self_2e_c_map_key]
             w.write_string(_vexil_self_2e_c_map_key)
             w.write_u64(_vexil_self_2e_c_map_value)
@@ -135,7 +135,7 @@ class Nested:
             if _vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional is not None:
                 w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional)
         w.write_leb128(len(self.c))
-        for _vexil_self_2e_c_map_key in sorted(self.c):
+        for _vexil_self_2e_c_map_key in sorted(self.c, key=lambda _vexil_self_2e_c_map_key: _vexil_self_2e_c_map_key):
             _vexil_self_2e_c_map_value = self.c[_vexil_self_2e_c_map_key]
             w.write_string(_vexil_self_2e_c_map_key)
             w.write_leb128(len(_vexil_self_2e_c_map_value))
@@ -170,7 +170,8 @@ class Nested:
             else:
                 w.write_bool(False)
                 w.write_leb128(len(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]))
-                for _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key, _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value in _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1].items():
+                for _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key in sorted(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1], key=lambda _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key: _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key):
+                    _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value = _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1][_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key]
                     w.write_u32(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key)
                     w.write_string(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value)
         w.flush_to_byte_boundary()

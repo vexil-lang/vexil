@@ -166,40 +166,48 @@ class MapKeyTest:
 
     def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.bool_map))
-        for _vexil_self_2e_bool_5f_map_map_key, _vexil_self_2e_bool_5f_map_map_value in self.bool_map.items():
+        for _vexil_self_2e_bool_5f_map_map_key in sorted(self.bool_map, key=lambda _vexil_self_2e_bool_5f_map_map_key: _vexil_self_2e_bool_5f_map_map_key):
+            _vexil_self_2e_bool_5f_map_map_value = self.bool_map[_vexil_self_2e_bool_5f_map_map_key]
             w.write_bool(_vexil_self_2e_bool_5f_map_map_key)
             w.write_string(_vexil_self_2e_bool_5f_map_map_value)
         w.write_leb128(len(self.u8_map))
-        for _vexil_self_2e_u8_5f_map_map_key, _vexil_self_2e_u8_5f_map_map_value in self.u8_map.items():
+        for _vexil_self_2e_u8_5f_map_map_key in sorted(self.u8_map, key=lambda _vexil_self_2e_u8_5f_map_map_key: _vexil_self_2e_u8_5f_map_map_key):
+            _vexil_self_2e_u8_5f_map_map_value = self.u8_map[_vexil_self_2e_u8_5f_map_map_key]
             w.write_u8(_vexil_self_2e_u8_5f_map_map_key)
             w.write_string(_vexil_self_2e_u8_5f_map_map_value)
         w.write_leb128(len(self.u32_map))
-        for _vexil_self_2e_u32_5f_map_map_key, _vexil_self_2e_u32_5f_map_map_value in self.u32_map.items():
+        for _vexil_self_2e_u32_5f_map_map_key in sorted(self.u32_map, key=lambda _vexil_self_2e_u32_5f_map_map_key: _vexil_self_2e_u32_5f_map_map_key):
+            _vexil_self_2e_u32_5f_map_map_value = self.u32_map[_vexil_self_2e_u32_5f_map_map_key]
             w.write_u32(_vexil_self_2e_u32_5f_map_map_key)
             w.write_string(_vexil_self_2e_u32_5f_map_map_value)
         w.write_leb128(len(self.i32_map))
-        for _vexil_self_2e_i32_5f_map_map_key, _vexil_self_2e_i32_5f_map_map_value in self.i32_map.items():
+        for _vexil_self_2e_i32_5f_map_map_key in sorted(self.i32_map, key=lambda _vexil_self_2e_i32_5f_map_map_key: _vexil_self_2e_i32_5f_map_map_key):
+            _vexil_self_2e_i32_5f_map_map_value = self.i32_map[_vexil_self_2e_i32_5f_map_map_key]
             w.write_i32(_vexil_self_2e_i32_5f_map_map_key)
             w.write_string(_vexil_self_2e_i32_5f_map_map_value)
         w.write_leb128(len(self.fixed_map))
-        for _vexil_self_2e_fixed_5f_map_map_key, _vexil_self_2e_fixed_5f_map_map_value in self.fixed_map.items():
+        for _vexil_self_2e_fixed_5f_map_map_key in sorted(self.fixed_map, key=lambda _vexil_self_2e_fixed_5f_map_map_key: _vexil_self_2e_fixed_5f_map_map_key):
+            _vexil_self_2e_fixed_5f_map_map_value = self.fixed_map[_vexil_self_2e_fixed_5f_map_map_key]
             w.write_i32(_vexil_self_2e_fixed_5f_map_map_key)
             w.write_string(_vexil_self_2e_fixed_5f_map_map_value)
         w.write_leb128(len(self.string_map))
-        for _vexil_self_2e_string_5f_map_map_key in sorted(self.string_map):
+        for _vexil_self_2e_string_5f_map_map_key in sorted(self.string_map, key=lambda _vexil_self_2e_string_5f_map_map_key: _vexil_self_2e_string_5f_map_map_key):
             _vexil_self_2e_string_5f_map_map_value = self.string_map[_vexil_self_2e_string_5f_map_map_key]
             w.write_string(_vexil_self_2e_string_5f_map_map_key)
             w.write_u32(_vexil_self_2e_string_5f_map_map_value)
         w.write_leb128(len(self.bytes_map))
-        for _vexil_self_2e_bytes_5f_map_map_key, _vexil_self_2e_bytes_5f_map_map_value in self.bytes_map.items():
+        for _vexil_self_2e_bytes_5f_map_map_key in sorted(self.bytes_map, key=lambda _vexil_self_2e_bytes_5f_map_map_key: _vexil_self_2e_bytes_5f_map_map_key):
+            _vexil_self_2e_bytes_5f_map_map_value = self.bytes_map[_vexil_self_2e_bytes_5f_map_map_key]
             w.write_bytes(_vexil_self_2e_bytes_5f_map_map_key)
             w.write_u32(_vexil_self_2e_bytes_5f_map_map_value)
         w.write_leb128(len(self.uuid_map))
-        for _vexil_self_2e_uuid_5f_map_map_key, _vexil_self_2e_uuid_5f_map_map_value in self.uuid_map.items():
+        for _vexil_self_2e_uuid_5f_map_map_key in sorted(self.uuid_map, key=lambda _vexil_self_2e_uuid_5f_map_map_key: _vexil_self_2e_uuid_5f_map_map_key):
+            _vexil_self_2e_uuid_5f_map_map_value = self.uuid_map[_vexil_self_2e_uuid_5f_map_map_key]
             w.write_raw_bytes(_vexil_self_2e_uuid_5f_map_map_key, 16)
             w.write_string(_vexil_self_2e_uuid_5f_map_map_value)
         w.write_leb128(len(self.enum_map))
-        for _vexil_self_2e_enum_5f_map_map_key, _vexil_self_2e_enum_5f_map_map_value in self.enum_map.items():
+        for _vexil_self_2e_enum_5f_map_map_key in sorted(self.enum_map, key=lambda _vexil_self_2e_enum_5f_map_map_key: int(_vexil_self_2e_enum_5f_map_map_key)):
+            _vexil_self_2e_enum_5f_map_map_value = self.enum_map[_vexil_self_2e_enum_5f_map_map_key]
             try:
                 w.enter_nested()
                 _vexil_self_2e_enum_5f_map_map_key.encode_to(w)
@@ -207,7 +215,8 @@ class MapKeyTest:
                 w.leave_nested()
             w.write_string(_vexil_self_2e_enum_5f_map_map_value)
         w.write_leb128(len(self.flags_map))
-        for _vexil_self_2e_flags_5f_map_map_key, _vexil_self_2e_flags_5f_map_map_value in self.flags_map.items():
+        for _vexil_self_2e_flags_5f_map_map_key in sorted(self.flags_map, key=lambda _vexil_self_2e_flags_5f_map_map_key: int(_vexil_self_2e_flags_5f_map_map_key)):
+            _vexil_self_2e_flags_5f_map_map_value = self.flags_map[_vexil_self_2e_flags_5f_map_map_key]
             try:
                 w.enter_nested()
                 _vexil_self_2e_flags_5f_map_map_key.encode_to(w)
@@ -215,7 +224,8 @@ class MapKeyTest:
                 w.leave_nested()
             w.write_string(_vexil_self_2e_flags_5f_map_map_value)
         w.write_leb128(len(self.newtype_u32_map))
-        for _vexil_self_2e_newtype_5f_u32_5f_map_map_key, _vexil_self_2e_newtype_5f_u32_5f_map_map_value in self.newtype_u32_map.items():
+        for _vexil_self_2e_newtype_5f_u32_5f_map_map_key in sorted(self.newtype_u32_map, key=lambda _vexil_self_2e_newtype_5f_u32_5f_map_map_key: _vexil_self_2e_newtype_5f_u32_5f_map_map_key.value):
+            _vexil_self_2e_newtype_5f_u32_5f_map_map_value = self.newtype_u32_map[_vexil_self_2e_newtype_5f_u32_5f_map_map_key]
             try:
                 w.enter_nested()
                 _vexil_self_2e_newtype_5f_u32_5f_map_map_key.encode_to(w)
@@ -223,7 +233,8 @@ class MapKeyTest:
                 w.leave_nested()
             w.write_string(_vexil_self_2e_newtype_5f_u32_5f_map_map_value)
         w.write_leb128(len(self.newtype_str_map))
-        for _vexil_self_2e_newtype_5f_str_5f_map_map_key, _vexil_self_2e_newtype_5f_str_5f_map_map_value in self.newtype_str_map.items():
+        for _vexil_self_2e_newtype_5f_str_5f_map_map_key in sorted(self.newtype_str_map, key=lambda _vexil_self_2e_newtype_5f_str_5f_map_map_key: _vexil_self_2e_newtype_5f_str_5f_map_map_key.value):
+            _vexil_self_2e_newtype_5f_str_5f_map_map_value = self.newtype_str_map[_vexil_self_2e_newtype_5f_str_5f_map_map_key]
             try:
                 w.enter_nested()
                 _vexil_self_2e_newtype_5f_str_5f_map_map_key.encode_to(w)
