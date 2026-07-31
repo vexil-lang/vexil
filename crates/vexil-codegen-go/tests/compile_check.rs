@@ -290,3 +290,8 @@ fn optional_container_access_compiles() {
         "namespace test.optional_container\nmessage M { value @0 : optional<map<u8, set<u16>>> }",
     );
 }
+
+#[test]
+fn constrained_fields_compile() {
+    check_compiles("036_where_clause");
+}

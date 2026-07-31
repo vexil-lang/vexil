@@ -3,9 +3,15 @@
 
 package where_clause
 
-import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+import (
+	"fmt"
+
+	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
 
 var SchemaHash = [32]byte{0xaa, 0xc0, 0x46, 0xf1, 0xe1, 0xc5, 0x86, 0xdb, 0x8e, 0xd3, 0xab, 0x3a, 0x96, 0xba, 0x5b, 0x55, 0x70, 0x40, 0x9c, 0x3c, 0x76, 0x7b, 0xcb, 0x75, 0x57, 0x2a, 0x9f, 0xa1, 0x8e, 0x35, 0xdc, 0x57}
+const MaxSize = 100
+const MinSize = 10
 
 // ── User ──
 type User struct {
@@ -210,8 +216,10 @@ type Config struct {
 }
 
 func (m *Config) Pack(w *vexil.BitWriter) error {
-	if !(m.Port >= 1024 && m.Port <= 65535) {
-		return fmt.Errorf(`constraint violation for field "port": value %v violates constraint: expected [m.Port >= 1024 && m.Port <= 65535]`, m.Port)
+	if m.Port != nil {
+		if !((*m.Port) >= 1024 && (*m.Port) <= 65535) {
+			return fmt.Errorf(`constraint violation for field "port": value %v violates constraint: expected [(*m.Port) >= 1024 && (*m.Port) <= 65535]`, (*m.Port))
+		}
 	}
 	w.WriteBool(m.Port != nil)
 	w.FlushToByteBoundary()
@@ -246,8 +254,10 @@ func (m *Config) Unpack(r *vexil.BitReader) error {
 			}
 		}
 	}
-	if !(m.Port >= 1024 && m.Port <= 65535) {
-		return fmt.Errorf(`constraint violation for field "port": value %v violates constraint: expected [m.Port >= 1024 && m.Port <= 65535]`, m.Port)
+	if m.Port != nil {
+		if !((*m.Port) >= 1024 && (*m.Port) <= 65535) {
+			return fmt.Errorf(`constraint violation for field "port": value %v violates constraint: expected [(*m.Port) >= 1024 && (*m.Port) <= 65535]`, (*m.Port))
+		}
 	}
 	r.FlushToByteBoundary()
 	m.Unknown = nil

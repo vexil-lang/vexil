@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xec, 0xd9, 0x0c, 0x6d, 0x0c, 0x2f, 0x20, 0x07, 0x09, 0xdb, 0xa3, 0x84, 0xa5, 0x27, 0x03, 0x34, 0x98, 0x6c, 0x64, 0xa3, 0xcb, 0x32, 0xa8, 0x81, 0xc6, 0xa4, 0xbe, 0x62, 0x82, 0xcd, 0xe5, 0x0d)
+HeaderSize: int = 16
+MaxBufferSize: int = 1024
+PayloadSize: int = 1008
 
 
 # ---------- Packet ----------
@@ -55,4 +58,4 @@ class Packet:
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "SCHEMA_HASH", "Packet"]
+__all__ = ["dataclass", "SCHEMA_HASH", "HeaderSize", "MaxBufferSize", "PayloadSize", "Packet"]

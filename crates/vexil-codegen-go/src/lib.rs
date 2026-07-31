@@ -80,7 +80,13 @@ pub(crate) fn generate_with_imports(
     // Check if we need cross-package imports
     let has_cross_imports = import_types.is_some_and(|m| !m.is_empty());
 
-    let needs_fmt = has_unions;
+    let needs_fmt = has_unions
+        || compiled.declarations.iter().any(|&id| {
+            compiled
+                .registry
+                .get(id)
+                .is_some_and(type_def_has_constraints)
+        });
     let needs_sort = compiled.declarations.iter().any(|&id| {
         compiled
             .registry
@@ -131,6 +137,12 @@ pub(crate) fn generate_with_imports(
     // Schema version
     if let Some(ref version) = compiled.annotations.version {
         w.line(&format!("const SchemaVersion = \"{version}\""));
+    }
+
+    let mut constants: Vec<_> = compiled.constants.iter().collect();
+    constants.sort_by_key(|(name, _)| name.as_str());
+    for (name, value) in constants {
+        w.line(&format!("const {name} = {}", value.value));
     }
 
     // Emit each declared type
@@ -222,6 +234,21 @@ fn type_def_has_ordered_collection(type_def: &TypeDef) -> bool {
             .fields
             .iter()
             .any(|field| contains_ordered_collection(&field.ty)),
+        _ => false,
+    }
+}
+
+fn type_def_has_constraints(type_def: &TypeDef) -> bool {
+    match type_def {
+        TypeDef::Message(message) => message
+            .fields
+            .iter()
+            .any(|field| field.constraint.is_some()),
+        TypeDef::Union(union) => union
+            .variants
+            .iter()
+            .flat_map(|variant| &variant.fields)
+            .any(|field| field.constraint.is_some()),
         _ => false,
     }
 }

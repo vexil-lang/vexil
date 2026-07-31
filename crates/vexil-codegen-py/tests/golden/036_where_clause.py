@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
 
 SCHEMA_HASH: tuple[int, ...] = (0xaa, 0xc0, 0x46, 0xf1, 0xe1, 0xc5, 0x86, 0xdb, 0x8e, 0xd3, 0xab, 0x3a, 0x96, 0xba, 0x5b, 0x55, 0x70, 0x40, 0x9c, 0x3c, 0x76, 0x7b, 0xcb, 0x75, 0x57, 0x2a, 0x9f, 0xa1, 0x8e, 0x35, 0xdc, 0x57)
+MaxSize: int = 100
+MinSize: int = 10
 
 
 # ---------- User ----------
@@ -62,7 +64,7 @@ class User:
         w.write_leb128(len(self.buffer))
         for _vexil_self_2e_buffer_array_item in self.buffer:
             w.write_u8(_vexil_self_2e_buffer_array_item)
-        if not ((self.active == true) or (self.active == false)):
+        if not ((self.active == True) or (self.active == False)):
             raise ValueError(f"constraint violation for field 'active': value {self.active} violates constraint")
         w.write_bool(self.active)
         if not (0 <= self.rating <= 5):
@@ -117,7 +119,7 @@ class User:
         if not ((len(m.buffer) >= MinSize) and (len(m.buffer) <= MaxSize)):
             raise ValueError(f"constraint violation for field 'buffer': value {m.buffer} violates constraint")
         m.active = r.read_bool()
-        if not ((m.active == true) or (m.active == false)):
+        if not ((m.active == True) or (m.active == False)):
             raise ValueError(f"constraint violation for field 'active': value {m.active} violates constraint")
         m.rating = r.read_f32()
         if not (0 <= m.rating <= 5):
@@ -147,8 +149,9 @@ class Config:
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        if not (1024 <= self.port <= 65535):
-            raise ValueError(f"constraint violation for field 'port': value {self.port} violates constraint")
+        if self.port is not None:
+            if not (1024 <= self.port <= 65535):
+                raise ValueError(f"constraint violation for field 'port': value {self.port} violates constraint")
         _vexil_self_2e_port_optional = self.port
         w.write_bool(_vexil_self_2e_port_optional is not None)
         w.flush_to_byte_boundary()
@@ -180,10 +183,11 @@ class Config:
                 m.port = r.read_u16()
             else:
                 m.port = None
-        if not (1024 <= m.port <= 65535):
-            raise ValueError(f"constraint violation for field 'port': value {m.port} violates constraint")
+        if m.port is not None:
+            if not (1024 <= m.port <= 65535):
+                raise ValueError(f"constraint violation for field 'port': value {m.port} violates constraint")
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "User", "Config"]
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "MaxSize", "MinSize", "User", "Config"]

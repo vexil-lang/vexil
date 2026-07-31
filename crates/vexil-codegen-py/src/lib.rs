@@ -148,6 +148,12 @@ pub(crate) fn generate_with_imports(
         w.line(&format!("SCHEMA_VERSION: str = \"{version}\""));
     }
 
+    let mut constants: Vec<_> = compiled.constants.iter().collect();
+    constants.sort_by_key(|(name, _)| name.as_str());
+    for (name, value) in constants {
+        w.line(&format!("{name}: int = {}", value.value));
+    }
+
     if !trait_type_params.is_empty() {
         for param in trait_type_params {
             let ident = types::py_type_param_ident(&param);

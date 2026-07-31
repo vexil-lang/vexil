@@ -121,7 +121,8 @@ fn operand_to_py(operand: &ConstraintOperand) -> String {
         ConstraintOperand::Int(i) => i.to_string(),
         ConstraintOperand::Float(f) => f.to_string(),
         ConstraintOperand::String(s) => format!("\"{s}\""),
-        ConstraintOperand::Bool(b) => b.to_string(),
+        ConstraintOperand::Bool(true) => "True".to_string(),
+        ConstraintOperand::Bool(false) => "False".to_string(),
         ConstraintOperand::ConstRef(name) => name.to_string(),
     }
 }
@@ -805,7 +806,13 @@ pub fn emit_message(
         let access = format!("self.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_py(w, constraint, &access, field.name.as_str());
+            if matches!(field.resolved_type, ResolvedType::Optional(_)) {
+                w.open_block(&format!("if {access} is not None"));
+                emit_constraint_validation_py(w, constraint, &access, field.name.as_str());
+                w.close_block();
+            } else {
+                emit_constraint_validation_py(w, constraint, &access, field.name.as_str());
+            }
         }
         emit_write(
             w,
@@ -872,7 +879,13 @@ pub fn emit_message(
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_py(w, constraint, &target, field.name.as_str());
+                    if matches!(field.resolved_type, ResolvedType::Optional(_)) {
+                        w.open_block(&format!("if {target} is not None"));
+                        emit_constraint_validation_py(w, constraint, &target, field.name.as_str());
+                        w.close_block();
+                    } else {
+                        emit_constraint_validation_py(w, constraint, &target, field.name.as_str());
+                    }
                 }
             }
             DecodeAction::Tombstone(tombstone) => {

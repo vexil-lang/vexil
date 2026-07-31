@@ -1081,7 +1081,19 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         let access = format!("m.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_go(w, constraint, &access, field.name.as_str(), err_ret);
+            if matches!(field.resolved_type, ResolvedType::Optional(_)) {
+                w.open_block(&format!("if {access} != nil"));
+                emit_constraint_validation_go(
+                    w,
+                    constraint,
+                    &format!("(*{access})"),
+                    field.name.as_str(),
+                    err_ret,
+                );
+                w.close_block();
+            } else {
+                emit_constraint_validation_go(w, constraint, &access, field.name.as_str(), err_ret);
+            }
         }
         emit_write(
             w,
@@ -1137,13 +1149,25 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_go(
-                        w,
-                        constraint,
-                        &target,
-                        field.name.as_str(),
-                        err_ret,
-                    );
+                    if matches!(field.resolved_type, ResolvedType::Optional(_)) {
+                        w.open_block(&format!("if {target} != nil"));
+                        emit_constraint_validation_go(
+                            w,
+                            constraint,
+                            &format!("(*{target})"),
+                            field.name.as_str(),
+                            err_ret,
+                        );
+                        w.close_block();
+                    } else {
+                        emit_constraint_validation_go(
+                            w,
+                            constraint,
+                            &target,
+                            field.name.as_str(),
+                            err_ret,
+                        );
+                    }
                 }
             }
             DecodeAction::Tombstone(tombstone) => {
