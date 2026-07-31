@@ -6,7 +6,7 @@ Generated: 2026-04-09
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (50 files)
+## Valid Corpus (49 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -59,7 +59,6 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 047_trait_function_codegen_deferred.vexil | §4.9 | Function-bearing trait signature accepted and projected by all reference generators |
 | 048_generic_trait_nested.vexil | §4.9 | Generic trait with a nested `array<T>` field and concrete implementation |
 | 049_trait_function_portable_body.vexil | §4.9–4.10 | Generic trait functions with immutable local, arithmetic, receiver mutation, and value/void returns |
-| 049_typed_tombstone_shapes.vexil | §10 | Decode-and-discard for length-prefixed, repeated, fixed, geometric, and inline-bit tombstones |
 
 ## Invalid Corpus (76 files)
 

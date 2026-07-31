@@ -11,7 +11,7 @@ from types import ModuleType
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 RUNTIME_ROOT = WORKSPACE_ROOT / "packages" / "runtime-py"
 GOLDEN_PATH = (
-    Path(__file__).resolve().parent / "golden" / "049_typed_tombstone_shapes.py"
+    Path(__file__).resolve().parent / "golden" / "typed_tombstone_shapes.py"
 )
 
 

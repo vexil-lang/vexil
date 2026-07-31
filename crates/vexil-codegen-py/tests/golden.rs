@@ -117,8 +117,21 @@ fn test_028_typed_tombstone() {
 }
 
 #[test]
-fn test_049_typed_tombstone_shapes() {
-    golden_test("049_typed_tombstone_shapes");
+fn typed_tombstone_shapes() {
+    golden_source_test(
+        "typed_tombstone_shapes",
+        r#"namespace test.typed.tombstone.shapes
+
+message LegacyShapes {
+    @removed(0, reason: "bytes payload removed") : bytes
+    @removed(1, reason: "set payload removed") : set<u16>
+    @removed(2, reason: "fixed array payload removed") : array<u8, 3>
+    @removed(3, reason: "geometric payload removed") : vec3<f32>
+    @removed(4, reason: "inline bits payload removed") : bits { read, write, execute }
+    current @5 : u32
+}
+"#,
+    );
 }
 
 #[test]
