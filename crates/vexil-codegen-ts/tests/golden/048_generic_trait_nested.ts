@@ -46,4 +46,4 @@ export function decodeEventList(r: BitReader): EventList {
 }
 
 
-type _EventListImplementsContainer = _VexilAssertAssignable<EventList, Container<bigint>>;
+export type _EventListImplementsContainer = _VexilAssertAssignable<EventList, Container<bigint>>;
