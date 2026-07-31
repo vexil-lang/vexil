@@ -236,10 +236,14 @@ fn emit_declarations(
 /// A trait-only or alias-only schema emits no codec, so it needs no runtime
 /// import at all.
 fn required_runtime_imports(body: &str) -> Vec<&'static str> {
-    ["_BitWriter", "_BitReader", "DecodeError"]
-        .into_iter()
-        .filter(|symbol| body.contains(symbol))
-        .collect()
+    [
+        ("_BitWriter", "BitWriter as _BitWriter"),
+        ("_BitReader", "BitReader as _BitReader"),
+        ("DecodeError", "DecodeError"),
+    ]
+    .into_iter()
+    .filter_map(|(symbol, import)| body.contains(symbol).then_some(import))
+    .collect()
 }
 
 /// Returns the name of a TypeDef for use in section separator comments.
@@ -412,6 +416,9 @@ mod tests {
         assert!(code.contains("def encode(self)"));
         assert!(code.contains("@staticmethod"));
         assert!(code.contains("def decode(data: bytes)"));
+        assert!(code.contains(
+            "from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader"
+        ));
     }
 
     #[test]
