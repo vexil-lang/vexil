@@ -22,7 +22,11 @@ class Basic:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -35,7 +39,11 @@ class Basic:
         for _vexil_self_2e_d_fixed_item in self.d:
             w.write_string(_vexil_self_2e_d_fixed_item)
         for _vexil_self_2e_e_fixed_item in self.e:
-            _vexil_self_2e_e_fixed_item.encode_to(w)
+            try:
+                w.enter_nested()
+                _vexil_self_2e_e_fixed_item.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -43,7 +51,11 @@ class Basic:
     @staticmethod
     def decode(data: bytes) -> Basic:
         r = _BitReader(data)
-        return Basic.decode_from(r)
+        try:
+            r.enter_nested()
+            return Basic.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Basic:
@@ -70,7 +82,11 @@ class Basic:
         m.d = tuple(_vexil_m_2e_d_fixed_items)
         _vexil_m_2e_e_fixed_items: list[Point] = []
         for _ in range(5):
-            _vexil_m_2e_e_fixed_item = Point.decode_from(r)
+            try:
+                r.enter_nested()
+                _vexil_m_2e_e_fixed_item = Point.decode_from(r)
+            finally:
+                r.leave_nested()
             _vexil_m_2e_e_fixed_items.append(_vexil_m_2e_e_fixed_item)
         m.e = tuple(_vexil_m_2e_e_fixed_items)
         r.flush_to_byte_boundary()
@@ -88,7 +104,11 @@ class Point:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -101,7 +121,11 @@ class Point:
     @staticmethod
     def decode(data: bytes) -> Point:
         r = _BitReader(data)
-        return Point.decode_from(r)
+        try:
+            r.enter_nested()
+            return Point.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Point:
@@ -122,7 +146,11 @@ class Nested:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -136,7 +164,11 @@ class Nested:
     @staticmethod
     def decode(data: bytes) -> Nested:
         r = _BitReader(data)
-        return Nested.decode_from(r)
+        try:
+            r.enter_nested()
+            return Nested.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Nested:
@@ -164,7 +196,11 @@ class WithOptional:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -180,7 +216,11 @@ class WithOptional:
     @staticmethod
     def decode(data: bytes) -> WithOptional:
         r = _BitReader(data)
-        return WithOptional.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithOptional.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> WithOptional:
@@ -212,11 +252,19 @@ class WithUnion:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        self.data.encode_to(w)
+        try:
+            w.enter_nested()
+            self.data.encode_to(w)
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -224,12 +272,20 @@ class WithUnion:
     @staticmethod
     def decode(data: bytes) -> WithUnion:
         r = _BitReader(data)
-        return WithUnion.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithUnion.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> WithUnion:
         m = WithUnion.__new__(WithUnion)
-        m.data = decode_Data_from(r)
+        try:
+            r.enter_nested()
+            m.data = decode_Data_from(r)
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -317,7 +373,11 @@ class EdgeCases:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -334,7 +394,11 @@ class EdgeCases:
     @staticmethod
     def decode(data: bytes) -> EdgeCases:
         r = _BitReader(data)
-        return EdgeCases.decode_from(r)
+        try:
+            r.enter_nested()
+            return EdgeCases.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> EdgeCases:

@@ -19,7 +19,11 @@ class Config:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -32,7 +36,11 @@ class Config:
     @staticmethod
     def decode(data: bytes) -> Config:
         r = _BitReader(data)
-        return Config.decode_from(r)
+        try:
+            r.enter_nested()
+            return Config.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Config:

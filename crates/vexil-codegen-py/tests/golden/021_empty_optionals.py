@@ -20,7 +20,11 @@ class WithOptionals:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -43,7 +47,11 @@ class WithOptionals:
     @staticmethod
     def decode(data: bytes) -> WithOptionals:
         r = _BitReader(data)
-        return WithOptionals.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithOptionals.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> WithOptionals:
@@ -89,7 +97,11 @@ class NestedOptional:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -107,7 +119,11 @@ class NestedOptional:
     @staticmethod
     def decode(data: bytes) -> NestedOptional:
         r = _BitReader(data)
-        return NestedOptional.decode_from(r)
+        try:
+            r.enter_nested()
+            return NestedOptional.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> NestedOptional:
@@ -146,7 +162,11 @@ class AllEmpty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -169,7 +189,11 @@ class AllEmpty:
     @staticmethod
     def decode(data: bytes) -> AllEmpty:
         r = _BitReader(data)
-        return AllEmpty.decode_from(r)
+        try:
+            r.enter_nested()
+            return AllEmpty.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> AllEmpty:

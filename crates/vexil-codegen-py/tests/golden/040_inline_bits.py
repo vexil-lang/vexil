@@ -18,7 +18,11 @@ class Header:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -29,7 +33,11 @@ class Header:
     @staticmethod
     def decode(data: bytes) -> Header:
         r = _BitReader(data)
-        return Header.decode_from(r)
+        try:
+            r.enter_nested()
+            return Header.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Header:

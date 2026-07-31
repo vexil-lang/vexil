@@ -20,7 +20,11 @@ class HeaderV1:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -33,7 +37,11 @@ class HeaderV1:
     @staticmethod
     def decode(data: bytes) -> HeaderV1:
         r = _BitReader(data)
-        return HeaderV1.decode_from(r)
+        try:
+            r.enter_nested()
+            return HeaderV1.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> HeaderV1:
@@ -56,7 +64,11 @@ class HeaderV2:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -70,7 +82,11 @@ class HeaderV2:
     @staticmethod
     def decode(data: bytes) -> HeaderV2:
         r = _BitReader(data)
-        return HeaderV2.decode_from(r)
+        try:
+            r.enter_nested()
+            return HeaderV2.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> HeaderV2:

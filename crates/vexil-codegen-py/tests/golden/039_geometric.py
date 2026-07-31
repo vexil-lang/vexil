@@ -21,7 +21,11 @@ class Transform:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -40,7 +44,11 @@ class Transform:
     @staticmethod
     def decode(data: bytes) -> Transform:
         r = _BitReader(data)
-        return Transform.decode_from(r)
+        try:
+            r.enter_nested()
+            return Transform.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Transform:
@@ -81,7 +89,11 @@ class Vectors:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -98,7 +110,11 @@ class Vectors:
     @staticmethod
     def decode(data: bytes) -> Vectors:
         r = _BitReader(data)
-        return Vectors.decode_from(r)
+        try:
+            r.enter_nested()
+            return Vectors.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Vectors:
@@ -133,7 +149,11 @@ class Matrices:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -148,7 +168,11 @@ class Matrices:
     @staticmethod
     def decode(data: bytes) -> Matrices:
         r = _BitReader(data)
-        return Matrices.decode_from(r)
+        try:
+            r.enter_nested()
+            return Matrices.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Matrices:

@@ -17,7 +17,11 @@ class Empty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -28,7 +32,11 @@ class Empty:
     @staticmethod
     def decode(data: bytes) -> Empty:
         r = _BitReader(data)
-        return Empty.decode_from(r)
+        try:
+            r.enter_nested()
+            return Empty.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Empty:
@@ -49,7 +57,11 @@ class WithGaps:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -63,7 +75,11 @@ class WithGaps:
     @staticmethod
     def decode(data: bytes) -> WithGaps:
         r = _BitReader(data)
-        return WithGaps.decode_from(r)
+        try:
+            r.enter_nested()
+            return WithGaps.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> WithGaps:
@@ -85,7 +101,11 @@ class Annotated:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -97,7 +117,11 @@ class Annotated:
     @staticmethod
     def decode(data: bytes) -> Annotated:
         r = _BitReader(data)
-        return Annotated.decode_from(r)
+        try:
+            r.enter_nested()
+            return Annotated.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Annotated:
@@ -120,7 +144,11 @@ class FieldAnnotations:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -135,7 +163,11 @@ class FieldAnnotations:
     @staticmethod
     def decode(data: bytes) -> FieldAnnotations:
         r = _BitReader(data)
-        return FieldAnnotations.decode_from(r)
+        try:
+            r.enter_nested()
+            return FieldAnnotations.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> FieldAnnotations:

@@ -95,18 +95,34 @@ class UserProfile:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        self.id.encode_to(w)
+        try:
+            w.enter_nested()
+            self.id.encode_to(w)
+        finally:
+            w.leave_nested()
         w.write_leb128(len(self.friends))
         for _vexil_self_2e_friends_map_key, _vexil_self_2e_friends_map_value in self.friends.items():
-            _vexil_self_2e_friends_map_key.encode_to(w)
+            try:
+                w.enter_nested()
+                _vexil_self_2e_friends_map_key.encode_to(w)
+            finally:
+                w.leave_nested()
             w.write_string(_vexil_self_2e_friends_map_value)
         w.write_leb128(len(self.tags))
         for _vexil_self_2e_tags_map_key, _vexil_self_2e_tags_map_value in self.tags.items():
-            _vexil_self_2e_tags_map_key.encode_to(w)
+            try:
+                w.enter_nested()
+                _vexil_self_2e_tags_map_key.encode_to(w)
+            finally:
+                w.leave_nested()
             w.write_u32(_vexil_self_2e_tags_map_value)
         w.flush_to_byte_boundary()
         if self.unknown:
@@ -115,23 +131,39 @@ class UserProfile:
     @staticmethod
     def decode(data: bytes) -> UserProfile:
         r = _BitReader(data)
-        return UserProfile.decode_from(r)
+        try:
+            r.enter_nested()
+            return UserProfile.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> UserProfile:
         m = UserProfile.__new__(UserProfile)
-        m.id = UserId.decode_from(r)
+        try:
+            r.enter_nested()
+            m.id = UserId.decode_from(r)
+        finally:
+            r.leave_nested()
         _vexil_m_2e_friends_map_length = r.read_leb128()
         _vexil_m_2e_friends_map_items: dict[UserId, str] = {}
         for _ in range(_vexil_m_2e_friends_map_length):
-            _vexil_m_2e_friends_map_key = UserId.decode_from(r)
+            try:
+                r.enter_nested()
+                _vexil_m_2e_friends_map_key = UserId.decode_from(r)
+            finally:
+                r.leave_nested()
             _vexil_m_2e_friends_map_value = r.read_string()
             _vexil_m_2e_friends_map_items[_vexil_m_2e_friends_map_key] = _vexil_m_2e_friends_map_value
         m.friends = _vexil_m_2e_friends_map_items
         _vexil_m_2e_tags_map_length = r.read_leb128()
         _vexil_m_2e_tags_map_items: dict[Label, int] = {}
         for _ in range(_vexil_m_2e_tags_map_length):
-            _vexil_m_2e_tags_map_key = Label.decode_from(r)
+            try:
+                r.enter_nested()
+                _vexil_m_2e_tags_map_key = Label.decode_from(r)
+            finally:
+                r.leave_nested()
             _vexil_m_2e_tags_map_value = r.read_u32()
             _vexil_m_2e_tags_map_items[_vexil_m_2e_tags_map_key] = _vexil_m_2e_tags_map_value
         m.tags = _vexil_m_2e_tags_map_items

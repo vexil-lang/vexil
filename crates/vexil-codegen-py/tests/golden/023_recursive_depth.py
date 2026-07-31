@@ -19,14 +19,22 @@ class TreeNode:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.write_leb128(len(self.children))
         for _vexil_self_2e_children_array_item in self.children:
-            _vexil_self_2e_children_array_item.encode_to(w)
+            try:
+                w.enter_nested()
+                _vexil_self_2e_children_array_item.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -34,7 +42,11 @@ class TreeNode:
     @staticmethod
     def decode(data: bytes) -> TreeNode:
         r = _BitReader(data)
-        return TreeNode.decode_from(r)
+        try:
+            r.enter_nested()
+            return TreeNode.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> TreeNode:
@@ -43,7 +55,11 @@ class TreeNode:
         _vexil_m_2e_children_array_length = r.read_leb128()
         _vexil_m_2e_children_array_items: list[TreeNode] = []
         for _ in range(_vexil_m_2e_children_array_length):
-            _vexil_m_2e_children_array_item = TreeNode.decode_from(r)
+            try:
+                r.enter_nested()
+                _vexil_m_2e_children_array_item = TreeNode.decode_from(r)
+            finally:
+                r.leave_nested()
             _vexil_m_2e_children_array_items.append(_vexil_m_2e_children_array_item)
         m.children = _vexil_m_2e_children_array_items
         r.flush_to_byte_boundary()
@@ -61,7 +77,11 @@ class LinkedList:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -69,7 +89,11 @@ class LinkedList:
         _vexil_self_2e_next_optional = self.next
         w.write_bool(_vexil_self_2e_next_optional is not None)
         if _vexil_self_2e_next_optional is not None:
-            _vexil_self_2e_next_optional.encode_to(w)
+            try:
+                w.enter_nested()
+                _vexil_self_2e_next_optional.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -77,7 +101,11 @@ class LinkedList:
     @staticmethod
     def decode(data: bytes) -> LinkedList:
         r = _BitReader(data)
-        return LinkedList.decode_from(r)
+        try:
+            r.enter_nested()
+            return LinkedList.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> LinkedList:
@@ -89,7 +117,11 @@ class LinkedList:
             m.next = None
         else:
             if _vexil_m_2e_next_present:
-                m.next = LinkedList.decode_from(r)
+                try:
+                    r.enter_nested()
+                    m.next = LinkedList.decode_from(r)
+                finally:
+                    r.leave_nested()
             else:
                 m.next = None
         r.flush_to_byte_boundary()

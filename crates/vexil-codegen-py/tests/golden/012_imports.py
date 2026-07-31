@@ -20,13 +20,29 @@ class UseImports:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        # Unknown type: Unknown
-        # Unknown type: Unknown
-        # Unknown type: Unknown
+        try:
+            w.enter_nested()
+            # Unknown type: Unknown
+        finally:
+            w.leave_nested()
+        try:
+            w.enter_nested()
+            # Unknown type: Unknown
+        finally:
+            w.leave_nested()
+        try:
+            w.enter_nested()
+            # Unknown type: Unknown
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -34,14 +50,30 @@ class UseImports:
     @staticmethod
     def decode(data: bytes) -> UseImports:
         r = _BitReader(data)
-        return UseImports.decode_from(r)
+        try:
+            r.enter_nested()
+            return UseImports.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> UseImports:
         m = UseImports.__new__(UseImports)
-        # Unknown type: Unknown
-        # Unknown type: Unknown
-        # Unknown type: Unknown
+        try:
+            r.enter_nested()
+            # Unknown type: Unknown
+        finally:
+            r.leave_nested()
+        try:
+            r.enter_nested()
+            # Unknown type: Unknown
+        finally:
+            r.leave_nested()
+        try:
+            r.enter_nested()
+            # Unknown type: Unknown
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

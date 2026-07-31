@@ -22,7 +22,11 @@ class Basic:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -52,7 +56,11 @@ class Basic:
     @staticmethod
     def decode(data: bytes) -> Basic:
         r = _BitReader(data)
-        return Basic.decode_from(r)
+        try:
+            r.enter_nested()
+            return Basic.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Basic:
@@ -106,7 +114,11 @@ class Nested:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -168,7 +180,11 @@ class Nested:
     @staticmethod
     def decode(data: bytes) -> Nested:
         r = _BitReader(data)
-        return Nested.decode_from(r)
+        try:
+            r.enter_nested()
+            return Nested.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Nested:

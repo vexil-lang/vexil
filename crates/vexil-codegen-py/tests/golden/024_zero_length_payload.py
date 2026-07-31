@@ -17,7 +17,11 @@ class Empty:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -28,7 +32,11 @@ class Empty:
     @staticmethod
     def decode(data: bytes) -> Empty:
         r = _BitReader(data)
-        return Empty.decode_from(r)
+        try:
+            r.enter_nested()
+            return Empty.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Empty:
@@ -48,11 +56,19 @@ class Wrapper:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        self.inner.encode_to(w)
+        try:
+            w.enter_nested()
+            self.inner.encode_to(w)
+        finally:
+            w.leave_nested()
         w.write_u8(self.tag)
         w.flush_to_byte_boundary()
         if self.unknown:
@@ -61,12 +77,20 @@ class Wrapper:
     @staticmethod
     def decode(data: bytes) -> Wrapper:
         r = _BitReader(data)
-        return Wrapper.decode_from(r)
+        try:
+            r.enter_nested()
+            return Wrapper.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Wrapper:
         m = Wrapper.__new__(Wrapper)
-        m.inner = Empty.decode_from(r)
+        try:
+            r.enter_nested()
+            m.inner = Empty.decode_from(r)
+        finally:
+            r.leave_nested()
         m.tag = r.read_u8()
         r.flush_to_byte_boundary()
         m.unknown = b""

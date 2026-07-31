@@ -27,7 +27,11 @@ class Event:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -40,7 +44,11 @@ class Event:
     @staticmethod
     def decode(data: bytes) -> Event:
         r = _BitReader(data)
-        return Event.decode_from(r)
+        try:
+            r.enter_nested()
+            return Event.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Event:

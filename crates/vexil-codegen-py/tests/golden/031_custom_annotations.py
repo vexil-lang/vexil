@@ -20,7 +20,11 @@ class Alert:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -33,7 +37,11 @@ class Alert:
     @staticmethod
     def decode(data: bytes) -> Alert:
         r = _BitReader(data)
-        return Alert.decode_from(r)
+        try:
+            r.enter_nested()
+            return Alert.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Alert:
@@ -54,7 +62,11 @@ class Heartbeat:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -66,7 +78,11 @@ class Heartbeat:
     @staticmethod
     def decode(data: bytes) -> Heartbeat:
         r = _BitReader(data)
-        return Heartbeat.decode_from(r)
+        try:
+            r.enter_nested()
+            return Heartbeat.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Heartbeat:

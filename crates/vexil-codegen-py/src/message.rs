@@ -215,6 +215,8 @@ fn emit_write_type(
                 },
                 None => "Unknown".to_string(),
             };
+            w.open_block("try");
+            w.line(&format!("{writer}.enter_nested()"));
             match registry.get(*id) {
                 Some(TypeDef::Message(_)) => {
                     w.line(&format!("{access}.encode_to({writer})"));
@@ -235,6 +237,11 @@ fn emit_write_type(
                     w.line(&format!("# Unknown type: {type_name}"));
                 }
             }
+            w.dedent();
+            w.line("finally:");
+            w.indent();
+            w.line(&format!("{writer}.leave_nested()"));
+            w.close_block();
         }
         ResolvedType::Optional(inner) => {
             let value = local_name(access, "optional");
@@ -427,6 +434,8 @@ fn emit_read_type(
                 },
                 None => "Unknown".to_string(),
             };
+            w.open_block("try");
+            w.line(&format!("{reader}.enter_nested()"));
             match registry.get(*id) {
                 Some(TypeDef::Message(_)) => {
                     w.line(&format!("{target} = {type_name}.decode_from({reader})"));
@@ -447,6 +456,11 @@ fn emit_read_type(
                     w.line(&format!("# Unknown type: {type_name}"));
                 }
             }
+            w.dedent();
+            w.line("finally:");
+            w.indent();
+            w.line(&format!("{reader}.leave_nested()"));
+            w.close_block();
         }
         ResolvedType::Optional(inner) => {
             let present = local_name(target, "present");
@@ -637,11 +651,18 @@ fn emit_tombstone_read(
                 },
                 None => "Unknown".to_string(),
             };
+            w.open_block("try");
+            w.line(&format!("{reader}.enter_nested()"));
             if matches!(registry.get(*id), Some(TypeDef::Union(_))) {
                 w.line(&format!("_ = decode_{type_name}_from({reader})"));
             } else {
                 w.line(&format!("_ = {type_name}.decode_from({reader})"));
             }
+            w.dedent();
+            w.line("finally:");
+            w.indent();
+            w.line(&format!("{reader}.leave_nested()"));
+            w.close_block();
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("_present = {reader}.read_bool()"));
@@ -706,7 +727,14 @@ pub fn emit_message(
     // encode method
     w.open_block("def encode(self) -> bytes");
     w.line("w = _BitWriter()");
+    w.open_block("try");
+    w.line("w.enter_nested()");
     w.line("self.encode_to(w)");
+    w.dedent();
+    w.line("finally:");
+    w.indent();
+    w.line("w.leave_nested()");
+    w.close_block();
     w.line("return w.finish()");
     w.close_block();
     w.blank();
@@ -739,7 +767,14 @@ pub fn emit_message(
     w.line("@staticmethod");
     w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
+    w.open_block("try");
+    w.line("r.enter_nested()");
     w.line(&format!("return {name}.decode_from(r)"));
+    w.dedent();
+    w.line("finally:");
+    w.indent();
+    w.line("r.leave_nested()");
+    w.close_block();
     w.close_block();
     w.blank();
 

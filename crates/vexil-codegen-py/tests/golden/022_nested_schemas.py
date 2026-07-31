@@ -19,7 +19,11 @@ class Coord:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -32,7 +36,11 @@ class Coord:
     @staticmethod
     def decode(data: bytes) -> Coord:
         r = _BitReader(data)
-        return Coord.decode_from(r)
+        try:
+            r.enter_nested()
+            return Coord.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Coord:
@@ -54,12 +62,24 @@ class Rect:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        self.origin.encode_to(w)
-        self.size.encode_to(w)
+        try:
+            w.enter_nested()
+            self.origin.encode_to(w)
+        finally:
+            w.leave_nested()
+        try:
+            w.enter_nested()
+            self.size.encode_to(w)
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -67,13 +87,25 @@ class Rect:
     @staticmethod
     def decode(data: bytes) -> Rect:
         r = _BitReader(data)
-        return Rect.decode_from(r)
+        try:
+            r.enter_nested()
+            return Rect.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Rect:
         m = Rect.__new__(Rect)
-        m.origin = Coord.decode_from(r)
-        m.size = Coord.decode_from(r)
+        try:
+            r.enter_nested()
+            m.origin = Coord.decode_from(r)
+        finally:
+            r.leave_nested()
+        try:
+            r.enter_nested()
+            m.size = Coord.decode_from(r)
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -90,15 +122,27 @@ class Canvas:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        self.bounds.encode_to(w)
+        try:
+            w.enter_nested()
+            self.bounds.encode_to(w)
+        finally:
+            w.leave_nested()
         w.write_string(self.name)
         w.write_leb128(len(self.layers))
         for _vexil_self_2e_layers_array_item in self.layers:
-            _vexil_self_2e_layers_array_item.encode_to(w)
+            try:
+                w.enter_nested()
+                _vexil_self_2e_layers_array_item.encode_to(w)
+            finally:
+                w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -106,17 +150,29 @@ class Canvas:
     @staticmethod
     def decode(data: bytes) -> Canvas:
         r = _BitReader(data)
-        return Canvas.decode_from(r)
+        try:
+            r.enter_nested()
+            return Canvas.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Canvas:
         m = Canvas.__new__(Canvas)
-        m.bounds = Rect.decode_from(r)
+        try:
+            r.enter_nested()
+            m.bounds = Rect.decode_from(r)
+        finally:
+            r.leave_nested()
         m.name = r.read_string()
         _vexil_m_2e_layers_array_length = r.read_leb128()
         _vexil_m_2e_layers_array_items: list[Rect] = []
         for _ in range(_vexil_m_2e_layers_array_length):
-            _vexil_m_2e_layers_array_item = Rect.decode_from(r)
+            try:
+                r.enter_nested()
+                _vexil_m_2e_layers_array_item = Rect.decode_from(r)
+            finally:
+                r.leave_nested()
             _vexil_m_2e_layers_array_items.append(_vexil_m_2e_layers_array_item)
         m.layers = _vexil_m_2e_layers_array_items
         r.flush_to_byte_boundary()

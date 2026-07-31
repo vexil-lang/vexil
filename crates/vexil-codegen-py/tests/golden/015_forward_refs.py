@@ -19,12 +19,24 @@ class Container:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        self.item.encode_to(w)
-        self.meta.encode_to(w)
+        try:
+            w.enter_nested()
+            self.item.encode_to(w)
+        finally:
+            w.leave_nested()
+        try:
+            w.enter_nested()
+            self.meta.encode_to(w)
+        finally:
+            w.leave_nested()
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -32,13 +44,25 @@ class Container:
     @staticmethod
     def decode(data: bytes) -> Container:
         r = _BitReader(data)
-        return Container.decode_from(r)
+        try:
+            r.enter_nested()
+            return Container.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Container:
         m = Container.__new__(Container)
-        m.item = Item.decode_from(r)
-        m.meta = Metadata.decode_from(r)
+        try:
+            r.enter_nested()
+            m.item = Item.decode_from(r)
+        finally:
+            r.leave_nested()
+        try:
+            r.enter_nested()
+            m.meta = Metadata.decode_from(r)
+        finally:
+            r.leave_nested()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -54,7 +78,11 @@ class Item:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -67,7 +95,11 @@ class Item:
     @staticmethod
     def decode(data: bytes) -> Item:
         r = _BitReader(data)
-        return Item.decode_from(r)
+        try:
+            r.enter_nested()
+            return Item.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Item:
@@ -89,7 +121,11 @@ class Metadata:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -102,7 +138,11 @@ class Metadata:
     @staticmethod
     def decode(data: bytes) -> Metadata:
         r = _BitReader(data)
-        return Metadata.decode_from(r)
+        try:
+            r.enter_nested()
+            return Metadata.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Metadata:

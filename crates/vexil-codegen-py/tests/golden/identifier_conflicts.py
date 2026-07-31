@@ -36,7 +36,11 @@ class Collision:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -51,7 +55,11 @@ class Collision:
     @staticmethod
     def decode(data: bytes) -> Collision:
         r = _BitReader(data)
-        return Collision.decode_from(r)
+        try:
+            r.enter_nested()
+            return Collision.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Collision:

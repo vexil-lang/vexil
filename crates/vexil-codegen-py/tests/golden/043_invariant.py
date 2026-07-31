@@ -18,7 +18,11 @@ class Balance:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -30,7 +34,11 @@ class Balance:
     @staticmethod
     def decode(data: bytes) -> Balance:
         r = _BitReader(data)
-        return Balance.decode_from(r)
+        try:
+            r.enter_nested()
+            return Balance.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Balance:
@@ -52,7 +60,11 @@ class Transfer:
 
     def encode(self) -> bytes:
         w = _BitWriter()
-        self.encode_to(w)
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
@@ -66,7 +78,11 @@ class Transfer:
     @staticmethod
     def decode(data: bytes) -> Transfer:
         r = _BitReader(data)
-        return Transfer.decode_from(r)
+        try:
+            r.enter_nested()
+            return Transfer.decode_from(r)
+        finally:
+            r.leave_nested()
 
     @staticmethod
     def decode_from(r: _BitReader) -> Transfer:
