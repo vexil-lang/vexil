@@ -2,7 +2,53 @@
 # Source: test.aliases
 
 from __future__ import annotations
+from dataclasses import dataclass
 
-SCHEMA_HASH: tuple[int, ...] = (0x97, 0xcd, 0xcb, 0x64, 0xd5, 0xb1, 0xf1, 0x85, 0x7a, 0x97, 0x26, 0x1b, 0x0e, 0x0f, 0xa4, 0x8f, 0x18, 0xfe, 0xd4, 0x34, 0x62, 0x07, 0x7a, 0xb1, 0x02, 0x23, 0x09, 0xce, 0xd3, 0x2c, 0x8b, 0x82)
+# Runtime support (to be provided by vexil Python runtime)
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
-__all__ = ["SCHEMA_HASH"]
+SCHEMA_HASH: tuple[int, ...] = (0x9d, 0xa2, 0x96, 0xfe, 0x02, 0xb6, 0x44, 0xb6, 0xb4, 0x94, 0xa1, 0x48, 0x5d, 0xa7, 0xd5, 0xab, 0xb4, 0xa8, 0x59, 0xb6, 0xf5, 0xba, 0xf9, 0x50, 0xb3, 0x21, 0x93, 0x65, 0xbf, 0xfd, 0x49, 0x29)
+
+
+# ---------- GameState ----------
+@dataclass
+class GameState:
+    player_id: int
+    score: int
+    unknown: bytes = b""
+
+    def encode(self) -> bytes:
+        w = _BitWriter()
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter) -> None:
+        w.write_u64(self.player_id)
+        w.write_i32(self.score)
+        w.flush_to_byte_boundary()
+        if self.unknown:
+            w.write_raw_bytes(self.unknown, len(self.unknown))
+
+    @staticmethod
+    def decode(data: bytes) -> GameState:
+        r = _BitReader(data)
+        try:
+            r.enter_nested()
+            return GameState.decode_from(r)
+        finally:
+            r.leave_nested()
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> GameState:
+        m = GameState.__new__(GameState)
+        m.player_id = r.read_u64()
+        m.score = r.read_i32()
+        r.flush_to_byte_boundary()
+        m.unknown = b""
+        return m
+
+__all__ = ["dataclass", "SCHEMA_HASH", "GameState"]

@@ -2,7 +2,186 @@
 # Source: test.where_clause
 
 from __future__ import annotations
+from dataclasses import dataclass
 
-SCHEMA_HASH: tuple[int, ...] = (0x96, 0x69, 0xd8, 0xe7, 0xe5, 0x9b, 0x3b, 0x2a, 0x55, 0x85, 0xde, 0x1f, 0x5c, 0x2d, 0x2d, 0x90, 0x15, 0x1e, 0x32, 0x69, 0x1f, 0x93, 0xd2, 0x82, 0x62, 0x4b, 0xaa, 0x7d, 0xa7, 0xb2, 0x5f, 0x40)
+# Runtime support (to be provided by vexil Python runtime)
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
 
-__all__ = ["SCHEMA_HASH"]
+SCHEMA_HASH: tuple[int, ...] = (0xaa, 0xc0, 0x46, 0xf1, 0xe1, 0xc5, 0x86, 0xdb, 0x8e, 0xd3, 0xab, 0x3a, 0x96, 0xba, 0x5b, 0x55, 0x70, 0x40, 0x9c, 0x3c, 0x76, 0x7b, 0xcb, 0x75, 0x57, 0x2a, 0x9f, 0xa1, 0x8e, 0x35, 0xdc, 0x57)
+
+
+# ---------- User ----------
+@dataclass
+class User:
+    age: int
+    score: int
+    percentile: int
+    username: str
+    email: str
+    bio: str
+    password: str
+    buffer: list[int]
+    active: bool
+    rating: float
+    status: int
+    unknown: bytes = b""
+
+    def encode(self) -> bytes:
+        w = _BitWriter()
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter) -> None:
+        if not ((self.age >= 0) and (self.age <= 150)):
+            raise ValueError(f"constraint violation for field 'age': value {self.age} violates constraint")
+        w.write_u32(self.age)
+        if not (0 <= self.score <= 100):
+            raise ValueError(f"constraint violation for field 'score': value {self.score} violates constraint")
+        w.write_u32(self.score)
+        if not (0 <= self.percentile < 101):
+            raise ValueError(f"constraint violation for field 'percentile': value {self.percentile} violates constraint")
+        w.write_u8(self.percentile)
+        if not (3 <= len(self.username) <= 32):
+            raise ValueError(f"constraint violation for field 'username': value {self.username} violates constraint")
+        w.write_string(self.username)
+        if not (5 <= len(self.email) < 256):
+            raise ValueError(f"constraint violation for field 'email': value {self.email} violates constraint")
+        w.write_string(self.email)
+        if not (len(self.bio) <= 500):
+            raise ValueError(f"constraint violation for field 'bio': value {self.bio} violates constraint")
+        w.write_string(self.bio)
+        if not ((len(self.password) >= 8) and (len(self.password) <= 128)):
+            raise ValueError(f"constraint violation for field 'password': value {self.password} violates constraint")
+        w.write_string(self.password)
+        if not ((len(self.buffer) >= MinSize) and (len(self.buffer) <= MaxSize)):
+            raise ValueError(f"constraint violation for field 'buffer': value {self.buffer} violates constraint")
+        w.write_leb128(len(self.buffer))
+        for _vexil_self_2e_buffer_array_item in self.buffer:
+            w.write_u8(_vexil_self_2e_buffer_array_item)
+        if not ((self.active == true) or (self.active == false)):
+            raise ValueError(f"constraint violation for field 'active': value {self.active} violates constraint")
+        w.write_bool(self.active)
+        if not (0 <= self.rating <= 5):
+            raise ValueError(f"constraint violation for field 'rating': value {self.rating} violates constraint")
+        w.write_f32(self.rating)
+        if not (0 <= self.status <= 4):
+            raise ValueError(f"constraint violation for field 'status': value {self.status} violates constraint")
+        w.write_u8(self.status)
+        w.flush_to_byte_boundary()
+        if self.unknown:
+            w.write_raw_bytes(self.unknown, len(self.unknown))
+
+    @staticmethod
+    def decode(data: bytes) -> User:
+        r = _BitReader(data)
+        try:
+            r.enter_nested()
+            return User.decode_from(r)
+        finally:
+            r.leave_nested()
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> User:
+        m = User.__new__(User)
+        m.age = r.read_u32()
+        if not ((m.age >= 0) and (m.age <= 150)):
+            raise ValueError(f"constraint violation for field 'age': value {m.age} violates constraint")
+        m.score = r.read_u32()
+        if not (0 <= m.score <= 100):
+            raise ValueError(f"constraint violation for field 'score': value {m.score} violates constraint")
+        m.percentile = r.read_u8()
+        if not (0 <= m.percentile < 101):
+            raise ValueError(f"constraint violation for field 'percentile': value {m.percentile} violates constraint")
+        m.username = r.read_string()
+        if not (3 <= len(m.username) <= 32):
+            raise ValueError(f"constraint violation for field 'username': value {m.username} violates constraint")
+        m.email = r.read_string()
+        if not (5 <= len(m.email) < 256):
+            raise ValueError(f"constraint violation for field 'email': value {m.email} violates constraint")
+        m.bio = r.read_string()
+        if not (len(m.bio) <= 500):
+            raise ValueError(f"constraint violation for field 'bio': value {m.bio} violates constraint")
+        m.password = r.read_string()
+        if not ((len(m.password) >= 8) and (len(m.password) <= 128)):
+            raise ValueError(f"constraint violation for field 'password': value {m.password} violates constraint")
+        _vexil_m_2e_buffer_array_length = r.read_leb128()
+        _vexil_m_2e_buffer_array_items: list[int] = []
+        for _ in range(_vexil_m_2e_buffer_array_length):
+            _vexil_m_2e_buffer_array_item = r.read_u8()
+            _vexil_m_2e_buffer_array_items.append(_vexil_m_2e_buffer_array_item)
+        m.buffer = _vexil_m_2e_buffer_array_items
+        if not ((len(m.buffer) >= MinSize) and (len(m.buffer) <= MaxSize)):
+            raise ValueError(f"constraint violation for field 'buffer': value {m.buffer} violates constraint")
+        m.active = r.read_bool()
+        if not ((m.active == true) or (m.active == false)):
+            raise ValueError(f"constraint violation for field 'active': value {m.active} violates constraint")
+        m.rating = r.read_f32()
+        if not (0 <= m.rating <= 5):
+            raise ValueError(f"constraint violation for field 'rating': value {m.rating} violates constraint")
+        m.status = r.read_u8()
+        if not (0 <= m.status <= 4):
+            raise ValueError(f"constraint violation for field 'status': value {m.status} violates constraint")
+        r.flush_to_byte_boundary()
+        m.unknown = b""
+        return m
+
+
+
+# ---------- Config ----------
+@dataclass
+class Config:
+    port: int | None
+    unknown: bytes = b""
+
+    def encode(self) -> bytes:
+        w = _BitWriter()
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter) -> None:
+        if not (1024 <= self.port <= 65535):
+            raise ValueError(f"constraint violation for field 'port': value {self.port} violates constraint")
+        _vexil_self_2e_port_optional = self.port
+        w.write_bool(_vexil_self_2e_port_optional is not None)
+        if _vexil_self_2e_port_optional is not None:
+            w.write_u16(_vexil_self_2e_port_optional)
+        w.flush_to_byte_boundary()
+        if self.unknown:
+            w.write_raw_bytes(self.unknown, len(self.unknown))
+
+    @staticmethod
+    def decode(data: bytes) -> Config:
+        r = _BitReader(data)
+        try:
+            r.enter_nested()
+            return Config.decode_from(r)
+        finally:
+            r.leave_nested()
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Config:
+        m = Config.__new__(Config)
+        try:
+            _vexil_m_2e_port_present = r.read_bool()
+        except DecodeError:
+            m.port = None
+        else:
+            if _vexil_m_2e_port_present:
+                m.port = r.read_u16()
+            else:
+                m.port = None
+        if not (1024 <= m.port <= 65535):
+            raise ValueError(f"constraint violation for field 'port': value {m.port} violates constraint")
+        r.flush_to_byte_boundary()
+        m.unknown = b""
+        return m
+
+__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "User", "Config"]

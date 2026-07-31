@@ -277,3 +277,8 @@ fn trait_only_schema() {
 fn bytes_map_keys_compile() {
     check_compiles("041_map_key_ordering");
 }
+
+#[test]
+fn transparent_alias_fields_compile() {
+    check_compiles("034_type_alias");
+}

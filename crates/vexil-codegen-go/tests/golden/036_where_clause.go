@@ -3,4 +3,253 @@
 
 package where_clause
 
-var SchemaHash = [32]byte{0x96, 0x69, 0xd8, 0xe7, 0xe5, 0x9b, 0x3b, 0x2a, 0x55, 0x85, 0xde, 0x1f, 0x5c, 0x2d, 0x2d, 0x90, 0x15, 0x1e, 0x32, 0x69, 0x1f, 0x93, 0xd2, 0x82, 0x62, 0x4b, 0xaa, 0x7d, 0xa7, 0xb2, 0x5f, 0x40}
+import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+
+var SchemaHash = [32]byte{0xaa, 0xc0, 0x46, 0xf1, 0xe1, 0xc5, 0x86, 0xdb, 0x8e, 0xd3, 0xab, 0x3a, 0x96, 0xba, 0x5b, 0x55, 0x70, 0x40, 0x9c, 0x3c, 0x76, 0x7b, 0xcb, 0x75, 0x57, 0x2a, 0x9f, 0xa1, 0x8e, 0x35, 0xdc, 0x57}
+
+// ── User ──
+type User struct {
+	Age uint32
+	Score uint32
+	Percentile uint8
+	Username string
+	Email string
+	Bio string
+	Password string
+	Buffer []uint8
+	Active bool
+	Rating float32
+	Status uint8
+	Unknown []byte
+}
+
+func (m *User) Pack(w *vexil.BitWriter) error {
+	if !((m.Age >= 0 && m.Age <= 150)) {
+		return fmt.Errorf(`constraint violation for field "age": value %v violates constraint: expected [(m.Age >= 0 && m.Age <= 150)]`, m.Age)
+	}
+	w.WriteU32(m.Age)
+	if !(m.Score >= 0 && m.Score <= 100) {
+		return fmt.Errorf(`constraint violation for field "score": value %v violates constraint: expected [m.Score >= 0 && m.Score <= 100]`, m.Score)
+	}
+	w.WriteU32(m.Score)
+	if !(m.Percentile >= 0 && m.Percentile < 101) {
+		return fmt.Errorf(`constraint violation for field "percentile": value %v violates constraint: expected [m.Percentile >= 0 && m.Percentile < 101]`, m.Percentile)
+	}
+	w.WriteU8(m.Percentile)
+	if !(len(m.Username) >= 3 && len(m.Username) <= 32) {
+		return fmt.Errorf(`constraint violation for field "username": value %v violates constraint: expected [len(m.Username) >= 3 && len(m.Username) <= 32]`, m.Username)
+	}
+	w.WriteString(m.Username)
+	if !(len(m.Email) >= 5 && len(m.Email) < 256) {
+		return fmt.Errorf(`constraint violation for field "email": value %v violates constraint: expected [len(m.Email) >= 5 && len(m.Email) < 256]`, m.Email)
+	}
+	w.WriteString(m.Email)
+	if !(len(m.Bio) <= 500) {
+		return fmt.Errorf(`constraint violation for field "bio": value %v violates constraint: expected [len(m.Bio) <= 500]`, m.Bio)
+	}
+	w.WriteString(m.Bio)
+	if !((len(m.Password) >= 8 && len(m.Password) <= 128)) {
+		return fmt.Errorf(`constraint violation for field "password": value %v violates constraint: expected [(len(m.Password) >= 8 && len(m.Password) <= 128)]`, m.Password)
+	}
+	w.WriteString(m.Password)
+	if !((len(m.Buffer) >= MinSize && len(m.Buffer) <= MaxSize)) {
+		return fmt.Errorf(`constraint violation for field "buffer": value %v violates constraint: expected [(len(m.Buffer) >= MinSize && len(m.Buffer) <= MaxSize)]`, m.Buffer)
+	}
+	w.WriteLeb128(uint64(len(m.Buffer)))
+	for _, item := range m.Buffer {
+		w.WriteU8(item)
+	}
+	if !((m.Active == true || m.Active == false)) {
+		return fmt.Errorf(`constraint violation for field "active": value %v violates constraint: expected [(m.Active == true || m.Active == false)]`, m.Active)
+	}
+	w.WriteBool(m.Active)
+	if !(m.Rating >= 0 && m.Rating <= 5) {
+		return fmt.Errorf(`constraint violation for field "rating": value %v violates constraint: expected [m.Rating >= 0 && m.Rating <= 5]`, m.Rating)
+	}
+	w.WriteF32(m.Rating)
+	if !(m.Status >= 0 && m.Status <= 4) {
+		return fmt.Errorf(`constraint violation for field "status": value %v violates constraint: expected [m.Status >= 0 && m.Status <= 4]`, m.Status)
+	}
+	w.WriteU8(m.Status)
+	w.FlushToByteBoundary()
+	if len(m.Unknown) > 0 {
+		w.WriteRawBytes(m.Unknown)
+	}
+	return nil
+}
+func (m *User) Unpack(r *vexil.BitReader) error {
+	{
+		v, err := r.ReadU32()
+		if err != nil {
+			return err
+		}
+		m.Age = v
+	}
+	if !((m.Age >= 0 && m.Age <= 150)) {
+		return fmt.Errorf(`constraint violation for field "age": value %v violates constraint: expected [(m.Age >= 0 && m.Age <= 150)]`, m.Age)
+	}
+	{
+		v, err := r.ReadU32()
+		if err != nil {
+			return err
+		}
+		m.Score = v
+	}
+	if !(m.Score >= 0 && m.Score <= 100) {
+		return fmt.Errorf(`constraint violation for field "score": value %v violates constraint: expected [m.Score >= 0 && m.Score <= 100]`, m.Score)
+	}
+	{
+		v, err := r.ReadU8()
+		if err != nil {
+			return err
+		}
+		m.Percentile = v
+	}
+	if !(m.Percentile >= 0 && m.Percentile < 101) {
+		return fmt.Errorf(`constraint violation for field "percentile": value %v violates constraint: expected [m.Percentile >= 0 && m.Percentile < 101]`, m.Percentile)
+	}
+	{
+		v, err := r.ReadString()
+		if err != nil {
+			return err
+		}
+		m.Username = v
+	}
+	if !(len(m.Username) >= 3 && len(m.Username) <= 32) {
+		return fmt.Errorf(`constraint violation for field "username": value %v violates constraint: expected [len(m.Username) >= 3 && len(m.Username) <= 32]`, m.Username)
+	}
+	{
+		v, err := r.ReadString()
+		if err != nil {
+			return err
+		}
+		m.Email = v
+	}
+	if !(len(m.Email) >= 5 && len(m.Email) < 256) {
+		return fmt.Errorf(`constraint violation for field "email": value %v violates constraint: expected [len(m.Email) >= 5 && len(m.Email) < 256]`, m.Email)
+	}
+	{
+		v, err := r.ReadString()
+		if err != nil {
+			return err
+		}
+		m.Bio = v
+	}
+	if !(len(m.Bio) <= 500) {
+		return fmt.Errorf(`constraint violation for field "bio": value %v violates constraint: expected [len(m.Bio) <= 500]`, m.Bio)
+	}
+	{
+		v, err := r.ReadString()
+		if err != nil {
+			return err
+		}
+		m.Password = v
+	}
+	if !((len(m.Password) >= 8 && len(m.Password) <= 128)) {
+		return fmt.Errorf(`constraint violation for field "password": value %v violates constraint: expected [(len(m.Password) >= 8 && len(m.Password) <= 128)]`, m.Password)
+	}
+	{
+		arrLen, err := r.ReadLeb128(4)
+		if err != nil {
+			return err
+		}
+		m.Buffer = make([]uint8, arrLen)
+		for i := uint64(0); i < arrLen; i++ {
+			{
+				v, err := r.ReadU8()
+				if err != nil {
+					return err
+				}
+				m.Buffer[i] = v
+			}
+		}
+	}
+	if !((len(m.Buffer) >= MinSize && len(m.Buffer) <= MaxSize)) {
+		return fmt.Errorf(`constraint violation for field "buffer": value %v violates constraint: expected [(len(m.Buffer) >= MinSize && len(m.Buffer) <= MaxSize)]`, m.Buffer)
+	}
+	{
+		v, err := r.ReadBool()
+		if err != nil {
+			return err
+		}
+		m.Active = v
+	}
+	if !((m.Active == true || m.Active == false)) {
+		return fmt.Errorf(`constraint violation for field "active": value %v violates constraint: expected [(m.Active == true || m.Active == false)]`, m.Active)
+	}
+	{
+		v, err := r.ReadF32()
+		if err != nil {
+			return err
+		}
+		m.Rating = v
+	}
+	if !(m.Rating >= 0 && m.Rating <= 5) {
+		return fmt.Errorf(`constraint violation for field "rating": value %v violates constraint: expected [m.Rating >= 0 && m.Rating <= 5]`, m.Rating)
+	}
+	{
+		v, err := r.ReadU8()
+		if err != nil {
+			return err
+		}
+		m.Status = v
+	}
+	if !(m.Status >= 0 && m.Status <= 4) {
+		return fmt.Errorf(`constraint violation for field "status": value %v violates constraint: expected [m.Status >= 0 && m.Status <= 4]`, m.Status)
+	}
+	r.FlushToByteBoundary()
+	m.Unknown = nil
+	return nil
+}
+
+
+// ── Config ──
+type Config struct {
+	Port *uint16
+	Unknown []byte
+}
+
+func (m *Config) Pack(w *vexil.BitWriter) error {
+	if !(m.Port >= 1024 && m.Port <= 65535) {
+		return fmt.Errorf(`constraint violation for field "port": value %v violates constraint: expected [m.Port >= 1024 && m.Port <= 65535]`, m.Port)
+	}
+	w.WriteBool(m.Port != nil)
+	w.FlushToByteBoundary()
+	if m.Port != nil {
+		w.WriteU16(*m.Port)
+	}
+	w.FlushToByteBoundary()
+	if len(m.Unknown) > 0 {
+		w.WriteRawBytes(m.Unknown)
+	}
+	return nil
+}
+
+func (m *Config) Unpack(r *vexil.BitReader) error {
+	{
+		present, err := r.ReadBool()
+		if err != nil && err != vexil.ErrUnexpectedEOF {
+			return err
+		}
+		if err == nil {
+			r.FlushToByteBoundary()
+			if present {
+				var optVal uint16
+				{
+					v, err := r.ReadU16()
+					if err != nil {
+						return err
+					}
+					optVal = v
+				}
+				m.Port = &optVal
+			}
+		}
+	}
+	if !(m.Port >= 1024 && m.Port <= 65535) {
+		return fmt.Errorf(`constraint violation for field "port": value %v violates constraint: expected [m.Port >= 1024 && m.Port <= 65535]`, m.Port)
+	}
+	r.FlushToByteBoundary()
+	m.Unknown = nil
+	return nil
+}

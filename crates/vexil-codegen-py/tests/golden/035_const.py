@@ -2,7 +2,57 @@
 # Source: test.consts
 
 from __future__ import annotations
+from dataclasses import dataclass
 
-SCHEMA_HASH: tuple[int, ...] = (0xa9, 0x39, 0x82, 0xcf, 0x2a, 0x5a, 0x50, 0xcc, 0xb4, 0xe8, 0xd5, 0x41, 0xee, 0xb4, 0xb0, 0xaf, 0x4a, 0x45, 0xb1, 0x53, 0x62, 0x30, 0x9a, 0x86, 0x94, 0x56, 0x11, 0x4c, 0x96, 0x52, 0x15, 0x9c)
+# Runtime support (to be provided by vexil Python runtime)
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
-__all__ = ["SCHEMA_HASH"]
+SCHEMA_HASH: tuple[int, ...] = (0xec, 0xd9, 0x0c, 0x6d, 0x0c, 0x2f, 0x20, 0x07, 0x09, 0xdb, 0xa3, 0x84, 0xa5, 0x27, 0x03, 0x34, 0x98, 0x6c, 0x64, 0xa3, 0xcb, 0x32, 0xa8, 0x81, 0xc6, 0xa4, 0xbe, 0x62, 0x82, 0xcd, 0xe5, 0x0d)
+
+
+# ---------- Packet ----------
+@dataclass
+class Packet:
+    data: list[int]
+    unknown: bytes = b""
+
+    def encode(self) -> bytes:
+        w = _BitWriter()
+        try:
+            w.enter_nested()
+            self.encode_to(w)
+        finally:
+            w.leave_nested()
+        return w.finish()
+
+    def encode_to(self, w: _BitWriter) -> None:
+        w.write_leb128(len(self.data))
+        for _vexil_self_2e_data_array_item in self.data:
+            w.write_u8(_vexil_self_2e_data_array_item)
+        w.flush_to_byte_boundary()
+        if self.unknown:
+            w.write_raw_bytes(self.unknown, len(self.unknown))
+
+    @staticmethod
+    def decode(data: bytes) -> Packet:
+        r = _BitReader(data)
+        try:
+            r.enter_nested()
+            return Packet.decode_from(r)
+        finally:
+            r.leave_nested()
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Packet:
+        m = Packet.__new__(Packet)
+        _vexil_m_2e_data_array_length = r.read_leb128()
+        _vexil_m_2e_data_array_items: list[int] = []
+        for _ in range(_vexil_m_2e_data_array_length):
+            _vexil_m_2e_data_array_item = r.read_u8()
+            _vexil_m_2e_data_array_items.append(_vexil_m_2e_data_array_item)
+        m.data = _vexil_m_2e_data_array_items
+        r.flush_to_byte_boundary()
+        m.unknown = b""
+        return m
+
+__all__ = ["dataclass", "SCHEMA_HASH", "Packet"]
