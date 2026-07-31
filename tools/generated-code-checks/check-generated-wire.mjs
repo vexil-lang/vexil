@@ -56,7 +56,7 @@ function namespacePackage(source) {
   return match[1].split(".").at(-1);
 }
 
-function writeGoHarness(dir, source, expected, value, valueCheck = "reflect.DeepEqual(decoded, value)", scenario = "unnamed") {
+function writeGoHarness(dir, source, expected, value, valueCheck = "reflect.DeepEqual(decoded, value)", scenario = "unnamed", typeName = "M") {
   writeFileSync(join(dir, "schema.vexil"), source);
   run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], dir, `${scenario}: generate Go contract source`);
   const pkg = namespacePackage(source);
@@ -65,12 +65,14 @@ function writeGoHarness(dir, source, expected, value, valueCheck = "reflect.Deep
 
 import (
   "bytes"
+  "math"
   "reflect"
   "testing"
   vexil "github.com/vexil-lang/vexil/packages/runtime-go"
 )
 
 var _ = reflect.DeepEqual
+var _ = math.IsNaN
 
 func TestGeneratedWireContract(t *testing.T) {
   want := []byte{${hexBytes(expected)}}
@@ -78,7 +80,7 @@ func TestGeneratedWireContract(t *testing.T) {
   writer := vexil.NewBitWriter()
   if err := value.Pack(writer); err != nil { t.Fatal(err) }
   if got := writer.Finish(); !bytes.Equal(got, want) { t.Fatalf("${scenario} encode: got %x want %x", got, want) }
-  decoded := &M{}
+  decoded := &${typeName}{}
   if err := decoded.Unpack(vexil.NewBitReader(want)); err != nil { t.Fatalf("${scenario} decode: %v", err) }
   if !(${valueCheck}) { t.Fatalf("${scenario} decode: got %#v want %#v", decoded, value) }
   round := vexil.NewBitWriter()
@@ -89,7 +91,7 @@ func TestGeneratedWireContract(t *testing.T) {
   run("go", ["test", "./..."], dir, `${scenario}: Go generated wire contract`);
 }
 
-function writePythonHarness(dir, source, expected, value, check = "decoded == value", scenario = "unnamed") {
+function writePythonHarness(dir, source, expected, value, check = "decoded == value", scenario = "unnamed", typeName = "M") {
   writeFileSync(join(dir, "schema.vexil"), source);
   run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], dir, `${scenario}: generate Python contract source`);
   writeFileSync(join(dir, "run.py"), `from generated import *
@@ -98,7 +100,7 @@ want = bytes.fromhex("${expected}")
 value = ${value}
 got = value.encode()
 assert got == want, f"${scenario} encode: got {got.hex()} want {want.hex()}"
-decoded = M.decode(want)
+decoded = ${typeName}.decode(want)
 assert ${check}, f"${scenario} decode: got {decoded!r} want {value!r}"
 round = decoded.encode()
 assert round == want, f"${scenario} roundtrip: got {round.hex()} want {want.hex()}"
@@ -117,8 +119,8 @@ function runBasic(label, file, name, goValue, pyValue, goCheck, pyCheck) {
     for (const dir of [go, py]) {
       mkdirSync(dir, { recursive: true });
     }
-    writeGoHarness(go, item.schema, item.expected_bytes, goValue, goCheck, label);
-    writePythonHarness(py, item.schema, item.expected_bytes, pyValue, pyCheck, label);
+    writeGoHarness(go, item.schema, item.expected_bytes, goValue, goCheck, label, item.type);
+    writePythonHarness(py, item.schema, item.expected_bytes, pyValue, pyCheck, label, item.type);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -267,19 +269,43 @@ run("cargo", ["build", "-p", "vexilc"], repoRoot, "build vexilc");
 // The selected vectors collectively cover primitives/LSB packing, aggregates,
 // optionals, collections, encoding annotations, and the stateful delta reset.
 runBasic("primitives", "messages.json", "mixed_bool_u16_string", "&M{Flag: true, Count: 42, Name: \"test\"}", "M(flag=True, count=42, name='test')");
+runBasic("bool-false", "primitives.json", "bool_false", "&M{V: false}", "M(v=False)");
+runBasic("bool-true", "primitives.json", "bool_true", "&M{V: true}", "M(v=True)");
+runBasic("u8-zero", "primitives.json", "u8_zero", "&M{V: 0}", "M(v=0)");
+runBasic("u8-max", "primitives.json", "u8_max", "&M{V: 255}", "M(v=255)");
+runBasic("u16-le", "primitives.json", "u16_le", "&M{V: 258}", "M(v=258)");
+runBasic("u32-le", "primitives.json", "u32_le", "&M{V: 305419896}", "M(v=305419896)");
 runBasic("signed-primitive", "primitives.json", "i32_negative", "&M{V: -1}", "M(v=-1)");
+runBasic("nan-canonical", "primitives.json", "f32_nan_canonical", "&M{V: float32(math.NaN())}", "M(v=float('nan'))", "math.IsNaN(float64(decoded.V))", "__import__('math').isnan(decoded.v)");
+runBasic("negative-zero", "primitives.json", "f64_negative_zero", "&M{V: math.Copysign(0, -1)}", "M(v=-0.0)", "math.Signbit(decoded.V)", "__import__('math').copysign(1.0, decoded.v) < 0");
+runBasic("string-hello", "primitives.json", "string_hello", "&M{V: \"hello\"}", "M(v='hello')");
+runBasic("string-empty", "primitives.json", "string_empty", "&M{V: \"\"}", "M(v='')");
 runBasic("finite-float", "primitives.json", "f32_finite_one_point_five", "&M{V: 1.5}", "M(v=1.5)");
 runBasic("bytes", "primitives.json", "bytes_three", "&M{V: []byte{0xde, 0xad, 0xbe}}", "M(v=bytes([0xde, 0xad, 0xbe]))");
 runBasic("subbyte", "sub_byte.json", "u3_u5_packed", "&M{A: 5, B: 18}", "M(a=5, b=18)");
+runBasic("subbyte-cross-byte", "sub_byte.json", "u3_u5_u6_cross_byte", "&M{A: 7, B: 31, C: 63}", "M(a=7, b=31, c=63)");
+runBasic("subbyte-u1", "sub_byte.json", "u1_one", "&M{V: 1}", "M(v=1)");
+runBasic("empty-message", "messages.json", "empty_message", "&Empty{}", "Empty()");
+runBasic("two-u32-fields", "messages.json", "two_u32_fields", "&M{X: 1, Y: 2}", "M(x=1, y=2)");
 runBasic("nested-message", "messages.json", "nested_message_u16", "&M{Child: Child{Value: 7}}", "M(child=Child(value=7))");
+runBasic("enum-first", "enums.json", "enum_first_variant", "&M{V: StatusActive}", "M(v=Status(Status.ACTIVE))");
 runBasic("enum", "enums.json", "enum_second_variant", "&M{V: StatusInactive}", "M(v=Status(Status.INACTIVE))");
 runBasic("union", "unions.json", "union_first_variant", "&M{V: &ShapeCircle{Radius: 1.5}}", "M(v=ShapeCircle(1.5))", "func() bool { circle, ok := decoded.V.(*ShapeCircle); return ok && circle.Radius == 1.5 }()", "type(decoded.v) is ShapeCircle and decoded.v.radius == value.v.radius");
 { const present = "uint32(42)"; runBasic("optional", "optionals.json", "optional_some_u32", `func() *M { v := ${present}; return &M{V: &v} }()`, "M(v=42)"); }
 runBasic("optional-absent", "optionals.json", "optional_none", "&M{V: nil}", "M(v=None)");
+runBasic("array-empty", "arrays_maps.json", "array_empty", "&M{V: []uint32{}}", "M(v=[])");
 runBasic("array", "arrays_maps.json", "array_three_u32", "&M{V: []uint32{1, 2, 3}}", "M(v=[1, 2, 3])");
+runBasic("map-one", "arrays_maps.json", "map_one_entry", "&M{V: map[string]uint32{\"key\": 42}}", "M(v={'key': 42})");
 runBasic("map", "arrays_maps.json", "map_two_string_entries_canonical_order", "&M{V: map[string]uint32{\"z\": 2, \"a\": 1}}", "M(v={'z': 2, 'a': 1})");
+runBasic("set-empty", "v1_types.json", "set_empty", "&M{Tags: map[string]struct{}{}}", "M(tags=set())");
 runBasic("set", "v1_types.json", "set_strings", "&M{Tags: map[string]struct{}{\"beta\": {}, \"alpha\": {}}}", "M(tags={'beta', 'alpha'})");
 runBasic("fixed-array", "v1_types.json", "fixed_array_u8", "&M{Data: [4]uint8{1,2,3,4}}", "M(data=(1,2,3,4))");
+runBasic("fixed32-zero", "v1_types.json", "fixed32_zero", "&M{V: 0}", "M(v=0)");
+runBasic("fixed32-one", "v1_types.json", "fixed32_one", "&M{V: 65536}", "M(v=65536)");
+runBasic("fixed64-zero", "v1_types.json", "fixed64_zero", "&M{V: 0}", "M(v=0)");
+runBasic("vec3-f32", "v1_types.json", "vec3_f32", "&M{Pos: [3]float32{1,2,3}}", "M(pos=(1.0,2.0,3.0))");
+runBasic("vec2-fixed64", "v1_types.json", "vec2_fixed64", "&M{Pos: [2]int64{0,0}}", "M(pos=(0,0))");
+runBasic("bits-inline", "v1_types.json", "bits_inline", "&M{Perms: 3}", "M(perms=3)");
 runBasic("annotations", "annotations.json", "varint_and_zigzag", "&M{Count: 300, Delta: -5}", "M(count=300, delta=-5)");
 runDeltaReset();
 runOptionalEvolution();
