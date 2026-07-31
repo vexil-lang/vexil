@@ -33,12 +33,6 @@ class SessionId:
         inner = r.read_u64()
         return SessionId(inner)
 
-    @staticmethod
-    def decode_from(r: _BitReader) -> SessionId:
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_u64()
-        return SessionId(inner)
-
     def __repr__(self) -> str:
         return f"SessionId({self.value!r})"
 
@@ -67,12 +61,6 @@ class PaneId:
 
     @staticmethod
     def decode_from(r: _BitReader) -> PaneId:
-        inner = r.read_u64()
-        return PaneId(inner)
-
-    @staticmethod
-    def decode_from(r: _BitReader) -> PaneId:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return PaneId(inner)
 
@@ -107,12 +95,6 @@ class ExitCode:
         inner = r.read_i32()
         return ExitCode(inner)
 
-    @staticmethod
-    def decode_from(r: _BitReader) -> ExitCode:
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_i32()
-        return ExitCode(inner)
-
     def __repr__(self) -> str:
         return f"ExitCode({self.value!r})"
 
@@ -141,12 +123,6 @@ class Name:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Name:
-        inner = r.read_string()
-        return Name(inner)
-
-    @staticmethod
-    def decode_from(r: _BitReader) -> Name:
-        inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Name(inner)
 
@@ -182,13 +158,6 @@ class Payload:
         inner = r.read_bytes(_vexil_inner_length)
         return Payload(inner)
 
-    @staticmethod
-    def decode_from(r: _BitReader) -> Payload:
-        inner: bytes = None  # type: ignore[assignment]
-        _vexil_inner_length = r.read_leb128()
-        inner = r.read_bytes(_vexil_inner_length)
-        return Payload(inner)
-
     def __repr__(self) -> str:
         return f"Payload({self.value!r})"
 
@@ -219,15 +188,6 @@ class Color:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Color:
-        _vexil_inner_red = r.read_u8()
-        _vexil_inner_green = r.read_u8()
-        _vexil_inner_blue = r.read_u8()
-        inner = (_vexil_inner_red, _vexil_inner_green, _vexil_inner_blue)
-        return Color(inner)
-
-    @staticmethod
-    def decode_from(r: _BitReader) -> Color:
-        inner: tuple[int, int, int] = None  # type: ignore[assignment]
         _vexil_inner_red = r.read_u8()
         _vexil_inner_green = r.read_u8()
         _vexil_inner_blue = r.read_u8()

@@ -135,6 +135,39 @@ message LegacyShapes {
 }
 
 #[test]
+fn reader_helpers_are_declared_once_per_type() {
+    let source = r#"namespace test.reader.helpers
+
+enum Status {
+    Ok @0
+}
+
+flags Mode {
+    Read @0
+}
+
+newtype Identifier : u64
+"#;
+    let result = vexil_lang::compile(source);
+    assert!(
+        !result
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == Severity::Error),
+        "compilation errors: {:?}",
+        result.diagnostics
+    );
+    let compiled = result.compiled.expect("no compiled schema");
+    let generated = vexil_codegen_py::generate(&compiled).expect("codegen failed");
+
+    assert_eq!(
+        generated.matches("    def decode_from(").count(),
+        3,
+        "each generated enum, flags, and newtype must declare one reader helper:\n{generated}"
+    );
+}
+
+#[test]
 fn test_003_sub_byte() {
     golden_test("003_sub_byte");
 }

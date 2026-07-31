@@ -35,12 +35,6 @@ class UserId:
         inner = r.read_u32()
         return UserId(inner)
 
-    @staticmethod
-    def decode_from(r: _BitReader) -> UserId:
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_u32()
-        return UserId(inner)
-
     def __repr__(self) -> str:
         return f"UserId({self.value!r})"
 
@@ -69,12 +63,6 @@ class Label:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Label:
-        inner = r.read_string()
-        return Label(inner)
-
-    @staticmethod
-    def decode_from(r: _BitReader) -> Label:
-        inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
 

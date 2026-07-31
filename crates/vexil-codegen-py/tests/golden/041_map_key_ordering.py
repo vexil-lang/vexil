@@ -35,10 +35,6 @@ class Status(int):
         v = r.read_bits(2)
         return Status(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Status(r.read_bits(2))
-
     def __repr__(self) -> str:
         return f"Status({int(self)})"
 
@@ -66,10 +62,6 @@ class Permissions(int):
     def decode_from(r: _BitReader) -> Permissions:
         v = r.read_u8()
         return Permissions(v)
-
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Permissions(r.read_u8())
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -102,12 +94,6 @@ class UserId:
         inner = r.read_u32()
         return UserId(inner)
 
-    @staticmethod
-    def decode_from(r: _BitReader) -> UserId:
-        inner: int = None  # type: ignore[assignment]
-        inner = r.read_u32()
-        return UserId(inner)
-
     def __repr__(self) -> str:
         return f"UserId({self.value!r})"
 
@@ -136,12 +122,6 @@ class Label:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Label:
-        inner = r.read_string()
-        return Label(inner)
-
-    @staticmethod
-    def decode_from(r: _BitReader) -> Label:
-        inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
 

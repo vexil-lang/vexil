@@ -47,16 +47,6 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.close_block();
     w.blank();
 
-    w.line("@staticmethod");
-    w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
-    w.line(&format!(
-        "inner: {inner_py} = None  # type: ignore[assignment]"
-    ));
-    emit_read(w, "inner", &nt.inner_type, &default_enc, registry, "r");
-    w.line(&format!("return {name}(inner)"));
-    w.close_block();
-    w.blank();
-
     // __repr__
     w.line("def __repr__(self) -> str:");
     w.indent();

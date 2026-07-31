@@ -76,9 +76,5 @@ class Bar(int):
         v = r.read_bits(1)
         return Bar(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Bar(r.read_bits(1))
-
     def __repr__(self) -> str:
         return f"Bar({int(self)})"

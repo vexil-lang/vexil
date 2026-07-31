@@ -34,10 +34,6 @@ class ImageProtocol(int):
         v = r.read_bits(2)
         return ImageProtocol(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return ImageProtocol(r.read_bits(2))
-
     def __repr__(self) -> str:
         return f"ImageProtocol({int(self)})"
 
@@ -66,10 +62,6 @@ class ParseResult(int):
     def decode_from(r: _BitReader) -> ParseResult:
         v = r.read_bits(2)
         return ParseResult(v)
-
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return ParseResult(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"ParseResult({int(self)})"

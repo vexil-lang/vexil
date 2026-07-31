@@ -54,17 +54,6 @@ pub fn emit_flags(w: &mut CodeWriter, flags: &FlagsDef, _registry: &TypeRegistry
     w.close_block();
     w.blank();
 
-    w.line("@staticmethod");
-    w.open_block("def decode_from(r: _BitReader)");
-    match wire_bytes {
-        1 => w.line(&format!("return {name}(r.read_u8())")),
-        2 => w.line(&format!("return {name}(r.read_u16())")),
-        4 => w.line(&format!("return {name}(r.read_u32())")),
-        _ => w.line(&format!("return {name}(r.read_u64())")),
-    }
-    w.close_block();
-    w.blank();
-
     // has_flag helper
     w.open_block("def has(self, flag: int)");
     w.line("return bool(int(self) & flag)");

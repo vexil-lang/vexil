@@ -34,10 +34,6 @@ class Permissions(int):
         v = r.read_u8()
         return Permissions(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Permissions(r.read_u8())
-
     def has(self, flag: int):
         return bool(int(self) & flag)
 
@@ -68,10 +64,6 @@ class WideFlags(int):
     def decode_from(r: _BitReader) -> WideFlags:
         v = r.read_u64()
         return WideFlags(v)
-
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return WideFlags(r.read_u64())
 
     def has(self, flag: int):
         return bool(int(self) & flag)
@@ -104,10 +96,6 @@ class FileMode(int):
     def decode_from(r: _BitReader) -> FileMode:
         v = r.read_u8()
         return FileMode(v)
-
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return FileMode(r.read_u8())
 
     def has(self, flag: int):
         return bool(int(self) & flag)

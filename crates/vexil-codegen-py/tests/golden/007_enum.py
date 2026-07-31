@@ -34,10 +34,6 @@ class Direction(int):
         v = r.read_bits(2)
         return Direction(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Direction(r.read_bits(2))
-
     def __repr__(self) -> str:
         return f"Direction({int(self)})"
 
@@ -67,10 +63,6 @@ class ClientKind(int):
         v = r.read_bits(8)
         return ClientKind(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return ClientKind(r.read_bits(8))
-
     def __repr__(self) -> str:
         return f"ClientKind({int(self)})"
 
@@ -99,10 +91,6 @@ class HardwareStatus(int):
         v = r.read_bits(16)
         return HardwareStatus(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return HardwareStatus(r.read_bits(16))
-
     def __repr__(self) -> str:
         return f"HardwareStatus({int(self)})"
 
@@ -130,10 +118,6 @@ class Sparse(int):
         v = r.read_bits(32)
         return Sparse(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Sparse(r.read_bits(32))
-
     def __repr__(self) -> str:
         return f"Sparse({int(self)})"
 
@@ -160,10 +144,6 @@ class Lifecycle(int):
     def decode_from(r: _BitReader) -> Lifecycle:
         v = r.read_bits(2)
         return Lifecycle(v)
-
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return Lifecycle(r.read_bits(2))
 
     def __repr__(self) -> str:
         return f"Lifecycle({int(self)})"

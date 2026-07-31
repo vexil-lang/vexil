@@ -35,10 +35,6 @@ class LogLevel(int):
         v = r.read_bits(2)
         return LogLevel(v)
 
-    @staticmethod
-    def decode_from(r: _BitReader):
-        return LogLevel(r.read_bits(2))
-
     def __repr__(self) -> str:
         return f"LogLevel({int(self)})"
 
