@@ -14,12 +14,14 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
     // encode method (dispatches to variant encode)
     w.open_block("def encode(self) -> bytes");
-    w.line("return self._encode_variant()");
+    w.line("_vexil_writer = _BitWriter()");
+    w.line("self.encode_to(_vexil_writer)");
+    w.line("return _vexil_writer.finish()");
     w.close_block();
     w.blank();
 
-    // _encode_variant — overridden by subclasses
-    w.open_block("def _encode_variant(self) -> bytes");
+    // encode_to — overridden by subclasses
+    w.open_block("def encode_to(self, _vexil_writer: _BitWriter) -> None");
     w.line("raise NotImplementedError");
     w.close_block();
 
@@ -56,10 +58,9 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         }
         w.blank();
 
-        // _encode_variant
+        // encode_to
         let ordinal = variant.ordinal;
-        w.open_block("def _encode_variant(self) -> bytes");
-        w.line("_vexil_writer = _BitWriter()");
+        w.open_block("def encode_to(self, _vexil_writer: _BitWriter) -> None");
         w.line(&format!("_vexil_writer.write_leb128({ordinal})"));
 
         if variant.fields.is_empty() {
@@ -82,7 +83,6 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             w.line("_vexil_writer.write_leb128(len(_vexil_payload))");
             w.line("_vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))");
         }
-        w.line("return _vexil_writer.finish()");
         w.close_block();
         w.blank();
 

@@ -22,7 +22,7 @@ class TreeNode:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.value)
         w.write_leb128(len(self.children))
         for item in self.children:
@@ -32,12 +32,12 @@ class TreeNode:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> TreeNode:
         r = _BitReader(data)
         return TreeNode.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> TreeNode:
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_i32()
         arr_len = r.read_leb128()
@@ -64,7 +64,7 @@ class LinkedList:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.value)
         w.write_bool(self.next is not None)
         w.flush_to_byte_boundary()
@@ -75,12 +75,12 @@ class LinkedList:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> LinkedList:
         r = _BitReader(data)
         return LinkedList.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> LinkedList:
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_string()
         try:
@@ -111,20 +111,19 @@ class Expr:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        _encoded_union = self.kind.encode()
-        w.write_raw_bytes(_encoded_union, len(_encoded_union))
+    def encode_to(self, w: _BitWriter) -> None:
+        self.kind.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Expr:
         r = _BitReader(data)
         return Expr.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Expr:
         m = Expr.__new__(Expr)
         m.kind = decode_ExprKind_from(r)
         r.flush_to_byte_boundary()
@@ -137,17 +136,18 @@ class Expr:
 class ExprKind:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ExprKindLiteral(ExprKind):
     def __init__(self, value: int):
         self.value = value
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_i64(self.value)
@@ -155,7 +155,6 @@ class ExprKindLiteral(ExprKind):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ExprKindBinary(ExprKind):
@@ -164,8 +163,7 @@ class ExprKindBinary(ExprKind):
         self.op = op
         self.right = right
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_payload_writer = _BitWriter()
         self.left.encode_to(_vexil_payload_writer)
@@ -175,7 +173,6 @@ class ExprKindBinary(ExprKind):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:

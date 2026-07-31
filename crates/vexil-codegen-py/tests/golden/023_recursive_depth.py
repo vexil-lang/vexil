@@ -22,7 +22,7 @@ class TreeNode:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.write_leb128(len(self.children))
         for item in self.children:
@@ -32,12 +32,12 @@ class TreeNode:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> TreeNode:
         r = _BitReader(data)
         return TreeNode.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> TreeNode:
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_u32()
         arr_len = r.read_leb128()
@@ -64,7 +64,7 @@ class LinkedList:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i64(self.value)
         w.write_bool(self.next is not None)
         w.flush_to_byte_boundary()
@@ -75,12 +75,12 @@ class LinkedList:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> LinkedList:
         r = _BitReader(data)
         return LinkedList.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> LinkedList:
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_i64()
         try:

@@ -27,7 +27,7 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.close_block();
     w.blank();
 
-    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.open_block("def encode_to(self, w: _BitWriter) -> None");
     emit_write(w, "self.value", &nt.inner_type, &default_enc, registry, "w");
     w.close_block();
     w.blank();
@@ -36,6 +36,12 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
     w.line("@staticmethod");
     w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
+    w.line(&format!("return {name}.decode_from(r)"));
+    w.close_block();
+    w.blank();
+
+    w.line("@staticmethod");
+    w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
     w.line(&format!(
         "inner: {inner_py} = None  # type: ignore[assignment]"
     ));

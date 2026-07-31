@@ -24,7 +24,7 @@ class Transform:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.pos:
             w.write_i64(item)
         for item in self.rot:
@@ -38,12 +38,12 @@ class Transform:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Transform:
         r = _BitReader(data)
         return Transform.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Transform:
         m = Transform.__new__(Transform)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -64,7 +64,7 @@ class Vectors:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.v2:
             w.write_f64(item)
         for item in self.v3:
@@ -76,12 +76,12 @@ class Vectors:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Vectors:
         r = _BitReader(data)
         return Vectors.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Vectors:
         m = Vectors.__new__(Vectors)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -101,7 +101,7 @@ class Matrices:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.m3:
             w.write_f64(item)
         for item in self.m4:
@@ -111,12 +111,12 @@ class Matrices:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Matrices:
         r = _BitReader(data)
         return Matrices.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Matrices:
         m = Matrices.__new__(Matrices)
         r.flush_to_byte_boundary()
         m.unknown = b""

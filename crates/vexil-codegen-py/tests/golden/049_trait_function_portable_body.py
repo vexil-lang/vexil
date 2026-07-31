@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xf0, 0x55, 0x8d, 0xce, 0xf6, 0x4f, 0x18, 0xb1, 0x08, 0xa4, 0x01, 0xc7, 0xba, 0xd5, 0x29, 0x8d, 0x06, 0x0b, 0xe3, 0x08, 0x48, 0xa3, 0xac, 0xab, 0x0c, 0xcc, 0x34, 0xfe, 0xc7, 0x42, 0xef, 0xb2)
-_VexilTypeParam_T = TypeVar("T")
+_VexilTypeParam_T = TypeVar("_VexilTypeParam_T")
 
 
 # ---------- Adjustable ----------
@@ -43,19 +43,19 @@ class Counter:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Counter:
         r = _BitReader(data)
         return Counter.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Counter:
         m = Counter.__new__(Counter)
         m.value = r.read_i32()
         r.flush_to_byte_boundary()

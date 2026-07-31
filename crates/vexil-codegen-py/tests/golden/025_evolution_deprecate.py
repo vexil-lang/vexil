@@ -24,7 +24,7 @@ class Config:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.name)
         w.write_string(self.old_name)
         w.write_u32(self.timeout)
@@ -33,12 +33,12 @@ class Config:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Config:
         r = _BitReader(data)
         return Config.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Config:
         m = Config.__new__(Config)
         m.name = r.read_string()
         m.old_name = r.read_string()

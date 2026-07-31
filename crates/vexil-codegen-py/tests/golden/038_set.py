@@ -21,7 +21,7 @@ class Tags:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.names))
         for item in sorted(self.names):
             w.write_string(item)
@@ -30,12 +30,12 @@ class Tags:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Tags:
         r = _BitReader(data)
         return Tags.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Tags:
         m = Tags.__new__(Tags)
         set_len = r.read_leb128()
         m.names = set()

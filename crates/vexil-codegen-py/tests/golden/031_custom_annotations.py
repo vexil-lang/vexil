@@ -23,7 +23,7 @@ class Alert:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.code)
         w.write_string(self.message)
         w.flush_to_byte_boundary()
@@ -31,12 +31,12 @@ class Alert:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Alert:
         r = _BitReader(data)
         return Alert.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Alert:
         m = Alert.__new__(Alert)
         m.code = r.read_u32()
         m.message = r.read_string()
@@ -57,19 +57,19 @@ class Heartbeat:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.seq)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Heartbeat:
         r = _BitReader(data)
         return Heartbeat.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Heartbeat:
         m = Heartbeat.__new__(Heartbeat)
         m.seq = r.read_u64()
         r.flush_to_byte_boundary()

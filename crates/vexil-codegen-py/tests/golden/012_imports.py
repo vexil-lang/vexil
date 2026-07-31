@@ -23,7 +23,7 @@ class UseImports:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         # Unknown type: Unknown
         # Unknown type: Unknown
         # Unknown type: Unknown
@@ -32,12 +32,12 @@ class UseImports:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> UseImports:
         r = _BitReader(data)
         return UseImports.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> UseImports:
         m = UseImports.__new__(UseImports)
         # Unknown type: Unknown
         # Unknown type: Unknown

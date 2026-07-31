@@ -20,18 +20,18 @@ class Empty:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Empty:
         r = _BitReader(data)
         return Empty.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Empty:
         m = Empty.__new__(Empty)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -52,7 +52,7 @@ class WithGaps:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.first)
         w.write_u32(self.third)
         w.write_string(self.tenth)
@@ -61,12 +61,12 @@ class WithGaps:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithGaps:
         r = _BitReader(data)
         return WithGaps.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithGaps:
         m = WithGaps.__new__(WithGaps)
         m.first = r.read_u32()
         m.third = r.read_u32()
@@ -88,19 +88,19 @@ class Annotated:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.version)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Annotated:
         r = _BitReader(data)
         return Annotated.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Annotated:
         m = Annotated.__new__(Annotated)
         m.version = r.read_u8()
         r.flush_to_byte_boundary()
@@ -123,7 +123,7 @@ class FieldAnnotations:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.a)
         w.write_leb128(self.b)
         w.write_string(self.c)
@@ -133,12 +133,12 @@ class FieldAnnotations:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> FieldAnnotations:
         r = _BitReader(data)
         return FieldAnnotations.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> FieldAnnotations:
         m = FieldAnnotations.__new__(FieldAnnotations)
         m.a = r.read_u32()
         m.b = r.read_leb128()

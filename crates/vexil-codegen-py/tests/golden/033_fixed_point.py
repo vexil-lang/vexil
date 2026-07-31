@@ -23,7 +23,7 @@ class SensorReading:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.temperature)
         w.write_i64(self.pressure)
         w.write_leb128(self.delta_temp)
@@ -32,12 +32,12 @@ class SensorReading:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SensorReading:
         r = _BitReader(data)
         return SensorReading.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SensorReading:
         m = SensorReading.__new__(SensorReading)
         m.temperature = r.read_i32()
         m.pressure = r.read_i64()

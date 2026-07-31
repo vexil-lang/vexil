@@ -26,8 +26,12 @@ class LogLevel(int):
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> LogLevel:
         r = _BitReader(data)
+        return LogLevel.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> LogLevel:
         v = r.read_bits(2)
         return LogLevel(v)
 

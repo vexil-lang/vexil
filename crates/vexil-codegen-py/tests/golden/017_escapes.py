@@ -21,19 +21,19 @@ class Escapes:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.a)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Escapes:
         r = _BitReader(data)
         return Escapes.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Escapes:
         m = Escapes.__new__(Escapes)
         m.a = r.read_string()
         r.flush_to_byte_boundary()
@@ -53,19 +53,19 @@ class EmptyDoc:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.b)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> EmptyDoc:
         r = _BitReader(data)
         return EmptyDoc.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> EmptyDoc:
         m = EmptyDoc.__new__(EmptyDoc)
         m.b = r.read_u8()
         r.flush_to_byte_boundary()

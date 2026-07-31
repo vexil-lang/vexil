@@ -24,7 +24,7 @@ class Telemetry:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_zigzag(self.timestamp)
         w.write_f32(self.value)
         w.write_string(self.label)
@@ -34,12 +34,12 @@ class Telemetry:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Telemetry:
         r = _BitReader(data)
         return Telemetry.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Telemetry:
         m = Telemetry.__new__(Telemetry)
         m.timestamp = r.read_zigzag()
         m.value = r.read_f32()

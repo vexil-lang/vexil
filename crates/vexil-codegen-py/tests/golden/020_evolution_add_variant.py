@@ -14,17 +14,18 @@ SCHEMA_VERSION: str = "1.0.0"
 class ShapeV1:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ShapeV1Circle(ShapeV1):
     def __init__(self, radius: float):
         self.radius = radius
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.radius)
@@ -32,7 +33,6 @@ class ShapeV1Circle(ShapeV1):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ShapeV1Rect(ShapeV1):
@@ -40,8 +40,7 @@ class ShapeV1Rect(ShapeV1):
         self.w = w
         self.h = h
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.w)
@@ -50,7 +49,6 @@ class ShapeV1Rect(ShapeV1):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_ShapeV1_from(_vexil_reader: _BitReader) -> ShapeV1:
@@ -83,17 +81,18 @@ def decode_ShapeV1(data: bytes) -> ShapeV1:
 class ShapeV2:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ShapeV2Circle(ShapeV2):
     def __init__(self, radius: float):
         self.radius = radius
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.radius)
@@ -101,7 +100,6 @@ class ShapeV2Circle(ShapeV2):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ShapeV2Rect(ShapeV2):
@@ -109,8 +107,7 @@ class ShapeV2Rect(ShapeV2):
         self.w = w
         self.h = h
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.w)
@@ -119,7 +116,6 @@ class ShapeV2Rect(ShapeV2):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ShapeV2Triangle(ShapeV2):
@@ -127,8 +123,7 @@ class ShapeV2Triangle(ShapeV2):
         self.base = base
         self.height = height
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(2)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.base)
@@ -137,7 +132,6 @@ class ShapeV2Triangle(ShapeV2):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_ShapeV2_from(_vexil_reader: _BitReader) -> ShapeV2:

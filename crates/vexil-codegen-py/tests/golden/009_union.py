@@ -13,17 +13,18 @@ SCHEMA_HASH: tuple[int, ...] = (0x2f, 0x63, 0x8f, 0x3e, 0x17, 0x8f, 0x50, 0x9c, 
 class Shape:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ShapeCircle(Shape):
     def __init__(self, radius: float):
         self.radius = radius
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.radius)
@@ -31,7 +32,6 @@ class ShapeCircle(Shape):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ShapeRectangle(Shape):
@@ -39,8 +39,7 @@ class ShapeRectangle(Shape):
         self.width = width
         self.height = height
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_f32(self.width)
@@ -49,18 +48,15 @@ class ShapeRectangle(Shape):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ShapePoint(Shape):
     def __init__(self):
         pass
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(2)
         _vexil_writer.write_leb128(0)
-        return _vexil_writer.finish()
 
 
 def decode_Shape_from(_vexil_reader: _BitReader) -> Shape:
@@ -95,17 +91,18 @@ def decode_Shape(data: bytes) -> Shape:
 class Color:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ColorAnsi(Color):
     def __init__(self, code: int):
         self.code = code
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_u8(self.code)
@@ -113,7 +110,6 @@ class ColorAnsi(Color):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ColorRgb(Color):
@@ -122,8 +118,7 @@ class ColorRgb(Color):
         self.g = g
         self.b = b
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_u8(self.r)
@@ -133,18 +128,15 @@ class ColorRgb(Color):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class ColorReset(Color):
     def __init__(self):
         pass
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(2)
         _vexil_writer.write_leb128(0)
-        return _vexil_writer.finish()
 
 
 def decode_Color_from(_vexil_reader: _BitReader) -> Color:
@@ -181,9 +173,11 @@ def decode_Color(data: bytes) -> Color:
 class Event:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class EventClick(Event):
@@ -191,8 +185,7 @@ class EventClick(Event):
         self.x = x
         self.y = y
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_u16(self.x)
@@ -201,15 +194,13 @@ class EventClick(Event):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class EventScroll(Event):
     def __init__(self, delta: int):
         self.delta = delta
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(2)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_i16(self.delta)
@@ -217,7 +208,6 @@ class EventScroll(Event):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_Event_from(_vexil_reader: _BitReader) -> Event:

@@ -23,7 +23,7 @@ class HeaderV1:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.kind)
         w.write_u8(self.status)
         w.flush_to_byte_boundary()
@@ -31,12 +31,12 @@ class HeaderV1:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> HeaderV1:
         r = _BitReader(data)
         return HeaderV1.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> HeaderV1:
         m = HeaderV1.__new__(HeaderV1)
         m.kind = r.read_u8()
         m.status = r.read_u8()
@@ -59,7 +59,7 @@ class HeaderV2:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.kind)
         w.write_u8(self.status)
         w.write_u16(self.flags)
@@ -68,12 +68,12 @@ class HeaderV2:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> HeaderV2:
         r = _BitReader(data)
         return HeaderV2.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> HeaderV2:
         m = HeaderV2.__new__(HeaderV2)
         m.kind = r.read_u8()
         m.status = r.read_u8()

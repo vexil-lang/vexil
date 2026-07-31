@@ -26,7 +26,7 @@ class AllSemantic:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.a)
         w.write_bytes(self.b)
         w.write_u8(self.c[0])
@@ -40,22 +40,23 @@ class AllSemantic:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> AllSemantic:
         r = _BitReader(data)
         return AllSemantic.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> AllSemantic:
         m = AllSemantic.__new__(AllSemantic)
         m.a = r.read_string()
-        m.b = r.read_bytes(r.read_leb128())
+        _vexil_m_b_length = r.read_leb128()
+        m.b = r.read_bytes(_vexil_m_b_length)
         r = r.read_u8()
         g = r.read_u8()
         b = r.read_u8()
         m.c = (r, g, b)
-        m.d = r.read_raw_bytes(16)
+        m.d = r.read_bytes(16)
         m.e = r.read_i64()
-        m.f = r.read_raw_bytes(32)
+        m.f = r.read_bytes(32)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

@@ -26,8 +26,12 @@ class Status(int):
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Status:
         r = _BitReader(data)
+        return Status.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Status:
         v = r.read_bits(2)
         return Status(v)
 
@@ -50,12 +54,16 @@ class Permissions(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Permissions:
         r = _BitReader(data)
+        return Permissions.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Permissions:
         v = r.read_u8()
         return Permissions(v)
 
@@ -81,12 +89,16 @@ class UserId:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
 
     @staticmethod
     def decode(data: bytes) -> UserId:
         r = _BitReader(data)
+        return UserId.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> UserId:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_u32()
         return UserId(inner)
@@ -115,12 +127,16 @@ class Label:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Label:
         r = _BitReader(data)
+        return Label.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Label:
         inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
@@ -160,7 +176,7 @@ class MapKeyTest:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.bool_map))
         for map_k, map_v in self.bool_map.items():
             w.write_bool(map_k)
@@ -215,12 +231,12 @@ class MapKeyTest:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> MapKeyTest:
         r = _BitReader(data)
         return MapKeyTest.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> MapKeyTest:
         m = MapKeyTest.__new__(MapKeyTest)
         map_len = r.read_leb128()
         m.bool_map = {}
@@ -275,7 +291,8 @@ class MapKeyTest:
         for _ in range(map_len):
             _k: bytes = None  # type: ignore[assignment]
             _v: int = None  # type: ignore[assignment]
-            _k = r.read_bytes(r.read_leb128())
+            _vexil__k_length = r.read_leb128()
+            _k = r.read_bytes(_vexil__k_length)
             _v = r.read_u32()
             m.bytes_map[_k] = _v
         map_len = r.read_leb128()
@@ -283,7 +300,7 @@ class MapKeyTest:
         for _ in range(map_len):
             _k: bytes = None  # type: ignore[assignment]
             _v: str = None  # type: ignore[assignment]
-            _k = r.read_raw_bytes(16)
+            _k = r.read_bytes(16)
             _v = r.read_string()
             m.uuid_map[_k] = _v
         map_len = r.read_leb128()

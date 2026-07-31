@@ -22,19 +22,19 @@ class OldMessage:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> OldMessage:
         r = _BitReader(data)
         return OldMessage.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> OldMessage:
         m = OldMessage.__new__(OldMessage)
         m.value = r.read_u32()
         r.flush_to_byte_boundary()
@@ -55,7 +55,7 @@ class Lifecycle:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.name)
         w.write_string(self.email)
         w.flush_to_byte_boundary()
@@ -63,12 +63,12 @@ class Lifecycle:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Lifecycle:
         r = _BitReader(data)
         return Lifecycle.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Lifecycle:
         m = Lifecycle.__new__(Lifecycle)
         m.name = r.read_string()
         m.email = r.read_string()
@@ -93,7 +93,7 @@ class Encoded:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(self.count)
         w.write_zigzag(self.delta)
         w.write_u64(self.offset)
@@ -104,12 +104,12 @@ class Encoded:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Encoded:
         r = _BitReader(data)
         return Encoded.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Encoded:
         m = Encoded.__new__(Encoded)
         m.count = r.read_leb128()
         m.delta = r.read_zigzag()
@@ -196,7 +196,7 @@ class Limited:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.body)
         w.write_leb128(len(self.tags))
         for item in self.tags:
@@ -212,12 +212,12 @@ class Limited:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Limited:
         r = _BitReader(data)
         return Limited.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Limited:
         m = Limited.__new__(Limited)
         m.body = r.read_string()
         arr_len = r.read_leb128()
@@ -234,7 +234,8 @@ class Limited:
             _k = r.read_string()
             _v = r.read_string()
             m.headers[_k] = _v
-        m.data = r.read_bytes(r.read_leb128())
+        _vexil_m_data_length = r.read_leb128()
+        m.data = r.read_bytes(_vexil_m_data_length)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -252,19 +253,19 @@ class RenderCommand:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.op)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> RenderCommand:
         r = _BitReader(data)
         return RenderCommand.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> RenderCommand:
         m = RenderCommand.__new__(RenderCommand)
         m.op = r.read_u8()
         r.flush_to_byte_boundary()
@@ -284,19 +285,19 @@ class Documented:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Documented:
         r = _BitReader(data)
         return Documented.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Documented:
         m = Documented.__new__(Documented)
         m.value = r.read_u32()
         r.flush_to_byte_boundary()

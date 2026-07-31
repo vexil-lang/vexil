@@ -22,12 +22,16 @@ class UserId:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
 
     @staticmethod
     def decode(data: bytes) -> UserId:
         r = _BitReader(data)
+        return UserId.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> UserId:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_u32()
         return UserId(inner)
@@ -56,12 +60,16 @@ class Label:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Label:
         r = _BitReader(data)
+        return Label.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Label:
         inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
@@ -92,7 +100,7 @@ class UserProfile:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         self.id.encode_to(w)
         w.write_leb128(len(self.friends))
         for map_k, map_v in self.friends.items():
@@ -107,12 +115,12 @@ class UserProfile:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> UserProfile:
         r = _BitReader(data)
         return UserProfile.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> UserProfile:
         m = UserProfile.__new__(UserProfile)
         m.id = UserId.decode_from(r)
         map_len = r.read_leb128()

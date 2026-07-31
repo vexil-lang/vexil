@@ -22,7 +22,7 @@ class Foo:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.x)
         w.write_string(self.y)
         w.flush_to_byte_boundary()
@@ -30,12 +30,12 @@ class Foo:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Foo:
         r = _BitReader(data)
         return Foo.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Foo:
         m = Foo.__new__(Foo)
         m.x = r.read_u32()
         m.y = r.read_string()
@@ -59,8 +59,12 @@ class Bar(int):
         w.write_bits(int(self), 1)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Bar:
         r = _BitReader(data)
+        return Bar.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Bar:
         v = r.read_bits(1)
         return Bar(v)
 

@@ -33,7 +33,7 @@ class SubByteUnsigned:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(self.a, 1)
         w.write_bits(self.b, 2)
         w.write_bits(self.c, 3)
@@ -52,12 +52,12 @@ class SubByteUnsigned:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SubByteUnsigned:
         r = _BitReader(data)
         return SubByteUnsigned.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SubByteUnsigned:
         m = SubByteUnsigned.__new__(SubByteUnsigned)
         m.a = r.read_bits(1)
         m.b = r.read_bits(2)
@@ -100,7 +100,7 @@ class SubByteSigned:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(self.a, 2)
         w.write_bits(self.b, 3)
         w.write_bits(self.c, 4)
@@ -118,12 +118,12 @@ class SubByteSigned:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SubByteSigned:
         r = _BitReader(data)
         return SubByteSigned.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SubByteSigned:
         m = SubByteSigned.__new__(SubByteSigned)
         m.a = r.read_bits(2)
         m.b = r.read_bits(3)

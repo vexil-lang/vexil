@@ -20,12 +20,16 @@ class SessionId:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.value)
 
     @staticmethod
     def decode(data: bytes) -> SessionId:
         r = _BitReader(data)
+        return SessionId.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> SessionId:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return SessionId(inner)
@@ -54,12 +58,16 @@ class PaneId:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.value)
 
     @staticmethod
     def decode(data: bytes) -> PaneId:
         r = _BitReader(data)
+        return PaneId.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> PaneId:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return PaneId(inner)
@@ -88,12 +96,16 @@ class ExitCode:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.value)
 
     @staticmethod
     def decode(data: bytes) -> ExitCode:
         r = _BitReader(data)
+        return ExitCode.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> ExitCode:
         inner: int = None  # type: ignore[assignment]
         inner = r.read_i32()
         return ExitCode(inner)
@@ -122,12 +134,16 @@ class Name:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Name:
         r = _BitReader(data)
+        return Name.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Name:
         inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Name(inner)
@@ -156,20 +172,26 @@ class Payload:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bytes(self.value)
 
     @staticmethod
     def decode(data: bytes) -> Payload:
         r = _BitReader(data)
+        return Payload.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Payload:
         inner: bytes = None  # type: ignore[assignment]
-        inner = r.read_bytes(r.read_leb128())
+        _vexil_inner_length = r.read_leb128()
+        inner = r.read_bytes(_vexil_inner_length)
         return Payload(inner)
 
     @staticmethod
     def decode_from(r: _BitReader) -> Payload:
         inner: bytes = None  # type: ignore[assignment]
-        inner = r.read_bytes(r.read_leb128())
+        _vexil_inner_length = r.read_leb128()
+        inner = r.read_bytes(_vexil_inner_length)
         return Payload(inner)
 
     def __repr__(self) -> str:
@@ -190,7 +212,7 @@ class Color:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.value[0])
         w.write_u8(self.value[1])
         w.write_u8(self.value[2])
@@ -198,6 +220,10 @@ class Color:
     @staticmethod
     def decode(data: bytes) -> Color:
         r = _BitReader(data)
+        return Color.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Color:
         inner: tuple[int, int, int] = None  # type: ignore[assignment]
         r = r.read_u8()
         g = r.read_u8()

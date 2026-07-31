@@ -222,10 +222,7 @@ fn emit_write_type(
                     w.line(&format!("{access}.encode_to({writer})"));
                 }
                 Some(TypeDef::Union(_)) => {
-                    w.line(&format!("_encoded_union = {access}.encode()"));
-                    w.line(&format!(
-                        "{writer}.write_raw_bytes(_encoded_union, len(_encoded_union))"
-                    ));
+                    w.line(&format!("{access}.encode_to({writer})"));
                 }
                 Some(TypeDef::Newtype(_)) => {
                     w.line(&format!("{access}.encode_to({writer})"));
@@ -384,9 +381,9 @@ fn emit_read_type(
                 w.line(&format!("{target} = {reader}.read_string()"));
             }
             SemanticType::Bytes => {
-                w.line(&format!(
-                    "{target} = {reader}.read_bytes({reader}.read_leb128())"
-                ));
+                let length = local_name(target, "length");
+                w.line(&format!("{length} = {reader}.read_leb128()"));
+                w.line(&format!("{target} = {reader}.read_bytes({length})"));
             }
             SemanticType::Rgb => {
                 w.line(&format!("r = {reader}.read_u8()"));
@@ -395,13 +392,13 @@ fn emit_read_type(
                 w.line(&format!("{target} = (r, g, b)"));
             }
             SemanticType::Uuid => {
-                w.line(&format!("{target} = {reader}.read_raw_bytes(16)"));
+                w.line(&format!("{target} = {reader}.read_bytes(16)"));
             }
             SemanticType::Timestamp => {
                 w.line(&format!("{target} = {reader}.read_i64()"));
             }
             SemanticType::Hash => {
-                w.line(&format!("{target} = {reader}.read_raw_bytes(32)"));
+                w.line(&format!("{target} = {reader}.read_bytes(32)"));
             }
         },
         ResolvedType::Named(id) => {
@@ -590,9 +587,9 @@ fn emit_tombstone_read(
                     w.line(&format!("_ = {reader}.read_u8()"));
                     return;
                 }
-                SemanticType::Uuid => format!("_ = {reader}.read_raw_bytes(16)"),
+                SemanticType::Uuid => format!("_ = {reader}.read_bytes(16)"),
                 SemanticType::Timestamp => format!("_ = {reader}.read_i64()"),
-                SemanticType::Hash => format!("_ = {reader}.read_raw_bytes(32)"),
+                SemanticType::Hash => format!("_ = {reader}.read_bytes(32)"),
             };
             w.line(&read_expr);
         }
@@ -608,8 +605,11 @@ fn emit_tombstone_read(
                 },
                 None => "Unknown".to_string(),
             };
-            w.line(&format!("_tmp = {type_name}.__new__({type_name})"));
-            w.line(&format!("_tmp.decode_from({reader})"));
+            if matches!(registry.get(*id), Some(TypeDef::Union(_))) {
+                w.line(&format!("_ = decode_{type_name}_from({reader})"));
+            } else {
+                w.line(&format!("_ = {type_name}.decode_from({reader})"));
+            }
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("_present = {reader}.read_bool()"));
@@ -680,7 +680,7 @@ pub fn emit_message(
     w.close_block();
     w.blank();
 
-    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.open_block("def encode_to(self, w: _BitWriter) -> None");
     for field in &msg.fields {
         let field_name = py_ident(field.name.as_str());
         let access = format!("self.{field_name}");
@@ -706,14 +706,14 @@ pub fn emit_message(
 
     // decode static method
     w.line("@staticmethod");
-    w.open_block("def decode(data: bytes)");
+    w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
     w.line(&format!("return {name}.decode_from(r)"));
     w.close_block();
     w.blank();
 
     w.line("@staticmethod");
-    w.open_block("def decode_from(r: _BitReader)");
+    w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
     w.line(&format!("m = {name}.__new__({name})"));
 
     enum DecodeAction<'a> {

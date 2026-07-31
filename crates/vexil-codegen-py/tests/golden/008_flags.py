@@ -21,12 +21,16 @@ class Permissions(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Permissions:
         r = _BitReader(data)
+        return Permissions.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Permissions:
         v = r.read_u8()
         return Permissions(v)
 
@@ -52,12 +56,16 @@ class WideFlags(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WideFlags:
         r = _BitReader(data)
+        return WideFlags.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> WideFlags:
         v = r.read_u64()
         return WideFlags(v)
 
@@ -84,12 +92,16 @@ class FileMode(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(int(self))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> FileMode:
         r = _BitReader(data)
+        return FileMode.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> FileMode:
         v = r.read_u8()
         return FileMode(v)
 

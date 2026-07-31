@@ -22,7 +22,7 @@ class Coord:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i32(self.x)
         w.write_i32(self.y)
         w.flush_to_byte_boundary()
@@ -30,12 +30,12 @@ class Coord:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Coord:
         r = _BitReader(data)
         return Coord.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Coord:
         m = Coord.__new__(Coord)
         m.x = r.read_i32()
         m.y = r.read_i32()
@@ -57,7 +57,7 @@ class Rect:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         self.origin.encode_to(w)
         self.size.encode_to(w)
         w.flush_to_byte_boundary()
@@ -65,12 +65,12 @@ class Rect:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Rect:
         r = _BitReader(data)
         return Rect.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Rect:
         m = Rect.__new__(Rect)
         m.origin = Coord.decode_from(r)
         m.size = Coord.decode_from(r)
@@ -93,7 +93,7 @@ class Canvas:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         self.bounds.encode_to(w)
         w.write_string(self.name)
         w.write_leb128(len(self.layers))
@@ -104,12 +104,12 @@ class Canvas:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Canvas:
         r = _BitReader(data)
         return Canvas.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Canvas:
         m = Canvas.__new__(Canvas)
         m.bounds = Rect.decode_from(r)
         m.name = r.read_string()

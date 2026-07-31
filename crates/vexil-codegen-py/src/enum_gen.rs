@@ -34,8 +34,14 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
 
     // decode static method
     w.line("@staticmethod");
-    w.open_block("def decode(data: bytes)");
+    w.open_block(&format!("def decode(data: bytes) -> {name}"));
     w.line("r = _BitReader(data)");
+    w.line(&format!("return {name}.decode_from(r)"));
+    w.close_block();
+    w.blank();
+
+    w.line("@staticmethod");
+    w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
     w.line(&format!("v = r.read_bits({})", en.wire_bits));
     w.line(&format!("return {name}(v)"));
     w.close_block();

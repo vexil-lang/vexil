@@ -22,19 +22,19 @@ class Annotated:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.x)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Annotated:
         r = _BitReader(data)
         return Annotated.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Annotated:
         m = Annotated.__new__(Annotated)
         m.x = r.read_u32()
         r.flush_to_byte_boundary()

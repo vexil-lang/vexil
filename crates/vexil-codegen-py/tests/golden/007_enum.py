@@ -25,8 +25,12 @@ class Direction(int):
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Direction:
         r = _BitReader(data)
+        return Direction.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Direction:
         v = r.read_bits(2)
         return Direction(v)
 
@@ -54,8 +58,12 @@ class ClientKind(int):
         w.write_bits(int(self), 8)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> ClientKind:
         r = _BitReader(data)
+        return ClientKind.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> ClientKind:
         v = r.read_bits(8)
         return ClientKind(v)
 
@@ -82,8 +90,12 @@ class HardwareStatus(int):
         w.write_bits(int(self), 16)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> HardwareStatus:
         r = _BitReader(data)
+        return HardwareStatus.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> HardwareStatus:
         v = r.read_bits(16)
         return HardwareStatus(v)
 
@@ -109,8 +121,12 @@ class Sparse(int):
         w.write_bits(int(self), 32)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Sparse:
         r = _BitReader(data)
+        return Sparse.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Sparse:
         v = r.read_bits(32)
         return Sparse(v)
 
@@ -136,8 +152,12 @@ class Lifecycle(int):
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Lifecycle:
         r = _BitReader(data)
+        return Lifecycle.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> Lifecycle:
         v = r.read_bits(2)
         return Lifecycle(v)
 

@@ -32,7 +32,7 @@ class AllPrimitives:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bool(self.a)
         w.write_u8(self.b)
         w.write_u16(self.c)
@@ -49,12 +49,12 @@ class AllPrimitives:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> AllPrimitives:
         r = _BitReader(data)
         return AllPrimitives.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> AllPrimitives:
         m = AllPrimitives.__new__(AllPrimitives)
         m.a = r.read_bool()
         m.b = r.read_u8()

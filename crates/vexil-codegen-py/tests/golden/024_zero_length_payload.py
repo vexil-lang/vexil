@@ -20,18 +20,18 @@ class Empty:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Empty:
         r = _BitReader(data)
         return Empty.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Empty:
         m = Empty.__new__(Empty)
         r.flush_to_byte_boundary()
         m.unknown = b""
@@ -51,7 +51,7 @@ class Wrapper:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         self.inner.encode_to(w)
         w.write_u8(self.tag)
         w.flush_to_byte_boundary()
@@ -59,12 +59,12 @@ class Wrapper:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Wrapper:
         r = _BitReader(data)
         return Wrapper.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Wrapper:
         m = Wrapper.__new__(Wrapper)
         m.inner = Empty.decode_from(r)
         m.tag = r.read_u8()
@@ -78,39 +78,36 @@ class Wrapper:
 class Event:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class EventPing(Event):
     def __init__(self):
         pass
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_writer.write_leb128(0)
-        return _vexil_writer.finish()
 
 
 class EventPong(Event):
     def __init__(self):
         pass
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_writer.write_leb128(0)
-        return _vexil_writer.finish()
 
 
 class EventData(Event):
     def __init__(self, payload: bytes):
         self.payload = payload
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(2)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_bytes(self.payload)
@@ -118,7 +115,6 @@ class EventData(Event):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_Event_from(_vexil_reader: _BitReader) -> Event:
@@ -133,7 +129,8 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
         _vexil_field_0: bytes = None  # type: ignore[assignment]
-        _vexil_field_0 = _vexil_payload_reader.read_bytes(_vexil_payload_reader.read_leb128())
+        _vexil__vexil_field_0_length = _vexil_payload_reader.read_leb128()
+        _vexil_field_0 = _vexil_payload_reader.read_bytes(_vexil__vexil_field_0_length)
         return EventData(_vexil_field_0)
     else:
         raise ValueError(f"unknown Event discriminant: {_vexil_discriminant}")

@@ -22,7 +22,7 @@ class Container:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         self.item.encode_to(w)
         self.meta.encode_to(w)
         w.flush_to_byte_boundary()
@@ -30,12 +30,12 @@ class Container:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Container:
         r = _BitReader(data)
         return Container.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Container:
         m = Container.__new__(Container)
         m.item = Item.decode_from(r)
         m.meta = Metadata.decode_from(r)
@@ -57,7 +57,7 @@ class Item:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.name)
         w.write_u64(self.value)
         w.flush_to_byte_boundary()
@@ -65,12 +65,12 @@ class Item:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Item:
         r = _BitReader(data)
         return Item.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Item:
         m = Item.__new__(Item)
         m.name = r.read_string()
         m.value = r.read_u64()
@@ -92,7 +92,7 @@ class Metadata:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i64(self.created)
         w.write_string(self.author)
         w.flush_to_byte_boundary()
@@ -100,12 +100,12 @@ class Metadata:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Metadata:
         r = _BitReader(data)
         return Metadata.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Metadata:
         m = Metadata.__new__(Metadata)
         m.created = r.read_i64()
         m.author = r.read_string()

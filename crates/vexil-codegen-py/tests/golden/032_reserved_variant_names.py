@@ -25,8 +25,12 @@ class ImageProtocol(int):
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> ImageProtocol:
         r = _BitReader(data)
+        return ImageProtocol.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> ImageProtocol:
         v = r.read_bits(2)
         return ImageProtocol(v)
 
@@ -54,8 +58,12 @@ class ParseResult(int):
         w.write_bits(int(self), 2)
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> ParseResult:
         r = _BitReader(data)
+        return ParseResult.decode_from(r)
+
+    @staticmethod
+    def decode_from(r: _BitReader) -> ParseResult:
         v = r.read_bits(2)
         return ParseResult(v)
 

@@ -40,7 +40,7 @@ class KeywordFields:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self.flags)
         w.write_u16(self.type)
         w.write_bytes(self.hash)
@@ -66,16 +66,17 @@ class KeywordFields:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> KeywordFields:
         r = _BitReader(data)
         return KeywordFields.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> KeywordFields:
         m = KeywordFields.__new__(KeywordFields)
         m.flags = r.read_u8()
         m.type = r.read_u16()
-        m.hash = r.read_bytes(r.read_leb128())
+        _vexil_m_hash_length = r.read_leb128()
+        m.hash = r.read_bytes(_vexil_m_hash_length)
         m.string = r.read_u32()
         m.message = r.read_u64()
         m.enum = r.read_u8()

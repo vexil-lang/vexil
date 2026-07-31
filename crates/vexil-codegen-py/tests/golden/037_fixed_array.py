@@ -25,7 +25,7 @@ class Basic:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.a:
             w.write_u8(item)
         for item in self.b:
@@ -41,12 +41,12 @@ class Basic:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Basic:
         r = _BitReader(data)
         return Basic.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Basic:
         m = Basic.__new__(Basic)
         _vexil_m_a_fixed_items: list[int] = []
         for _ in range(4):
@@ -91,7 +91,7 @@ class Point:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_f32(self.x)
         w.write_f32(self.y)
         w.flush_to_byte_boundary()
@@ -99,12 +99,12 @@ class Point:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Point:
         r = _BitReader(data)
         return Point.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Point:
         m = Point.__new__(Point)
         m.x = r.read_f32()
         m.y = r.read_f32()
@@ -125,7 +125,7 @@ class Nested:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.a:
             for item in item:
                 w.write_u8(item)
@@ -134,12 +134,12 @@ class Nested:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Nested:
         r = _BitReader(data)
         return Nested.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Nested:
         m = Nested.__new__(Nested)
         _vexil_m_a_fixed_items: list[tuple[int, ...]] = []
         for _ in range(3):
@@ -167,7 +167,7 @@ class WithOptional:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.a:
             w.write_bool(item is not None)
             w.flush_to_byte_boundary()
@@ -178,12 +178,12 @@ class WithOptional:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithOptional:
         r = _BitReader(data)
         return WithOptional.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithOptional:
         m = WithOptional.__new__(WithOptional)
         _vexil_m_a_fixed_items: list[int | None] = []
         for _ in range(10):
@@ -217,20 +217,19 @@ class WithUnion:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
-        _encoded_union = self.data.encode()
-        w.write_raw_bytes(_encoded_union, len(_encoded_union))
+    def encode_to(self, w: _BitWriter) -> None:
+        self.data.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithUnion:
         r = _BitReader(data)
         return WithUnion.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithUnion:
         m = WithUnion.__new__(WithUnion)
         m.data = decode_Data_from(r)
         r.flush_to_byte_boundary()
@@ -243,17 +242,18 @@ class WithUnion:
 class Data:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class DataFixedInts(Data):
     def __init__(self, values: tuple[int, ...]):
         self.values = values
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         for item in self.values:
@@ -262,15 +262,13 @@ class DataFixedInts(Data):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 class DataFixedBytes(Data):
     def __init__(self, bytes: tuple[int, ...]):
         self.bytes = bytes
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(1)
         _vexil_payload_writer = _BitWriter()
         for item in self.bytes:
@@ -279,7 +277,6 @@ class DataFixedBytes(Data):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_Data_from(_vexil_reader: _BitReader) -> Data:
@@ -327,7 +324,7 @@ class EdgeCases:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         for item in self.single:
             w.write_u8(item)
         for item in self.large:
@@ -339,12 +336,12 @@ class EdgeCases:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> EdgeCases:
         r = _BitReader(data)
         return EdgeCases.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> EdgeCases:
         m = EdgeCases.__new__(EdgeCases)
         _vexil_m_single_fixed_items: list[int] = []
         for _ in range(1):

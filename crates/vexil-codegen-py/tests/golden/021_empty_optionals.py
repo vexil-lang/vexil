@@ -23,7 +23,7 @@ class WithOptionals:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bool(self.name is not None)
         w.flush_to_byte_boundary()
         if self.name is not None:
@@ -41,12 +41,12 @@ class WithOptionals:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> WithOptionals:
         r = _BitReader(data)
         return WithOptionals.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> WithOptionals:
         m = WithOptionals.__new__(WithOptionals)
         try:
             present = r.read_bool()
@@ -98,7 +98,7 @@ class NestedOptional:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bool(self.inner is not None)
         w.flush_to_byte_boundary()
         if self.inner is not None:
@@ -111,12 +111,12 @@ class NestedOptional:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> NestedOptional:
         r = _BitReader(data)
         return NestedOptional.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> NestedOptional:
         m = NestedOptional.__new__(NestedOptional)
         try:
             present = r.read_bool()
@@ -158,7 +158,7 @@ class AllEmpty:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bool(self.a is not None)
         w.flush_to_byte_boundary()
         if self.a is not None:
@@ -176,12 +176,12 @@ class AllEmpty:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> AllEmpty:
         r = _BitReader(data)
         return AllEmpty.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> AllEmpty:
         m = AllEmpty.__new__(AllEmpty)
         try:
             present = r.read_bool()

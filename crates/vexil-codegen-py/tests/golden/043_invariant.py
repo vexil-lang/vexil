@@ -21,19 +21,19 @@ class Balance:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i64(self.amount)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Balance:
         r = _BitReader(data)
         return Balance.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Balance:
         m = Balance.__new__(Balance)
         m.amount = r.read_i64()
         r.flush_to_byte_boundary()
@@ -55,7 +55,7 @@ class Transfer:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_i64(self._vexil_from)
         w.write_i64(self.to)
         w.write_i64(self.amount)
@@ -64,12 +64,12 @@ class Transfer:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Transfer:
         r = _BitReader(data)
         return Transfer.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Transfer:
         m = Transfer.__new__(Transfer)
         m._vexil_from = r.read_i64()
         m.to = r.read_i64()

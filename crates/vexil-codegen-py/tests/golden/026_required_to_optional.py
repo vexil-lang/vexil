@@ -22,7 +22,7 @@ class SettingsV1:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.timeout)
         w.write_string(self.name)
         w.flush_to_byte_boundary()
@@ -30,12 +30,12 @@ class SettingsV1:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SettingsV1:
         r = _BitReader(data)
         return SettingsV1.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SettingsV1:
         m = SettingsV1.__new__(SettingsV1)
         m.timeout = r.read_u32()
         m.name = r.read_string()
@@ -57,7 +57,7 @@ class SettingsV2:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bool(self.timeout is not None)
         w.flush_to_byte_boundary()
         if self.timeout is not None:
@@ -68,12 +68,12 @@ class SettingsV2:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> SettingsV2:
         r = _BitReader(data)
         return SettingsV2.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> SettingsV2:
         m = SettingsV2.__new__(SettingsV2)
         try:
             present = r.read_bool()

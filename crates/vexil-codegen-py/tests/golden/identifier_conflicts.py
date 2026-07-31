@@ -39,7 +39,7 @@ class Collision:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u8(self._vexil_from)
         w.write_u8(self.from_)
         w.write_u8(self._vexil_self)
@@ -49,17 +49,18 @@ class Collision:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Collision:
         r = _BitReader(data)
         return Collision.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Collision:
         m = Collision.__new__(Collision)
         m._vexil_from = r.read_u8()
         m.from_ = r.read_u8()
         m._vexil_self = r.read_u8()
-        m._vexil_unknown = r.read_bytes(r.read_leb128())
+        _vexil_m__vexil_unknown_length = r.read_leb128()
+        m._vexil_unknown = r.read_bytes(_vexil_m__vexil_unknown_length)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -70,9 +71,11 @@ class Collision:
 class Choice:
 
     def encode(self) -> bytes:
-        return self._encode_variant()
+        _vexil_writer = _BitWriter()
+        self.encode_to(_vexil_writer)
+        return _vexil_writer.finish()
 
-    def _encode_variant(self) -> bytes:
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         raise NotImplementedError
 
 class ChoiceNamed(Choice):
@@ -80,8 +83,7 @@ class ChoiceNamed(Choice):
         self._vexil_self = _vexil_self
         self.pr = pr
 
-    def _encode_variant(self) -> bytes:
-        _vexil_writer = _BitWriter()
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
         _vexil_writer.write_leb128(0)
         _vexil_payload_writer = _BitWriter()
         _vexil_payload_writer.write_u8(self._vexil_self)
@@ -90,7 +92,6 @@ class ChoiceNamed(Choice):
         _vexil_payload = _vexil_payload_writer.finish()
         _vexil_writer.write_leb128(len(_vexil_payload))
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
-        return _vexil_writer.finish()
 
 
 def decode_Choice_from(_vexil_reader: _BitReader) -> Choice:

@@ -30,7 +30,7 @@ class Event:
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_u64(self.tag)
         w.write_string(self.label)
         w.flush_to_byte_boundary()
@@ -38,12 +38,12 @@ class Event:
             w.write_raw_bytes(self.unknown, len(self.unknown))
 
     @staticmethod
-    def decode(data: bytes):
+    def decode(data: bytes) -> Event:
         r = _BitReader(data)
         return Event.decode_from(r)
 
     @staticmethod
-    def decode_from(r: _BitReader):
+    def decode_from(r: _BitReader) -> Event:
         m = Event.__new__(Event)
         m.tag = r.read_u64()
         m.label = r.read_string()
