@@ -191,6 +191,10 @@ fn emit_write_type(
             let bits = s.bits;
             w.line(&format!("{writer}.write_bits({access}, {bits})"));
         }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            w.line(&format!("{writer}.write_bits({access}, {bits})"));
+        }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => w.line(&format!("{writer}.write_string({access})")),
             SemanticType::Bytes => w.line(&format!("{writer}.write_bytes({access})")),
@@ -392,6 +396,10 @@ fn emit_read_type(
         }
         ResolvedType::SubByte(s) => {
             let bits = s.bits;
+            w.line(&format!("{target} = {reader}.read_bits({bits})"));
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
             w.line(&format!("{target} = {reader}.read_bits({bits})"));
         }
         ResolvedType::Semantic(s) => match s {

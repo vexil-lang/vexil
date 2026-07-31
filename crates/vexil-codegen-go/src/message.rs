@@ -16,6 +16,7 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     match ty {
         ResolvedType::Primitive(PrimitiveType::Bool) => false,
         ResolvedType::SubByte(_) => false,
+        ResolvedType::BitsInline(names) => names.len() >= 8,
         ResolvedType::Named(id) => {
             if let Some(TypeDef::Enum(e)) = registry.get(*id) {
                 e.wire_bits >= 8
@@ -255,6 +256,10 @@ fn emit_write_type(
         },
         ResolvedType::SubByte(s) => {
             let bits = s.bits;
+            w.line(&format!("{writer}.WriteBits(uint64({access}), {bits})"));
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
             w.line(&format!("{writer}.WriteBits(uint64({access}), {bits})"));
         }
         ResolvedType::Semantic(s) => match s {
@@ -553,6 +558,17 @@ fn emit_read_type(
             } else {
                 w.line(&format!("{target} = uint8(v)"));
             }
+            w.close_block();
+        }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            let go_ty = go_type(ty, registry);
+            w.open_block("");
+            w.line(&format!("v, err := {reader}.ReadBits({bits})"));
+            w.open_block("if err != nil");
+            w.line(err_return);
+            w.close_block();
+            w.line(&format!("{target} = {go_ty}(v)"));
             w.close_block();
         }
         ResolvedType::Semantic(s) => match s {
