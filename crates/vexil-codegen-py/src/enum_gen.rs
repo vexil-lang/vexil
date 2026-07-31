@@ -27,7 +27,7 @@ pub fn emit_enum(w: &mut CodeWriter, en: &EnumDef, _registry: &TypeRegistry) {
     w.blank();
 
     // Writer-level methods are used when an enum is embedded in a message.
-    w.open_block("def encode_to(self, w: _BitWriter)");
+    w.open_block("def encode_to(self, w: _BitWriter) -> None");
     w.line(&format!("w.write_bits(int(self), {})", en.wire_bits));
     w.close_block();
     w.blank();

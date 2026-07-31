@@ -55,7 +55,7 @@ class Bar(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 1)
 
     @staticmethod

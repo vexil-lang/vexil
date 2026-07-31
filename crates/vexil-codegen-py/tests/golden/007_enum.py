@@ -21,7 +21,7 @@ class Direction(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod
@@ -50,7 +50,7 @@ class ClientKind(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 8)
 
     @staticmethod
@@ -78,7 +78,7 @@ class HardwareStatus(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 16)
 
     @staticmethod
@@ -105,7 +105,7 @@ class Sparse(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 32)
 
     @staticmethod
@@ -132,7 +132,7 @@ class Lifecycle(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod

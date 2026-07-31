@@ -21,7 +21,7 @@ class ImageProtocol(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod
@@ -50,7 +50,7 @@ class ParseResult(int):
         self.encode_to(w)
         return w.finish()
 
-    def encode_to(self, w: _BitWriter):
+    def encode_to(self, w: _BitWriter) -> None:
         w.write_bits(int(self), 2)
 
     @staticmethod
