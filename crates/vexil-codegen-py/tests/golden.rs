@@ -117,6 +117,11 @@ fn test_028_typed_tombstone() {
 }
 
 #[test]
+fn test_049_typed_tombstone_shapes() {
+    golden_test("049_typed_tombstone_shapes");
+}
+
+#[test]
 fn test_003_sub_byte() {
     golden_test("003_sub_byte");
 }

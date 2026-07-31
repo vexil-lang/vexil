@@ -625,7 +625,9 @@ fn emit_tombstone_read(
             let read_expr = match s {
                 SemanticType::String => format!("_ = {reader}.read_string()"),
                 SemanticType::Bytes => {
-                    format!("_ = {reader}.read_bytes({reader}.read_leb128())")
+                    w.line(&format!("_vexil_tombstone_length = {reader}.read_leb128()"));
+                    w.line(&format!("_ = {reader}.read_bytes(_vexil_tombstone_length)"));
+                    return;
                 }
                 SemanticType::Rgb => {
                     w.line(&format!("_ = {reader}.read_u8()"));
@@ -670,9 +672,14 @@ fn emit_tombstone_read(
             emit_tombstone_read(w, inner, registry, reader);
             w.close_block();
         }
-        ResolvedType::Array(inner) => {
+        ResolvedType::Array(inner) | ResolvedType::Set(inner) => {
             w.line(&format!("_len = {reader}.read_leb128()"));
             w.open_block("for _ in range(_len)");
+            emit_tombstone_read(w, inner, registry, reader);
+            w.close_block();
+        }
+        ResolvedType::FixedArray(inner, size) => {
+            w.open_block(&format!("for _ in range({size})"));
             emit_tombstone_read(w, inner, registry, reader);
             w.close_block();
         }
@@ -692,6 +699,27 @@ fn emit_tombstone_read(
             w.indent();
             emit_tombstone_read(w, err_ty, registry, reader);
             w.close_block();
+        }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            let size = match ty {
+                ResolvedType::Vec2(_) => 2,
+                ResolvedType::Vec3(_) => 3,
+                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
+                ResolvedType::Mat3(_) => 9,
+                ResolvedType::Mat4(_) => 16,
+                _ => unreachable!(),
+            };
+            w.open_block(&format!("for _ in range({size})"));
+            emit_tombstone_read(w, inner, registry, reader);
+            w.close_block();
+        }
+        ResolvedType::BitsInline(names) => {
+            w.line(&format!("_ = {reader}.read_bits({})", names.len()));
         }
         _ => {}
     }
