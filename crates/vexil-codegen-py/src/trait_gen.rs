@@ -50,14 +50,14 @@ pub fn emit_trait(
             format!(
                 "{}: {}",
                 parameter.name,
-                project_type(&parameter.ty, registry)
+                project_type(&parameter.ty, registry, &type_param_names)
             )
         }));
         let return_type = function
             .return_type
             .as_ref()
             .filter(|ty| !matches!(ty, TypeExpr::Primitive(PrimitiveType::Void)))
-            .map(|ty| project_type(ty, registry))
+            .map(|ty| project_type(ty, registry, &type_param_names))
             .unwrap_or_else(|| "None".to_string());
         w.line(&format!(
             "def {}({}) -> {return_type}: ...",

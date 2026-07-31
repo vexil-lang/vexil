@@ -48,36 +48,31 @@ class Basic:
     @staticmethod
     def decode_from(r: _BitReader):
         m = Basic.__new__(Basic)
-        _fixed_items_ma: list[int] = []
+        _vexil_m_a_fixed_items: list[int] = []
         for _ in range(4):
-            _fixed_item_ma: int = None  # type: ignore[assignment]
-            _fixed_item_ma = r.read_u8()
-            _fixed_items_ma.append(_fixed_item_ma)
-        m.a = tuple(_fixed_items_ma)
-        _fixed_items_mb: list[int] = []
+            _vexil_m_a_fixed_item = r.read_u8()
+            _vexil_m_a_fixed_items.append(_vexil_m_a_fixed_item)
+        m.a = tuple(_vexil_m_a_fixed_items)
+        _vexil_m_b_fixed_items: list[int] = []
         for _ in range(8):
-            _fixed_item_mb: int = None  # type: ignore[assignment]
-            _fixed_item_mb = r.read_u32()
-            _fixed_items_mb.append(_fixed_item_mb)
-        m.b = tuple(_fixed_items_mb)
-        _fixed_items_mc: list[float] = []
+            _vexil_m_b_fixed_item = r.read_u32()
+            _vexil_m_b_fixed_items.append(_vexil_m_b_fixed_item)
+        m.b = tuple(_vexil_m_b_fixed_items)
+        _vexil_m_c_fixed_items: list[float] = []
         for _ in range(16):
-            _fixed_item_mc: float = None  # type: ignore[assignment]
-            _fixed_item_mc = r.read_f64()
-            _fixed_items_mc.append(_fixed_item_mc)
-        m.c = tuple(_fixed_items_mc)
-        _fixed_items_md: list[str] = []
+            _vexil_m_c_fixed_item = r.read_f64()
+            _vexil_m_c_fixed_items.append(_vexil_m_c_fixed_item)
+        m.c = tuple(_vexil_m_c_fixed_items)
+        _vexil_m_d_fixed_items: list[str] = []
         for _ in range(3):
-            _fixed_item_md: str = None  # type: ignore[assignment]
-            _fixed_item_md = r.read_string()
-            _fixed_items_md.append(_fixed_item_md)
-        m.d = tuple(_fixed_items_md)
-        _fixed_items_me: list[Point] = []
+            _vexil_m_d_fixed_item = r.read_string()
+            _vexil_m_d_fixed_items.append(_vexil_m_d_fixed_item)
+        m.d = tuple(_vexil_m_d_fixed_items)
+        _vexil_m_e_fixed_items: list[Point] = []
         for _ in range(5):
-            _fixed_item_me: Point = None  # type: ignore[assignment]
-            _fixed_item_me = Point.decode_from(r)
-            _fixed_items_me.append(_fixed_item_me)
-        m.e = tuple(_fixed_items_me)
+            _vexil_m_e_fixed_item = Point.decode_from(r)
+            _vexil_m_e_fixed_items.append(_vexil_m_e_fixed_item)
+        m.e = tuple(_vexil_m_e_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -146,17 +141,15 @@ class Nested:
     @staticmethod
     def decode_from(r: _BitReader):
         m = Nested.__new__(Nested)
-        _fixed_items_ma: list[tuple[int, ...]] = []
+        _vexil_m_a_fixed_items: list[tuple[int, ...]] = []
         for _ in range(3):
-            _fixed_item_ma: tuple[int, ...] = None  # type: ignore[assignment]
-            _fixed_items_fixeditemma: list[int] = []
+            _vexil__vexil_m_a_fixed_item_fixed_items: list[int] = []
             for _ in range(4):
-                _fixed_item_fixeditemma: int = None  # type: ignore[assignment]
-                _fixed_item_fixeditemma = r.read_u8()
-                _fixed_items_fixeditemma.append(_fixed_item_fixeditemma)
-            _fixed_item_ma = tuple(_fixed_items_fixeditemma)
-            _fixed_items_ma.append(_fixed_item_ma)
-        m.a = tuple(_fixed_items_ma)
+                _vexil__vexil_m_a_fixed_item_fixed_item = r.read_u8()
+                _vexil__vexil_m_a_fixed_item_fixed_items.append(_vexil__vexil_m_a_fixed_item_fixed_item)
+            _vexil_m_a_fixed_item = tuple(_vexil__vexil_m_a_fixed_item_fixed_items)
+            _vexil_m_a_fixed_items.append(_vexil_m_a_fixed_item)
+        m.a = tuple(_vexil_m_a_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -192,22 +185,21 @@ class WithOptional:
     @staticmethod
     def decode_from(r: _BitReader):
         m = WithOptional.__new__(WithOptional)
-        _fixed_items_ma: list[int | None] = []
+        _vexil_m_a_fixed_items: list[int | None] = []
         for _ in range(10):
-            _fixed_item_ma: int | None = None  # type: ignore[assignment]
             try:
                 present = r.read_bool()
             except DecodeError:
-                _fixed_item_ma = None
+                _vexil_m_a_fixed_item = None
             else:
                 r.flush_to_byte_boundary()
                 if present:
-                    _fixed_item_ma: int = None  # type: ignore[assignment]
-                    _fixed_item_ma = r.read_u32()
+                    _vexil_m_a_fixed_item: int = None  # type: ignore[assignment]
+                    _vexil_m_a_fixed_item = r.read_u32()
                 else:
-                    _fixed_item_ma = None
-            _fixed_items_ma.append(_fixed_item_ma)
-        m.a = tuple(_fixed_items_ma)
+                    _vexil_m_a_fixed_item = None
+            _vexil_m_a_fixed_items.append(_vexil_m_a_fixed_item)
+        m.a = tuple(_vexil_m_a_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -298,23 +290,21 @@ def decode_Data_from(_vexil_reader: _BitReader) -> Data:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
         _vexil_field_0: tuple[int, ...] = None  # type: ignore[assignment]
-        _fixed_items_vexilfield0: list[int] = []
+        _vexil__vexil_field_0_fixed_items: list[int] = []
         for _ in range(4):
-            _fixed_item_vexilfield0: int = None  # type: ignore[assignment]
-            _fixed_item_vexilfield0 = _vexil_payload_reader.read_i32()
-            _fixed_items_vexilfield0.append(_fixed_item_vexilfield0)
-        _vexil_field_0 = tuple(_fixed_items_vexilfield0)
+            _vexil__vexil_field_0_fixed_item = _vexil_payload_reader.read_i32()
+            _vexil__vexil_field_0_fixed_items.append(_vexil__vexil_field_0_fixed_item)
+        _vexil_field_0 = tuple(_vexil__vexil_field_0_fixed_items)
         return DataFixedInts(_vexil_field_0)
     elif _vexil_discriminant == 1:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
         _vexil_field_0: tuple[int, ...] = None  # type: ignore[assignment]
-        _fixed_items_vexilfield0: list[int] = []
+        _vexil__vexil_field_0_fixed_items: list[int] = []
         for _ in range(32):
-            _fixed_item_vexilfield0: int = None  # type: ignore[assignment]
-            _fixed_item_vexilfield0 = _vexil_payload_reader.read_u8()
-            _fixed_items_vexilfield0.append(_fixed_item_vexilfield0)
-        _vexil_field_0 = tuple(_fixed_items_vexilfield0)
+            _vexil__vexil_field_0_fixed_item = _vexil_payload_reader.read_u8()
+            _vexil__vexil_field_0_fixed_items.append(_vexil__vexil_field_0_fixed_item)
+        _vexil_field_0 = tuple(_vexil__vexil_field_0_fixed_items)
         return DataFixedBytes(_vexil_field_0)
     else:
         raise ValueError(f"unknown Data discriminant: {_vexil_discriminant}")
@@ -356,24 +346,21 @@ class EdgeCases:
     @staticmethod
     def decode_from(r: _BitReader):
         m = EdgeCases.__new__(EdgeCases)
-        _fixed_items_msingle: list[int] = []
+        _vexil_m_single_fixed_items: list[int] = []
         for _ in range(1):
-            _fixed_item_msingle: int = None  # type: ignore[assignment]
-            _fixed_item_msingle = r.read_u8()
-            _fixed_items_msingle.append(_fixed_item_msingle)
-        m.single = tuple(_fixed_items_msingle)
-        _fixed_items_mlarge: list[int] = []
+            _vexil_m_single_fixed_item = r.read_u8()
+            _vexil_m_single_fixed_items.append(_vexil_m_single_fixed_item)
+        m.single = tuple(_vexil_m_single_fixed_items)
+        _vexil_m_large_fixed_items: list[int] = []
         for _ in range(1024):
-            _fixed_item_mlarge: int = None  # type: ignore[assignment]
-            _fixed_item_mlarge = r.read_u8()
-            _fixed_items_mlarge.append(_fixed_item_mlarge)
-        m.large = tuple(_fixed_items_mlarge)
-        _fixed_items_mhexsized: list[int] = []
+            _vexil_m_large_fixed_item = r.read_u8()
+            _vexil_m_large_fixed_items.append(_vexil_m_large_fixed_item)
+        m.large = tuple(_vexil_m_large_fixed_items)
+        _vexil_m_hex_sized_fixed_items: list[int] = []
         for _ in range(16):
-            _fixed_item_mhexsized: int = None  # type: ignore[assignment]
-            _fixed_item_mhexsized = r.read_u16()
-            _fixed_items_mhexsized.append(_fixed_item_mhexsized)
-        m.hex_sized = tuple(_fixed_items_mhexsized)
+            _vexil_m_hex_sized_fixed_item = r.read_u16()
+            _vexil_m_hex_sized_fixed_items.append(_vexil_m_hex_sized_fixed_item)
+        m.hex_sized = tuple(_vexil_m_hex_sized_fixed_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

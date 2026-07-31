@@ -8,6 +8,14 @@ use vexil_lang::ir::{
 use crate::emit::CodeWriter;
 use crate::types::{py_ident, py_type};
 
+fn local_name(target: &str, suffix: &str) -> String {
+    let stem: String = target
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect();
+    format!("_vexil_{stem}_{suffix}")
+}
+
 // ---------------------------------------------------------------------------
 // Constraint validation
 // ---------------------------------------------------------------------------
@@ -479,17 +487,10 @@ fn emit_read_type(
         }
         ResolvedType::FixedArray(inner, size) => {
             let inner_py = py_type(inner, registry);
-            let suffix = target
-                .chars()
-                .filter(char::is_ascii_alphanumeric)
-                .collect::<String>();
-            let items = format!("_fixed_items_{suffix}");
-            let item = format!("_fixed_item_{suffix}");
+            let items = local_name(target, "fixed_items");
+            let item = local_name(target, "fixed_item");
             w.line(&format!("{items}: list[{inner_py}] = []"));
             w.open_block(&format!("for _ in range({size})"));
-            w.line(&format!(
-                "{item}: {inner_py} = None  # type: ignore[assignment]"
-            ));
             emit_read_type(w, &item, inner, registry, reader);
             w.line(&format!("{items}.append({item})"));
             w.close_block();

@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 from vexil_runtime import _BitWriter, _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xf0, 0x55, 0x8d, 0xce, 0xf6, 0x4f, 0x18, 0xb1, 0x08, 0xa4, 0x01, 0xc7, 0xba, 0xd5, 0x29, 0x8d, 0x06, 0x0b, 0xe3, 0x08, 0x48, 0xa3, 0xac, 0xab, 0x0c, 0xcc, 0x34, 0xfe, 0xc7, 0x42, 0xef, 0xb2)
-T = TypeVar("T")
+_VexilTypeParam_T = TypeVar("T")
 
 
 # ---------- Adjustable ----------
 @runtime_checkable
-class Adjustable(Protocol[T]):
-    value: T
-    def adjust(self, delta: T) -> T: ...
+class Adjustable(Protocol[_VexilTypeParam_T]):
+    value: _VexilTypeParam_T
+    def adjust(self, delta: _VexilTypeParam_T) -> _VexilTypeParam_T: ...
     def reset(self) -> None: ...
     def snapshot(self) -> Counter: ...
 
