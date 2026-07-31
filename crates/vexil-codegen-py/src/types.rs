@@ -62,7 +62,7 @@ pub fn py_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         ResolvedType::Result(ok, err) => {
             let ok_str = py_type(ok, registry);
             let err_str = py_type(err, registry);
-            format!("tuple[bool, {ok_str} | {err_str}]")
+            format!("tuple[_VexilLiteral[True], {ok_str}] | tuple[_VexilLiteral[False], {err_str}]")
         }
         ResolvedType::BitsInline(names) => {
             let _bits = names.len() as u8;

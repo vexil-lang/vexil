@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Literal as _VexilLiteral
 
 # Runtime support (to be provided by vexil Python runtime)
 from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
@@ -16,7 +17,7 @@ class Basic:
     a: int | None
     b: list[str]
     c: dict[str, int]
-    d: tuple[bool, int | str]
+    d: tuple[_VexilLiteral[True], int] | tuple[_VexilLiteral[False], str]
     unknown: bytes = b""
 
     def encode(self) -> bytes:
@@ -38,12 +39,13 @@ class Basic:
             _vexil_self_2e_c_map_value = self.c[_vexil_self_2e_c_map_key]
             w.write_string(_vexil_self_2e_c_map_key)
             w.write_u64(_vexil_self_2e_c_map_value)
-        if self.d[0]:
+        _vexil_self_2e_d_result = self.d
+        if _vexil_self_2e_d_result[0] is True:
             w.write_bool(True)
-            w.write_u32(self.d[1])
+            w.write_u32(_vexil_self_2e_d_result[1])
         else:
             w.write_bool(False)
-            w.write_string(self.d[1])
+            w.write_string(_vexil_self_2e_d_result[1])
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -98,10 +100,10 @@ class Nested:
     a: list[str] | None
     b: list[int | None]
     c: dict[str, list[int]]
-    d: tuple[bool, None | str]
-    e: tuple[bool, str | None]
-    f: tuple[bool, None | None]
-    g: tuple[bool, list[str] | dict[int, str]] | None
+    d: tuple[_VexilLiteral[True], None] | tuple[_VexilLiteral[False], str]
+    e: tuple[_VexilLiteral[True], str] | tuple[_VexilLiteral[False], None]
+    f: tuple[_VexilLiteral[True], None] | tuple[_VexilLiteral[False], None]
+    g: tuple[_VexilLiteral[True], list[str]] | tuple[_VexilLiteral[False], dict[int, str]] | None
     unknown: bytes = b""
 
     def encode(self) -> bytes:
@@ -131,17 +133,20 @@ class Nested:
             w.write_leb128(len(_vexil_self_2e_c_map_value))
             for _vexil__5f_vexil_5f_self_5f_2e_5f_c_5f_map_5f_value_array_item in _vexil_self_2e_c_map_value:
                 w.write_u8(_vexil__5f_vexil_5f_self_5f_2e_5f_c_5f_map_5f_value_array_item)
-        if self.d[0]:
+        _vexil_self_2e_d_result = self.d
+        if _vexil_self_2e_d_result[0] is True:
             w.write_bool(True)
         else:
             w.write_bool(False)
-            w.write_string(self.d[1])
-        if self.e[0]:
+            w.write_string(_vexil_self_2e_d_result[1])
+        _vexil_self_2e_e_result = self.e
+        if _vexil_self_2e_e_result[0] is True:
             w.write_bool(True)
-            w.write_string(self.e[1])
+            w.write_string(_vexil_self_2e_e_result[1])
         else:
             w.write_bool(False)
-        if self.f[0]:
+        _vexil_self_2e_f_result = self.f
+        if _vexil_self_2e_f_result[0] is True:
             w.write_bool(True)
         else:
             w.write_bool(False)
@@ -149,17 +154,18 @@ class Nested:
         w.write_bool(_vexil_self_2e_g_optional is not None)
         w.flush_to_byte_boundary()
         if _vexil_self_2e_g_optional is not None:
-            if _vexil_self_2e_g_optional[0]:
+            _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result = _vexil_self_2e_g_optional
+            if _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[0] is True:
                 w.write_bool(True)
-                w.write_leb128(len(_vexil_self_2e_g_optional[1]))
-                for _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_5b_1_5d__array_item in _vexil_self_2e_g_optional[1]:
-                    w.write_string(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_5b_1_5d__array_item)
+                w.write_leb128(len(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]))
+                for _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__array_item in _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]:
+                    w.write_string(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__array_item)
             else:
                 w.write_bool(False)
-                w.write_leb128(len(_vexil_self_2e_g_optional[1]))
-                for _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_5b_1_5d__map_key, _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_5b_1_5d__map_value in _vexil_self_2e_g_optional[1].items():
-                    w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_5b_1_5d__map_key)
-                    w.write_string(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_5b_1_5d__map_value)
+                w.write_leb128(len(_vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1]))
+                for _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key, _vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value in _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[1].items():
+                    w.write_u32(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_key)
+                    w.write_string(_vexil__5f_vexil_5f__5f_5f_5f_vexil_5f_5f_5f_self_5f_5f_5f_2e_5f_5f_5f_g_5f_5f_5f_optional_5f_result_5b_1_5d__map_value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))

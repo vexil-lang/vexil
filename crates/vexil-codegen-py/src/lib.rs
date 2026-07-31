@@ -90,6 +90,9 @@ pub(crate) fn generate_with_imports(
     if has_impls {
         typing_imports.push("TYPE_CHECKING");
     }
+    if body.contains("_VexilLiteral") {
+        typing_imports.push("Literal as _VexilLiteral");
+    }
     if has_traits {
         typing_imports.push("Protocol");
         if !trait_type_params.is_empty() {

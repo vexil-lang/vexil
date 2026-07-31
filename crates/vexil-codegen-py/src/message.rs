@@ -298,14 +298,16 @@ fn emit_write_type(
             w.close_block();
         }
         ResolvedType::Result(ok, err_ty) => {
-            w.open_block(&format!("if {access}[0]"));
+            let value = local_name(access, "result");
+            w.line(&format!("{value} = {access}"));
+            w.open_block(&format!("if {value}[0] is True"));
             w.line(&format!("{writer}.write_bool(True)"));
-            emit_write_type(w, &format!("{access}[1]"), ok, registry, writer);
+            emit_write_type(w, &format!("{value}[1]"), ok, registry, writer);
             w.dedent();
             w.line("else:");
             w.indent();
             w.line(&format!("{writer}.write_bool(False)"));
-            emit_write_type(w, &format!("{access}[1]"), err_ty, registry, writer);
+            emit_write_type(w, &format!("{value}[1]"), err_ty, registry, writer);
             w.close_block();
         }
         _ => {}
