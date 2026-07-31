@@ -272,3 +272,8 @@ fn trait_only_schema() {
         "{code}"
     );
 }
+
+#[test]
+fn bytes_map_keys_compile() {
+    check_compiles("041_map_key_ordering");
+}

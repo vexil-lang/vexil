@@ -110,7 +110,7 @@ type MapKeyTest struct {
 	I32Map map[int32]string
 	FixedMap map[int32]string
 	StringMap map[string]uint32
-	BytesMap map[[]byte]uint32
+	BytesMap map[string]uint32
 	UuidMap map[[16]byte]string
 	EnumMap map[Status]string
 	FlagsMap map[Permissions]string
@@ -158,7 +158,7 @@ func (m *MapKeyTest) Pack(w *vexil.BitWriter) error {
 	}
 	w.WriteLeb128(uint64(len(m.BytesMap)))
 	for mapK, mapV := range m.BytesMap {
-		w.WriteBytes(mapK)
+		w.WriteBytes([]byte(mapK))
 		w.WriteU32(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.UuidMap)))
@@ -355,17 +355,18 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		if err != nil {
 			return err
 		}
-		m.BytesMap = make(map[[]byte]uint32, mapLen)
+		m.BytesMap = make(map[string]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
-			var mapKey []byte
+			var mapKeyBytes []byte
 			var mapVal uint32
 			{
 				v, err := r.ReadBytes()
 				if err != nil {
 					return err
 				}
-				mapKey = v
+				mapKeyBytes = v
 			}
+			mapKey := string(mapKeyBytes)
 			{
 				v, err := r.ReadU32()
 				if err != nil {

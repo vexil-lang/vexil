@@ -5,7 +5,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::{go_type, to_pascal_case};
+use crate::types::{go_collection_key_type, go_type, to_pascal_case};
 
 // ---------------------------------------------------------------------------
 // Byte-alignment helper
@@ -366,7 +366,13 @@ fn emit_write_type(
             } else {
                 w.open_block(&format!("for item := range {access}"));
             }
-            emit_write_type(w, "item", inner, registry, writer, err_return);
+            let item_access =
+                if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                    "[]byte(item)"
+                } else {
+                    "item"
+                };
+            emit_write_type(w, item_access, inner, registry, writer, err_return);
             w.close_block();
         }
         ResolvedType::FixedArray(inner, _) => {
@@ -406,7 +412,12 @@ fn emit_write_type(
             } else {
                 w.open_block(&format!("for mapK, mapV := range {access}"));
             }
-            emit_write_type(w, "mapK", k, registry, writer, err_return);
+            let key_access = if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                "[]byte(mapK)"
+            } else {
+                "mapK"
+            };
+            emit_write_type(w, key_access, k, registry, writer, err_return);
             emit_write_type(w, "mapV", v, registry, writer, err_return);
             w.close_block();
         }
@@ -715,7 +726,7 @@ fn emit_read_type(
                 w.line(&format!("{reader}.FlushToByteBoundary()"));
             }
             w.open_block("if present");
-            let inner_go = go_type(inner, registry);
+            let inner_go = go_collection_key_type(inner, registry);
             w.line(&format!("var optVal {inner_go}"));
             emit_read_type(w, "optVal", inner, registry, reader, err_return);
             w.line(&format!("{target} = &optVal"));
@@ -754,8 +765,14 @@ fn emit_read_type(
                 "{target} = make(map[{inner_go}]struct{{}}, setLen)"
             ));
             w.open_block("for i := uint64(0); i < setLen; i++");
-            w.line(&format!("var item {inner_go}"));
-            emit_read_type(w, "item", inner, registry, reader, err_return);
+            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                w.line("var itemBytes []byte");
+                emit_read_type(w, "itemBytes", inner, registry, reader, err_return);
+                w.line("item := string(itemBytes)");
+            } else {
+                w.line(&format!("var item {inner_go}"));
+                emit_read_type(w, "item", inner, registry, reader, err_return);
+            }
             w.line(&format!("{target}[item] = struct{{}}{{}}"));
             w.close_block();
             w.close_block();
@@ -808,13 +825,22 @@ fn emit_read_type(
             w.open_block("if err != nil");
             w.line(err_return);
             w.close_block();
-            let k_go = go_type(k, registry);
+            let k_go = go_collection_key_type(k, registry);
             let v_go = go_type(v, registry);
             w.line(&format!("{target} = make(map[{k_go}]{v_go}, mapLen)"));
             w.open_block("for i := uint64(0); i < mapLen; i++");
-            w.line(&format!("var mapKey {k_go}"));
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                w.line("var mapKeyBytes []byte");
+            } else {
+                w.line(&format!("var mapKey {k_go}"));
+            }
             w.line(&format!("var mapVal {v_go}"));
-            emit_read_type(w, "mapKey", k, registry, reader, err_return);
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                emit_read_type(w, "mapKeyBytes", k, registry, reader, err_return);
+                w.line("mapKey := string(mapKeyBytes)");
+            } else {
+                emit_read_type(w, "mapKey", k, registry, reader, err_return);
+            }
             emit_read_type(w, "mapVal", v, registry, reader, err_return);
             w.line(&format!("{target}[mapKey] = mapVal"));
             w.close_block();
