@@ -15,10 +15,57 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use vexil_lang::codegen::CodegenBackend;
 use vexil_lang::diagnostic::Severity;
 use vexil_lang::project::ProjectResult;
 use vexil_lang::resolve::FilesystemLoader;
+
+static TEMP_PROJECT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+struct TempProject {
+    path: PathBuf,
+    cleaned: bool,
+}
+
+impl TempProject {
+    fn new(label: &str) -> Self {
+        let sequence = TEMP_PROJECT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "vexil-project-codegen-check-{label}-{}-{sequence}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&path).unwrap_or_else(|e| {
+            panic!("failed to create temporary project {}: {e}", path.display())
+        });
+        Self {
+            path,
+            cleaned: false,
+        }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn cleanup(mut self) {
+        std::fs::remove_dir_all(&self.path).unwrap_or_else(|e| {
+            panic!(
+                "failed to remove temporary project {}: {e}",
+                self.path.display()
+            )
+        });
+        self.cleaned = true;
+    }
+}
+
+impl Drop for TempProject {
+    fn drop(&mut self) {
+        if !self.cleaned {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+}
 
 fn corpus_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -229,18 +276,17 @@ fn project_diamond_compiles_natively() {
     let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
     let runtime_path = workspace_root.join("crates/vexil-runtime");
 
-    let tmp = std::env::temp_dir().join("vexil-project-codegen-check-diamond");
-    let _ = std::fs::remove_dir_all(&tmp);
-    write_crate(&tmp, &files, &runtime_path);
+    let tmp = TempProject::new("diamond");
+    write_crate(tmp.path(), &files, &runtime_path);
 
     let output = std::process::Command::new("cargo")
         .args(["clippy", "--", "-D", "warnings"])
-        .current_dir(&tmp)
-        .env("CARGO_TARGET_DIR", tmp.join("target"))
+        .current_dir(tmp.path())
+        .env("CARGO_TARGET_DIR", tmp.path().join("target"))
         .output()
         .expect("failed to run cargo clippy");
 
-    let _ = std::fs::remove_dir_all(&tmp);
+    tmp.cleanup();
 
     assert!(
         output.status.success(),
