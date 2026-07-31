@@ -1,0 +1,58 @@
+[
+  {
+    "name": "newtype_u32",
+    "schema": "namespace test.newtype_wire\nnewtype UserId : u32\nmessage M { v @0 : UserId }",
+    "type": "M",
+    "value": { "v": 16909060 },
+    "expected_bytes": "04030201",
+    "notes": "A newtype has no wire overhead and uses its u32 inner encoding."
+  },
+  {
+    "name": "alias_u16",
+    "schema": "namespace test.alias_wire\ntype Count = u16\nmessage M { v @0 : Count }",
+    "type": "M",
+    "value": { "v": 258 },
+    "expected_bytes": "0201",
+    "notes": "An alias has no wire overhead and uses its u16 target encoding."
+  },
+  {
+    "name": "non_exhaustive_enum_unknown",
+    "schema": "namespace test.enum_unknown\n@non_exhaustive\nenum Status { Active @0 }\nmessage M { v @0 : Status }",
+    "type": "M",
+    "value": { "v": 7 },
+    "expected_bytes": "07",
+    "notes": "A non-exhaustive enum uses at least 8 bits and preserves an unknown ordinal."
+  },
+  {
+    "name": "flags_unknown_bits",
+    "schema": "namespace test.flags_unknown\nflags Permissions { Read @0 }\nmessage M { v @0 : Permissions }",
+    "type": "M",
+    "value": { "v": 128 },
+    "expected_bytes": "80",
+    "notes": "Unknown flag bits are preserved in the generated numeric wrapper."
+  },
+  {
+    "name": "map_i16_canonical_order",
+    "schema": "namespace test.map_i16\nmessage M { v @0 : map<i16, u8> }",
+    "type": "M",
+    "value": { "v": [[2, 22], [-1, 11]] },
+    "expected_bytes": "02ffff0b020016",
+    "notes": "Entries supplied in reverse numeric order encode with -1 before 2."
+  },
+  {
+    "name": "set_u16_canonical_order",
+    "schema": "namespace test.set_u16\nmessage M { v @0 : set<u16> }",
+    "type": "M",
+    "value": { "v": [2, 1] },
+    "expected_bytes": "0201000200",
+    "notes": "Set elements supplied in reverse numeric order encode as 1 then 2."
+  },
+  {
+    "name": "nested_optional_map_set",
+    "schema": "namespace test.nested_wire\nmessage M { v @0 : optional<map<u8, set<u16>>> }",
+    "type": "M",
+    "value": { "v": [[2, [2, 1]]] },
+    "expected_bytes": "0101020201000200",
+    "notes": "Present optional flushes before a one-entry map whose set is canonically sorted."
+  }
+]

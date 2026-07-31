@@ -46,6 +46,21 @@ function vector(file, name) {
   return found;
 }
 
+function validateCoverageTable() {
+  const coverage = JSON.parse(readFileSync(join(toolDir, "wire-coverage.json"), "utf8"));
+  if (!Array.isArray(coverage) || coverage.length === 0) {
+    throw new Error("generated wire coverage table must contain scenarios");
+  }
+  for (const item of coverage) {
+    if (!item.scenario || !item.authority || !["covered", "blocked"].includes(item.status)) {
+      throw new Error(`invalid generated wire coverage row: ${JSON.stringify(item)}`);
+    }
+    if (item.status === "blocked" && !item.reason) {
+      throw new Error(`blocked generated wire coverage row needs a reason: ${item.scenario}`);
+    }
+  }
+}
+
 function hexBytes(hex) {
   return hex.match(/../g).map((byte) => `0x${byte}`).join(", ");
 }
@@ -261,8 +276,83 @@ function runTraitInvariance() {
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
+function runFailurePaths() {
+  const root = mkdtempSync(join(tmpdir(), "vexil-wire-failures-"));
+  const cases = {
+    truncated: "namespace test.truncated\nmessage M { value @0 : u32 }\n",
+    recursion: "namespace test.recursion_limit\nmessage Node { next @0 : optional<Node> }\n",
+  };
+  try {
+    for (const [name, source] of Object.entries(cases)) {
+      const go = join(root, "go", name);
+      const py = join(root, "python", name);
+      mkdirSync(go, { recursive: true });
+      mkdirSync(py, { recursive: true });
+      writeFileSync(join(go, "schema.vexil"), source);
+      writeFileSync(join(py, "schema.vexil"), source);
+      run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], go, `${name}: generate Go source`);
+      run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], py, `${name}: generate Python source`);
+      writeFileSync(join(go, "go.mod"), `module vexil-generated-${name}\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => ${runtimeGo}\n`);
+      if (name === "truncated") {
+        writeFileSync(join(go, "generated_test.go"), `package truncated
+import ("testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")
+func TestTruncatedGeneratedDecode(t *testing.T) { if err := (&M{}).Unpack(vexil.NewBitReader([]byte{1, 2})); err == nil { t.Fatal("truncated-u32: expected decode error") } }
+`);
+        writeFileSync(join(py, "run.py"), `from generated import M
+try:
+    M.decode(bytes([1, 2]))
+except Exception:
+    pass
+else:
+    raise AssertionError("truncated-u32: expected decode error")
+`);
+      } else {
+        writeFileSync(join(go, "generated_test.go"), `package recursion_limit
+import ("bytes"; "testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")
+func chain(count int) *Node { var next *Node; for i := 0; i < count; i++ { next = &Node{Next: next} }; return next }
+func encodeRoot(value *Node) error { w := vexil.NewBitWriter(); if err := w.EnterRecursive(); err != nil { return err }; defer w.LeaveRecursive(); return value.Pack(w) }
+func decodeRoot(data []byte) error { r := vexil.NewBitReader(data); if err := r.EnterRecursive(); err != nil { return err }; defer r.LeaveRecursive(); return (&Node{}).Unpack(r) }
+func TestGeneratedRecursionLimit(t *testing.T) {
+  if err := encodeRoot(chain(64)); err != nil { t.Fatalf("depth-64 encode: %v", err) }
+  if err := encodeRoot(chain(65)); err == nil { t.Fatal("depth-65 encode: expected recursion error") }
+  if err := decodeRoot(append(bytes.Repeat([]byte{1}, 63), 0)); err != nil { t.Fatalf("depth-64 decode: %v", err) }
+  if err := decodeRoot(append(bytes.Repeat([]byte{1}, 64), 0)); err == nil { t.Fatal("depth-65 decode: expected recursion error") }
+}
+`);
+        writeFileSync(join(py, "run.py"), `from generated import Node
+def chain(count: int) -> Node:
+    value = None
+    for _ in range(count): value = Node(next=value)
+    assert value is not None
+    return value
+chain(64).encode()
+try:
+    chain(65).encode()
+except Exception as error:
+    assert "nesting exceeded 64" in str(error), f"depth-65 encode: {error}"
+else:
+    raise AssertionError("depth-65 encode: expected recursion error")
+Node.decode(bytes([1] * 63 + [0]))
+try:
+    Node.decode(bytes([1] * 64 + [0]))
+except Exception as error:
+    assert "nesting exceeded 64" in str(error), f"depth-65 decode: {error}"
+else:
+    raise AssertionError("depth-65 decode: expected recursion error")
+`);
+      }
+      run("go", ["test", "./..."], go, `${name}: Go generated failure contract`);
+      run(python, ["run.py"], py, `${name}: Python generated failure contract`, {
+        ...process.env,
+        PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${py}`,
+      });
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}
+
 requireTool("go", "Go", ["version"]);
 requireTool(python, "Python");
+validateCoverageTable();
 if (!existsSync(join(repoRoot, "Cargo.toml"))) throw new Error("repository root not found");
 run("cargo", ["build", "-p", "vexilc"], repoRoot, "build vexilc");
 
@@ -306,8 +396,16 @@ runBasic("fixed64-zero", "v1_types.json", "fixed64_zero", "&M{V: 0}", "M(v=0)");
 runBasic("vec3-f32", "v1_types.json", "vec3_f32", "&M{Pos: [3]float32{1,2,3}}", "M(pos=(1.0,2.0,3.0))");
 runBasic("vec2-fixed64", "v1_types.json", "vec2_fixed64", "&M{Pos: [2]int64{0,0}}", "M(pos=(0,0))");
 runBasic("bits-inline", "v1_types.json", "bits_inline", "&M{Perms: 3}", "M(perms=3)");
+runBasic("newtype-u32", "generated_wire.json", "newtype_u32", "&M{V: UserId(16909060)}", "M(v=UserId(16909060))");
+runBasic("alias-u16", "generated_wire.json", "alias_u16", "&M{V: 258}", "M(v=258)");
+runBasic("unknown-enum", "generated_wire.json", "non_exhaustive_enum_unknown", "&M{V: Status(7)}", "M(v=Status(7))");
+runBasic("unknown-flags", "generated_wire.json", "flags_unknown_bits", "&M{V: Permissions(128)}", "M(v=Permissions(128))");
+runBasic("map-i16-order", "generated_wire.json", "map_i16_canonical_order", "&M{V: map[int16]uint8{2: 22, -1: 11}}", "M(v={2: 22, -1: 11})");
+runBasic("set-u16-order", "generated_wire.json", "set_u16_canonical_order", "&M{V: map[uint16]struct{}{2: {}, 1: {}}}", "M(v={2, 1})");
+runBasic("nested-optional-map-set", "generated_wire.json", "nested_optional_map_set", "func() *M { value := map[uint8]map[uint16]struct{}{2: {2: {}, 1: {}}}; return &M{V: &value} }()", "M(v={2: {2, 1}})");
 runBasic("annotations", "annotations.json", "varint_and_zigzag", "&M{Count: 300, Delta: -5}", "M(count=300, delta=-5)");
 runDeltaReset();
 runOptionalEvolution();
 runTraitInvariance();
+runFailurePaths();
 process.stdout.write("Generated Go/Python wire contract matrix passed.\n");
