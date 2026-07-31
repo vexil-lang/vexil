@@ -103,11 +103,9 @@ class NestedOptional:
         w.write_bool(_vexil_self_2e_inner_optional is not None)
         w.flush_to_byte_boundary()
         if _vexil_self_2e_inner_optional is not None:
-            _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_optional = _vexil_self_2e_inner_optional
-            w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_optional is not None)
+            w.write_bool(True)
             w.flush_to_byte_boundary()
-            if _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_optional is not None:
-                w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_optional)
+            w.write_u32(_vexil_self_2e_inner_optional)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
