@@ -259,4 +259,3 @@ def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:
 def decode_ExprKind(data: bytes) -> ExprKind:
     _vexil_reader = _BitReader(data)
     return decode_ExprKind_from(_vexil_reader)
-

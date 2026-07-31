@@ -77,5 +77,3 @@ class UseImports:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
-
-

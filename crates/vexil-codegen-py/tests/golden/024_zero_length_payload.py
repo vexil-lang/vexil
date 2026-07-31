@@ -161,4 +161,3 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
 def decode_Event(data: bytes) -> Event:
     _vexil_reader = _BitReader(data)
     return decode_Event_from(_vexil_reader)
-

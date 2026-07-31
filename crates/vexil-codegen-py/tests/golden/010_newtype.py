@@ -239,4 +239,3 @@ class Color:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Color) and self.value == other.value
-

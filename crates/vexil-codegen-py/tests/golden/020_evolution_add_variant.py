@@ -158,4 +158,3 @@ def decode_ShapeV2_from(_vexil_reader: _BitReader) -> ShapeV2:
 def decode_ShapeV2(data: bytes) -> ShapeV2:
     _vexil_reader = _BitReader(data)
     return decode_ShapeV2_from(_vexil_reader)
-

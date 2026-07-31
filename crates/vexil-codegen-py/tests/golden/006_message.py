@@ -220,4 +220,3 @@ class FieldAnnotationsDecoder:
 
     def reset(self):
         self._prev_d = 0
-

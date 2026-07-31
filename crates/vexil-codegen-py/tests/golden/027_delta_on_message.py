@@ -115,4 +115,3 @@ class TelemetryDecoder:
         self._prev_timestamp = 0
         self._prev_value = 0.0
         self._prev_count = 0
-

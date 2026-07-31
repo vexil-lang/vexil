@@ -421,5 +421,3 @@ class EdgeCases:
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
-
-

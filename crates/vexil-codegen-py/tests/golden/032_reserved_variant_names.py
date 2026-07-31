@@ -73,4 +73,3 @@ class ParseResult(int):
 
     def __repr__(self) -> str:
         return f"ParseResult({int(self)})"
-

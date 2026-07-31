@@ -73,4 +73,3 @@ class WithArrays:
 @dataclass
 class Nested:
     level: LogLevel
-

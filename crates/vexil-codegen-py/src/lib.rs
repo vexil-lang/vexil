@@ -158,11 +158,7 @@ pub(crate) fn generate_with_imports(
     w.blank();
 
     let generated = format!("{}{body}", w.finish());
-    if has_traits {
-        Ok(format!("{}\n", generated.trim_end()))
-    } else {
-        Ok(generated)
-    }
+    Ok(format!("{}\n", generated.trim_end()))
 }
 
 /// Emit the body: one section per declared type.

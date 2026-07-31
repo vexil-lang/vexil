@@ -167,4 +167,3 @@ class Lifecycle(int):
 
     def __repr__(self) -> str:
         return f"Lifecycle({int(self)})"
-

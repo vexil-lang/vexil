@@ -82,4 +82,3 @@ class Bar(int):
 
     def __repr__(self) -> str:
         return f"Bar({int(self)})"
-
