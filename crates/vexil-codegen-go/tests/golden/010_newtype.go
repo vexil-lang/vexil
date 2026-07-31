@@ -141,4 +141,3 @@ func UnpackColor(r *vexil.BitReader) (Color, error) {
 	}
 	return Color(inner), nil
 }
-

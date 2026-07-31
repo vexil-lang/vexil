@@ -192,7 +192,7 @@ pub(crate) fn generate_with_imports(
         trait_gen::emit_impl(&mut w, impl_def, compiled, import_types)?;
     }
 
-    Ok(w.finish())
+    Ok(format!("{}\n", w.finish().trim_end()))
 }
 
 fn type_def_has_ordered_collection(type_def: &TypeDef) -> bool {

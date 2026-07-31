@@ -59,4 +59,3 @@ func (m *Tags) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

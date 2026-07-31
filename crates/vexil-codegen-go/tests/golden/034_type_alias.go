@@ -23,6 +23,7 @@ func (m *GameState) Pack(w *vexil.BitWriter) error {
 	}
 	return nil
 }
+
 func (m *GameState) Unpack(r *vexil.BitReader) error {
 	{
 		v, err := r.ReadU64()

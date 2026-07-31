@@ -55,4 +55,3 @@ func (s *ParseResult) Unpack(r *vexil.BitReader) error {
 	*s = ParseResult(v)
 	return nil
 }
-

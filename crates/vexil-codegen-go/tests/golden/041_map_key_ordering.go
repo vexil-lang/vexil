@@ -593,4 +593,3 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

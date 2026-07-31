@@ -83,6 +83,7 @@ func (m *User) Pack(w *vexil.BitWriter) error {
 	}
 	return nil
 }
+
 func (m *User) Unpack(r *vexil.BitReader) error {
 	{
 		v, err := r.ReadU32()

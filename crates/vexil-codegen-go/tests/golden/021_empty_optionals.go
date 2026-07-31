@@ -260,4 +260,3 @@ func (m *AllEmpty) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

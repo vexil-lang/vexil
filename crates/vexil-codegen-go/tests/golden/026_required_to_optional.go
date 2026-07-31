@@ -98,4 +98,3 @@ func (m *SettingsV2) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

@@ -27,6 +27,7 @@ func (m *Packet) Pack(w *vexil.BitWriter) error {
 	}
 	return nil
 }
+
 func (m *Packet) Unpack(r *vexil.BitReader) error {
 	{
 		arrLen, err := r.ReadLeb128(4)

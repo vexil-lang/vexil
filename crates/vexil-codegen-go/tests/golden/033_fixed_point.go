@@ -52,4 +52,3 @@ func (m *SensorReading) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

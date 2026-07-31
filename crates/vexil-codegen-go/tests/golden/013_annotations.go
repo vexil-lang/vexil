@@ -401,4 +401,3 @@ func (m *Documented) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-
