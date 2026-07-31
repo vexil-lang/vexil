@@ -30,8 +30,8 @@ class EventList:
 
     def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.items))
-        for item in self.items:
-            w.write_u64(item)
+        for _vexil_self_2e_items_array_item in self.items:
+            w.write_u64(_vexil_self_2e_items_array_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -44,12 +44,12 @@ class EventList:
     @staticmethod
     def decode_from(r: _BitReader) -> EventList:
         m = EventList.__new__(EventList)
-        arr_len = r.read_leb128()
-        m.items = []
-        for _ in range(arr_len):
-            _item: int = None  # type: ignore[assignment]
-            _item = r.read_u64()
-            m.items.append(_item)
+        _vexil_m_2e_items_array_length = r.read_leb128()
+        _vexil_m_2e_items_array_items: list[int] = []
+        for _ in range(_vexil_m_2e_items_array_length):
+            _vexil_m_2e_items_array_item = r.read_u64()
+            _vexil_m_2e_items_array_items.append(_vexil_m_2e_items_array_item)
+        m.items = _vexil_m_2e_items_array_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

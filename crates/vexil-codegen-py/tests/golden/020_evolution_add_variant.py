@@ -58,15 +58,12 @@ def decode_ShapeV1_from(_vexil_reader: _BitReader) -> ShapeV1:
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
         return ShapeV1Circle(_vexil_field_0)
     elif _vexil_discriminant == 1:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
-        _vexil_field_1: float = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeV1Rect(_vexil_field_0, _vexil_field_1)
     else:
@@ -141,23 +138,18 @@ def decode_ShapeV2_from(_vexil_reader: _BitReader) -> ShapeV2:
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
         return ShapeV2Circle(_vexil_field_0)
     elif _vexil_discriminant == 1:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
-        _vexil_field_1: float = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeV2Rect(_vexil_field_0, _vexil_field_1)
     elif _vexil_discriminant == 2:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
-        _vexil_field_1: float = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeV2Triangle(_vexil_field_0, _vexil_field_1)
     else:

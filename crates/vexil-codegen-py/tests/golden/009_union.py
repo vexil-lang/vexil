@@ -66,15 +66,12 @@ def decode_Shape_from(_vexil_reader: _BitReader) -> Shape:
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
         return ShapeCircle(_vexil_field_0)
     elif _vexil_discriminant == 1:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: float = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_f32()
-        _vexil_field_1: float = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeRectangle(_vexil_field_0, _vexil_field_1)
     elif _vexil_discriminant == 2:
@@ -146,17 +143,13 @@ def decode_Color_from(_vexil_reader: _BitReader) -> Color:
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: int = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_u8()
         return ColorAnsi(_vexil_field_0)
     elif _vexil_discriminant == 1:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: int = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_u8()
-        _vexil_field_1: int = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_u8()
-        _vexil_field_2: int = None  # type: ignore[assignment]
         _vexil_field_2 = _vexil_payload_reader.read_u8()
         return ColorRgb(_vexil_field_0, _vexil_field_1, _vexil_field_2)
     elif _vexil_discriminant == 2:
@@ -217,15 +210,12 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: int = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_u16()
-        _vexil_field_1: int = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_u16()
         return EventClick(_vexil_field_0, _vexil_field_1)
     elif _vexil_discriminant == 2:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: int = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_i16()
         return EventScroll(_vexil_field_0)
     else:

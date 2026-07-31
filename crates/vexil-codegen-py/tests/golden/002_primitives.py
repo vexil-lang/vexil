@@ -67,6 +67,7 @@ class AllPrimitives:
         m.i = r.read_i64()
         m.j = r.read_f32()
         m.k = r.read_f64()
+        m.l = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

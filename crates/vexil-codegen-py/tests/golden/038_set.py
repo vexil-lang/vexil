@@ -23,8 +23,8 @@ class Tags:
 
     def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.names))
-        for item in sorted(self.names):
-            w.write_string(item)
+        for _vexil_self_2e_names_set_item in sorted(self.names):
+            w.write_string(_vexil_self_2e_names_set_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -37,12 +37,12 @@ class Tags:
     @staticmethod
     def decode_from(r: _BitReader) -> Tags:
         m = Tags.__new__(Tags)
-        set_len = r.read_leb128()
-        m.names = set()
-        for _ in range(set_len):
-            _item: str = None  # type: ignore[assignment]
-            _item = r.read_string()
-            m.names.add(_item)
+        _vexil_m_2e_names_set_length = r.read_leb128()
+        _vexil_m_2e_names_set_items: set[str] = set()
+        for _ in range(_vexil_m_2e_names_set_length):
+            _vexil_m_2e_names_set_item = r.read_string()
+            _vexil_m_2e_names_set_items.add(_vexil_m_2e_names_set_item)
+        m.names = _vexil_m_2e_names_set_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

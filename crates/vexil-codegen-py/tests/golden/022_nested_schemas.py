@@ -97,8 +97,8 @@ class Canvas:
         self.bounds.encode_to(w)
         w.write_string(self.name)
         w.write_leb128(len(self.layers))
-        for item in self.layers:
-            item.encode_to(w)
+        for _vexil_self_2e_layers_array_item in self.layers:
+            _vexil_self_2e_layers_array_item.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -113,12 +113,12 @@ class Canvas:
         m = Canvas.__new__(Canvas)
         m.bounds = Rect.decode_from(r)
         m.name = r.read_string()
-        arr_len = r.read_leb128()
-        m.layers = []
-        for _ in range(arr_len):
-            _item: Rect = None  # type: ignore[assignment]
-            _item = Rect.decode_from(r)
-            m.layers.append(_item)
+        _vexil_m_2e_layers_array_length = r.read_leb128()
+        _vexil_m_2e_layers_array_items: list[Rect] = []
+        for _ in range(_vexil_m_2e_layers_array_length):
+            _vexil_m_2e_layers_array_item = Rect.decode_from(r)
+            _vexil_m_2e_layers_array_items.append(_vexil_m_2e_layers_array_item)
+        m.layers = _vexil_m_2e_layers_array_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

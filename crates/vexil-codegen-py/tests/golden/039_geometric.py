@@ -25,14 +25,14 @@ class Transform:
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        for item in self.pos:
-            w.write_i64(item)
-        for item in self.rot:
-            w.write_i64(item)
-        for item in self.gl_pos:
-            w.write_f32(item)
-        for item in self.model:
-            w.write_f32(item)
+        for _vexil_self_2e_pos_geometric_item in self.pos:
+            w.write_i64(_vexil_self_2e_pos_geometric_item)
+        for _vexil_self_2e_rot_geometric_item in self.rot:
+            w.write_i64(_vexil_self_2e_rot_geometric_item)
+        for _vexil_self_2e_gl_5f_pos_geometric_item in self.gl_pos:
+            w.write_f32(_vexil_self_2e_gl_5f_pos_geometric_item)
+        for _vexil_self_2e_model_geometric_item in self.model:
+            w.write_f32(_vexil_self_2e_model_geometric_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -45,6 +45,26 @@ class Transform:
     @staticmethod
     def decode_from(r: _BitReader) -> Transform:
         m = Transform.__new__(Transform)
+        _vexil_m_2e_pos_geometric_items: list[int] = []
+        for _ in range(3):
+            _vexil_m_2e_pos_geometric_item = r.read_i64()
+            _vexil_m_2e_pos_geometric_items.append(_vexil_m_2e_pos_geometric_item)
+        m.pos = tuple(_vexil_m_2e_pos_geometric_items)
+        _vexil_m_2e_rot_geometric_items: list[int] = []
+        for _ in range(4):
+            _vexil_m_2e_rot_geometric_item = r.read_i64()
+            _vexil_m_2e_rot_geometric_items.append(_vexil_m_2e_rot_geometric_item)
+        m.rot = tuple(_vexil_m_2e_rot_geometric_items)
+        _vexil_m_2e_gl_5f_pos_geometric_items: list[float] = []
+        for _ in range(3):
+            _vexil_m_2e_gl_5f_pos_geometric_item = r.read_f32()
+            _vexil_m_2e_gl_5f_pos_geometric_items.append(_vexil_m_2e_gl_5f_pos_geometric_item)
+        m.gl_pos = tuple(_vexil_m_2e_gl_5f_pos_geometric_items)
+        _vexil_m_2e_model_geometric_items: list[float] = []
+        for _ in range(16):
+            _vexil_m_2e_model_geometric_item = r.read_f32()
+            _vexil_m_2e_model_geometric_items.append(_vexil_m_2e_model_geometric_item)
+        m.model = tuple(_vexil_m_2e_model_geometric_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -65,12 +85,12 @@ class Vectors:
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        for item in self.v2:
-            w.write_f64(item)
-        for item in self.v3:
-            w.write_f32(item)
-        for item in self.v4:
-            w.write_i32(item)
+        for _vexil_self_2e_v2_geometric_item in self.v2:
+            w.write_f64(_vexil_self_2e_v2_geometric_item)
+        for _vexil_self_2e_v3_geometric_item in self.v3:
+            w.write_f32(_vexil_self_2e_v3_geometric_item)
+        for _vexil_self_2e_v4_geometric_item in self.v4:
+            w.write_i32(_vexil_self_2e_v4_geometric_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -83,6 +103,21 @@ class Vectors:
     @staticmethod
     def decode_from(r: _BitReader) -> Vectors:
         m = Vectors.__new__(Vectors)
+        _vexil_m_2e_v2_geometric_items: list[float] = []
+        for _ in range(2):
+            _vexil_m_2e_v2_geometric_item = r.read_f64()
+            _vexil_m_2e_v2_geometric_items.append(_vexil_m_2e_v2_geometric_item)
+        m.v2 = tuple(_vexil_m_2e_v2_geometric_items)
+        _vexil_m_2e_v3_geometric_items: list[float] = []
+        for _ in range(3):
+            _vexil_m_2e_v3_geometric_item = r.read_f32()
+            _vexil_m_2e_v3_geometric_items.append(_vexil_m_2e_v3_geometric_item)
+        m.v3 = tuple(_vexil_m_2e_v3_geometric_items)
+        _vexil_m_2e_v4_geometric_items: list[int] = []
+        for _ in range(4):
+            _vexil_m_2e_v4_geometric_item = r.read_i32()
+            _vexil_m_2e_v4_geometric_items.append(_vexil_m_2e_v4_geometric_item)
+        m.v4 = tuple(_vexil_m_2e_v4_geometric_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -102,10 +137,10 @@ class Matrices:
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
-        for item in self.m3:
-            w.write_f64(item)
-        for item in self.m4:
-            w.write_f32(item)
+        for _vexil_self_2e_m3_geometric_item in self.m3:
+            w.write_f64(_vexil_self_2e_m3_geometric_item)
+        for _vexil_self_2e_m4_geometric_item in self.m4:
+            w.write_f32(_vexil_self_2e_m4_geometric_item)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -118,6 +153,16 @@ class Matrices:
     @staticmethod
     def decode_from(r: _BitReader) -> Matrices:
         m = Matrices.__new__(Matrices)
+        _vexil_m_2e_m3_geometric_items: list[float] = []
+        for _ in range(9):
+            _vexil_m_2e_m3_geometric_item = r.read_f64()
+            _vexil_m_2e_m3_geometric_items.append(_vexil_m_2e_m3_geometric_item)
+        m.m3 = tuple(_vexil_m_2e_m3_geometric_items)
+        _vexil_m_2e_m4_geometric_items: list[float] = []
+        for _ in range(16):
+            _vexil_m_2e_m4_geometric_item = r.read_f32()
+            _vexil_m_2e_m4_geometric_items.append(_vexil_m_2e_m4_geometric_item)
+        m.m4 = tuple(_vexil_m_2e_m4_geometric_items)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

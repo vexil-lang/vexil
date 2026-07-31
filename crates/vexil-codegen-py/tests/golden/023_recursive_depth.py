@@ -25,8 +25,8 @@ class TreeNode:
     def encode_to(self, w: _BitWriter) -> None:
         w.write_u32(self.value)
         w.write_leb128(len(self.children))
-        for item in self.children:
-            item.encode_to(w)
+        for _vexil_self_2e_children_array_item in self.children:
+            _vexil_self_2e_children_array_item.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -40,12 +40,12 @@ class TreeNode:
     def decode_from(r: _BitReader) -> TreeNode:
         m = TreeNode.__new__(TreeNode)
         m.value = r.read_u32()
-        arr_len = r.read_leb128()
-        m.children = []
-        for _ in range(arr_len):
-            _item: TreeNode = None  # type: ignore[assignment]
-            _item = TreeNode.decode_from(r)
-            m.children.append(_item)
+        _vexil_m_2e_children_array_length = r.read_leb128()
+        _vexil_m_2e_children_array_items: list[TreeNode] = []
+        for _ in range(_vexil_m_2e_children_array_length):
+            _vexil_m_2e_children_array_item = TreeNode.decode_from(r)
+            _vexil_m_2e_children_array_items.append(_vexil_m_2e_children_array_item)
+        m.children = _vexil_m_2e_children_array_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -66,10 +66,11 @@ class LinkedList:
 
     def encode_to(self, w: _BitWriter) -> None:
         w.write_i64(self.value)
-        w.write_bool(self.next is not None)
+        _vexil_self_2e_next_optional = self.next
+        w.write_bool(_vexil_self_2e_next_optional is not None)
         w.flush_to_byte_boundary()
-        if self.next is not None:
-            self.next.encode_to(w)
+        if _vexil_self_2e_next_optional is not None:
+            _vexil_self_2e_next_optional.encode_to(w)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -84,13 +85,12 @@ class LinkedList:
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_i64()
         try:
-            present = r.read_bool()
+            _vexil_m_2e_next_present = r.read_bool()
         except DecodeError:
             m.next = None
         else:
             r.flush_to_byte_boundary()
-            if present:
-                m.next: LinkedList = None  # type: ignore[assignment]
+            if _vexil_m_2e_next_present:
                 m.next = LinkedList.decode_from(r)
             else:
                 m.next = None

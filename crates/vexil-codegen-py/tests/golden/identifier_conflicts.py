@@ -59,8 +59,8 @@ class Collision:
         m._vexil_from = r.read_u8()
         m.from_ = r.read_u8()
         m._vexil_self = r.read_u8()
-        _vexil_m__vexil_unknown_length = r.read_leb128()
-        m._vexil_unknown = r.read_bytes(_vexil_m__vexil_unknown_length)
+        _vexil_m_2e__5f_vexil_5f_unknown_length = r.read_leb128()
+        m._vexil_unknown = r.read_bytes(_vexil_m_2e__5f_vexil_5f_unknown_length)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -101,9 +101,7 @@ def decode_Choice_from(_vexil_reader: _BitReader) -> Choice:
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: int = None  # type: ignore[assignment]
         _vexil_field_0 = _vexil_payload_reader.read_u8()
-        _vexil_field_1: int = None  # type: ignore[assignment]
         _vexil_field_1 = _vexil_payload_reader.read_u16()
         return ChoiceNamed(_vexil_field_0, _vexil_field_1)
     else:

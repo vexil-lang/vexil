@@ -199,13 +199,13 @@ class Limited:
     def encode_to(self, w: _BitWriter) -> None:
         w.write_string(self.body)
         w.write_leb128(len(self.tags))
-        for item in self.tags:
-            w.write_string(item)
+        for _vexil_self_2e_tags_array_item in self.tags:
+            w.write_string(_vexil_self_2e_tags_array_item)
         w.write_leb128(len(self.headers))
-        for map_k in sorted(self.headers):
-            map_v = self.headers[map_k]
-            w.write_string(map_k)
-            w.write_string(map_v)
+        for _vexil_self_2e_headers_map_key in sorted(self.headers):
+            _vexil_self_2e_headers_map_value = self.headers[_vexil_self_2e_headers_map_key]
+            w.write_string(_vexil_self_2e_headers_map_key)
+            w.write_string(_vexil_self_2e_headers_map_value)
         w.write_bytes(self.data)
         w.flush_to_byte_boundary()
         if self.unknown:
@@ -220,22 +220,21 @@ class Limited:
     def decode_from(r: _BitReader) -> Limited:
         m = Limited.__new__(Limited)
         m.body = r.read_string()
-        arr_len = r.read_leb128()
-        m.tags = []
-        for _ in range(arr_len):
-            _item: str = None  # type: ignore[assignment]
-            _item = r.read_string()
-            m.tags.append(_item)
-        map_len = r.read_leb128()
-        m.headers = {}
-        for _ in range(map_len):
-            _k: str = None  # type: ignore[assignment]
-            _v: str = None  # type: ignore[assignment]
-            _k = r.read_string()
-            _v = r.read_string()
-            m.headers[_k] = _v
-        _vexil_m_data_length = r.read_leb128()
-        m.data = r.read_bytes(_vexil_m_data_length)
+        _vexil_m_2e_tags_array_length = r.read_leb128()
+        _vexil_m_2e_tags_array_items: list[str] = []
+        for _ in range(_vexil_m_2e_tags_array_length):
+            _vexil_m_2e_tags_array_item = r.read_string()
+            _vexil_m_2e_tags_array_items.append(_vexil_m_2e_tags_array_item)
+        m.tags = _vexil_m_2e_tags_array_items
+        _vexil_m_2e_headers_map_length = r.read_leb128()
+        _vexil_m_2e_headers_map_items: dict[str, str] = {}
+        for _ in range(_vexil_m_2e_headers_map_length):
+            _vexil_m_2e_headers_map_key = r.read_string()
+            _vexil_m_2e_headers_map_value = r.read_string()
+            _vexil_m_2e_headers_map_items[_vexil_m_2e_headers_map_key] = _vexil_m_2e_headers_map_value
+        m.headers = _vexil_m_2e_headers_map_items
+        _vexil_m_2e_data_length = r.read_leb128()
+        m.data = r.read_bytes(_vexil_m_2e_data_length)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

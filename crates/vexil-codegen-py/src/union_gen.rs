@@ -117,11 +117,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             w.line("_vexil_payload_reader = _BitReader(_vexil_payload)");
             // Read each field into locals
             for field in &variant.fields {
-                let py_ty = py_type(&field.resolved_type, registry);
                 let ident = format!("_vexil_field_{}", field.ordinal);
-                w.line(&format!(
-                    "{ident}: {py_ty} = None  # type: ignore[assignment]"
-                ));
                 emit_read(
                     w,
                     &ident,

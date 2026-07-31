@@ -30,7 +30,6 @@ class SessionId:
 
     @staticmethod
     def decode_from(r: _BitReader) -> SessionId:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return SessionId(inner)
 
@@ -68,7 +67,6 @@ class PaneId:
 
     @staticmethod
     def decode_from(r: _BitReader) -> PaneId:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_u64()
         return PaneId(inner)
 
@@ -106,7 +104,6 @@ class ExitCode:
 
     @staticmethod
     def decode_from(r: _BitReader) -> ExitCode:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_i32()
         return ExitCode(inner)
 
@@ -144,7 +141,6 @@ class Name:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Name:
-        inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Name(inner)
 
@@ -182,7 +178,6 @@ class Payload:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Payload:
-        inner: bytes = None  # type: ignore[assignment]
         _vexil_inner_length = r.read_leb128()
         inner = r.read_bytes(_vexil_inner_length)
         return Payload(inner)
@@ -224,20 +219,19 @@ class Color:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Color:
-        inner: tuple[int, int, int] = None  # type: ignore[assignment]
-        r = r.read_u8()
-        g = r.read_u8()
-        b = r.read_u8()
-        inner = (r, g, b)
+        _vexil_inner_red = r.read_u8()
+        _vexil_inner_green = r.read_u8()
+        _vexil_inner_blue = r.read_u8()
+        inner = (_vexil_inner_red, _vexil_inner_green, _vexil_inner_blue)
         return Color(inner)
 
     @staticmethod
     def decode_from(r: _BitReader) -> Color:
         inner: tuple[int, int, int] = None  # type: ignore[assignment]
-        r = r.read_u8()
-        g = r.read_u8()
-        b = r.read_u8()
-        inner = (r, g, b)
+        _vexil_inner_red = r.read_u8()
+        _vexil_inner_green = r.read_u8()
+        _vexil_inner_blue = r.read_u8()
+        inner = (_vexil_inner_red, _vexil_inner_green, _vexil_inner_blue)
         return Color(inner)
 
     def __repr__(self) -> str:

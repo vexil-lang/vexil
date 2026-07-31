@@ -32,7 +32,6 @@ class UserId:
 
     @staticmethod
     def decode_from(r: _BitReader) -> UserId:
-        inner: int = None  # type: ignore[assignment]
         inner = r.read_u32()
         return UserId(inner)
 
@@ -70,7 +69,6 @@ class Label:
 
     @staticmethod
     def decode_from(r: _BitReader) -> Label:
-        inner: str = None  # type: ignore[assignment]
         inner = r.read_string()
         return Label(inner)
 
@@ -103,13 +101,13 @@ class UserProfile:
     def encode_to(self, w: _BitWriter) -> None:
         self.id.encode_to(w)
         w.write_leb128(len(self.friends))
-        for map_k, map_v in self.friends.items():
-            map_k.encode_to(w)
-            w.write_string(map_v)
+        for _vexil_self_2e_friends_map_key, _vexil_self_2e_friends_map_value in self.friends.items():
+            _vexil_self_2e_friends_map_key.encode_to(w)
+            w.write_string(_vexil_self_2e_friends_map_value)
         w.write_leb128(len(self.tags))
-        for map_k, map_v in self.tags.items():
-            map_k.encode_to(w)
-            w.write_u32(map_v)
+        for _vexil_self_2e_tags_map_key, _vexil_self_2e_tags_map_value in self.tags.items():
+            _vexil_self_2e_tags_map_key.encode_to(w)
+            w.write_u32(_vexil_self_2e_tags_map_value)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -123,22 +121,20 @@ class UserProfile:
     def decode_from(r: _BitReader) -> UserProfile:
         m = UserProfile.__new__(UserProfile)
         m.id = UserId.decode_from(r)
-        map_len = r.read_leb128()
-        m.friends = {}
-        for _ in range(map_len):
-            _k: UserId = None  # type: ignore[assignment]
-            _v: str = None  # type: ignore[assignment]
-            _k = UserId.decode_from(r)
-            _v = r.read_string()
-            m.friends[_k] = _v
-        map_len = r.read_leb128()
-        m.tags = {}
-        for _ in range(map_len):
-            _k: Label = None  # type: ignore[assignment]
-            _v: int = None  # type: ignore[assignment]
-            _k = Label.decode_from(r)
-            _v = r.read_u32()
-            m.tags[_k] = _v
+        _vexil_m_2e_friends_map_length = r.read_leb128()
+        _vexil_m_2e_friends_map_items: dict[UserId, str] = {}
+        for _ in range(_vexil_m_2e_friends_map_length):
+            _vexil_m_2e_friends_map_key = UserId.decode_from(r)
+            _vexil_m_2e_friends_map_value = r.read_string()
+            _vexil_m_2e_friends_map_items[_vexil_m_2e_friends_map_key] = _vexil_m_2e_friends_map_value
+        m.friends = _vexil_m_2e_friends_map_items
+        _vexil_m_2e_tags_map_length = r.read_leb128()
+        _vexil_m_2e_tags_map_items: dict[Label, int] = {}
+        for _ in range(_vexil_m_2e_tags_map_length):
+            _vexil_m_2e_tags_map_key = Label.decode_from(r)
+            _vexil_m_2e_tags_map_value = r.read_u32()
+            _vexil_m_2e_tags_map_items[_vexil_m_2e_tags_map_key] = _vexil_m_2e_tags_map_value
+        m.tags = _vexil_m_2e_tags_map_items
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

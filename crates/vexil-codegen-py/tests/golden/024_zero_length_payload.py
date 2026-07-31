@@ -128,9 +128,8 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
     elif _vexil_discriminant == 2:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
-        _vexil_field_0: bytes = None  # type: ignore[assignment]
-        _vexil__vexil_field_0_length = _vexil_payload_reader.read_leb128()
-        _vexil_field_0 = _vexil_payload_reader.read_bytes(_vexil__vexil_field_0_length)
+        _vexil__5f_vexil_5f_field_5f_0_length = _vexil_payload_reader.read_leb128()
+        _vexil_field_0 = _vexil_payload_reader.read_bytes(_vexil__5f_vexil_5f_field_5f_0_length)
         return EventData(_vexil_field_0)
     else:
         raise ValueError(f"unknown Event discriminant: {_vexil_discriminant}")
