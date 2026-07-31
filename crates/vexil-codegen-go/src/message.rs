@@ -1,7 +1,7 @@
 use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::ir::{
     CmpOp, ConfigDef, ConstraintOperand, Encoding, FieldConstraint, FieldEncoding, MessageDef,
-    ResolvedType, TombstoneDef, TypeDef, TypeRegistry,
+    ResolvedType, TypeDef, TypeRegistry,
 };
 
 use crate::emit::CodeWriter;
@@ -823,164 +823,6 @@ fn emit_read_type(
 }
 
 // ---------------------------------------------------------------------------
-// emit_tombstone_read — read-and-discard for typed tombstones (Go)
-// ---------------------------------------------------------------------------
-
-fn emit_tombstone_read(
-    w: &mut CodeWriter,
-    ty: &ResolvedType,
-    registry: &TypeRegistry,
-    reader: &str,
-    idx: usize,
-    err_return: &str,
-) {
-    match ty {
-        ResolvedType::Primitive(p) => {
-            let read_fn = match p {
-                PrimitiveType::Bool => "ReadBool",
-                PrimitiveType::U8 => "ReadU8",
-                PrimitiveType::U16 => "ReadU16",
-                PrimitiveType::U32 => "ReadU32",
-                PrimitiveType::U64 => "ReadU64",
-                PrimitiveType::I8 => "ReadI8",
-                PrimitiveType::I16 => "ReadI16",
-                PrimitiveType::I32 => "ReadI32",
-                PrimitiveType::I64 => "ReadI64",
-                PrimitiveType::F32 => "ReadF32",
-                PrimitiveType::F64 => "ReadF64",
-                PrimitiveType::Fixed32 => "ReadI32",
-                PrimitiveType::Fixed64 => "ReadI64",
-                PrimitiveType::Void => return,
-            };
-            w.open_block("");
-            w.line(&format!("_, err := {reader}.{read_fn}()"));
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            w.close_block();
-        }
-        ResolvedType::SubByte(s) => {
-            w.open_block("");
-            w.line(&format!("_, err := {reader}.ReadBits({})", s.bits));
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            w.close_block();
-        }
-        ResolvedType::Semantic(s) => {
-            let read_expr = match s {
-                SemanticType::String => format!("_, err := {reader}.ReadString()"),
-                SemanticType::Bytes => format!("_, err := {reader}.ReadBytes()"),
-                SemanticType::Rgb => {
-                    for _ in 0..3 {
-                        w.open_block("");
-                        w.line(&format!("_, err := {reader}.ReadU8()"));
-                        w.open_block("if err != nil");
-                        w.line(err_return);
-                        w.close_block();
-                        w.close_block();
-                    }
-                    return;
-                }
-                SemanticType::Uuid => format!("_, err := {reader}.ReadRawBytes(16)"),
-                SemanticType::Timestamp => format!("_, err := {reader}.ReadI64()"),
-                SemanticType::Hash => format!("_, err := {reader}.ReadRawBytes(32)"),
-            };
-            w.open_block("");
-            w.line(&read_expr);
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            w.close_block();
-        }
-        ResolvedType::Named(id) => {
-            let type_name = match registry.get(*id) {
-                Some(def) => match def {
-                    TypeDef::Message(m) => m.name.to_string(),
-                    TypeDef::Enum(e) => e.name.to_string(),
-                    TypeDef::Flags(f) => f.name.to_string(),
-                    TypeDef::Union(u) => u.name.to_string(),
-                    TypeDef::Newtype(n) => n.name.to_string(),
-                    _ => "Unknown".to_string(),
-                },
-                None => "Unknown".to_string(),
-            };
-            w.line(&format!(
-                "if err := {reader}.EnterRecursive(); err != nil {{"
-            ));
-            w.indent();
-            w.line(err_return);
-            w.close_block();
-            w.open_block("");
-            w.line(&format!("var tmp {type_name}"));
-            w.line(&format!("if err := tmp.Unpack({reader}); err != nil {{"));
-            w.indent();
-            w.line(err_return);
-            w.close_block();
-            w.close_block();
-            w.line(&format!("{reader}.LeaveRecursive()"));
-        }
-        ResolvedType::Optional(inner) => {
-            let var = format!("_tombstone_{idx}_present");
-            w.open_block("");
-            w.line(&format!("{var}, err := {reader}.ReadBool()"));
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            if is_byte_aligned(inner, registry) {
-                w.line(&format!("{reader}.FlushToByteBoundary()"));
-            }
-            w.open_block(&format!("if {var}"));
-            emit_tombstone_read(w, inner, registry, reader, idx, err_return);
-            w.close_block();
-            w.close_block();
-        }
-        ResolvedType::Array(inner) => {
-            let len_var = format!("_tombstone_{idx}_len");
-            w.open_block("");
-            w.line(&format!("{len_var}, err := {reader}.ReadLeb128(4)"));
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            w.open_block(&format!("for i := uint64(0); i < {len_var}; i++"));
-            emit_tombstone_read(w, inner, registry, reader, idx, err_return);
-            w.close_block();
-            w.close_block();
-        }
-        ResolvedType::Map(k, v) => {
-            let len_var = format!("_tombstone_{idx}_len");
-            w.open_block("");
-            w.line(&format!("{len_var}, err := {reader}.ReadLeb128(4)"));
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            w.open_block(&format!("for i := uint64(0); i < {len_var}; i++"));
-            emit_tombstone_read(w, k, registry, reader, idx, err_return);
-            emit_tombstone_read(w, v, registry, reader, idx, err_return);
-            w.close_block();
-            w.close_block();
-        }
-        ResolvedType::Result(ok, err_ty) => {
-            let var = format!("_tombstone_{idx}_isOk");
-            w.open_block("");
-            w.line(&format!("{var}, err := {reader}.ReadBool()"));
-            w.open_block("if err != nil");
-            w.line(err_return);
-            w.close_block();
-            w.open_block(&format!("if {var}"));
-            emit_tombstone_read(w, ok, registry, reader, idx, err_return);
-            w.dedent();
-            w.line("} else {");
-            w.indent();
-            emit_tombstone_read(w, err_ty, registry, reader, idx, err_return);
-            w.close_block();
-            w.close_block();
-        }
-        _ => {}
-    }
-}
-
-// ---------------------------------------------------------------------------
 // emit_message
 // ---------------------------------------------------------------------------
 
@@ -1033,55 +875,23 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         "func (m *{name}) Unpack(r *vexil.BitReader) error"
     ));
 
-    enum DecodeAction<'a> {
-        Field(&'a vexil_lang::ir::FieldDef),
-        Tombstone(&'a TombstoneDef),
-    }
-    let mut actions: Vec<(u32, DecodeAction<'_>)> = Vec::new();
-    for field in &msg.fields {
-        actions.push((field.ordinal, DecodeAction::Field(field)));
-    }
-    for tombstone in &msg.tombstones {
-        if tombstone.original_type.is_some() {
-            actions.push((tombstone.ordinal, DecodeAction::Tombstone(tombstone)));
-        }
-    }
-    actions.sort_by_key(|(ord, _)| *ord);
-
-    for (idx, (_ord, action)) in actions.iter().enumerate() {
-        match action {
-            DecodeAction::Field(field) => {
-                let field_name_pascal = to_pascal_case(&field.name);
-                let target = format!("m.{field_name_pascal}");
-                emit_read(
-                    w,
-                    &target,
-                    &field.resolved_type,
-                    &field.encoding,
-                    registry,
-                    "r",
-                    err_ret,
-                );
-                // Validate constraint after decoding
-                if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_go(
-                        w,
-                        constraint,
-                        &target,
-                        field.name.as_str(),
-                        err_ret,
-                    );
-                }
-            }
-            DecodeAction::Tombstone(tombstone) => {
-                if let Some(ref ty) = tombstone.original_type {
-                    w.line(&format!(
-                        "// discard @removed ordinal {}",
-                        tombstone.ordinal
-                    ));
-                    emit_tombstone_read(w, ty, registry, "r", idx, err_ret);
-                }
-            }
+    let mut fields: Vec<_> = msg.fields.iter().collect();
+    fields.sort_by_key(|field| field.ordinal);
+    for field in fields {
+        let field_name_pascal = to_pascal_case(&field.name);
+        let target = format!("m.{field_name_pascal}");
+        emit_read(
+            w,
+            &target,
+            &field.resolved_type,
+            &field.encoding,
+            registry,
+            "r",
+            err_ret,
+        );
+        // Validate constraint after decoding
+        if let Some(constraint) = &field.constraint {
+            emit_constraint_validation_go(w, constraint, &target, field.name.as_str(), err_ret);
         }
     }
     w.line("r.FlushToByteBoundary()");

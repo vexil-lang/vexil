@@ -24,7 +24,7 @@
 
 ### Added
 
-- feat(codegen): emit decode-and-discard for typed tombstones
+- feat(codegen): retain typed tombstones as wire-inert generated metadata
 - feat(vexil-codegen-rust): emit _unknown field for schema evolution round-tripping
 - feat: add delta compliance vectors and Rust validator
 

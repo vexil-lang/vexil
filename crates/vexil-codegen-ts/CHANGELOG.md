@@ -25,7 +25,7 @@
 
 ### Added
 
-- feat(codegen): emit decode-and-discard for typed tombstones
+- feat(codegen): retain typed tombstones as wire-inert generated metadata
 - feat(vexil-codegen-ts): emit _unknown field for schema evolution round-tripping
 - feat(vexil-codegen-ts): generate delta encoder/decoder classes
 
@@ -43,7 +43,6 @@
 - chore(release): bump crate versions
 
 All notable changes to this project will be documented in this file.
-
 
 
 

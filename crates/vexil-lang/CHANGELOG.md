@@ -25,7 +25,7 @@
 
 ### Added
 
-- feat(vexil-lang): typed tombstones — @removed with original type for decode-and-discard
+- feat(vexil-lang): typed tombstones — retain the original type as history metadata
 - feat(vexil-lang): add compat module with report types
 - feat(vexil-lang): desugar @delta on message to per-field @delta
 

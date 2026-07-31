@@ -32,13 +32,6 @@ func (m *Config) Unpack(r *vexil.BitReader) error {
 		}
 		m.Name = v
 	}
-	// discard @removed ordinal 1
-	{
-		_, err := r.ReadU32()
-		if err != nil {
-			return err
-		}
-	}
 	{
 		v, err := r.ReadU64()
 		if err != nil {

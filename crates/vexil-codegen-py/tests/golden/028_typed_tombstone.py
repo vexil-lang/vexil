@@ -46,8 +46,6 @@ class Config:
     def decode_from(r: _BitReader) -> Config:
         m = Config.__new__(Config)
         m.name = r.read_string()
-        # discard @removed ordinal 1
-        _ = r.read_u32()
         m.timeout_ms = r.read_u64()
         r.flush_to_byte_boundary()
         m.unknown = b""

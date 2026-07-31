@@ -117,6 +117,20 @@ fn test_028_typed_tombstone() {
 }
 
 #[test]
+fn typed_tombstone_emits_no_codec_read() {
+    let source = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/valid/028_typed_tombstone.vexil"),
+    )
+    .expect("typed tombstone corpus");
+    let compiled = vexil_lang::compile(&source)
+        .compiled
+        .expect("typed tombstone schema");
+    let generated = vexil_codegen_rust::generate(&compiled).expect("Rust codegen");
+    assert!(!generated.contains("read_u32()?"), "{generated}");
+    assert!(!generated.contains("discard @removed"), "{generated}");
+}
+
+#[test]
 fn test_030_newtype_map_key() {
     golden_test("030_newtype_map_key");
 }
