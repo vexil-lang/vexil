@@ -55,7 +55,8 @@ The ignored bytes are discarded, not retained -- a v1 decoder cannot re-encode t
 
 ## Typed tombstones
 
-When removing a field, use `@removed` with the original type to enable decode-and-discard:
+When removing a field, use `@removed` to reserve its ordinal and document why
+it disappeared. You can retain the original type as historical metadata:
 
 ```vexil
 message Config {
@@ -65,6 +66,10 @@ message Config {
 }
 ```
 
-The tombstone tells the decoder exactly how many bytes to skip for ordinal 1, even though the field no longer exists in the current schema.
+The type after the tombstone is metadata only. Generated codecs do not read or
+write bytes for it, and changing it does not change the schema hash. Removing a
+field still changes the wire layout and remains a breaking change; the
+tombstone prevents accidental ordinal reuse rather than making old and new
+payloads interoperable.
 
 See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

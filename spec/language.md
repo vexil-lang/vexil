@@ -984,13 +984,14 @@ grammar for a declaration body is:
 
 ```
 decl-body-item = field | tombstone
-tombstone      = "@removed" "(" dec-int "," tombstone-args ")"
+tombstone      = "@removed" "(" dec-int "," tombstone-args ")" [ ":" type-expr ]
 tombstone-args = tombstone-arg ( "," tombstone-arg )*
 tombstone-arg  = ident ":" annotation-value
 ```
 
 Tombstone arguments use named form only. `reason` MUST be provided.
-`since` is OPTIONAL.
+`since` is OPTIONAL. The optional type expression records the removed field's
+original type as historical metadata. It has no wire or codec effect.
 
 ### 5.3  Duplication
 
@@ -1370,7 +1371,7 @@ The field remains on the wire; decoders continue to read it. Backends MUST emit
 a deprecation marker in generated code (e.g. `#[deprecated]` in Rust,
 `@deprecated` in JSDoc).
 
-**`@removed(ordinal, since: "version", reason: "text")`**
+**`@removed(ordinal, since: "version", reason: "text") [ : type ]`**
 Tombstones a previously-used ordinal. This is a standalone statement within a
 declaration body (see §5.2 grammar for `tombstone`), not a field annotation.
 
@@ -1379,7 +1380,7 @@ message User {
     display_name @0 : string
         @since("1.0.0")
 
-    @removed(1, since: "1.1.0", reason: "Replaced by display_name for i18n")
+    @removed(1, since: "1.1.0", reason: "Replaced by display_name for i18n") : string
 
     email @2 : string
         @since("1.0.0")
@@ -1389,15 +1390,20 @@ message User {
 
 `ordinal` MUST be provided (the previously-used field ordinal). `reason` MUST
 be provided. `since` is OPTIONAL; if omitted, no version is recorded.
+The optional type expression SHOULD record the removed field's original type.
+It is source and resolved-IR history metadata only. Adding, removing, or
+changing this metadata MUST NOT change encoded bytes, generated codec actions,
+canonical form, schema hash, or compatibility classification.
 
 **Purpose:** `@removed` prevents ordinal reuse and serves as historical
 documentation. It does NOT make removal a wire-compatible operation. Since Vexil
-is not self-describing, a decoder cannot skip a removed field's bytes without
-knowing the original type. Removing a field is a **breaking** wire change (see
-§10). The tombstone ensures the compiler rejects any future reuse of the ordinal.
+is not self-describing and a current encoder emits no bytes for a removed field,
+a decoder cannot recover the old field from the tombstone or consume a phantom
+value in its place. Removing a field is a **breaking** wire change (see §10).
+The tombstone ensures the compiler rejects any future reuse of the ordinal.
 
-The backend MUST emit the tombstone list as generated constants so decoders can
-distinguish a tombstoned ordinal from an unrecognized one:
+Backends MAY surface tombstones as generated comments or metadata for human
+inspection. The Rust backend additionally emits the list required by §12.2:
 
 ```rust
 // Rust (generated)
@@ -1407,11 +1413,8 @@ pub const REMOVED_ORDINALS: &[(u16, &str, &str)] = &[
 // REMOVED @1 (since 1.1.0): Replaced by display_name for i18n
 ```
 
-A decoder encountering a tombstoned ordinal MUST emit:
-```
-DecodeError::RemovedField { ordinal: N, removed_in: "1.1.0", reason: "..." }
-```
-where `removed_in` is an empty string if `since` was not specified.
+Tombstones are not wire tags. Encoders and decoders MUST perform no read,
+write, padding, allocation, validation, or cursor movement for a tombstone.
 
 ### 13.4  Encoding annotations (field-level)
 
