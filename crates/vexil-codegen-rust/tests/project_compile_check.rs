@@ -6,12 +6,12 @@
 //! 3. Assert no error-level diagnostics
 //! 4. Generate project files via the `CodegenBackend` trait, which is what
 //!    emits cross-file `use` statements
-//! 5. Verify generated files are non-empty and carry the generated header
+//! 5. Verify the exact generated file set
+//! 6. Compile the generated crate natively with Cargo
 //!
-//! `project_diamond_compiles_natively` goes further: it writes the generated
-//! diamond crate to a temporary directory and compiles it with Cargo, proving
-//! that transitive type references (`Graph -> LeftNode/RightNode -> Id`) are
-//! remapped to imports that actually resolve.
+//! The diamond test also proves that transitive type references
+//! (`Graph -> LeftNode/RightNode -> Id`) are remapped to imports that resolve
+//! without duplicate definitions.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -82,6 +82,7 @@ fn compile_project_files(
     project_name: &str,
     root_ns: &str,
     expected_schema_count: usize,
+    expected_paths: &[&str],
 ) -> BTreeMap<PathBuf, String> {
     let project_dir = corpus_dir().join(project_name);
 
@@ -125,7 +126,14 @@ fn compile_project_files(
         .generate_project(&result)
         .unwrap_or_else(|e| panic!("generate_project failed for {project_name}: {e}"));
 
-    assert!(!files.is_empty(), "{project_name}: no files generated");
+    let generated_paths: Vec<String> = files
+        .keys()
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect();
+    assert_eq!(
+        generated_paths, expected_paths,
+        "{project_name}: generated file set changed"
+    );
 
     for (path, content) in &files {
         assert!(
@@ -188,23 +196,83 @@ vexil-runtime = {{ path = "{runtime_path_str}" }}
     .unwrap();
 }
 
+fn compile_generated_crate(project_name: &str, files: &BTreeMap<PathBuf, String>) {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
+    let runtime_path = workspace_root.join("crates/vexil-runtime");
+
+    let tmp = TempProject::new(project_name);
+    write_crate(tmp.path(), files, &runtime_path);
+
+    let output = std::process::Command::new("cargo")
+        .args(["clippy", "--", "-D", "warnings"])
+        .current_dir(tmp.path())
+        .env("CARGO_TARGET_DIR", tmp.path().join("target"))
+        .output()
+        .expect("failed to run cargo clippy");
+
+    tmp.cleanup();
+
+    assert!(
+        output.status.success(),
+        "Generated {project_name} project failed to compile:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Simple two-file project: main imports types.
 #[test]
 fn project_simple() {
-    compile_project_files("simple", "simple.main", 2);
+    let files = compile_project_files(
+        "simple",
+        "simple.main",
+        2,
+        &[
+            "mod.rs",
+            "simple/main.rs",
+            "simple/mod.rs",
+            "simple/types.rs",
+        ],
+    );
+    compile_generated_crate("simple", &files);
 }
 
 /// Diamond dependency: root -> left + right -> base.
 /// Verifies diamond dedup (base compiled only once).
 #[test]
 fn project_diamond() {
-    compile_project_files("diamond", "diamond.root", 4);
+    compile_project_files(
+        "diamond",
+        "diamond.root",
+        4,
+        &[
+            "diamond/base.rs",
+            "diamond/left.rs",
+            "diamond/mod.rs",
+            "diamond/right.rs",
+            "diamond/root.rs",
+            "mod.rs",
+        ],
+    );
 }
 
 /// Mixed project with enum + message across three files.
 #[test]
 fn project_mixed() {
-    compile_project_files("mixed", "mix.app", 3);
+    let files = compile_project_files(
+        "mixed",
+        "mix.app",
+        3,
+        &[
+            "mix/app.rs",
+            "mix/mod.rs",
+            "mix/shapes.rs",
+            "mix/types.rs",
+            "mod.rs",
+        ],
+    );
+    compile_generated_crate("mixed", &files);
 }
 
 /// The diamond project exercises a transitive type reference:
@@ -214,7 +282,19 @@ fn project_mixed() {
 /// module, and the whole generated module tree must compile natively.
 #[test]
 fn project_diamond_compiles_natively() {
-    let files = compile_project_files("diamond", "diamond.root", 4);
+    let files = compile_project_files(
+        "diamond",
+        "diamond.root",
+        4,
+        &[
+            "diamond/base.rs",
+            "diamond/left.rs",
+            "diamond/mod.rs",
+            "diamond/right.rs",
+            "diamond/root.rs",
+            "mod.rs",
+        ],
+    );
 
     let get = |name: &str| -> &str {
         files
@@ -271,28 +351,7 @@ fn project_diamond_compiles_natively() {
         "root.rs should import RightNode from diamond::right, got:\n{root}"
     );
 
-    // The complete generated module tree must compile.
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
-    let runtime_path = workspace_root.join("crates/vexil-runtime");
-
-    let tmp = TempProject::new("diamond");
-    write_crate(tmp.path(), &files, &runtime_path);
-
-    let output = std::process::Command::new("cargo")
-        .args(["clippy", "--", "-D", "warnings"])
-        .current_dir(tmp.path())
-        .env("CARGO_TARGET_DIR", tmp.path().join("target"))
-        .output()
-        .expect("failed to run cargo clippy");
-
-    tmp.cleanup();
-
-    assert!(
-        output.status.success(),
-        "Generated diamond project failed to compile:\nstderr: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    compile_generated_crate("diamond", &files);
 }
 
 #[test]
