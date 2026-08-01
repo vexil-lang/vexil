@@ -381,9 +381,10 @@ import ("testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")
 func TestTruncatedGeneratedDecode(t *testing.T) { if err := (&M{}).Unpack(vexil.NewBitReader([]byte{1, 2})); err == nil { t.Fatal("truncated-u32: expected decode error") } }
 `);
         writeFileSync(join(py, "run.py"), `from generated import M
+from vexil_runtime import DecodeError
 try:
     M.decode(bytes([1, 2]))
-except Exception:
+except DecodeError:
     pass
 else:
     raise AssertionError("truncated-u32: expected decode error")
