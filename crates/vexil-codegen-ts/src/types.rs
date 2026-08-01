@@ -13,7 +13,11 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         },
         ResolvedType::Optional(inner) => {
             let inner_str = ts_type(inner, registry);
-            format!("{inner_str} | null")
+            if optional_payload_needs_wrapper(inner) {
+                format!("[{inner_str}] | null")
+            } else {
+                format!("{inner_str} | null")
+            }
         }
         ResolvedType::Array(inner) => {
             let inner_str = ts_type(inner, registry);
@@ -61,6 +65,12 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         }
         _ => "unknown".to_string(),
     }
+}
+
+/// TypeScript needs a one-tuple to distinguish an absent outer optional from
+/// a present payload whose value is itself `null`.
+pub fn optional_payload_needs_wrapper(ty: &ResolvedType) -> bool {
+    matches!(ty, ResolvedType::Optional(_))
 }
 
 fn primitive_type(p: &PrimitiveType) -> &'static str {

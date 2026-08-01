@@ -125,4 +125,3 @@ func (s *Lifecycle) Unpack(r *vexil.BitReader) error {
 	*s = Lifecycle(v)
 	return nil
 }
-

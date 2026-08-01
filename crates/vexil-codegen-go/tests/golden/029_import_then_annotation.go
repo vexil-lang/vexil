@@ -35,4 +35,3 @@ func (m *Annotated) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

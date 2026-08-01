@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import struct
 import sys
 from pathlib import Path
@@ -26,13 +27,16 @@ def to_hex(b: bytes) -> str:
     return b.hex()
 
 
-def extract_field_names(schema: str) -> list[str]:
+def message_body(schema: str, message_name: str | None = None) -> str:
+    messages = re.findall(r"message\s+(\w+)\s*\{([^{}]*)\}", schema)
+    if message_name is not None:
+        return next((body for name, body in messages if name == message_name), "")
+    return messages[-1][1] if messages else ""
+
+
+def extract_field_names(schema: str, message_name: str | None = None) -> list[str]:
     names = []
-    brace_start = schema.find("{")
-    brace_end = schema.rfind("}")
-    if brace_start == -1 or brace_end == -1:
-        return names
-    body = schema[brace_start + 1 : brace_end]
+    body = message_body(schema, message_name)
     tokens = body.split()
     for i, tok in enumerate(tokens):
         if len(tok) >= 2 and tok[0] == "@":
@@ -42,12 +46,8 @@ def extract_field_names(schema: str) -> list[str]:
     return names
 
 
-def extract_field_type(schema: str, field_name: str) -> str:
-    brace_start = schema.find("{")
-    brace_end = schema.rfind("}")
-    if brace_start == -1 or brace_end == -1:
-        return ""
-    body = schema[brace_start + 1 : brace_end]
+def extract_field_type(schema: str, field_name: str, message_name: str | None = None) -> str:
+    body = message_body(schema, message_name)
     tokens = body.split()
     for i, tok in enumerate(tokens):
         if tok == field_name and i + 2 < len(tokens) and tokens[i + 1].startswith("@"):
@@ -57,8 +57,10 @@ def extract_field_type(schema: str, field_name: str) -> str:
     return ""
 
 
-def encode_field(w: BitWriter, schema: str, field_name: str, value) -> None:
-    field_type = extract_field_type(schema, field_name)
+def encode_field(
+    w: BitWriter, schema: str, field_name: str, value, message_name: str | None = None
+) -> None:
+    field_type = extract_field_type(schema, field_name, message_name)
     if field_type == "bool":
         w.write_bool(bool(value))
     elif field_type == "u8":
@@ -97,10 +99,15 @@ def encode_field(w: BitWriter, schema: str, field_name: str, value) -> None:
             w.write_f64(float(value))
     elif field_type == "string":
         w.write_string(str(value))
+    elif field_type == "bytes":
+        w.write_bytes(bytes(value))
     elif field_type.startswith("u") and field_type[1:].isdigit():
         bits = int(field_type[1:])
         if bits < 8:
             w.write_bits(int(value), bits)
+    elif message_body(schema, field_type) and isinstance(value, dict):
+        for nested_field in extract_field_names(schema, field_type):
+            encode_field(w, schema, nested_field, value[nested_field], field_type)
     else:
         raise ValueError(f"unsupported field type: {field_type}")
 
@@ -211,7 +218,7 @@ class TestComplianceArraysMaps:
             for elem in v:
                 w.write_u32(int(elem))
         elif isinstance(v, dict):
-            entries = list(v.items())
+            entries = sorted(v.items())
             w.write_leb128(len(entries))
             for key, val in entries:
                 w.write_string(key)

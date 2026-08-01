@@ -27,7 +27,7 @@ class Tags:
 
     def encode_to(self, w: _BitWriter) -> None:
         w.write_leb128(len(self.names))
-        for _vexil_self_2e_names_set_item in sorted(self.names):
+        for _vexil_self_2e_names_set_item in sorted(self.names, key=lambda _vexil_self_2e_names_set_item: _vexil_self_2e_names_set_item):
             w.write_string(_vexil_self_2e_names_set_item)
         w.flush_to_byte_boundary()
         if self.unknown:

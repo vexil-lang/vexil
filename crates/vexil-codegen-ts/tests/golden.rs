@@ -165,6 +165,22 @@ fn trait_only_generic_map() {
     );
 }
 
+#[test]
+fn nested_optional_constraint() {
+    golden_source_test(
+        "nested_optional_constraint",
+        "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+    );
+}
+
+#[test]
+fn nested_optional_tail() {
+    golden_source_test(
+        "nested_optional_tail",
+        "namespace test.nested_optional_none_tail\nmessage M { v @0 : optional<optional<u16>> tail @1 : bool }",
+    );
+}
+
 /// Trait names that happen to match runtime symbols must not manufacture an
 /// import when the schema emits no codec.
 #[test]

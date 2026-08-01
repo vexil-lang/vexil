@@ -89,6 +89,7 @@ class LinkedList:
         _vexil_self_2e_next_optional = self.next
         w.write_bool(_vexil_self_2e_next_optional is not None)
         if _vexil_self_2e_next_optional is not None:
+            w.flush_to_byte_boundary()
             try:
                 w.enter_nested()
                 _vexil_self_2e_next_optional.encode_to(w)
@@ -117,6 +118,7 @@ class LinkedList:
             m.next = None
         else:
             if _vexil_m_2e_next_present:
+                r.flush_to_byte_boundary()
                 try:
                     r.enter_nested()
                     m.next = LinkedList.decode_from(r)

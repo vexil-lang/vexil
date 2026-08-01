@@ -270,4 +270,3 @@ func (m *SubByteSigned) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

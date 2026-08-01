@@ -26,6 +26,7 @@ class Header:
         return w.finish()
 
     def encode_to(self, w: _BitWriter) -> None:
+        w.write_bits(self.perms, 4)
         w.flush_to_byte_boundary()
         if self.unknown:
             w.write_raw_bytes(self.unknown, len(self.unknown))
@@ -42,6 +43,7 @@ class Header:
     @staticmethod
     def decode_from(r: _BitReader) -> Header:
         m = Header.__new__(Header)
+        m.perms = r.read_bits(4)
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

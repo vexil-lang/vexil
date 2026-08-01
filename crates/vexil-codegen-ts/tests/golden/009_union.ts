@@ -246,4 +246,3 @@ export function decodeEvent(r: BitReader): Event {
     }
   }
 }
-

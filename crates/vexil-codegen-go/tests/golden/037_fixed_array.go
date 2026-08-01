@@ -195,9 +195,9 @@ type WithOptional struct {
 func (m *WithOptional) Pack(w *vexil.BitWriter) error {
 	for _, item := range m.A {
 		w.WriteBool(item != nil)
-		w.FlushToByteBoundary()
 		if item != nil {
-			w.WriteU32(*item)
+			w.FlushToByteBoundary()
+			w.WriteU32((*item))
 		}
 	}
 	w.FlushToByteBoundary()
@@ -216,8 +216,8 @@ func (m *WithOptional) Unpack(r *vexil.BitReader) error {
 				return err
 			}
 			if err == nil {
-				r.FlushToByteBoundary()
 				if present {
+					r.FlushToByteBoundary()
 					var optVal uint32
 					{
 						v, err := r.ReadU32()
@@ -443,4 +443,3 @@ func (m *EdgeCases) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

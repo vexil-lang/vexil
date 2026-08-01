@@ -79,4 +79,3 @@ func (f *FileMode) Unpack(r *vexil.BitReader) error {
 	*f = FileMode(v)
 	return nil
 }
-

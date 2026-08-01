@@ -63,8 +63,8 @@ impl vexil_runtime::Pack for LinkedList {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.write_string(self.value.as_str());
         w.write_bool(self.next.is_some());
-        w.flush_to_byte_boundary();
         if let Some(ref inner_val) = self.next {
+            w.flush_to_byte_boundary();
             w.enter_recursive()?;
             inner_val.pack(w)?;
             w.leave_recursive();
@@ -81,8 +81,8 @@ impl vexil_runtime::Unpack for LinkedList {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let value = r.read_string()?;
         let next_present = r.read_bool()?;
-        r.flush_to_byte_boundary();
         let next = if next_present {
+            r.flush_to_byte_boundary();
             r.enter_recursive()?;
             let next_inner = vexil_runtime::Unpack::unpack(r)?;
             r.leave_recursive();

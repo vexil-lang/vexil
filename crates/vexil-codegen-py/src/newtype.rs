@@ -60,6 +60,12 @@ pub fn emit_newtype(w: &mut CodeWriter, nt: &NewtypeDef, registry: &TypeRegistry
         "return isinstance(other, {name}) and self.value == other.value"
     ));
     w.close_block();
+    w.blank();
+
+    // Newtypes over valid map-key types must remain usable as dict/set keys.
+    w.open_block("def __hash__(self) -> int");
+    w.line("return hash(self.value)");
+    w.close_block();
 
     w.close_block();
     w.blank();

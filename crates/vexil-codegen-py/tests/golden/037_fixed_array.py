@@ -208,6 +208,7 @@ class WithOptional:
             _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional = _vexil_self_2e_a_fixed_item
             w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional is not None)
             if _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional is not None:
+                w.flush_to_byte_boundary()
                 w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_fixed_5f_item_optional)
         w.flush_to_byte_boundary()
         if self.unknown:
@@ -233,6 +234,7 @@ class WithOptional:
                 _vexil_m_2e_a_fixed_item = None
             else:
                 if _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present:
+                    r.flush_to_byte_boundary()
                     _vexil_m_2e_a_fixed_item = r.read_u32()
                 else:
                     _vexil_m_2e_a_fixed_item = None

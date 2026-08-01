@@ -73,6 +73,7 @@ class SettingsV2:
         _vexil_self_2e_timeout_optional = self.timeout
         w.write_bool(_vexil_self_2e_timeout_optional is not None)
         if _vexil_self_2e_timeout_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_u32(_vexil_self_2e_timeout_optional)
         w.write_string(self.name)
         w.flush_to_byte_boundary()
@@ -97,6 +98,7 @@ class SettingsV2:
             m.timeout = None
         else:
             if _vexil_m_2e_timeout_present:
+                r.flush_to_byte_boundary()
                 m.timeout = r.read_u32()
             else:
                 m.timeout = None

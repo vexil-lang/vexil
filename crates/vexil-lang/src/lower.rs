@@ -163,11 +163,22 @@ pub fn lower_with_deps(
             }
         }
     }
+    // Register transparent aliases once all concrete names have stable TypeIds,
+    // before fields and trait signatures resolve those aliases.
+    for alias in alias_decls {
+        lower_alias(alias, &mut ctx);
+    }
+    ctx.deferred_alias_names.clear();
+
     // Second pass: lower the actual type definitions for non-impl declarations
-    for (decl_spanned, &id) in schema.declarations.iter().zip(decl_ids.iter()) {
+    let mut concrete_ids = decl_ids.iter().copied();
+    for decl_spanned in &schema.declarations {
         match &decl_spanned.node {
-            Decl::Impl(_) => {}
+            Decl::Alias(_) | Decl::Const(_) | Decl::Impl(_) => {}
             _ => {
+                let id = concrete_ids
+                    .next()
+                    .expect("registered declaration must have a TypeId");
                 let def = lower_decl(&decl_spanned.node, decl_spanned.span, &mut ctx);
                 if let Some(slot) = ctx.registry.get_mut(id) {
                     *slot = def;
@@ -202,12 +213,6 @@ pub fn lower_with_deps(
         impl_slots.push((impl_decl, span, impl_id));
     }
 
-    // Second pass: process aliases after all regular declarations exist.
-    // This preserves the established alias lowering lifecycle.
-    for alias in alias_decls {
-        lower_alias(alias, &mut ctx);
-    }
-
     for (impl_decl, span, impl_id) in impl_slots {
         let impl_def = lower_impl(impl_decl, span, &mut ctx);
         ctx.registry.fill_stub(impl_id, TypeDef::Impl(impl_def));
@@ -232,13 +237,7 @@ pub fn lower_with_deps(
     // Filter out aliases and consts from declarations list.
     // Generic aliases are handled separately (see generic_alias_ids below).
     // Consts are skipped here because they don't have TypeIds (handled separately).
-    let mut declaration_ids: Vec<TypeId> = schema
-        .declarations
-        .iter()
-        .zip(decl_ids.iter())
-        .filter(|(d, _)| !matches!(d.node, Decl::Alias(_) | Decl::Const(_)))
-        .map(|(_, &id)| id)
-        .collect();
+    let mut declaration_ids = decl_ids;
 
     // Add TypeIds of generic aliases (registered in lower_alias) to declarations
     declaration_ids.extend(ctx.generic_alias_ids.iter().copied());
@@ -1270,6 +1269,9 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
         TypeExpr::SubByte(s) => ResolvedType::SubByte(*s),
         TypeExpr::Semantic(s) => ResolvedType::Semantic(*s),
         TypeExpr::Named(name) => {
+            if let Some(primitive) = ctx.registry.lookup_primitive_alias(name.as_str()) {
+                return ResolvedType::Primitive(primitive);
+            }
             // 1. Local declarations always win (shadow wildcards).
             if ctx.local_names.contains(name.as_str()) {
                 if let Some(id) = ctx.registry.lookup(name.as_str()) {
@@ -2052,6 +2054,25 @@ fn eval_const_expr(expr: &ConstExpr, values: &HashMap<SmolStr, ConstValue>) -> O
 #[cfg(test)]
 mod dep_tests {
     use super::*;
+
+    #[test]
+    fn transparent_alias_does_not_displace_following_declaration() {
+        let result = crate::compile(
+            "namespace test.alias_order\ntype Count = u16\nmessage M { value @0 : Count }",
+        );
+        let compiled = result.compiled.expect("schema should compile");
+        assert_eq!(compiled.declarations.len(), 1);
+        let id = compiled.declarations[0];
+        let Some(TypeDef::Message(message)) = compiled.registry.get(id) else {
+            panic!("following declaration must remain a message");
+        };
+        assert_eq!(message.name.as_str(), "M");
+        assert_eq!(message.fields.len(), 1);
+        assert!(matches!(
+            message.fields[0].resolved_type,
+            ResolvedType::Primitive(PrimitiveType::U16)
+        ));
+    }
 
     #[test]
     fn lower_with_dependency_resolves_named_import() {

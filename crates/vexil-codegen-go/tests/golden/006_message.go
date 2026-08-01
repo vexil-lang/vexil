@@ -233,4 +233,3 @@ func (d *FieldAnnotationsDecoder) Unpack(r *vexil.BitReader) (*FieldAnnotations,
 func (d *FieldAnnotationsDecoder) Reset() {
 	d.prevD = 0
 }
-

@@ -110,7 +110,7 @@ type MapKeyTest struct {
 	I32Map map[int32]string
 	FixedMap map[int32]string
 	StringMap map[string]uint32
-	BytesMap map[[]byte]uint32
+	BytesMap map[string]uint32
 	UuidMap map[[16]byte]string
 	EnumMap map[Status]string
 	FlagsMap map[Permissions]string
@@ -121,68 +121,158 @@ type MapKeyTest struct {
 
 func (m *MapKeyTest) Pack(w *vexil.BitWriter) error {
 	w.WriteLeb128(uint64(len(m.BoolMap)))
-	for mapK, mapV := range m.BoolMap {
+	mapKeysmBoolMap := make([]bool, 0, len(m.BoolMap))
+	for key := range m.BoolMap {
+		mapKeysmBoolMap = append(mapKeysmBoolMap, key)
+	}
+	sort.Slice(mapKeysmBoolMap, func(i, j int) bool {
+		return !mapKeysmBoolMap[i] && mapKeysmBoolMap[j]
+	})
+	for _, mapK := range mapKeysmBoolMap {
+		mapV := m.BoolMap[mapK]
 		w.WriteBool(mapK)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.U8Map)))
-	for mapK, mapV := range m.U8Map {
+	mapKeysmU8Map := make([]uint8, 0, len(m.U8Map))
+	for key := range m.U8Map {
+		mapKeysmU8Map = append(mapKeysmU8Map, key)
+	}
+	sort.Slice(mapKeysmU8Map, func(i, j int) bool {
+		return mapKeysmU8Map[i] < mapKeysmU8Map[j]
+	})
+	for _, mapK := range mapKeysmU8Map {
+		mapV := m.U8Map[mapK]
 		w.WriteU8(mapK)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.U32Map)))
-	for mapK, mapV := range m.U32Map {
+	mapKeysmU32Map := make([]uint32, 0, len(m.U32Map))
+	for key := range m.U32Map {
+		mapKeysmU32Map = append(mapKeysmU32Map, key)
+	}
+	sort.Slice(mapKeysmU32Map, func(i, j int) bool {
+		return mapKeysmU32Map[i] < mapKeysmU32Map[j]
+	})
+	for _, mapK := range mapKeysmU32Map {
+		mapV := m.U32Map[mapK]
 		w.WriteU32(mapK)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.I32Map)))
-	for mapK, mapV := range m.I32Map {
+	mapKeysmI32Map := make([]int32, 0, len(m.I32Map))
+	for key := range m.I32Map {
+		mapKeysmI32Map = append(mapKeysmI32Map, key)
+	}
+	sort.Slice(mapKeysmI32Map, func(i, j int) bool {
+		return mapKeysmI32Map[i] < mapKeysmI32Map[j]
+	})
+	for _, mapK := range mapKeysmI32Map {
+		mapV := m.I32Map[mapK]
 		w.WriteI32(mapK)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.FixedMap)))
-	for mapK, mapV := range m.FixedMap {
+	mapKeysmFixedMap := make([]int32, 0, len(m.FixedMap))
+	for key := range m.FixedMap {
+		mapKeysmFixedMap = append(mapKeysmFixedMap, key)
+	}
+	sort.Slice(mapKeysmFixedMap, func(i, j int) bool {
+		return mapKeysmFixedMap[i] < mapKeysmFixedMap[j]
+	})
+	for _, mapK := range mapKeysmFixedMap {
+		mapV := m.FixedMap[mapK]
 		w.WriteI32(mapK)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.StringMap)))
 	mapKeysmStringMap := make([]string, 0, len(m.StringMap))
-	for mapK := range m.StringMap {
-		mapKeysmStringMap = append(mapKeysmStringMap, mapK)
+	for key := range m.StringMap {
+		mapKeysmStringMap = append(mapKeysmStringMap, key)
 	}
-	sort.Strings(mapKeysmStringMap)
+	sort.Slice(mapKeysmStringMap, func(i, j int) bool {
+		return mapKeysmStringMap[i] < mapKeysmStringMap[j]
+	})
 	for _, mapK := range mapKeysmStringMap {
 		mapV := m.StringMap[mapK]
 		w.WriteString(mapK)
 		w.WriteU32(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.BytesMap)))
-	for mapK, mapV := range m.BytesMap {
-		w.WriteBytes(mapK)
+	mapKeysmBytesMap := make([]string, 0, len(m.BytesMap))
+	for key := range m.BytesMap {
+		mapKeysmBytesMap = append(mapKeysmBytesMap, key)
+	}
+	sort.Slice(mapKeysmBytesMap, func(i, j int) bool {
+		return mapKeysmBytesMap[i] < mapKeysmBytesMap[j]
+	})
+	for _, mapK := range mapKeysmBytesMap {
+		mapV := m.BytesMap[mapK]
+		w.WriteBytes([]byte(mapK))
 		w.WriteU32(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.UuidMap)))
-	for mapK, mapV := range m.UuidMap {
+	mapKeysmUuidMap := make([][16]byte, 0, len(m.UuidMap))
+	for key := range m.UuidMap {
+		mapKeysmUuidMap = append(mapKeysmUuidMap, key)
+	}
+	sort.Slice(mapKeysmUuidMap, func(i, j int) bool {
+		return string(mapKeysmUuidMap[i][:]) < string(mapKeysmUuidMap[j][:])
+	})
+	for _, mapK := range mapKeysmUuidMap {
+		mapV := m.UuidMap[mapK]
 		w.WriteRawBytes(mapK[:])
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.EnumMap)))
-	for mapK, mapV := range m.EnumMap {
+	mapKeysmEnumMap := make([]Status, 0, len(m.EnumMap))
+	for key := range m.EnumMap {
+		mapKeysmEnumMap = append(mapKeysmEnumMap, key)
+	}
+	sort.Slice(mapKeysmEnumMap, func(i, j int) bool {
+		return mapKeysmEnumMap[i] < mapKeysmEnumMap[j]
+	})
+	for _, mapK := range mapKeysmEnumMap {
+		mapV := m.EnumMap[mapK]
 		mapK.Pack(w)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.FlagsMap)))
-	for mapK, mapV := range m.FlagsMap {
+	mapKeysmFlagsMap := make([]Permissions, 0, len(m.FlagsMap))
+	for key := range m.FlagsMap {
+		mapKeysmFlagsMap = append(mapKeysmFlagsMap, key)
+	}
+	sort.Slice(mapKeysmFlagsMap, func(i, j int) bool {
+		return mapKeysmFlagsMap[i] < mapKeysmFlagsMap[j]
+	})
+	for _, mapK := range mapKeysmFlagsMap {
+		mapV := m.FlagsMap[mapK]
 		mapK.Pack(w)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.NewtypeU32Map)))
-	for mapK, mapV := range m.NewtypeU32Map {
+	mapKeysmNewtypeU32Map := make([]UserId, 0, len(m.NewtypeU32Map))
+	for key := range m.NewtypeU32Map {
+		mapKeysmNewtypeU32Map = append(mapKeysmNewtypeU32Map, key)
+	}
+	sort.Slice(mapKeysmNewtypeU32Map, func(i, j int) bool {
+		return mapKeysmNewtypeU32Map[i] < mapKeysmNewtypeU32Map[j]
+	})
+	for _, mapK := range mapKeysmNewtypeU32Map {
+		mapV := m.NewtypeU32Map[mapK]
 		PackUserId(mapK, w)
 		w.WriteString(mapV)
 	}
 	w.WriteLeb128(uint64(len(m.NewtypeStrMap)))
-	for mapK, mapV := range m.NewtypeStrMap {
+	mapKeysmNewtypeStrMap := make([]Label, 0, len(m.NewtypeStrMap))
+	for key := range m.NewtypeStrMap {
+		mapKeysmNewtypeStrMap = append(mapKeysmNewtypeStrMap, key)
+	}
+	sort.Slice(mapKeysmNewtypeStrMap, func(i, j int) bool {
+		return mapKeysmNewtypeStrMap[i] < mapKeysmNewtypeStrMap[j]
+	})
+	for _, mapK := range mapKeysmNewtypeStrMap {
+		mapV := m.NewtypeStrMap[mapK]
 		PackLabel(mapK, w)
 		w.WriteU32(mapV)
 	}
@@ -355,17 +445,18 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 		if err != nil {
 			return err
 		}
-		m.BytesMap = make(map[[]byte]uint32, mapLen)
+		m.BytesMap = make(map[string]uint32, mapLen)
 		for i := uint64(0); i < mapLen; i++ {
-			var mapKey []byte
+			var mapKeyBytes []byte
 			var mapVal uint32
 			{
 				v, err := r.ReadBytes()
 				if err != nil {
 					return err
 				}
-				mapKey = v
+				mapKeyBytes = v
 			}
+			mapKey := string(mapKeyBytes)
 			{
 				v, err := r.ReadU32()
 				if err != nil {
@@ -502,4 +593,3 @@ func (m *MapKeyTest) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

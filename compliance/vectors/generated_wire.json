@@ -1,0 +1,90 @@
+[
+  {
+    "name": "newtype_u32",
+    "schema": "namespace test.newtype_wire\nnewtype UserId : u32\nmessage M { v @0 : UserId }",
+    "type": "M",
+    "value": { "v": 16909060 },
+    "expected_bytes": "04030201",
+    "notes": "A newtype has no wire overhead and uses its u32 inner encoding."
+  },
+  {
+    "name": "alias_u16",
+    "schema": "namespace test.alias_wire\ntype Count = u16\nmessage M { v @0 : Count }",
+    "type": "M",
+    "value": { "v": 258 },
+    "expected_bytes": "0201",
+    "notes": "An alias has no wire overhead and uses its u16 target encoding."
+  },
+  {
+    "name": "nested_optional_some_none_u16",
+    "schema": "namespace test.nested_optional_none\nmessage M { v @0 : optional<optional<u16>> }",
+    "type": "M",
+    "value": { "v": { "some": null } },
+    "expected_bytes": "01",
+    "notes": "The outer present bit and inner absent bit pack contiguously as 1 0 before final padding."
+  },
+  {
+    "name": "nested_optional_some_none_u16_tail_bool",
+    "schema": "namespace test.nested_optional_none_tail\nmessage M { v @0 : optional<optional<u16>> tail @1 : bool }",
+    "type": "M",
+    "value": { "v": { "some": null }, "tail": true },
+    "expected_bytes": "05",
+    "notes": "An absent inner payload does not align the stream: outer-present, inner-absent, and tail-true pack contiguously as bits 1 0 1."
+  },
+  {
+    "name": "nested_optional_some_u16",
+    "schema": "namespace test.nested_optional_some\nmessage M { v @0 : optional<optional<u16>> }",
+    "type": "M",
+    "value": { "v": { "some": 258 } },
+    "expected_bytes": "030201",
+    "notes": "The two present bits pack contiguously as 1 1, then the stream aligns before little-endian u16."
+  },
+  {
+    "name": "nested_optional_constrained_u16",
+    "schema": "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+    "type": "M",
+    "value": { "v": { "some": 258 } },
+    "expected_bytes": "030201",
+    "notes": "A constraint applies only to the final present scalar and does not change the nested optional wire bytes."
+  },
+  {
+    "name": "non_exhaustive_enum_unknown",
+    "schema": "namespace test.enum_unknown\n@non_exhaustive\nenum Status { Active @0 }\nmessage M { v @0 : Status }",
+    "type": "M",
+    "value": { "v": 7 },
+    "expected_bytes": "07",
+    "notes": "A non-exhaustive enum uses at least 8 bits and preserves an unknown ordinal."
+  },
+  {
+    "name": "flags_unknown_bits",
+    "schema": "namespace test.flags_unknown\nflags Permissions { Read @0 }\nmessage M { v @0 : Permissions }",
+    "type": "M",
+    "value": { "v": 128 },
+    "expected_bytes": "80",
+    "notes": "Unknown flag bits are preserved in the generated numeric wrapper."
+  },
+  {
+    "name": "map_i16_canonical_order",
+    "schema": "namespace test.map_i16\nmessage M { v @0 : map<i16, u8> }",
+    "type": "M",
+    "value": { "v": [[2, 22], [-1, 11]] },
+    "expected_bytes": "02ffff0b020016",
+    "notes": "Entries supplied in reverse numeric order encode with -1 before 2."
+  },
+  {
+    "name": "set_u16_canonical_order",
+    "schema": "namespace test.set_u16\nmessage M { v @0 : set<u16> }",
+    "type": "M",
+    "value": { "v": [2, 1] },
+    "expected_bytes": "0201000200",
+    "notes": "Set elements supplied in reverse numeric order encode as 1 then 2."
+  },
+  {
+    "name": "nested_optional_map_set",
+    "schema": "namespace test.nested_wire\nmessage M { v @0 : optional<map<u8, set<u16>>> }",
+    "type": "M",
+    "value": { "v": [[2, [2, 1]]] },
+    "expected_bytes": "0101020201000200",
+    "notes": "Present optional flushes before a one-entry map whose set is canonically sorted."
+  }
+]

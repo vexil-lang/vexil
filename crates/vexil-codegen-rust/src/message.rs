@@ -31,7 +31,10 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
                 true
             }
         }
-        ResolvedType::Optional(inner) => is_byte_aligned(inner, registry),
+        // An optional always starts with a one-bit presence flag. Nested
+        // optional flags therefore remain contiguous until a present payload
+        // itself requires byte alignment.
+        ResolvedType::Optional(_) => false,
         _ => true,
     }
 }
@@ -176,7 +179,7 @@ fn emit_constraint_validation(
     let negated_condition = format!("!({})", condition);
     w.open_block(&format!("if {}", negated_condition));
     w.line(&format!(
-        "return Err(vexil_runtime::EncodeError::ConstraintViolation {{ field: \"{}\", message: format!(\"value violates constraint: expected `{}`\", {}) }});",
+        "return Err(vexil_runtime::EncodeError::ConstraintViolation {{ field: \"{}\", message: format!(\"value {{:?}} violates constraint: expected `{}`\", {}) }});",
         field_name,
         condition.replace("\\\"", "\"").replace("\n", ""),
         access
@@ -195,12 +198,49 @@ fn emit_constraint_validation_unpack(
     let negated_condition = format!("!({})", condition);
     w.open_block(&format!("if {}", negated_condition));
     w.line(&format!(
-        "return Err(vexil_runtime::DecodeError::InvalidValue {{ field: \"{}\", message: format!(\"value violates constraint: expected `{}`\", {}) }});",
+        "return Err(vexil_runtime::DecodeError::InvalidValue {{ field: \"{}\", message: format!(\"value {{:?}} violates constraint: expected `{}`\", {}) }});",
         field_name,
         condition.replace("\\\"", "\"").replace("\n", ""),
         access
     ));
     w.close_block();
+}
+
+fn emit_field_constraint_validation(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+    decode: bool,
+    depth: usize,
+) {
+    if let ResolvedType::Optional(inner) = ty {
+        let binding = format!("constraint_value_{depth}");
+        w.open_block(&format!("if let Some({binding}) = ({access}).as_ref()"));
+        emit_field_constraint_validation(
+            w,
+            constraint,
+            inner,
+            &binding,
+            field_name,
+            decode,
+            depth + 1,
+        );
+        w.close_block();
+        return;
+    }
+
+    let value = if depth == 0 {
+        access.to_string()
+    } else {
+        format!("*({access})")
+    };
+    if decode {
+        emit_constraint_validation_unpack(w, constraint, &value, field_name);
+    } else {
+        emit_constraint_validation(w, constraint, &value, field_name);
+    }
 }
 
 /// Emit code to write (pack) a field to a `BitWriter`.
@@ -330,15 +370,10 @@ fn emit_write_type(
         ResolvedType::Optional(inner) => {
             // Presence bit
             w.line(&format!("w.write_bool({access}.is_some());"));
-            // If inner is byte-aligned, flush before conditional
+            w.open_block(&format!("if let Some(ref inner_val) = {access}"));
             if is_byte_aligned(inner, registry) {
                 w.line("w.flush_to_byte_boundary();");
-                // Hmm, actually flush is on writer side. We only flush after the presence
-                // bit if the inner type requires byte alignment. The spec says flush the
-                // bit-stream before writing the inner value. Let's keep the flush here
-                // only when needed.
             }
-            w.open_block(&format!("if let Some(ref inner_val) = {access}"));
             let inner_access = if is_copy_type(inner) {
                 "*inner_val"
             } else {
@@ -627,10 +662,10 @@ fn emit_read_type(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("let {var_name}_present = r.read_bool()?;"));
+            w.open_block(&format!("let {var_name} = if {var_name}_present"));
             if is_byte_aligned(inner, registry) {
                 w.line("r.flush_to_byte_boundary();");
             }
-            w.open_block(&format!("let {var_name} = if {var_name}_present"));
             emit_read_type(
                 w,
                 &format!("{var_name}_inner"),
@@ -1302,7 +1337,15 @@ pub fn emit_message(
         let access = format!("self.{}", field.name);
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation(w, constraint, &access, field.name.as_str());
+            emit_field_constraint_validation(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+                false,
+                0,
+            );
         }
         emit_write(
             w,
@@ -1357,7 +1400,15 @@ pub fn emit_message(
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_unpack(w, constraint, var_name, var_name);
+                    emit_field_constraint_validation(
+                        w,
+                        constraint,
+                        &field.resolved_type,
+                        var_name,
+                        var_name,
+                        true,
+                        0,
+                    );
                 }
             }
             DecodeAction::Tombstone(tombstone) => {

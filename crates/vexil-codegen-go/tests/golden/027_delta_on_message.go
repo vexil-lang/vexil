@@ -155,4 +155,3 @@ func (d *TelemetryDecoder) Reset() {
 	d.prevValue = 0.0
 	d.prevCount = 0
 }
-

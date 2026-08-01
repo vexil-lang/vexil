@@ -22,9 +22,9 @@ type Basic struct {
 
 func (m *Basic) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
-	w.FlushToByteBoundary()
 	if m.A != nil {
-		w.WriteU32(*m.A)
+		w.FlushToByteBoundary()
+		w.WriteU32((*m.A))
 	}
 	w.WriteLeb128(uint64(len(m.B)))
 	for _, item := range m.B {
@@ -32,10 +32,12 @@ func (m *Basic) Pack(w *vexil.BitWriter) error {
 	}
 	w.WriteLeb128(uint64(len(m.C)))
 	mapKeysmC := make([]string, 0, len(m.C))
-	for mapK := range m.C {
-		mapKeysmC = append(mapKeysmC, mapK)
+	for key := range m.C {
+		mapKeysmC = append(mapKeysmC, key)
 	}
-	sort.Strings(mapKeysmC)
+	sort.Slice(mapKeysmC, func(i, j int) bool {
+		return mapKeysmC[i] < mapKeysmC[j]
+	})
 	for _, mapK := range mapKeysmC {
 		mapV := m.C[mapK]
 		w.WriteString(mapK)
@@ -62,8 +64,8 @@ func (m *Basic) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal uint32
 				{
 					v, err := r.ReadU32()
@@ -163,27 +165,29 @@ type Nested struct {
 
 func (m *Nested) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
-	w.FlushToByteBoundary()
 	if m.A != nil {
-		w.WriteLeb128(uint64(len(*m.A)))
-		for _, item := range *m.A {
+		w.FlushToByteBoundary()
+		w.WriteLeb128(uint64(len((*m.A))))
+		for _, item := range (*m.A) {
 			w.WriteString(item)
 		}
 	}
 	w.WriteLeb128(uint64(len(m.B)))
 	for _, item := range m.B {
 		w.WriteBool(item != nil)
-		w.FlushToByteBoundary()
 		if item != nil {
-			w.WriteU32(*item)
+			w.FlushToByteBoundary()
+			w.WriteU32((*item))
 		}
 	}
 	w.WriteLeb128(uint64(len(m.C)))
 	mapKeysmC := make([]string, 0, len(m.C))
-	for mapK := range m.C {
-		mapKeysmC = append(mapKeysmC, mapK)
+	for key := range m.C {
+		mapKeysmC = append(mapKeysmC, key)
 	}
-	sort.Strings(mapKeysmC)
+	sort.Slice(mapKeysmC, func(i, j int) bool {
+		return mapKeysmC[i] < mapKeysmC[j]
+	})
 	for _, mapK := range mapKeysmC {
 		mapV := m.C[mapK]
 		w.WriteString(mapK)
@@ -210,18 +214,26 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		w.WriteBool(false)
 	}
 	w.WriteBool(m.G != nil)
-	w.FlushToByteBoundary()
 	if m.G != nil {
-		if *m.G.Ok != nil {
+		w.FlushToByteBoundary()
+		if (*m.G).Ok != nil {
 			w.WriteBool(true)
-			w.WriteLeb128(uint64(len(**m.G.Ok)))
-			for _, item := range **m.G.Ok {
+			w.WriteLeb128(uint64(len(*(*m.G).Ok)))
+			for _, item := range *(*m.G).Ok {
 				w.WriteString(item)
 			}
 		} else {
 			w.WriteBool(false)
-			w.WriteLeb128(uint64(len(**m.G.Err)))
-			for mapK, mapV := range **m.G.Err {
+			w.WriteLeb128(uint64(len(*(*m.G).Err)))
+			mapKeysmGErr := make([]uint32, 0, len(*(*m.G).Err))
+			for key := range *(*m.G).Err {
+				mapKeysmGErr = append(mapKeysmGErr, key)
+			}
+			sort.Slice(mapKeysmGErr, func(i, j int) bool {
+				return mapKeysmGErr[i] < mapKeysmGErr[j]
+			})
+			for _, mapK := range mapKeysmGErr {
+				mapV := *(*m.G).Err[mapK]
 				w.WriteU32(mapK)
 				w.WriteString(mapV)
 			}
@@ -241,8 +253,8 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal []string
 				{
 					arrLen, err := r.ReadLeb128(4)
@@ -277,8 +289,8 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 					return err
 				}
 				if err == nil {
-					r.FlushToByteBoundary()
 					if present {
+						r.FlushToByteBoundary()
 						var optVal uint32
 						{
 							v, err := r.ReadU32()
@@ -381,8 +393,8 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal Result[[]string, map[uint32]string]
 				{
 					isOk, err := r.ReadBool()
@@ -445,4 +457,3 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

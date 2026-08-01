@@ -21,7 +21,7 @@ pub fn go_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             format!("[]{inner_str}")
         }
         ResolvedType::Map(k, v) => {
-            let k_str = go_type(k, registry);
+            let k_str = go_collection_key_type(k, registry);
             let v_str = go_type(v, registry);
             format!("map[{k_str}]{v_str}")
         }
@@ -40,7 +40,7 @@ pub fn go_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             format!("[{size}]{inner_str}")
         }
         ResolvedType::Set(inner) => {
-            let inner_str = go_type(inner, registry);
+            let inner_str = go_collection_key_type(inner, registry);
             format!("map[{inner_str}]struct{{}}")
         }
         ResolvedType::Vec2(inner) => {
@@ -64,6 +64,18 @@ pub fn go_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             format!("[16]{inner_str}")
         }
         _ => "interface{}".to_string(),
+    }
+}
+
+/// Return a comparable Go representation for a valid map or set key.
+///
+/// Go slices are not comparable, so Vexil `bytes` keys use `string` as their
+/// lossless host representation while retaining the bytes wire encoding.
+pub(crate) fn go_collection_key_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
+    if matches!(ty, ResolvedType::Semantic(SemanticType::Bytes)) {
+        "string".to_string()
+    } else {
+        go_type(ty, registry)
     }
 }
 

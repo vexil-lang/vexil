@@ -400,4 +400,3 @@ func UnpackEvent(r *vexil.BitReader) (Event, error) {
 		}
 	}
 }
-

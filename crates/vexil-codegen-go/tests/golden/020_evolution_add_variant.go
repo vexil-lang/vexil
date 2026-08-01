@@ -282,4 +282,3 @@ func UnpackShapeV2(r *vexil.BitReader) (ShapeV2, error) {
 		}
 	}
 }
-

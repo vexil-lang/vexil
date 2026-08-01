@@ -91,4 +91,3 @@ export class TelemetryDecoder {
     this.prevcount = 0;
   }
 }
-

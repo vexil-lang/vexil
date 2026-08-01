@@ -153,4 +153,3 @@ export function decodeLifecycle(r: BitReader): Lifecycle {
     default: throw new Error(`Unknown Lifecycle discriminant: ${disc}`);
   }
 }
-

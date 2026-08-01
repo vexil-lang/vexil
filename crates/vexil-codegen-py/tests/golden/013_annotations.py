@@ -230,7 +230,7 @@ class Limited:
         for _vexil_self_2e_tags_array_item in self.tags:
             w.write_string(_vexil_self_2e_tags_array_item)
         w.write_leb128(len(self.headers))
-        for _vexil_self_2e_headers_map_key in sorted(self.headers):
+        for _vexil_self_2e_headers_map_key in sorted(self.headers, key=lambda _vexil_self_2e_headers_map_key: _vexil_self_2e_headers_map_key):
             _vexil_self_2e_headers_map_value = self.headers[_vexil_self_2e_headers_map_key]
             w.write_string(_vexil_self_2e_headers_map_key)
             w.write_string(_vexil_self_2e_headers_map_value)

@@ -17,6 +17,18 @@ type Transform struct {
 }
 
 func (m *Transform) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.Pos {
+		w.WriteI64(item)
+	}
+	for _, item := range m.Rot {
+		w.WriteI64(item)
+	}
+	for _, item := range m.GlPos {
+		w.WriteF32(item)
+	}
+	for _, item := range m.Model {
+		w.WriteF32(item)
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -80,6 +92,15 @@ type Vectors struct {
 }
 
 func (m *Vectors) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.V2 {
+		w.WriteF64(item)
+	}
+	for _, item := range m.V3 {
+		w.WriteF32(item)
+	}
+	for _, item := range m.V4 {
+		w.WriteI32(item)
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -132,6 +153,12 @@ type Matrices struct {
 }
 
 func (m *Matrices) Pack(w *vexil.BitWriter) error {
+	for _, item := range m.M3 {
+		w.WriteF64(item)
+	}
+	for _, item := range m.M4 {
+		w.WriteF32(item)
+	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -164,4 +191,3 @@ func (m *Matrices) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

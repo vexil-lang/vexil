@@ -20,10 +20,12 @@ type Tags struct {
 func (m *Tags) Pack(w *vexil.BitWriter) error {
 	w.WriteLeb128(uint64(len(m.Names)))
 	setKeysmNames := make([]string, 0, len(m.Names))
-	for item := range m.Names {
-		setKeysmNames = append(setKeysmNames, item)
+	for key := range m.Names {
+		setKeysmNames = append(setKeysmNames, key)
 	}
-	sort.Strings(setKeysmNames)
+	sort.Slice(setKeysmNames, func(i, j int) bool {
+		return setKeysmNames[i] < setKeysmNames[j]
+	})
 	for _, item := range setKeysmNames {
 		w.WriteString(item)
 	}
@@ -57,4 +59,3 @@ func (m *Tags) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-

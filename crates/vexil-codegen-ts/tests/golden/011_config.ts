@@ -68,4 +68,3 @@ export interface WithArrays {
 export interface Nested {
   level: LogLevel;
 }
-

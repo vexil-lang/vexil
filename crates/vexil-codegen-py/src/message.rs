@@ -20,6 +20,52 @@ fn local_name(target: &str, suffix: &str) -> String {
     format!("_vexil_{stem}_{suffix}")
 }
 
+fn canonical_sort_key_expr(ty: &ResolvedType, registry: &TypeRegistry, value: &str) -> String {
+    match ty {
+        ResolvedType::Named(id) => match registry.get(*id) {
+            Some(TypeDef::Newtype(newtype)) => {
+                canonical_sort_key_expr(&newtype.inner_type, registry, &format!("{value}.value"))
+            }
+            Some(TypeDef::Enum(_) | TypeDef::Flags(_)) => format!("int({value})"),
+            _ => value.to_string(),
+        },
+        _ => value.to_string(),
+    }
+}
+
+fn canonical_sort_key_callable(ty: &ResolvedType, registry: &TypeRegistry, value: &str) -> String {
+    match ty {
+        ResolvedType::Named(id)
+            if matches!(
+                registry.get(*id),
+                Some(TypeDef::Enum(_) | TypeDef::Flags(_))
+            ) =>
+        {
+            "int".to_string()
+        }
+        _ => format!(
+            "lambda {value}: {}",
+            canonical_sort_key_expr(ty, registry, value)
+        ),
+    }
+}
+
+fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
+    match ty {
+        ResolvedType::Primitive(PrimitiveType::Bool) | ResolvedType::SubByte(_) => false,
+        ResolvedType::BitsInline(names) => names.len() >= 8,
+        ResolvedType::Named(id) => match registry.get(*id) {
+            Some(TypeDef::Enum(enum_def)) => enum_def.wire_bits >= 8,
+            _ => true,
+        },
+        // An optional always starts with a one-bit presence flag. Nested
+        // optional flags therefore remain contiguous until a present payload
+        // itself requires byte alignment.
+        ResolvedType::Optional(_) => false,
+        _ => true,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Constraint validation
 // ---------------------------------------------------------------------------
@@ -95,7 +141,8 @@ fn operand_to_py(operand: &ConstraintOperand) -> String {
         ConstraintOperand::Int(i) => i.to_string(),
         ConstraintOperand::Float(f) => f.to_string(),
         ConstraintOperand::String(s) => format!("\"{s}\""),
-        ConstraintOperand::Bool(b) => b.to_string(),
+        ConstraintOperand::Bool(true) => "True".to_string(),
+        ConstraintOperand::Bool(false) => "False".to_string(),
         ConstraintOperand::ConstRef(name) => name.to_string(),
     }
 }
@@ -112,6 +159,37 @@ fn emit_constraint_validation_py(
         "raise ValueError(f\"constraint violation for field '{field_name}': value {{{access}}} violates constraint\")"
     ));
     w.close_block();
+}
+
+fn constraint_value_access_py(ty: &ResolvedType, access: &str) -> (Vec<String>, String) {
+    let mut guards = Vec::new();
+    let mut value = access.to_string();
+    let mut current = ty;
+    while let ResolvedType::Optional(inner) = current {
+        guards.push(format!("{value} is not None"));
+        if optional_payload_needs_wrapper(inner) {
+            value = format!("{value}[0]");
+        }
+        current = inner;
+    }
+    (guards, value)
+}
+
+fn emit_field_constraint_validation_py(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+) {
+    let (guards, value) = constraint_value_access_py(ty, access);
+    if !guards.is_empty() {
+        w.open_block(&format!("if {}", guards.join(" and ")));
+    }
+    emit_constraint_validation_py(w, constraint, &value, field_name);
+    if !guards.is_empty() {
+        w.close_block();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +269,10 @@ fn emit_write_type(
             let bits = s.bits;
             w.line(&format!("{writer}.write_bits({access}, {bits})"));
         }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            w.line(&format!("{writer}.write_bits({access}, {bits})"));
+        }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => w.line(&format!("{writer}.write_string({access})")),
             SemanticType::Bytes => w.line(&format!("{writer}.write_bytes({access})")),
@@ -248,6 +330,9 @@ fn emit_write_type(
             w.line(&format!("{value} = {access}"));
             w.line(&format!("{writer}.write_bool({value} is not None)"));
             w.open_block(&format!("if {value} is not None"));
+            if is_byte_aligned(inner, registry) {
+                w.line(&format!("{writer}.flush_to_byte_boundary()"));
+            }
             if optional_payload_needs_wrapper(inner) {
                 emit_write_type(w, &format!("{value}[0]"), inner, registry, writer);
             } else {
@@ -266,15 +351,9 @@ fn emit_write_type(
             let map_k = local_name(access, "map_key");
             let map_v = local_name(access, "map_value");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                // String keys have a canonical lexical order. Iterating a
-                // caller-owned dict would otherwise make the wire depend on
-                // insertion order.
-                w.open_block(&format!("for {map_k} in sorted({access})"));
-                w.line(&format!("{map_v} = {access}[{map_k}]"));
-            } else {
-                w.open_block(&format!("for {map_k}, {map_v} in {access}.items()"));
-            }
+            let sort_key = canonical_sort_key_callable(k, registry, &map_k);
+            w.open_block(&format!("for {map_k} in sorted({access}, key={sort_key})"));
+            w.line(&format!("{map_v} = {access}[{map_k}]"));
             emit_write_type(w, &map_k, k, registry, writer);
             emit_write_type(w, &map_v, v, registry, writer);
             w.close_block();
@@ -282,11 +361,8 @@ fn emit_write_type(
         ResolvedType::Set(inner) => {
             let item = local_name(access, "set_item");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                w.open_block(&format!("for {item} in sorted({access})"));
-            } else {
-                w.open_block(&format!("for {item} in {access}"));
-            }
+            let sort_key = canonical_sort_key_callable(inner, registry, &item);
+            w.open_block(&format!("for {item} in sorted({access}, key={sort_key})"));
             emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }
@@ -394,6 +470,10 @@ fn emit_read_type(
             let bits = s.bits;
             w.line(&format!("{target} = {reader}.read_bits({bits})"));
         }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            w.line(&format!("{target} = {reader}.read_bits({bits})"));
+        }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => {
                 w.line(&format!("{target} = {reader}.read_string()"));
@@ -474,6 +554,9 @@ fn emit_read_type(
             w.line("else:");
             w.indent();
             w.open_block(&format!("if {present}"));
+            if is_byte_aligned(inner, registry) {
+                w.line(&format!("{reader}.flush_to_byte_boundary()"));
+            }
             if optional_payload_needs_wrapper(inner) {
                 let value = local_name(target, "optional_value");
                 emit_read_type(w, &value, inner, registry, reader);
@@ -770,7 +853,13 @@ pub fn emit_message(
         let access = format!("self.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_py(w, constraint, &access, field.name.as_str());
+            emit_field_constraint_validation_py(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+            );
         }
         emit_write(
             w,
@@ -837,7 +926,13 @@ pub fn emit_message(
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_py(w, constraint, &target, field.name.as_str());
+                    emit_field_constraint_validation_py(
+                        w,
+                        constraint,
+                        &field.resolved_type,
+                        &target,
+                        field.name.as_str(),
+                    );
                 }
             }
             DecodeAction::Tombstone(tombstone) => {
