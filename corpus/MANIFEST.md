@@ -51,7 +51,6 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 039_geometric.vexil | §3.1, §3.4 | Geometric types: vec2, vec3, vec4, quat, mat3, mat4 with element types |
 | 040_inline_bits.vexil | §3.4 | Inline bitfield type: `bits { r, w, x }` with named bits |
 | 041_map_key_ordering.vexil | §3.4 | Map key canonical sort order for all valid key types |
-| 043_invariant.vexil | §4.1 | Named and unnamed invariant conditions in message bodies |
 | 044_generic_alias.vexil | §4.7 | Generic type alias with type parameter substitution |
 | 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
 | 045_generic_trait.vexil | §4.9 | Generic trait impl with type arguments (`impl Tagged<u64>`) |
@@ -107,6 +106,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 041_removed_reuses_ordinal.vexil | §12.3 | Semantic | Active field reusing tombstoned ordinal |
 | 042_version_not_semver.vexil | §6.3 | Parse | Version constraint ^1.0 missing patch |
 | 043_non_exhaustive_on_message.vexil | §12.2 | Semantic | @non_exhaustive on message (enum/union only) |
+| 066_invariant_unsupported.vexil | §4.11 | Semantic | Message invariants are reserved but rejected until portable enforcement exists |
 | 044_limit_on_invalid_type.vexil | §12.5 | Semantic | @limit on u32 (string/bytes/array/map only) |
 | 045_limit_exceeds_global.vexil | §12.5 | Semantic | @limit(16777217) exceeds array max |
 | 046_type_unknown.vexil | §3.5 | Type | Reference to undefined type |

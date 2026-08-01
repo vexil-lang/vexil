@@ -109,6 +109,7 @@ pub enum ErrorCode {
     E123, // Where clause const not found
     E124, // Where clause operator invalid
     E125, // Where clause constraint failed
+    E126, // Message invariants are not yet supported
 
     // Import errors (E130-E139)
     E130, // Import not found
@@ -207,6 +208,7 @@ impl ErrorCode {
             ErrorCode::E123 => "E123",
             ErrorCode::E124 => "E124",
             ErrorCode::E125 => "E125",
+            ErrorCode::E126 => "E126",
             ErrorCode::E130 => "E130",
             ErrorCode::E131 => "E131",
             ErrorCode::E132 => "E132",
@@ -319,6 +321,7 @@ pub enum ErrorClass {
     WhereClauseLenOnNonCollection,
     WhereClauseConstRefNotFound,
     WhereClauseOperatorInvalid,
+    InvariantUnsupported,
 
     // Impl
     ImplFnExternal,
@@ -427,6 +430,7 @@ impl ErrorClass {
             ErrorClass::WhereClauseLenOnNonCollection => ErrorCode::E122,
             ErrorClass::WhereClauseConstRefNotFound => ErrorCode::E123,
             ErrorClass::WhereClauseOperatorInvalid => ErrorCode::E124,
+            ErrorClass::InvariantUnsupported => ErrorCode::E126,
 
             // Impl
             ErrorClass::ImplFnExternal => ErrorCode::E133,

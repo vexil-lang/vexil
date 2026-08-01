@@ -445,8 +445,17 @@ fn check_message_body(
 
     // Second pass: check fields
     for item in body {
-        if let MessageBodyItem::Invariant(_inv) = item {
-            // Invariant validation deferred to codegen phase
+        if let MessageBodyItem::Invariant(inv) = item {
+            diags.push(
+                Diagnostic::error(
+                    inv.span,
+                    ErrorClass::InvariantUnsupported,
+                    "message invariants are not yet supported",
+                )
+                .with_help(
+                    "remove the invariant until portable encode/decode validation semantics are implemented",
+                ),
+            );
             continue;
         }
         if let MessageBodyItem::Field(field) = item {

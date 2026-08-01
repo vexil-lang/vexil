@@ -92,7 +92,7 @@ const decoded = decodeSensorReading(r);
 - **Compile-time constants**: `const MaxSize : u32 = 1024` -- usable in array sizes and where clauses
 - **Where clauses**: `field @0 : u32 where value > 0` -- validated on encode and decode, invalid data never touches the wire
 - **Traits and impl**: structural fields and portable generated instance methods, with zero wire impact
-- **Invariants**: `invariant { value >= 0 }` -- cross-field conditions in messages
+- **Reserved invariants**: parsed for precise diagnostics and rejected until portable encode/decode enforcement is specified
 - **Type param bounds**: `type Sorted<T: Ord> = array<T>` -- constrain generic types
 - BLAKE3 hash of the canonical schema form embedded as a compile-time constant in generated code
 - Rust and TypeScript have broad byte-vector coverage; generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.

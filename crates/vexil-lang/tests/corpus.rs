@@ -254,11 +254,6 @@ fn valid_041_map_key_ordering() {
 }
 
 #[test]
-fn valid_043_invariant() {
-    parse_valid("043_invariant.vexil");
-}
-
-#[test]
 fn valid_044_generic_alias() {
     parse_valid("044_generic_alias.vexil");
 }
@@ -669,6 +664,14 @@ fn invalid_043() {
     parse_invalid(
         "043_non_exhaustive_on_message.vexil",
         ErrorClass::NonExhaustiveInvalidTarget,
+    );
+}
+
+#[test]
+fn invalid_066_invariant_unsupported() {
+    parse_invalid(
+        "066_invariant_unsupported.vexil",
+        ErrorClass::InvariantUnsupported,
     );
 }
 

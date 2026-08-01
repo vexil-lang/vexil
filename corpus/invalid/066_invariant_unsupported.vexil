@@ -1,0 +1,9 @@
+# §4.11: invariant syntax is reserved, but portable enforcement is not implemented.
+# EXPECTED ERROR: message invariants are not yet supported
+
+namespace test.inv
+
+message Balance {
+    amount @0 : fixed64
+    invariant AmountNonNegative { value >= 0 }
+}

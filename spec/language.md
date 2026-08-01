@@ -909,9 +909,10 @@ target-specific suffix.
 
 Impls have ZERO wire impact.
 
-### 4.11  invariant
+### 4.11  invariant (reserved)
 
-An invariant is a named or unnamed condition within a message body.
+The grammar reserves named and unnamed invariant conditions within a message
+body for a future portable validation contract.
 
 ```vexil
 message Balance {
@@ -921,14 +922,13 @@ message Balance {
 }
 ```
 
-Invariants use the same expression syntax as where clauses. The `value`
-keyword refers to the most recently declared field's value.
+Current conforming compilers MUST reject every invariant with diagnostic
+`E126 InvariantUnsupported`. They MUST NOT silently discard an invariant or
+produce partial generated output. Expression scope, encode/decode timing, and
+generated validation APIs remain undefined until a later specification change.
 
-Invariants are checked on encode and decode. A violation MUST produce
-an error and MUST NOT write data to the wire.
-
-Invariants have zero wire impact — they generate validation code, not
-wire data.
+The reserved syntax has zero wire impact because invariant-bearing schemas do
+not currently compile.
 
 ---
 
