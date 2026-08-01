@@ -453,6 +453,33 @@ config Settings {
     }
 
     #[test]
+    fn nested_optional_presence_bits_are_contiguous() {
+        let compiled = vexil_lang::compile(
+            "namespace test.nested_optional\nmessage M { v @0 : optional<optional<u16>> }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("code generation succeeds");
+
+        assert!(
+            code.contains(
+                "w.write_bool(self.v.is_some());\n        if let Some(ref inner_val) = self.v"
+            ),
+            "outer presence bit must not flush before the inner optional:\n{code}"
+        );
+        assert!(
+            code.contains(
+                "w.write_bool(inner_val.is_some());\n            w.flush_to_byte_boundary();"
+            ),
+            "inner presence bit must flush before its u16 payload:\n{code}"
+        );
+        assert!(
+            code.contains("let v_present = r.read_bool()?;\n        let v = if v_present"),
+            "outer decode presence bit must not flush before the inner optional:\n{code}"
+        );
+    }
+
+    #[test]
     fn generate_project_emits_cross_file_use_statements() {
         use vexil_lang::codegen::CodegenBackend;
         use vexil_lang::resolve::InMemoryLoader;

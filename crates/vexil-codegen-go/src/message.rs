@@ -24,7 +24,10 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
                 true
             }
         }
-        ResolvedType::Optional(inner) => is_byte_aligned(inner, registry),
+        // An optional always starts with a one-bit presence flag. Nested
+        // optional flags therefore remain contiguous until a present payload
+        // itself requires byte alignment.
+        ResolvedType::Optional(_) => false,
         _ => true,
     }
 }
@@ -748,9 +751,14 @@ fn emit_read_type(
             }
             w.open_block("if present");
             let inner_go = go_collection_key_type(inner, registry);
-            w.line(&format!("var optVal {inner_go}"));
-            emit_read_type(w, "optVal", inner, registry, reader, err_return);
-            w.line(&format!("{target} = &optVal"));
+            let opt_value = if target == "optVal" || target.ends_with("OptVal") {
+                format!("nested{}", to_pascal_case(target))
+            } else {
+                "optVal".to_string()
+            };
+            w.line(&format!("var {opt_value} {inner_go}"));
+            emit_read_type(w, &opt_value, inner, registry, reader, err_return);
+            w.line(&format!("{target} = &{opt_value}"));
             w.close_block();
             w.close_block();
             w.close_block();

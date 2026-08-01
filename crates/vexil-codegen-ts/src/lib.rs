@@ -433,6 +433,29 @@ mod tests {
     }
 
     #[test]
+    fn nested_optional_presence_bits_are_contiguous() {
+        let compiled = vexil_lang::compile(
+            "namespace test.nested_optional\nmessage M { v @0 : optional<optional<u16>> }",
+        )
+        .compiled
+        .expect("schema compiles");
+        let code = generate(&compiled).expect("code generation succeeds");
+
+        assert!(
+            code.contains("w.writeBool(v.v !== null);\n  if (v.v !== null)"),
+            "outer presence bit must not flush before the inner optional:\n{code}"
+        );
+        assert!(
+            code.contains("w.writeBool(v.v !== null);\n    w.flushToByteBoundary();"),
+            "inner presence bit must flush before its u16 payload:\n{code}"
+        );
+        assert!(
+            code.contains("const v_present = r.readBool();\n  let v: number | null | null;"),
+            "outer decode presence bit must not flush before the inner optional:\n{code}"
+        );
+    }
+
+    #[test]
     fn emits_function_bearing_traits() {
         let compiled = vexil_lang::compile(
             "namespace test.function_trait\ntrait Validatable {\n    fn validate() -> bool\n}",

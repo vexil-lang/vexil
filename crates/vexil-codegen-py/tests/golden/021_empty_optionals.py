@@ -111,7 +111,6 @@ class NestedOptional:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_inner_optional = self.inner
         w.write_bool(_vexil_self_2e_inner_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_inner_optional is not None:
             _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional = _vexil_self_2e_inner_optional[0]
             w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional is not None)
@@ -139,7 +138,6 @@ class NestedOptional:
         except DecodeError:
             m.inner = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_inner_present:
                 try:
                     _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present = r.read_bool()

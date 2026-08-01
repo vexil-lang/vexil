@@ -41,7 +41,10 @@ fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
             Some(TypeDef::Enum(enum_def)) => enum_def.wire_bits >= 8,
             _ => true,
         },
-        ResolvedType::Optional(inner) => is_byte_aligned(inner, registry),
+        // An optional always starts with a one-bit presence flag. Nested
+        // optional flags therefore remain contiguous until a present payload
+        // itself requires byte alignment.
+        ResolvedType::Optional(_) => false,
         _ => true,
     }
 }

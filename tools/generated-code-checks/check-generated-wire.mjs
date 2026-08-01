@@ -398,6 +398,20 @@ runBasic("vec2-fixed64", "v1_types.json", "vec2_fixed64", "&M{Pos: [2]int64{0,0}
 runBasic("bits-inline", "v1_types.json", "bits_inline", "&M{Perms: 3}", "M(perms=3)");
 runBasic("newtype-u32", "generated_wire.json", "newtype_u32", "&M{V: UserId(16909060)}", "M(v=UserId(16909060))");
 runBasic("alias-u16", "generated_wire.json", "alias_u16", "&M{V: 258}", "M(v=258)");
+runBasic(
+  "nested-optional-some-none-u16",
+  "generated_wire.json",
+  "nested_optional_some_none_u16",
+  "func() *M { var inner *uint16; return &M{V: &inner} }()",
+  "M(v=(None,))",
+);
+runBasic(
+  "nested-optional-some-u16",
+  "generated_wire.json",
+  "nested_optional_some_u16",
+  "func() *M { scalar := uint16(258); inner := &scalar; return &M{V: &inner} }()",
+  "M(v=(258,))",
+);
 runBasic("unknown-enum", "generated_wire.json", "non_exhaustive_enum_unknown", "&M{V: Status(7)}", "M(v=Status(7))");
 runBasic("unknown-flags", "generated_wire.json", "flags_unknown_bits", "&M{V: Permissions(128)}", "M(v=Permissions(128))");
 runBasic("map-i16-order", "generated_wire.json", "map_i16_canonical_order", "&M{V: map[int16]uint8{2: 22, -1: 11}}", "M(v={2: 22, -1: 11})");

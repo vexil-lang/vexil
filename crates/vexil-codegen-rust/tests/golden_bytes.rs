@@ -157,6 +157,25 @@ fn verify_optional_some_u32() {
     assert_eq!(hex(&w.finish()), "012a000000");
 }
 
+#[test]
+fn verify_nested_optional_some_none_u16() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.write_bool(false);
+    w.flush_to_byte_boundary();
+    assert_eq!(hex(&w.finish()), "01");
+}
+
+#[test]
+fn verify_nested_optional_some_u16() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.write_bool(true);
+    w.flush_to_byte_boundary();
+    w.write_u16(258);
+    assert_eq!(hex(&w.finish()), "030201");
+}
+
 // --- Arrays ---
 
 #[test]

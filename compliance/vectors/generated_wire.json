@@ -16,6 +16,22 @@
     "notes": "An alias has no wire overhead and uses its u16 target encoding."
   },
   {
+    "name": "nested_optional_some_none_u16",
+    "schema": "namespace test.nested_optional_none\nmessage M { v @0 : optional<optional<u16>> }",
+    "type": "M",
+    "value": { "v": { "some": null } },
+    "expected_bytes": "01",
+    "notes": "The outer present bit and inner absent bit pack contiguously as 1 0 before final padding."
+  },
+  {
+    "name": "nested_optional_some_u16",
+    "schema": "namespace test.nested_optional_some\nmessage M { v @0 : optional<optional<u16>> }",
+    "type": "M",
+    "value": { "v": { "some": 258 } },
+    "expected_bytes": "030201",
+    "notes": "The two present bits pack contiguously as 1 1, then the stream aligns before little-endian u16."
+  },
+  {
     "name": "non_exhaustive_enum_unknown",
     "schema": "namespace test.enum_unknown\n@non_exhaustive\nenum Status { Active @0 }\nmessage M { v @0 : Status }",
     "type": "M",

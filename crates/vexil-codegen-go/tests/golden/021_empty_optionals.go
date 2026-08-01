@@ -111,7 +111,6 @@ type NestedOptional struct {
 
 func (m *NestedOptional) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Inner != nil)
-	w.FlushToByteBoundary()
 	if m.Inner != nil {
 		w.WriteBool((*m.Inner) != nil)
 		w.FlushToByteBoundary()
@@ -133,7 +132,6 @@ func (m *NestedOptional) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
 				var optVal *uint32
 				{
@@ -144,15 +142,15 @@ func (m *NestedOptional) Unpack(r *vexil.BitReader) error {
 					if err == nil {
 						r.FlushToByteBoundary()
 						if present {
-							var optVal uint32
+							var nestedOptVal uint32
 							{
 								v, err := r.ReadU32()
 								if err != nil {
 									return err
 								}
-								optVal = v
+								nestedOptVal = v
 							}
-							optVal = &optVal
+							optVal = &nestedOptVal
 						}
 					}
 				}
