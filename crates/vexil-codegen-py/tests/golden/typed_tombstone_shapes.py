@@ -43,21 +43,6 @@ class LegacyShapes:
     @staticmethod
     def decode_from(r: _BitReader) -> LegacyShapes:
         m = LegacyShapes.__new__(LegacyShapes)
-        # discard @removed ordinal 0
-        _vexil_tombstone_length = r.read_leb128()
-        _ = r.read_bytes(_vexil_tombstone_length)
-        # discard @removed ordinal 1
-        _len = r.read_leb128()
-        for _ in range(_len):
-            _ = r.read_u16()
-        # discard @removed ordinal 2
-        for _ in range(3):
-            _ = r.read_u8()
-        # discard @removed ordinal 3
-        for _ in range(3):
-            _ = r.read_f32()
-        # discard @removed ordinal 4
-        _ = r.read_bits(3)
         m.current = r.read_u32()
         r.flush_to_byte_boundary()
         m.unknown = b""

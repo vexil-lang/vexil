@@ -1,4 +1,4 @@
-"""Verify generated typed tombstones consume every legacy wire shape."""
+"""Verify typed tombstones cause no generated Python codec operations."""
 
 from __future__ import annotations
 
@@ -26,30 +26,21 @@ def load_generated_module() -> ModuleType:
     return module
 
 
-def legacy_payload() -> bytes:
+def current_payload() -> bytes:
     from vexil_runtime import BitWriter
 
     writer = BitWriter()
-    writer.write_bytes(b"old")
-    writer.write_leb128(2)
-    writer.write_u16(10)
-    writer.write_u16(20)
-    writer.write_u8(1)
-    writer.write_u8(2)
-    writer.write_u8(3)
-    writer.write_f32(1.0)
-    writer.write_f32(2.0)
-    writer.write_f32(3.0)
-    writer.write_bits(0b101, 3)
     writer.write_u32(0x12345678)
     return writer.finish()
 
 
 def main() -> None:
     generated = load_generated_module()
-    decoded = generated.LegacyShapes.decode(legacy_payload())
+    expected = current_payload()
+    decoded = generated.LegacyShapes.decode(expected)
     assert decoded.current == 0x12345678
     assert decoded.unknown == b""
+    assert decoded.encode() == expected
 
 
 if __name__ == "__main__":

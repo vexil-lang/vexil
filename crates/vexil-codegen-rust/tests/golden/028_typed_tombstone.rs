@@ -31,8 +31,6 @@ impl vexil_runtime::Pack for Config {
 impl vexil_runtime::Unpack for Config {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         let name = r.read_string()?;
-        // discard @removed ordinal 1
-        let _ = r.read_u32()?;
         let timeout_ms = r.read_u64()?;
         r.flush_to_byte_boundary();
         let _unknown = Vec::new();

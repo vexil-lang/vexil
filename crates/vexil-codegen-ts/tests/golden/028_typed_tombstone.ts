@@ -23,8 +23,6 @@ export function encodeConfig(v: Config, w: BitWriter): void {
 
 export function decodeConfig(r: BitReader): Config {
   const name = r.readString();
-  // discard @removed ordinal 1
-  r.readU32();
   const timeout_ms = r.readU64();
   r.flushToByteBoundary();
   const _unknown = new Uint8Array(0);

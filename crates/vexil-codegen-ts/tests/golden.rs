@@ -122,6 +122,20 @@ fn test_028_typed_tombstone() {
 }
 
 #[test]
+fn typed_tombstone_emits_no_codec_read() {
+    let source = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/valid/028_typed_tombstone.vexil"),
+    )
+    .expect("typed tombstone corpus");
+    let compiled = vexil_lang::compile(&source)
+        .compiled
+        .expect("typed tombstone schema");
+    let generated = vexil_codegen_ts::generate(&compiled).expect("TypeScript codegen");
+    assert!(!generated.contains("readU32()"), "{generated}");
+    assert!(!generated.contains("discard @removed"), "{generated}");
+}
+
+#[test]
 fn test_045_generic_trait() {
     golden_test("045_generic_trait");
 }

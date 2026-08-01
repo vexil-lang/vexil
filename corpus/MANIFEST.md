@@ -37,7 +37,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 025_evolution_deprecate.vexil    | §11.10 | Schema evolution: deprecated field (no wire change) |
 | 026_required_to_optional.vexil   | §11.10 | Breaking change: required→optional wire layout difference |
 | 027_delta_on_message.vexil       | §13.4  | `@delta` on message declaration desugars to per-field |
-| 028_typed_tombstone.vexil        | §10    | Typed `@removed` tombstone for decode-and-discard |
+| 028_typed_tombstone.vexil        | §5.2, §13.3 | Typed `@removed` tombstone as wire-inert history metadata |
 | 029_import_then_annotation.vexil | §2.7, §5 | Bare import followed by `@doc` annotation (#42 regression) |
 | 030_newtype_map_key.vexil | §3.4 | Newtypes wrapping valid key types as map keys |
 | 031_custom_annotations.vexil | — | User-defined annotations preserved through compilation |

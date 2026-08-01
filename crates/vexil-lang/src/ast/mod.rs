@@ -807,7 +807,7 @@ pub struct Tombstone {
     pub ordinal: Spanned<u32>,
     /// Arguments to the `@removed` annotation (reason, since, etc.).
     pub args: Vec<TombstoneArg>,
-    /// The original type of the removed field, if preserved for diagnostics.
+    /// The original type of the removed field, retained as wire-inert history metadata.
     pub original_type: Option<Spanned<TypeExpr>>,
 }
 

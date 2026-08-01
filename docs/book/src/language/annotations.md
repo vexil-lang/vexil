@@ -25,7 +25,7 @@ message Packet {
 |-----------|-----------|--------|
 | `@non_exhaustive` | enum, union | Allows adding variants without breaking decoders |
 | `@deprecated` | fields, variants | Marks as deprecated in generated code |
-| `@removed(ordinal, reason: "...")` | message fields | Typed tombstone for removed fields |
+| `@removed(ordinal, reason: "...")` | declaration bodies | Reserves a removed ordinal; optional original type is history metadata |
 
 ```vexil
 @non_exhaustive
@@ -39,7 +39,9 @@ enum Status : u8 {
 
 ## Removed fields
 
-When evolving a schema, use `@removed` to leave a typed tombstone. This allows decoders to skip the correct number of bytes for the removed field:
+When evolving a schema, use `@removed` to reserve the old ordinal and explain
+the removal. An optional type records the old field's type for readers of the
+schema:
 
 ```vexil
 message Config {
@@ -48,5 +50,8 @@ message Config {
     timeout_ms @2 : u64
 }
 ```
+
+The recorded type is metadata only. It causes no encoder or decoder operation,
+and a tombstone does not make field removal wire-compatible.
 
 See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

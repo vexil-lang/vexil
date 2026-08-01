@@ -395,7 +395,7 @@ field-name
 # consumed as a field-level annotation named "removed".
 
 tombstone
-    = '@removed' _ '(' _ nat-int _ ',' _ tombstone-args _ ')'
+    = '@removed' _ '(' _ nat-int _ ',' _ tombstone-args _ ')' (_ ':' _ type-expr)?
 
 tombstone-args
     = tombstone-arg (_ ',' _ tombstone-arg)*

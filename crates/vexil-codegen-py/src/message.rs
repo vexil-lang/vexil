@@ -2,7 +2,7 @@ use vexil_lang::ast::{PrimitiveType, SemanticType};
 use vexil_lang::codegen::portable::PortableFunction;
 use vexil_lang::ir::{
     CmpOp, ConfigDef, ConstraintOperand, Encoding, FieldConstraint, FieldEncoding, MessageDef,
-    ResolvedType, TombstoneDef, TypeDef, TypeRegistry,
+    ResolvedType, TypeDef, TypeRegistry,
 };
 
 use crate::emit::CodeWriter;
@@ -668,144 +668,6 @@ fn emit_read_type(
 }
 
 // ---------------------------------------------------------------------------
-// emit_tombstone_read - read and discard (for backwards compatibility)
-// ---------------------------------------------------------------------------
-
-fn emit_tombstone_read(
-    w: &mut CodeWriter,
-    ty: &ResolvedType,
-    registry: &TypeRegistry,
-    reader: &str,
-) {
-    match ty {
-        ResolvedType::Primitive(p) => {
-            let read_fn = match p {
-                PrimitiveType::Bool => "read_bool",
-                PrimitiveType::U8 => "read_u8",
-                PrimitiveType::U16 => "read_u16",
-                PrimitiveType::U32 => "read_u32",
-                PrimitiveType::U64 => "read_u64",
-                PrimitiveType::I8 => "read_i8",
-                PrimitiveType::I16 => "read_i16",
-                PrimitiveType::I32 => "read_i32",
-                PrimitiveType::I64 => "read_i64",
-                PrimitiveType::F32 => "read_f32",
-                PrimitiveType::F64 => "read_f64",
-                PrimitiveType::Fixed32 => "read_i32",
-                PrimitiveType::Fixed64 => "read_i64",
-                PrimitiveType::Void => return,
-            };
-            w.line(&format!("_ = {reader}.{read_fn}()"));
-        }
-        ResolvedType::SubByte(s) => {
-            let bits = s.bits;
-            w.line(&format!("_ = {reader}.read_bits({bits})"));
-        }
-        ResolvedType::Semantic(s) => {
-            let read_expr = match s {
-                SemanticType::String => format!("_ = {reader}.read_string()"),
-                SemanticType::Bytes => {
-                    w.line(&format!("_vexil_tombstone_length = {reader}.read_leb128()"));
-                    w.line(&format!("_ = {reader}.read_bytes(_vexil_tombstone_length)"));
-                    return;
-                }
-                SemanticType::Rgb => {
-                    w.line(&format!("_ = {reader}.read_u8()"));
-                    w.line(&format!("_ = {reader}.read_u8()"));
-                    w.line(&format!("_ = {reader}.read_u8()"));
-                    return;
-                }
-                SemanticType::Uuid => format!("_ = {reader}.read_bytes(16)"),
-                SemanticType::Timestamp => format!("_ = {reader}.read_i64()"),
-                SemanticType::Hash => format!("_ = {reader}.read_bytes(32)"),
-            };
-            w.line(&read_expr);
-        }
-        ResolvedType::Named(id) => {
-            let type_name = match registry.get(*id) {
-                Some(def) => match def {
-                    TypeDef::Message(m) => m.name.to_string(),
-                    TypeDef::Enum(e) => e.name.to_string(),
-                    TypeDef::Flags(f) => f.name.to_string(),
-                    TypeDef::Union(u) => u.name.to_string(),
-                    TypeDef::Newtype(n) => n.name.to_string(),
-                    _ => "Unknown".to_string(),
-                },
-                None => "Unknown".to_string(),
-            };
-            w.open_block("try");
-            w.line(&format!("{reader}.enter_nested()"));
-            if matches!(registry.get(*id), Some(TypeDef::Union(_))) {
-                w.line(&format!("_ = decode_{type_name}_from({reader})"));
-            } else {
-                w.line(&format!("_ = {type_name}.decode_from({reader})"));
-            }
-            w.dedent();
-            w.line("finally:");
-            w.indent();
-            w.line(&format!("{reader}.leave_nested()"));
-            w.close_block();
-        }
-        ResolvedType::Optional(inner) => {
-            w.line(&format!("_present = {reader}.read_bool()"));
-            w.open_block("if _present");
-            emit_tombstone_read(w, inner, registry, reader);
-            w.close_block();
-        }
-        ResolvedType::Array(inner) | ResolvedType::Set(inner) => {
-            w.line(&format!("_len = {reader}.read_leb128()"));
-            w.open_block("for _ in range(_len)");
-            emit_tombstone_read(w, inner, registry, reader);
-            w.close_block();
-        }
-        ResolvedType::FixedArray(inner, size) => {
-            w.open_block(&format!("for _ in range({size})"));
-            emit_tombstone_read(w, inner, registry, reader);
-            w.close_block();
-        }
-        ResolvedType::Map(k, v) => {
-            w.line(&format!("_len = {reader}.read_leb128()"));
-            w.open_block("for _ in range(_len)");
-            emit_tombstone_read(w, k, registry, reader);
-            emit_tombstone_read(w, v, registry, reader);
-            w.close_block();
-        }
-        ResolvedType::Result(ok, err_ty) => {
-            w.line(&format!("_is_ok = {reader}.read_bool()"));
-            w.open_block("if _is_ok");
-            emit_tombstone_read(w, ok, registry, reader);
-            w.dedent();
-            w.line("else:");
-            w.indent();
-            emit_tombstone_read(w, err_ty, registry, reader);
-            w.close_block();
-        }
-        ResolvedType::Vec2(inner)
-        | ResolvedType::Vec3(inner)
-        | ResolvedType::Vec4(inner)
-        | ResolvedType::Quat(inner)
-        | ResolvedType::Mat3(inner)
-        | ResolvedType::Mat4(inner) => {
-            let size = match ty {
-                ResolvedType::Vec2(_) => 2,
-                ResolvedType::Vec3(_) => 3,
-                ResolvedType::Vec4(_) | ResolvedType::Quat(_) => 4,
-                ResolvedType::Mat3(_) => 9,
-                ResolvedType::Mat4(_) => 16,
-                _ => unreachable!(),
-            };
-            w.open_block(&format!("for _ in range({size})"));
-            emit_tombstone_read(w, inner, registry, reader);
-            w.close_block();
-        }
-        ResolvedType::BitsInline(names) => {
-            w.line(&format!("_ = {reader}.read_bits({})", names.len()));
-        }
-        _ => {}
-    }
-}
-
-// ---------------------------------------------------------------------------
 // emit_message - main message struct + encode/decode
 // ---------------------------------------------------------------------------
 
@@ -896,51 +758,28 @@ pub fn emit_message(
     w.open_block(&format!("def decode_from(r: _BitReader) -> {name}"));
     w.line(&format!("m = {name}.__new__({name})"));
 
-    enum DecodeAction<'a> {
-        Field(&'a vexil_lang::ir::FieldDef),
-        Tombstone(&'a TombstoneDef),
-    }
-    let mut actions: Vec<(u32, DecodeAction<'_>)> = Vec::new();
-    for field in &msg.fields {
-        actions.push((field.ordinal, DecodeAction::Field(field)));
-    }
-    for tombstone in &msg.tombstones {
-        if tombstone.original_type.is_some() {
-            actions.push((tombstone.ordinal, DecodeAction::Tombstone(tombstone)));
-        }
-    }
-    actions.sort_by_key(|(ord, _)| *ord);
-
-    for (_ord, action) in actions.iter() {
-        match action {
-            DecodeAction::Field(field) => {
-                let field_name = py_ident(field.name.as_str());
-                let target = format!("m.{field_name}");
-                emit_read(
-                    w,
-                    &target,
-                    &field.resolved_type,
-                    &field.encoding,
-                    registry,
-                    "r",
-                );
-                // Validate constraint after decoding
-                if let Some(constraint) = &field.constraint {
-                    emit_field_constraint_validation_py(
-                        w,
-                        constraint,
-                        &field.resolved_type,
-                        &target,
-                        field.name.as_str(),
-                    );
-                }
-            }
-            DecodeAction::Tombstone(tombstone) => {
-                if let Some(ref ty) = tombstone.original_type {
-                    w.line(&format!("# discard @removed ordinal {}", tombstone.ordinal));
-                    emit_tombstone_read(w, ty, registry, "r");
-                }
-            }
+    let mut fields: Vec<_> = msg.fields.iter().collect();
+    fields.sort_by_key(|field| field.ordinal);
+    for field in fields {
+        let field_name = py_ident(field.name.as_str());
+        let target = format!("m.{field_name}");
+        emit_read(
+            w,
+            &target,
+            &field.resolved_type,
+            &field.encoding,
+            registry,
+            "r",
+        );
+        // Validate constraint after decoding
+        if let Some(constraint) = &field.constraint {
+            emit_field_constraint_validation_py(
+                w,
+                constraint,
+                &field.resolved_type,
+                &target,
+                field.name.as_str(),
+            );
         }
     }
     w.line("r.flush_to_byte_boundary()");

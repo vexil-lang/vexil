@@ -418,6 +418,51 @@ mod tests {
     }
 
     #[test]
+    fn typed_tombstone_metadata_preserves_imported_type_identity() {
+        let loader = make_loader(&[(
+            "history",
+            "namespace history\nmessage RemovedValue { value @0 : u32 }",
+        )]);
+        let root = r#"
+namespace current
+import { RemovedValue } from history
+message Current {
+    live @0 : bool
+    @removed(1, reason: "historical") : array<RemovedValue>
+    next @2 : u64
+}
+"#;
+
+        let result =
+            compile_project(root, &PathBuf::from("<memory>/current.vexil"), &loader).unwrap();
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Severity::Error),
+            "{:?}",
+            result.diagnostics
+        );
+        let (_, current) = result.schemas.last().expect("root schema");
+        let (_, current_def) = current.find_type("Current").expect("Current message");
+        let crate::ir::TypeDef::Message(current_def) = current_def else {
+            panic!("expected Current message");
+        };
+        let Some(crate::ir::ResolvedType::Array(original_type)) =
+            &current_def.tombstones[0].original_type
+        else {
+            panic!("expected array tombstone metadata");
+        };
+        let crate::ir::ResolvedType::Named(removed_value_id) = **original_type else {
+            panic!("expected imported named metadata type");
+        };
+        assert_eq!(
+            current.registry.origin(removed_value_id),
+            Some(("history", "RemovedValue"))
+        );
+    }
+
+    #[test]
     fn compile_project_diamond() {
         let mut loader = InMemoryLoader::new();
         loader.schemas.insert(
