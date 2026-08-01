@@ -342,6 +342,65 @@ fn transparent_alias_fields_compile() {
 }
 
 #[test]
+fn concrete_type_aliases_compile() {
+    check_compiles("051_concrete_type_aliases");
+}
+
+#[test]
+fn result_containers_compile() {
+    check_compiles("005_parameterized");
+}
+
+#[test]
+fn result_discriminants_round_trip_with_native_go() {
+    let source = "namespace test.result_native\nmessage M { value @0 : result<u8, string> }";
+    let Some(output) = run_generated_go(
+        "result-native",
+        source,
+        r#"package result_native
+
+import (
+    "bytes"
+    "testing"
+
+    vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
+
+func TestResultDiscriminants(t *testing.T) {
+    okValue := uint8(42)
+    ok := &M{Value: struct { Ok *uint8; Err *string }{Ok: &okValue}}
+    writer := vexil.NewBitWriter()
+    if err := ok.Pack(writer); err != nil { t.Fatal(err) }
+    if got, want := writer.Finish(), []byte{0x01, 0x2a}; !bytes.Equal(got, want) {
+        t.Fatalf("ok bytes: got %x want %x", got, want)
+    }
+
+    errValue := "oops"
+    failed := &M{Value: struct { Ok *uint8; Err *string }{Err: &errValue}}
+    writer = vexil.NewBitWriter()
+    if err := failed.Pack(writer); err != nil { t.Fatal(err) }
+    if got, want := writer.Finish(), []byte{0x00, 0x04, 'o', 'o', 'p', 's'}; !bytes.Equal(got, want) {
+        t.Fatalf("err bytes: got %x want %x", got, want)
+    }
+
+    var decoded M
+    if err := decoded.Unpack(vexil.NewBitReader([]byte{0x01, 0x2a})); err != nil { t.Fatal(err) }
+    if decoded.Value.Ok == nil || *decoded.Value.Ok != 42 || decoded.Value.Err != nil {
+        t.Fatalf("decoded result: %#v", decoded.Value)
+    }
+}
+"#,
+    ) else {
+        return;
+    };
+    assert!(
+        output.status.success(),
+        "generated Go result contract failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn optional_container_access_compiles() {
     check_source_compiles(
         "optional-container-access",

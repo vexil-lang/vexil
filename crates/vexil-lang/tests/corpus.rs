@@ -854,3 +854,11 @@ fn invalid_076_impl_trait_path_too_deep() {
         ErrorClass::UnexpectedToken,
     );
 }
+
+#[test]
+fn invalid_077_nested_alias_chain() {
+    compile_invalid(
+        "077_nested_alias_chain.vexil",
+        ErrorClass::AliasTargetIsAlias,
+    );
+}

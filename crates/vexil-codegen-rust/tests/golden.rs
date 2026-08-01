@@ -201,6 +201,11 @@ fn test_050_non_exhaustive_union_unknown_collision() {
 }
 
 #[test]
+fn test_051_concrete_type_aliases() {
+    golden_test("051_concrete_type_aliases");
+}
+
+#[test]
 fn trait_only_generic_map() {
     golden_source_test(
         "trait_only_generic_map",

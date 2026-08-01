@@ -26,7 +26,7 @@ test suite. If you use non-exhaustive unions, handle or retain the generated
 unknown case. If a schema contains `invariant`, compilation now rejects it
 instead of implying enforcement that did not exist.
 
-Import requirements such as `@ "^0.5"` now have effect. Give imported schemas
+Import requirements such as `@ ^0.5.0` now have effect. Give imported schemas
 a valid schema-level `@version`; a missing version produces a warning and a
 mismatch produces an error.
 

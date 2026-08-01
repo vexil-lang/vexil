@@ -1,15 +1,29 @@
 namespace test.concrete_type_aliases
 
+message Item {
+    id @0 : u32
+}
+
+type Count = u32
+type Label = string
+type Direction = vec3<f32>
+type Permissions = bits { read, write }
+type ItemAlias = Item
 type Names = array<string>
 type Grid = array<u16, 4>
 type Lookup = map<string, optional<u32>>
 type Tags = set<string>
-type Outcome = result<Names, string>
+type Outcome = result<array<string>, string>
 
 message AliasUser {
-    names   @0 : Names
-    grid    @1 : Grid
-    lookup  @2 : Lookup
-    tags    @3 : Tags
-    outcome @4 : Outcome
+    count       @0 : Count
+    label       @1 : Label
+    direction   @2 : Direction
+    permissions @3 : Permissions
+    item        @4 : ItemAlias
+    names       @5 : Names
+    grid        @6 : Grid
+    lookup      @7 : Lookup
+    tags        @8 : Tags
+    outcome     @9 : Outcome
 }

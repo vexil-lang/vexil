@@ -23,11 +23,11 @@ impl vexil_runtime::Pack for Basic {
             w.write_u32(*inner_val);
         }
         w.write_leb128(self.b.len() as u64);
-        for item in &self.b {
+        for item in self.b.iter() {
             w.write_string(item.as_str());
         }
         w.write_leb128(self.c.len() as u64);
-        for (map_k, map_v) in &self.c {
+        for (map_k, map_v) in self.c.iter() {
             w.write_string(map_k.as_str());
             w.write_u64(*map_v);
         }
@@ -116,12 +116,12 @@ impl vexil_runtime::Pack for Nested {
         if let Some(ref inner_val) = self.a {
             w.flush_to_byte_boundary();
             w.write_leb128(inner_val.len() as u64);
-            for item in &inner_val {
+            for item in inner_val.iter() {
                 w.write_string(item.as_str());
             }
         }
         w.write_leb128(self.b.len() as u64);
-        for item in &self.b {
+        for item in self.b.iter() {
             w.write_bool(item.is_some());
             if let Some(ref inner_val) = item {
                 w.flush_to_byte_boundary();
@@ -129,10 +129,10 @@ impl vexil_runtime::Pack for Nested {
             }
         }
         w.write_leb128(self.c.len() as u64);
-        for (map_k, map_v) in &self.c {
+        for (map_k, map_v) in self.c.iter() {
             w.write_string(map_k.as_str());
             w.write_leb128(map_v.len() as u64);
-            for item in &map_v {
+            for item in map_v.iter() {
                 w.write_u8(*item);
             }
         }
@@ -169,14 +169,14 @@ impl vexil_runtime::Pack for Nested {
                 Ok(ok_val) => {
                     w.write_bool(true);
                     w.write_leb128(ok_val.len() as u64);
-                    for item in &ok_val {
+                    for item in ok_val.iter() {
                         w.write_string(item.as_str());
                     }
                 }
                 Err(err_val) => {
                     w.write_bool(false);
                     w.write_leb128(err_val.len() as u64);
-                    for (map_k, map_v) in &err_val {
+                    for (map_k, map_v) in err_val.iter() {
                         w.write_u32(*map_k);
                         w.write_string(map_v.as_str());
                     }

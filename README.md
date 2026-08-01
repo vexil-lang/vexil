@@ -102,7 +102,7 @@ const decoded = decodeSensorReading(r);
 - Rust and TypeScript have broad byte-vector coverage; generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.
 - Same data always produces the same bytes -- no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
-- 126-file conformance corpus (50 valid, 76 invalid) that any conformant implementation must pass
+- 129-file conformance corpus (50 valid, 79 invalid) that any conformant implementation must pass
 
 ## Fixed-Point Types
 

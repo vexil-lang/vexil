@@ -384,14 +384,14 @@ fn emit_write_type(
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
-            w.open_block(&format!("for item in &{access}"));
+            w.open_block(&format!("for item in {access}.iter()"));
             let item_access = if is_copy_type(inner) { "*item" } else { "item" };
             emit_write_type(w, item_access, inner, registry, field_name);
             w.close_block();
         }
         ResolvedType::Set(inner) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
-            w.open_block(&format!("for item in {access}"));
+            w.open_block(&format!("for item in {access}.iter()"));
             let item_access = if is_copy_type(inner) { "*item" } else { "item" };
             emit_write_type(w, item_access, inner, registry, field_name);
             w.close_block();
@@ -456,7 +456,7 @@ fn emit_write_type(
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("w.write_leb128({access}.len() as u64);"));
-            w.open_block(&format!("for (map_k, map_v) in &{access}"));
+            w.open_block(&format!("for (map_k, map_v) in {access}.iter()"));
             let k_access = if is_copy_type(k) { "*map_k" } else { "map_k" };
             let v_access = if is_copy_type(v) { "*map_v" } else { "map_v" };
             emit_write_type(w, k_access, k, registry, field_name);

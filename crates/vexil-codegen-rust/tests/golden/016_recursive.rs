@@ -16,7 +16,7 @@ impl vexil_runtime::Pack for TreeNode {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.write_i32(self.value);
         w.write_leb128(self.children.len() as u64);
-        for item in &self.children {
+        for item in self.children.iter() {
             w.enter_recursive()?;
             item.pack(w)?;
             w.leave_recursive();

@@ -480,7 +480,7 @@ fn emit_write_type(
             w.line(&format!("{writer}.WriteBool(true)"));
             emit_write_type(
                 w,
-                &format!("*{access}.Ok"),
+                &format!("(*{access}.Ok)"),
                 ok,
                 registry,
                 writer,
@@ -492,7 +492,7 @@ fn emit_write_type(
             w.line(&format!("{writer}.WriteBool(false)"));
             emit_write_type(
                 w,
-                &format!("*{access}.Err"),
+                &format!("(*{access}.Err)"),
                 err_ty,
                 registry,
                 writer,
@@ -906,26 +906,33 @@ fn emit_read_type(
             w.close_block();
         }
         ResolvedType::Result(ok, err_ty) => {
+            let temp_base: String = target
+                .chars()
+                .map(|character| {
+                    if character.is_ascii_alphanumeric() {
+                        character
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let ok_temp = format!("{temp_base}Ok");
+            let err_temp = format!("{temp_base}Err");
             w.open_block("");
             w.line(&format!("isOk, err := {reader}.ReadBool()"));
             w.open_block("if err != nil");
             w.line(err_return);
             w.close_block();
             w.open_block("if isOk");
-            emit_read_type(w, &format!("{target}_ok"), ok, registry, reader, err_return);
-            w.line(&format!("{target}.Ok = &{target}_ok"));
+            w.line(&format!("var {ok_temp} {}", go_type(ok, registry)));
+            emit_read_type(w, &ok_temp, ok, registry, reader, err_return);
+            w.line(&format!("{target}.Ok = &{ok_temp}"));
             w.dedent();
             w.line("} else {");
             w.indent();
-            emit_read_type(
-                w,
-                &format!("{target}_err"),
-                err_ty,
-                registry,
-                reader,
-                err_return,
-            );
-            w.line(&format!("{target}.Err = &{target}_err"));
+            w.line(&format!("var {err_temp} {}", go_type(err_ty, registry)));
+            emit_read_type(w, &err_temp, err_ty, registry, reader, err_return);
+            w.line(&format!("{target}.Err = &{err_temp}"));
             w.close_block();
             w.close_block();
         }

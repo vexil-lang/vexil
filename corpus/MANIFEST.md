@@ -61,7 +61,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 050_non_exhaustive_union_unknown_collision.vexil | §4.4, §11.10 | Unknown non-exhaustive union payload preservation with authored `Unknown` variant |
 | 051_concrete_type_aliases.vexil | §3.4, §4.7 | Transparent aliases for concrete container types |
 
-## Invalid Corpus (76 files)
+## Invalid Corpus (79 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -143,6 +143,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 074_impl_body_type_mismatch.vexil | §4.10 | Type | Impl local annotation conflicts with the inferred expression type |
 | 075_impl_bare_expression_statement.vexil | §4.10 | Type | Impl body contains a bare expression statement |
 | 076_impl_trait_path_too_deep.vexil | §4.10 | Parse | Impl trait path contains more than one alias qualifier |
+| 077_nested_alias_chain.vexil | §4.7 | Type | Alias chain hidden inside a concrete container |
 
 ## Error class taxonomy
 

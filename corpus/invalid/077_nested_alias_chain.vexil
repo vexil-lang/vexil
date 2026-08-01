@@ -1,0 +1,8 @@
+namespace test.alias_nested_chain
+
+type Base = u32
+type Wrapped = optional<Base>
+
+message M {
+    value @0 : Wrapped
+}

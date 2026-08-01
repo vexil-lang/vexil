@@ -1213,41 +1213,84 @@ fn check_alias(
         }
     }
 
-    // Check 2: Target type must exist (cannot be a forward reference to undefined type)
-    // For a type alias, the target must be resolvable at declaration time.
-    match &alias.target.node {
-        TypeExpr::Named(name) => {
-            // Check if the name refers to another alias (alias chains are forbidden)
-            if let Some((kind, _)) = ctx.decl_map.get(name) {
-                if *kind == DeclKind::Alias {
-                    diags.push(Diagnostic::error(
-                        alias.target.span,
-                        ErrorClass::AliasTargetIsAlias,
-                        format!(
-                            "alias `{}` references another alias `{name}`; \
-                             must reference a terminal type directly",
-                            alias.name.node
-                        ),
-                    ));
-                }
-            } else if !ctx.is_known_type(name) {
-                diags.push(Diagnostic::error(
-                    alias.target.span,
-                    ErrorClass::AliasTargetNotFound,
-                    format!("alias target type `{name}` not found",),
-                ));
-            }
-        }
-        _ => {
-            // Non-named types (primitives, containers, etc.) are always valid targets
-        }
-    }
+    // Check 2: every nested named target must exist and must not be an alias.
+    // Alias transparency is recursive, so checking only a top-level Named node
+    // would allow an alias chain to hide inside a container.
+    let type_params: HashSet<&str> = alias
+        .type_params
+        .iter()
+        .map(|parameter| parameter.name.node.as_str())
+        .collect();
+    check_alias_target_expr(&alias.target, alias, ctx, &type_params, diags);
 
     // Check 3: Alias cycles (A = B, B = A)
     // We need to detect cycles where aliases reference each other.
     // Since we already forbid alias-to-alias references above, a cycle can only
     // happen through indirect means, but let's be thorough.
     check_alias_cycles(alias, ctx, diags);
+}
+
+fn check_alias_target_expr(
+    target: &Spanned<TypeExpr>,
+    alias: &crate::ast::AliasDecl,
+    ctx: &ValidationContext<'_>,
+    type_params: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match &target.node {
+        TypeExpr::Named(name) if type_params.contains(name.as_str()) => {}
+        TypeExpr::Named(name) => match ctx.decl_map.get(name) {
+            Some((DeclKind::Alias, _)) => diags.push(Diagnostic::error(
+                target.span,
+                ErrorClass::AliasTargetIsAlias,
+                format!(
+                    "alias `{}` references another alias `{name}`; must reference a terminal type directly",
+                    alias.name.node
+                ),
+            )),
+            Some(_) => {}
+            None if !ctx.is_known_type(name) => diags.push(Diagnostic::error(
+                target.span,
+                ErrorClass::AliasTargetNotFound,
+                format!("alias target type `{name}` not found"),
+            )),
+            None => {}
+        },
+        TypeExpr::Generic(name, argument) => {
+            if matches!(ctx.decl_map.get(name), Some((DeclKind::Alias, _))) {
+                diags.push(Diagnostic::error(
+                    target.span,
+                    ErrorClass::AliasTargetIsAlias,
+                    format!(
+                        "alias `{}` references another alias `{name}`; must reference a terminal type directly",
+                        alias.name.node
+                    ),
+                ));
+            }
+            check_alias_target_expr(argument, alias, ctx, type_params, diags);
+        }
+        TypeExpr::Optional(inner)
+        | TypeExpr::Array(inner)
+        | TypeExpr::FixedArray(inner, _)
+        | TypeExpr::Set(inner)
+        | TypeExpr::Vec2(inner)
+        | TypeExpr::Vec3(inner)
+        | TypeExpr::Vec4(inner)
+        | TypeExpr::Quat(inner)
+        | TypeExpr::Mat3(inner)
+        | TypeExpr::Mat4(inner) => {
+            check_alias_target_expr(inner, alias, ctx, type_params, diags);
+        }
+        TypeExpr::Map(key, value) | TypeExpr::Result(key, value) => {
+            check_alias_target_expr(key, alias, ctx, type_params, diags);
+            check_alias_target_expr(value, alias, ctx, type_params, diags);
+        }
+        TypeExpr::Primitive(_)
+        | TypeExpr::SubByte(_)
+        | TypeExpr::Semantic(_)
+        | TypeExpr::Qualified(_, _)
+        | TypeExpr::BitsInline(_) => {}
+    }
 }
 
 /// Detect alias cycles using DFS.

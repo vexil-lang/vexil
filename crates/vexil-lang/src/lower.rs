@@ -95,6 +95,10 @@ pub fn lower_with_deps(
     deps: Option<&DependencyContext>,
 ) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
     let mut ctx = LowerCtx::new();
+    reject_unsupported_invariants(schema, &mut ctx);
+    if !ctx.diagnostics.is_empty() {
+        return (None, ctx.diagnostics);
+    }
     ctx.local_names.extend(
         schema
             .declarations
@@ -137,6 +141,11 @@ pub fn lower_with_deps(
         .unwrap_or_default();
 
     register_import_types(schema, &mut ctx, deps);
+    let diagnostic_count = ctx.diagnostics.len();
+    reject_imported_alias_chains(schema, &mut ctx);
+    if ctx.diagnostics.len() > diagnostic_count {
+        return (None, ctx.diagnostics);
+    }
     let decl_ids = register_declarations(schema, &namespace_key, &mut ctx);
 
     // First pass: lower non-alias, non-const, non-impl declarations
@@ -251,6 +260,92 @@ pub fn lower_with_deps(
     };
 
     (Some(compiled), ctx.diagnostics)
+}
+
+fn reject_unsupported_invariants(schema: &Schema, ctx: &mut LowerCtx) {
+    for declaration in &schema.declarations {
+        let Decl::Message(message) = &declaration.node else {
+            continue;
+        };
+        for item in &message.body {
+            if let MessageBodyItem::Invariant(invariant) = item {
+                ctx.emit(
+                    invariant.span,
+                    ErrorClass::InvariantUnsupported,
+                    "message invariants are not yet supported",
+                );
+            }
+        }
+    }
+}
+
+fn reject_imported_alias_chains(schema: &Schema, ctx: &mut LowerCtx) {
+    for declaration in &schema.declarations {
+        let Decl::Alias(alias) = &declaration.node else {
+            continue;
+        };
+        let type_params: HashSet<&str> = alias
+            .type_params
+            .iter()
+            .map(|parameter| parameter.name.node.as_str())
+            .collect();
+        if type_expr_references_registered_alias(&alias.target.node, ctx, &type_params) {
+            ctx.emit(
+                alias.target.span,
+                ErrorClass::AliasTargetIsAlias,
+                format!(
+                    "alias `{}` references an imported alias; must reference a terminal type directly",
+                    alias.name.node
+                ),
+            );
+        }
+    }
+}
+
+fn type_expr_references_registered_alias(
+    target: &TypeExpr,
+    ctx: &LowerCtx,
+    type_params: &HashSet<&str>,
+) -> bool {
+    let is_alias_name = |name: &str| {
+        ctx.registry.lookup_alias(name).is_some()
+            || ctx
+                .registry
+                .lookup(name)
+                .and_then(|id| ctx.registry.get(id))
+                .is_some_and(|definition| matches!(definition, TypeDef::GenericAlias(_)))
+    };
+
+    match target {
+        TypeExpr::Named(name) => {
+            !type_params.contains(name.as_str()) && is_alias_name(name.as_str())
+        }
+        TypeExpr::Qualified(namespace, name) => is_alias_name(&format!("{namespace}.{name}")),
+        TypeExpr::Generic(name, argument) => {
+            is_alias_name(name.as_str())
+                || type_expr_references_registered_alias(&argument.node, ctx, type_params)
+        }
+        TypeExpr::Optional(inner)
+        | TypeExpr::Array(inner)
+        | TypeExpr::FixedArray(inner, _)
+        | TypeExpr::Set(inner)
+        | TypeExpr::Vec2(inner)
+        | TypeExpr::Vec3(inner)
+        | TypeExpr::Vec4(inner)
+        | TypeExpr::Quat(inner)
+        | TypeExpr::Mat3(inner)
+        | TypeExpr::Mat4(inner) => {
+            type_expr_references_registered_alias(&inner.node, ctx, type_params)
+        }
+        TypeExpr::Map(key, value) | TypeExpr::Result(key, value) => {
+            type_expr_references_registered_alias(&key.node, ctx, type_params)
+                || type_expr_references_registered_alias(&value.node, ctx, type_params)
+        }
+        TypeExpr::Primitive(_)
+        | TypeExpr::SubByte(_)
+        | TypeExpr::Semantic(_)
+        | TypeExpr::BitsInline(_) => false,
+    }
 }
 
 fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&DependencyContext>) {
@@ -644,7 +739,7 @@ fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) 
         match item {
             MessageBodyItem::Field(f) => fields.push(lower_field(&f.node, f.span, ctx)),
             MessageBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span, ctx)),
-            MessageBodyItem::Invariant(_) => {} // invariants lowered with message
+            MessageBodyItem::Invariant(_) => {} // rejected by the lowering entry-point guard
         }
     }
 
@@ -2159,12 +2254,62 @@ mod dep_tests {
     }
 
     #[test]
+    fn public_lowering_api_rejects_invariants_without_partial_ir() {
+        let parsed = crate::parse(
+            "namespace test.guard\nmessage M { value @0 : u32 invariant { value > 0 } }",
+        );
+        let schema = parsed.schema.expect("schema parses");
+        let (compiled, diagnostics) = lower(&schema);
+        assert!(compiled.is_none());
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.class == ErrorClass::InvariantUnsupported
+                && diagnostic.message == "message invariants are not yet supported"
+        }));
+    }
+
+    #[test]
+    fn nested_alias_chains_are_rejected_regardless_of_source_order() {
+        for source in [
+            "namespace test.alias_order\ntype Base = u32\ntype Wrapped = optional<Base>",
+            "namespace test.alias_order\ntype Wrapped = optional<Base>\ntype Base = u32",
+        ] {
+            let result = crate::compile(source);
+            assert!(result.compiled.is_none());
+            assert!(result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.class == ErrorClass::AliasTargetIsAlias }));
+        }
+    }
+
+    #[test]
+    fn concrete_alias_spelling_has_no_hash_wire_or_compatibility_effect() {
+        let aliased = crate::compile(
+            "namespace test.alias_contract\ntype Values = array<u16>\nmessage M { values @0 : Values }",
+        )
+        .compiled
+        .expect("aliased schema compiles");
+        let expanded =
+            crate::compile("namespace test.alias_contract\nmessage M { values @0 : array<u16> }")
+                .compiled
+                .expect("expanded schema compiles");
+
+        assert_eq!(
+            crate::canonical::schema_hash(&aliased),
+            crate::canonical::schema_hash(&expanded)
+        );
+        let report = crate::compat::check(&aliased, &expanded);
+        assert_eq!(report.result, crate::compat::CompatResult::Compatible);
+        assert!(report.changes.is_empty(), "{:?}", report.changes);
+    }
+
+    #[test]
     fn concrete_container_aliases_resolve_transparently() {
         let result = crate::compile(
             "namespace test.container_aliases\n\
              type Names = array<string>\n\
              type Lookup = map<string, optional<u32>>\n\
-             type Outcome = result<Names, string>\n\
+             type Outcome = result<array<string>, string>\n\
              message M { names @0 : Names lookup @1 : Lookup outcome @2 : Outcome }",
         );
         let compiled = result.compiled.expect("schema should compile");
@@ -2312,6 +2457,33 @@ mod dep_tests {
             element_id(&message.fields[1]),
             "diamond imports must deduplicate the defining Item identity"
         );
+    }
+
+    #[test]
+    fn imported_aliases_cannot_be_targets_by_name_wildcard_or_namespace() {
+        let dependency = crate::compile("namespace dep.aliases\ntype Names = array<string>")
+            .compiled
+            .expect("dependency compiles");
+
+        for source in [
+            "namespace root.named\nimport { Names } from dep.aliases\ntype Local = optional<Names>",
+            "namespace root.wildcard\nimport dep.aliases\ntype Local = optional<Names>",
+            "namespace root.qualified\nimport dep.aliases as DT\ntype Local = optional<DT.Names>",
+        ] {
+            let schema = crate::parse(source).schema.expect("root parses");
+            let mut dependencies = DependencyContext {
+                schemas: HashMap::new(),
+            };
+            dependencies
+                .schemas
+                .insert("dep.aliases".to_owned(), dependency.clone());
+            let (compiled, diagnostics) = lower_with_deps(&schema, Some(&dependencies));
+            assert!(compiled.is_none(), "alias chain emitted partial IR");
+            assert!(diagnostics.iter().any(|diagnostic| {
+                diagnostic.class == ErrorClass::AliasTargetIsAlias
+                    && diagnostic.message.contains("imported alias")
+            }));
+        }
     }
 
     #[test]

@@ -756,6 +756,8 @@ name = "vexil-runtime"
 version = "0.5.1"
 dependencies = [
  "proptest",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

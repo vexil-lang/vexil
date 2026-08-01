@@ -83,7 +83,7 @@ export function decodeBasic(r: BitReader): Basic {
 // ── Nested ──
 export interface Nested {
   a: string[] | null;
-  b: number | null[];
+  b: (number | null)[];
   c: Map<string, number[]>;
   d: { ok: void } | { err: string };
   e: { ok: string } | { err: void };
@@ -174,7 +174,7 @@ export function decodeNested(r: BitReader): Nested {
     a = null;
   }
   const b_len = r.readLeb128();
-  const b: number | null[] = [];
+  const b: (number | null)[] = [];
   for (let i = 0; i < b_len; i++) {
     const b_item_present = r.readBool();
     let b_item: number | null;

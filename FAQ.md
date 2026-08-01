@@ -14,7 +14,7 @@ The trade-off: language targets are Rust, TypeScript, Go, and Python, not the "1
 
 ## Is Vexil production-ready?
 
-The binary wire format hasn't changed since April 2026 and breaking it would require a major version bump, while the language specification remains a draft. The repository includes a 126-file conformance corpus (50 valid and 76 invalid), broad Rust and TypeScript byte-vector coverage, and a representative shared generated-wire matrix for Go and Python. BLAKE3 schema hashes help peers detect incompatible schemas before exchanging application data. Neither the wire format nor the corpus have been exercised by external implementations or independently audited yet.
+The binary wire format hasn't changed since April 2026 and breaking it would require a major version bump, while the language specification remains a draft. The repository includes a 129-file conformance corpus (50 valid and 79 invalid), broad Rust and TypeScript byte-vector coverage, and a representative shared generated-wire matrix for Go and Python. BLAKE3 schema hashes help peers detect incompatible schemas before exchanging application data. Neither the wire format nor the corpus have been exercised by external implementations or independently audited yet.
 
 This is not a claim of a final stable release or a substitute for application-level compatibility testing. The Go and Python matrix is not exhaustive for every schema or environment, and the project has not published a security audit. Review the [limitations](docs/limitations-and-gaps.md) and verify your target combination before shipping a cross-language protocol.
 

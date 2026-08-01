@@ -16,7 +16,7 @@ type Basic struct {
 	A *uint32
 	B []string
 	C map[string]uint64
-	D Result[uint32, string]
+	D struct { Ok *uint32; Err *string }
 	Unknown []byte
 }
 
@@ -45,10 +45,10 @@ func (m *Basic) Pack(w *vexil.BitWriter) error {
 	}
 	if m.D.Ok != nil {
 		w.WriteBool(true)
-		w.WriteU32(*m.D.Ok)
+		w.WriteU32((*m.D.Ok))
 	} else {
 		w.WriteBool(false)
-		w.WriteString(*m.D.Err)
+		w.WriteString((*m.D.Err))
 	}
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
@@ -126,23 +126,25 @@ func (m *Basic) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if isOk {
+			var m_DOk uint32
 			{
 				v, err := r.ReadU32()
 				if err != nil {
 					return err
 				}
-				m.D_ok = v
+				m_DOk = v
 			}
-			m.D.Ok = &m.D_ok
+			m.D.Ok = &m_DOk
 		} else {
+			var m_DErr string
 			{
 				v, err := r.ReadString()
 				if err != nil {
 					return err
 				}
-				m.D_err = v
+				m_DErr = v
 			}
-			m.D.Err = &m.D_err
+			m.D.Err = &m_DErr
 		}
 	}
 	r.FlushToByteBoundary()
@@ -156,10 +158,10 @@ type Nested struct {
 	A *[]string
 	B []*uint32
 	C map[string][]uint8
-	D Result[struct{}, string]
-	E Result[string, struct{}]
-	F Result[struct{}, struct{}]
-	G *Result[[]string, map[uint32]string]
+	D struct { Ok *struct{}; Err *string }
+	E struct { Ok *string; Err *struct{} }
+	F struct { Ok *struct{}; Err *struct{} }
+	G *struct { Ok *[]string; Err *map[uint32]string }
 	Unknown []byte
 }
 
@@ -200,11 +202,11 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		w.WriteBool(true)
 	} else {
 		w.WriteBool(false)
-		w.WriteString(*m.D.Err)
+		w.WriteString((*m.D.Err))
 	}
 	if m.E.Ok != nil {
 		w.WriteBool(true)
-		w.WriteString(*m.E.Ok)
+		w.WriteString((*m.E.Ok))
 	} else {
 		w.WriteBool(false)
 	}
@@ -218,22 +220,22 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		w.FlushToByteBoundary()
 		if (*m.G).Ok != nil {
 			w.WriteBool(true)
-			w.WriteLeb128(uint64(len(*(*m.G).Ok)))
-			for _, item := range *(*m.G).Ok {
+			w.WriteLeb128(uint64(len((*(*m.G).Ok))))
+			for _, item := range (*(*m.G).Ok) {
 				w.WriteString(item)
 			}
 		} else {
 			w.WriteBool(false)
-			w.WriteLeb128(uint64(len(*(*m.G).Err)))
-			mapKeysmGErr := make([]uint32, 0, len(*(*m.G).Err))
-			for key := range *(*m.G).Err {
+			w.WriteLeb128(uint64(len((*(*m.G).Err))))
+			mapKeysmGErr := make([]uint32, 0, len((*(*m.G).Err)))
+			for key := range (*(*m.G).Err) {
 				mapKeysmGErr = append(mapKeysmGErr, key)
 			}
 			sort.Slice(mapKeysmGErr, func(i, j int) bool {
 				return mapKeysmGErr[i] < mapKeysmGErr[j]
 			})
 			for _, mapK := range mapKeysmGErr {
-				mapV := *(*m.G).Err[mapK]
+				mapV := (*(*m.G).Err)[mapK]
 				w.WriteU32(mapK)
 				w.WriteString(mapV)
 			}
@@ -346,16 +348,18 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if isOk {
-			m.D.Ok = &m.D_ok
+			var m_DOk struct{}
+			m.D.Ok = &m_DOk
 		} else {
+			var m_DErr string
 			{
 				v, err := r.ReadString()
 				if err != nil {
 					return err
 				}
-				m.D_err = v
+				m_DErr = v
 			}
-			m.D.Err = &m.D_err
+			m.D.Err = &m_DErr
 		}
 	}
 	{
@@ -364,16 +368,18 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if isOk {
+			var m_EOk string
 			{
 				v, err := r.ReadString()
 				if err != nil {
 					return err
 				}
-				m.E_ok = v
+				m_EOk = v
 			}
-			m.E.Ok = &m.E_ok
+			m.E.Ok = &m_EOk
 		} else {
-			m.E.Err = &m.E_err
+			var m_EErr struct{}
+			m.E.Err = &m_EErr
 		}
 	}
 	{
@@ -382,9 +388,11 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if isOk {
-			m.F.Ok = &m.F_ok
+			var m_FOk struct{}
+			m.F.Ok = &m_FOk
 		} else {
-			m.F.Err = &m.F_err
+			var m_FErr struct{}
+			m.F.Err = &m_FErr
 		}
 	}
 	{
@@ -395,37 +403,39 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 		if err == nil {
 			if present {
 				r.FlushToByteBoundary()
-				var optVal Result[[]string, map[uint32]string]
+				var optVal struct { Ok *[]string; Err *map[uint32]string }
 				{
 					isOk, err := r.ReadBool()
 					if err != nil {
 						return err
 					}
 					if isOk {
+						var optValOk []string
 						{
 							arrLen, err := r.ReadLeb128(4)
 							if err != nil {
 								return err
 							}
-							optVal_ok = make([]string, arrLen)
+							optValOk = make([]string, arrLen)
 							for i := uint64(0); i < arrLen; i++ {
 								{
 									v, err := r.ReadString()
 									if err != nil {
 										return err
 									}
-									optVal_ok[i] = v
+									optValOk[i] = v
 								}
 							}
 						}
-						optVal.Ok = &optVal_ok
+						optVal.Ok = &optValOk
 					} else {
+						var optValErr map[uint32]string
 						{
 							mapLen, err := r.ReadLeb128(4)
 							if err != nil {
 								return err
 							}
-							optVal_err = make(map[uint32]string, mapLen)
+							optValErr = make(map[uint32]string, mapLen)
 							for i := uint64(0); i < mapLen; i++ {
 								var mapKey uint32
 								var mapVal string
@@ -443,10 +453,10 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 									}
 									mapVal = v
 								}
-								optVal_err[mapKey] = mapVal
+								optValErr[mapKey] = mapVal
 							}
 						}
-						optVal.Err = &optVal_err
+						optVal.Err = &optValErr
 					}
 				}
 				m.G = &optVal

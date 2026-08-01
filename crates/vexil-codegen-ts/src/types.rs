@@ -21,12 +21,20 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
         }
         ResolvedType::Array(inner) => {
             let inner_str = ts_type(inner, registry);
-            format!("{inner_str}[]")
+            if array_element_needs_wrapper(inner) {
+                format!("({inner_str})[]")
+            } else {
+                format!("{inner_str}[]")
+            }
         }
         ResolvedType::FixedArray(inner, _size) => {
             // TypeScript doesn't have native fixed array types, use regular array
             let inner_str = ts_type(inner, registry);
-            format!("{inner_str}[]")
+            if array_element_needs_wrapper(inner) {
+                format!("({inner_str})[]")
+            } else {
+                format!("{inner_str}[]")
+            }
         }
         ResolvedType::Set(inner) => {
             let inner_str = ts_type(inner, registry);
@@ -71,6 +79,10 @@ pub fn ts_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
 /// a present payload whose value is itself `null`.
 pub fn optional_payload_needs_wrapper(ty: &ResolvedType) -> bool {
     matches!(ty, ResolvedType::Optional(_))
+}
+
+fn array_element_needs_wrapper(ty: &ResolvedType) -> bool {
+    matches!(ty, ResolvedType::Optional(_) | ResolvedType::Result(_, _))
 }
 
 fn primitive_type(p: &PrimitiveType) -> &'static str {

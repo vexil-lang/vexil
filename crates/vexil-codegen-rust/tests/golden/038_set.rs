@@ -15,7 +15,7 @@ pub struct Tags {
 impl vexil_runtime::Pack for Tags {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.write_leb128(self.names.len() as u64);
-        for item in self.names {
+        for item in self.names.iter() {
             w.write_string(item.as_str());
         }
         w.flush_to_byte_boundary();

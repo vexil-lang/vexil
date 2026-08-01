@@ -319,6 +319,7 @@ jobs:
           python crates/vexil-codegen-py/tests/delta_runtime_probe.py
           python crates/vexil-codegen-py/tests/optional_runtime_probe.py
           python crates/vexil-codegen-py/tests/recursion_runtime_probe.py
+          python crates/vexil-codegen-py/tests/result_runtime_probe.py
           python crates/vexil-codegen-py/tests/tombstone_runtime_probe.py
           python crates/vexil-codegen-py/tests/trait_runtime_probe.py
           python crates/vexil-codegen-py/tests/union_runtime_probe.py

@@ -212,6 +212,36 @@ class TestComplianceUnions:
         assert to_hex(w.finish()) == vec["expected_bytes"]
 
 
+class TestComplianceResults:
+    vectors = load_vectors("results.json")
+
+    @pytest.mark.parametrize("vec", vectors, ids=[v["name"] for v in vectors])
+    def test_encode_and_decode(self, vec) -> None:
+        result = vec["value"]["value"]
+        is_ok = "ok" in result
+        w = BitWriter()
+        w.write_bool(is_ok)
+        if vec["name"] == "result_ok_u8":
+            w.write_u8(result["ok"])
+        elif vec["name"] == "result_err_string":
+            w.write_string(result["err"])
+        elif vec["name"] == "result_packed_bool_adjacency":
+            w.write_bool(result["ok"])
+            w.write_bool(vec["value"]["tail"])
+        encoded = w.finish()
+        assert to_hex(encoded) == vec["expected_bytes"]
+
+        r = BitReader(hex_to_bytes(vec["expected_bytes"]))
+        assert r.read_bool() is is_ok
+        if vec["name"] == "result_ok_u8":
+            assert r.read_u8() == result["ok"]
+        elif vec["name"] == "result_err_string":
+            assert r.read_string() == result["err"]
+        elif vec["name"] == "result_packed_bool_adjacency":
+            assert r.read_bool() is result["ok"]
+            assert r.read_bool() is vec["value"]["tail"]
+
+
 class TestComplianceArraysMaps:
     vectors = load_vectors("arrays_maps.json")
 

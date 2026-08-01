@@ -308,7 +308,7 @@ func TestComplianceEnums(t *testing.T) {
 func TestComplianceUnions(t *testing.T) {
 	vectors := loadVectors[primitiveVector](t, "unions.json")
 	for _, v := range vectors {
-			t.Run(v.Name, func(t *testing.T) {
+		t.Run(v.Name, func(t *testing.T) {
 			w := NewBitWriter()
 			unionVal := v.Value["v"].(map[string]interface{})
 			variant, _ := unionVal["variant"].(string)
@@ -339,6 +339,56 @@ func TestComplianceUnions(t *testing.T) {
 			want := hexToBytes(t, v.ExpectedBytes)
 			if !bytesEqual(got, want) {
 				t.Fatalf("got %X, want %X", got, want)
+			}
+		})
+	}
+}
+
+func TestComplianceResults(t *testing.T) {
+	vectors := loadVectors[primitiveVector](t, "results.json")
+	for _, v := range vectors {
+		t.Run(v.Name, func(t *testing.T) {
+			result := v.Value["value"].(map[string]interface{})
+			_, isOK := result["ok"]
+			w := NewBitWriter()
+			w.WriteBool(isOK)
+			switch v.Name {
+			case "result_ok_u8":
+				w.WriteU8(uint8(toFloat64(result["ok"])))
+			case "result_err_string":
+				w.WriteString(result["err"].(string))
+			case "result_packed_bool_adjacency":
+				w.WriteBool(result["ok"].(bool))
+				w.WriteBool(v.Value["tail"].(bool))
+			}
+			got := w.Finish()
+			want := hexToBytes(t, v.ExpectedBytes)
+			if !bytesEqual(got, want) {
+				t.Fatalf("got %X, want %X", got, want)
+			}
+
+			r := NewBitReader(want)
+			decodedOK, err := r.ReadBool()
+			if err != nil || decodedOK != isOK {
+				t.Fatalf("result discriminant: got %v, %v; want %v", decodedOK, err, isOK)
+			}
+			switch v.Name {
+			case "result_ok_u8":
+				value, err := r.ReadU8()
+				if err != nil || value != 42 {
+					t.Fatalf("ok payload: %v, %v", value, err)
+				}
+			case "result_err_string":
+				value, err := r.ReadString()
+				if err != nil || value != "oops" {
+					t.Fatalf("err payload: %q, %v", value, err)
+				}
+			case "result_packed_bool_adjacency":
+				payload, payloadErr := r.ReadBool()
+				tail, tailErr := r.ReadBool()
+				if payloadErr != nil || tailErr != nil || !payload || !tail {
+					t.Fatalf("packed bools: %v/%v, %v/%v", payload, payloadErr, tail, tailErr)
+				}
 			}
 		})
 	}

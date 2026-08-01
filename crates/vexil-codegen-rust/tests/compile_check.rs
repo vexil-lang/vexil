@@ -225,6 +225,7 @@ mod generated_contract {
         assert_eq!(counter.value, 0);
     }
 }
+
 "#,
     );
     assert!(
@@ -232,6 +233,11 @@ mod generated_contract {
         "generated trait behavior failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn concrete_type_aliases_compile() {
+    check_compiles("051_concrete_type_aliases");
 }
 
 #[test]
