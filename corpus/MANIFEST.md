@@ -1,12 +1,12 @@
 # Vexil Test Corpus Manifest
 
 Version: 1.0.0-draft
-Generated: 2026-04-09
+Generated: 2026-08-01
 
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (49 files)
+## Valid Corpus (50 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -59,6 +59,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 048_generic_trait_nested.vexil | §4.9 | Generic trait with a nested `array<T>` field and concrete implementation |
 | 049_trait_function_portable_body.vexil | §4.9–4.10 | Generic trait functions with immutable local, arithmetic, receiver mutation, and value/void returns |
 | 050_non_exhaustive_union_unknown_collision.vexil | §4.4, §11.10 | Unknown non-exhaustive union payload preservation with authored `Unknown` variant |
+| 051_concrete_type_aliases.vexil | §3.4, §4.7 | Transparent aliases for concrete container types |
 
 ## Invalid Corpus (76 files)
 

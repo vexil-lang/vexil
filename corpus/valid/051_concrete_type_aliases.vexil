@@ -1,0 +1,15 @@
+namespace test.concrete_type_aliases
+
+type Names = array<string>
+type Grid = array<u16, 4>
+type Lookup = map<string, optional<u32>>
+type Tags = set<string>
+type Outcome = result<Names, string>
+
+message AliasUser {
+    names   @0 : Names
+    grid    @1 : Grid
+    lookup  @2 : Lookup
+    tags    @3 : Tags
+    outcome @4 : Outcome
+}

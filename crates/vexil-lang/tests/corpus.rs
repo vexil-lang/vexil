@@ -288,6 +288,11 @@ fn valid_050_non_exhaustive_union_unknown_collision() {
     parse_valid("050_non_exhaustive_union_unknown_collision.vexil");
 }
 
+#[test]
+fn valid_051_concrete_type_aliases() {
+    parse_valid("051_concrete_type_aliases.vexil");
+}
+
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================

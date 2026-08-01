@@ -8,6 +8,8 @@ A type alias gives an existing type a new name. It's transparent — same wire e
 type UserId = u64
 type Token = bytes
 type DFixed = fixed64
+type Labels = array<string>
+type Lookup = map<string, optional<u32>>
 ```
 
 `UserId` and `u64` produce identical bytes. The alias exists only in the schema source, making fields more readable.
