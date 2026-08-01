@@ -152,14 +152,10 @@ python -m pip install ./packages/runtime-py
 ```
 
 ```python
-from vexil_runtime import BitReader, BitWriter
 from hello import Greeting
 
-writer = BitWriter()
-Greeting(name="world", message="hello", count=42).pack(writer)
-encoded = writer.finish()
-
-decoded = Greeting.unpack(BitReader(encoded))
+encoded = Greeting(name="world", message="hello", count=42).encode()
+decoded = Greeting.decode(encoded)
 assert decoded.count == 42
 ```
 
