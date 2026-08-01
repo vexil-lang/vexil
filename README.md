@@ -19,6 +19,10 @@
 
 Vexil describes both the shape *and* the wire encoding of data crossing system boundaries. `u4` is 4 bits, no negotiation. `@varint` on a `u64` makes it unsigned LEB128. The schema is the wire contract, not a hint about the wire format.
 
+> **Project revival:** the next release is a focused 0.x stabilization release,
+> not Vexil 1.0. See the [candidate release notes](docs/book/src/releases/revival.md)
+> and [current support matrix](docs/book/src/getting-started/support-matrix.md).
+
 Each schema produces a deterministic BLAKE3 hash embedded in generated code at compile time. If two parties compile against different schemas, the mismatch is detectable before data is read. This helps make incompatible schema changes explicit instead of relying on environment-specific behavior.
 
 ## Quick look
@@ -88,7 +92,7 @@ const decoded = decodeSensorReading(r);
 - **Fixed-size arrays**: `array<T, N>` -- no length prefix on wire, size is part of the schema
 - **Set type**: `set<T>` -- sorted on encode, duplicates silently dropped
 - **Inline bitfields**: `bits { a, b, c }` -- anonymous flags, exactly N bits
-- **Type aliases**: `type UserId = u64` -- same wire encoding, better names
+- **Type aliases**: `type UserId = u64` or `type Labels = array<string>` -- same wire encoding, better names
 - **Compile-time constants**: `const MaxSize : u32 = 1024` -- usable in array sizes and where clauses
 - **Where clauses**: `field @0 : u32 where value > 0` -- validated on encode and decode, invalid data never touches the wire
 - **Traits and impl**: structural fields and portable generated instance methods, with zero wire impact
@@ -98,7 +102,7 @@ const decoded = decodeSensorReading(r);
 - Rust and TypeScript have broad byte-vector coverage; generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.
 - Same data always produces the same bytes -- no maps with random iteration order, no padding variance
 - Every invalid input yields a distinct error with file, line, column, and a description
-- 125-file conformance corpus (49 valid, 76 invalid) that any conformant implementation must pass
+- 126-file conformance corpus (50 valid, 76 invalid) that any conformant implementation must pass
 
 ## Fixed-Point Types
 
@@ -177,7 +181,8 @@ message UserProfile {
 }
 ```
 
-Cross-field constraints (`where amount <= balance`) and regex matching are deferred to 1.1.
+Cross-field constraints (`where amount <= balance`) and regex matching are
+future language work with no promised release number.
 
 ## Comparison
 
@@ -281,8 +286,8 @@ spec/
   wire-format.md         # Binary wire-format specification (normative)
   grammar.peg             # Formal PEG grammar
 corpus/
-  valid/                 # 49 schemas -- a conformant impl must accept all
-  invalid/               # 75 schemas -- a conformant impl must reject all
+  valid/                 # 50 schemas -- a conformant impl must accept all
+  invalid/               # 76 schemas -- a conformant impl must reject all
   projects/              # Multi-file integration tests
 compliance/
   vectors/               # Golden byte vectors -- cross-implementation contract
@@ -299,7 +304,7 @@ crates/
 packages/
   runtime-ts/            # @vexil-lang/runtime -- TypeScript BitWriter/BitReader (npm)
   runtime-go/            # github.com/vexil-lang/vexil/packages/runtime-go -- Go runtime
-  runtime-py/            # vexil_runtime -- Python BitWriter/BitReader (source-only)
+  runtime-py/            # vexil-runtime -- Python BitWriter/BitReader (0.1.0 release candidate)
 examples/
   sensor-packet/         # Sub-byte types, encoding annotations, compact enums
   command-protocol/      # Unions, flags, limits -- RPC-style protocol
@@ -314,6 +319,8 @@ examples/
 - [Language Specification](spec/language.md)
 - [Wire-Format Specification](spec/wire-format.md)
 - [FAQ](FAQ.md)
+- [Changelog](CHANGELOG.md)
+- [Support matrix](docs/book/src/getting-started/support-matrix.md)
 - [Examples](examples/)
 - [Limitations and Gaps](docs/limitations-and-gaps.md)
 - [**vexmon**](https://github.com/vexil-lang/vexmon) -- real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)

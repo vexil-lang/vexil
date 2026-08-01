@@ -30,6 +30,7 @@ actually changes:
 | `vexil-lang`, `vexil-runtime`, `vexil-store`, `vexilc`, codegen crates | crates.io | each has its own rate of change |
 | `@vexil-lang/runtime` (TS) | npm | own release cadence |
 | Go runtime | Go module proxy, tag-only | newest, least proven target — its low version number (`v0.1.x`) is an honest signal of that, not a gap to close |
+| `vexil-runtime` (Python) | PyPI | own release cadence and representative generated-code coverage |
 
 There is no single "Vexil version" number, and no attempt to keep crate
 version numbers in lockstep with each other or with the spec version. If

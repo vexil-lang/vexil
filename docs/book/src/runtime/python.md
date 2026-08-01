@@ -4,8 +4,8 @@ The Python runtime provides bit-level I/O for Vexil-generated Python code.
 
 ## Source installation
 
-The runtime is currently available from this repository; it does not make a
-public PyPI publication claim. From a repository checkout, install it with:
+Version 0.1.0 is prepared for its first PyPI release. Until the tagged Trusted
+Publishing workflow succeeds, install it from a repository checkout:
 
 ```sh
 python -m pip install ./packages/runtime-py

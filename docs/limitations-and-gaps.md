@@ -1,6 +1,6 @@
 # Vexil Wire Format — Limitations, Gaps, and What We Haven't Done Yet
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-08-01
 
 ## What We've Verified
 
@@ -11,6 +11,9 @@ Last reviewed: 2026-07-30
 - **Delta encoding:** `@delta` works in both Rust and TypeScript. The system-monitor example uses it over WebSocket with live data.
 - **Zero-copy reads:** `BitReader` can return `&[u8]` and `&str` slices backed by the input buffer. No copies for large payloads.
 - **Map key ordering:** Canonical sort order is defined for all valid key types. Encoders sort before writing.
+- **Result and open-union contracts:** Result uses `0 = Err` and `1 = Ok`.
+  Unknown non-exhaustive union values preserve their discriminant and bounded
+  payload bytes across all four generated targets.
 
 ## Known Limitations
 
@@ -28,6 +31,10 @@ Things that would be useful but aren't implemented:
 - **Runtime type guards (TypeScript):** The generated TypeScript has interfaces but no runtime validation. You can't check "is this object a valid `SensorReading`?" without the schema.
 - **Schema registry:** No built-in distribution mechanism. The BLAKE3 hash gives you identity but not discovery.
 - **Generated Python coverage is representative:** Generated Python is verified against a shared representative wire matrix. This is not exhaustive for every schema or deployment environment.
+- **Reserved invariants are rejected:** The parser retains precise syntax and
+  spans, but compilation fails until portable encode/decode enforcement is
+  specified. Cross-field and regex constraints likewise have no release-number
+  promise.
 
 ## Performance
 

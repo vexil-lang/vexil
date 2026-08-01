@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Enforce schema `@version` and import SemVer requirements across project graphs.
+- Resolve transparent aliases for concrete container and imported named types.
+
+### Fixed
+
+- Reject unsupported message invariants instead of silently compiling them.
+- Preserve declaration identity through aliases, imports, tombstones, traits,
+  and diamond dependency remapping.
+
 ## [0.4.3] - 2026-03-29
 
 ### Fixed

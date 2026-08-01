@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Retain the published Result discriminant contract in runtime and generated
+  round-trip coverage.
+
 ## [0.5.1] - 2026-03-29
 
 ### Documentation

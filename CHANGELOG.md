@@ -1,96 +1,84 @@
 # Changelog
 
-Individual crate changelogs track detailed changes:
+This file summarizes repository-wide release milestones. Detailed Rust crate
+changes remain in each crate's changelog.
+
+## Unreleased — revival release candidate
+
+Vexil is returning with a focused 0.x release. This is a stabilization release,
+not a 1.0 declaration: it closes known contract gaps, makes generated output
+safer, and refreshes the path from installation to a working schema.
+
+### Language and compiler
+
+- Enforce SemVer requirements on imports, including direct, aliased,
+  transitive, and diamond project graphs.
+- Support transparent aliases for concrete container and named types, including
+  imported aliases, without changing canonical hashes or wire layouts.
+- Reject message invariants with a dedicated diagnostic until portable
+  encode/decode semantics are specified; they are no longer silently accepted.
+- Preserve typed tombstones as wire-inert history metadata.
+- Generate portable trait methods from the supported straight-line expression
+  subset and reject unsupported bodies before emission.
+
+### Wire behavior and generated code
+
+- Keep the released `result<T, E>` discriminants: `0` encodes `Err`, `1`
+  encodes `Ok`.
+- Preserve unknown `@non_exhaustive` union discriminants and payload bytes in
+  Rust, TypeScript, Go, and Python, with bounded length-prefix decoding and
+  collision-safe generated names.
+- Correct nested optional encoding, constraint validation, deterministic map
+  and set ordering, inline bitfields, geometric values, newtype keys, and
+  target-specific generated-code defects found by native compilation and
+  execution.
+- Expand generated Go and Python execution against the shared compliance
+  vectors while retaining an honest, representative-coverage claim.
+
+### Tooling and release preparation
+
+- Make generated Rust, TypeScript, Go, and Python code part of enforced native
+  validation rather than relying on textual goldens alone.
+- Prepare `vexil-runtime` 0.1.0 for its first PyPI release with a tested public
+  API, dual-license metadata, built-distribution checks, and a SHA-pinned
+  Trusted Publishing workflow.
+- Refresh the README and book around a tested first-run path, target support
+  boundaries, release notes, and version-neutral future work.
+
+### Compatibility notes
+
+- This release does not introduce a new wire format. The Result correction
+  restores the already published byte contract; decoders do not accept both
+  discriminant orders.
+- Unknown non-exhaustive union values now round-trip instead of losing their
+  payload. Applications matching union values should retain their generated
+  unknown case.
+- Cross-field constraints, regex constraints, invariants, RPC, a standard
+  library, and other roadmap ideas have no promised release number.
+
+## Published baseline
+
+There has been no Vexil 1.0 release. The latest repository tags before this
+candidate are:
+
+| Component | Latest tag |
+| --- | --- |
+| `vexil-lang` and Rust/TypeScript/Go generators | `0.4.3` |
+| `vexil-runtime` and `vexilc` | `0.5.1` |
+| `vexil-store` | `0.4.2` |
+| Go runtime module | `0.1.1` |
+
+Earlier root tags `v0.1.0` and `v0.2.0` established the compiler, schema hash,
+project compilation, store formats, and initial release pipeline. Component
+changelogs and Git tags are authoritative for package-specific history.
+
+## Component changelogs
 
 - [vexil-lang](crates/vexil-lang/CHANGELOG.md)
 - [vexil-runtime](crates/vexil-runtime/CHANGELOG.md)
 - [vexil-codegen-rust](crates/vexil-codegen-rust/CHANGELOG.md)
 - [vexil-codegen-ts](crates/vexil-codegen-ts/CHANGELOG.md)
 - [vexil-codegen-go](crates/vexil-codegen-go/CHANGELOG.md)
+- [vexil-codegen-py](crates/vexil-codegen-py/CHANGELOG.md)
 - [vexil-store](crates/vexil-store/CHANGELOG.md)
 - [vexilc](crates/vexilc/CHANGELOG.md)
-
-## Releases
-
-### v1.0.0 (2026-04-09)
-
-Language complete. New types, codegen for all backends, optimized runtime, comprehensive docs.
-
-**New types:**
-- `fixed32` (Q16.16), `fixed64` (Q32.32) — deterministic fixed-point arithmetic
-- `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` — geometric primitives
-- `array<T, N>` — fixed-size arrays (no count prefix on wire)
-- `set<T>` — sorted unique collections
-- `bits { ... }` — inline bitfields
-
-**New declarations:**
-- `type Name = Target` — transparent type aliases
-- `const Name : Type = Value` — compile-time constants with cross-reference arithmetic
-- `where value > 0` — field-level validation constraints (auto-checked on encode/decode)
-- `trait Name { fields }` — structural contracts (zero wire impact)
-- `impl Trait for Type` — trait implementations with validation
-- `invariant { condition }` — cross-field conditions in messages
-- `type Name<T: Trait> = ...` — type parameter bounds
-
-**Runtime improvements:**
-- `BitWriter::with_capacity(n)` — pre-allocate to avoid reallocations
-- `BitWriter::reset()` — reuse writer for batch encoding
-- `BitReader::read_bytes_ref()` — zero-copy byte slice reads
-- `BitReader::read_string_ref()` — zero-copy string reads
-- `write_bits` / `read_bits` fast path for byte-aligned writes
-- Checked arithmetic in const evaluation (no overflow panics)
-- `CompiledSchema` compile-time `Send + Sync` assertion
-
-**Codegen:**
-- All three backends (Rust, TypeScript, Go) generate pack/unpack for new types
-- Golden test files for all new types
-- 14 new compliance vector tests
-
-**CLI:**
-- `vexilc check --json` — machine-readable diagnostics for CI
-- `NO_COLOR` env var support — disables ANSI colors
-
-**API:**
-- `CompileResult.is_ok()`, `.has_errors()`, `.errors()`, `.warnings()`
-- `CompiledSchema.type_names()`, `.find_type(name)`, `.hash_hex()`
-- `FormatOptions::builder()` — builder pattern for formatting options
-
-**Testing:**
-- 20 property-based tests with proptest (roundtrip invariants)
-
-**Docs:**
-- 108-file conformance corpus (43 valid, 65 invalid)
-- 32 golden byte tests
-- 11 book chapters
-- Doc comments on all public items across all crates
-- Human-voice README, FAQ, contributing guide
-- Game state protocol example
-
-### v0.5.0 / v0.4.2 (2026-03-29)
-
-CLI polish, code quality, Go backend, delta streaming, schema evolution.
-
-- **CLI:** `vexilc watch` (auto-rebuild on save), `vexilc init`, `vexilc hash`, `--version`, `--help`
-- **Go backend:** `vexil-codegen-go` crate + `packages/runtime-go` module
-- **Delta encoding:** `@delta` on messages with automatic varint/zigzag selection
-- **Schema evolution:** `vexilc compat` CLI, `_unknown` field preservation, typed tombstones, `SchemaHandshake`
-- **Cross-language:** Rust ↔ TypeScript ↔ Go interop verified by compliance vectors
-- **Examples:** System monitor dashboard (Rust → browser via WebSocket), cross-language sensor telemetry
-- **Code quality:** No `unwrap()` in production code, all public APIs documented, rustdoc clean
-
-### v0.2.4 (2026-03-27)
-
-TypeScript backend, compliance infrastructure, benchmarks.
-
-- **TypeScript backend:** `vexil-codegen-ts` crate + `@vexil-lang/runtime` npm package
-- **Compliance vectors:** 8 JSON golden byte vector files
-- **Benchmark suite:** `vexil-bench` crate with Criterion
-- **Spec §11:** Encoding edge cases (normative)
-
-### v0.2.0 (2026-03-26)
-
-SDK architecture, vexil-store, release pipeline.
-
-### v0.1.0 (2026-03-26)
-
-Initial release. Lexer, parser, AST, IR, type checker, canonical form, BLAKE3 schema hash.

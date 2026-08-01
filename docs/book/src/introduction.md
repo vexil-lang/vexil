@@ -8,6 +8,10 @@ Vexil (Validated Exchange Language) is a typed schema language where the wire en
   <a href="https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md">Review compatibility limits</a>
 </div>
 
+> **Revival release candidate:** Vexil is preparing a focused 0.x
+> stabilization release. Read [what changed](releases/revival.md) and the
+> [support matrix](getting-started/support-matrix.md) before adopting it.
+
 > **Choose a verified path.** Rust and TypeScript have broad cross-language byte-vector coverage. Generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.
 
 ## What makes Vexil different?

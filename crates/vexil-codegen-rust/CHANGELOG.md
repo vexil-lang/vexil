@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
+- Keep published Result discriminants and correct nested optional, constraint,
+  map/set ordering, inline-bit, and trait-method generation behavior.
+
 ## [0.4.3] - 2026-03-29
 
 ### Fixed

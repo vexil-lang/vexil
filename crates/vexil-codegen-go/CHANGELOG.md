@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
+- Keep published Result discriminants and correct optional-container access,
+  collection keys, geometric values, constraints, and generated file endings.
+
 ## [0.4.3] - 2026-03-29
 
 ### Fixed
@@ -19,4 +27,3 @@
 ### Other
 
 - chore(release): v0.4.1
-

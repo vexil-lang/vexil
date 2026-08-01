@@ -8,6 +8,12 @@
 - [Your First Schema](./getting-started/first-schema.md)
 - [Generating Code](./getting-started/generating-code.md)
 - [Compatibility and limitations](./getting-started/compatibility.md)
+- [Support matrix](./getting-started/support-matrix.md)
+- [Compression layering](./getting-started/compression.md)
+
+# Releases
+
+- [Revival release candidate](./releases/revival.md)
 
 # Language Guide
 
@@ -51,4 +57,3 @@
 
 - [Development Setup](./contributing/setup.md)
 - [Architecture](./contributing/architecture.md)
-

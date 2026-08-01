@@ -61,7 +61,8 @@ message User {
 
 ## What's Not Supported (Yet)
 
-- **Cross-field constraints**: `where amount <= balance` can't reference other fields. Deferred to 1.1.
+- **Cross-field constraints**: `where amount <= balance` can't reference other
+  fields. This is future language work with no promised release number.
 - **Regex**: `where value matches "..."` doesn't exist. Use a length check and validate regex in application code.
 - **User-defined functions**: you can only use the built-in operators and `len()`.
 
