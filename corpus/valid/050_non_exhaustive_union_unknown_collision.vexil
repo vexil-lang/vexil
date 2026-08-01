@@ -1,0 +1,8 @@
+# §4.4, §11.10: generated unknown values must not collide with authored names.
+namespace test.union_unknown
+
+@non_exhaustive
+union Event {
+    Unknown @0 { reason @0 : string }
+    Data @1 { value @0 : u16 }
+}

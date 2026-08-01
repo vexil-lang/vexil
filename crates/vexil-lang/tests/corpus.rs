@@ -283,6 +283,11 @@ fn valid_049_trait_function_portable_body() {
     parse_valid("049_trait_function_portable_body.vexil");
 }
 
+#[test]
+fn valid_050_non_exhaustive_union_unknown_collision() {
+    parse_valid("050_non_exhaustive_union_unknown_collision.vexil");
+}
+
 // =========================================================================
 // Where clause semantic validation errors
 // =========================================================================

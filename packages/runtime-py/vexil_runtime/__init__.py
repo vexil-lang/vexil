@@ -13,6 +13,7 @@ from .bitio import (
     DecodeError,
     MAX_RECURSION_DEPTH,
     MAX_BYTES_LENGTH,
+    MAX_LENGTH_PREFIX_BYTES,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "DecodeError",
     "MAX_RECURSION_DEPTH",
     "MAX_BYTES_LENGTH",
+    "MAX_LENGTH_PREFIX_BYTES",
 ]

@@ -145,7 +145,7 @@ Special value formats in JSON:
 | `array<T>` | Array | `[1, 2, 3]` |
 | `map<K,V>` | Object (string keys) | `{"key": "value"}` |
 | `set<T>` | Array (sorted, unique) | `["a", "b"]` |
-| `union` | Object with `variant` key | `{"variant": "Circle", "radius": 1.5}` |
+| `union` | Object with `variant` key; unknown open variants include `unknown`, `discriminant`, and byte-array `data` | `{"variant": "Circle", "radius": 1.5}` |
 | `void` | `null` | `null` |
 | `newtype` | Inner value | `42` |
 | `vec2`/`vec3`/`vec4` | Array | `[1.0, 2.0, 3.0]` |

@@ -697,8 +697,11 @@ Empty variants (no fields, e.g. `Reset @2 {}`) encode the discriminant (step 2)
 and a zero byte length (step 3). No field bytes follow.
 
 For exhaustive unions, a decoder MUST reject unknown discriminant values. For
-`@non_exhaustive` unions, a decoder MUST read the byte length prefix and skip
-exactly that many bytes, then continue decoding.
+`@non_exhaustive` unions, a decoder MUST read the byte length prefix, preserve
+exactly that many bytes with the unknown discriminant in an opaque generated
+value, and reproduce them unchanged if the value is re-encoded. The length
+prefix MUST use no more than four LEB128 bytes and the payload MUST NOT exceed
+67,108,864 bytes (64 MiB).
 
 Variant ordinals MUST NOT exceed 65535.
 
@@ -1235,8 +1238,9 @@ after reading all known fields, before checking for trailing bytes.
 If a decoder encounters a union discriminant value that does not match
 any known variant:
 
-- If the union is `@non_exhaustive`: skip the length-prefixed payload.
-  The application receives an opaque discriminant + raw bytes.
+- If the union is `@non_exhaustive`: preserve the bounded length-prefixed
+  payload. The application receives an opaque discriminant + raw bytes, and
+  re-encoding reproduces them unchanged.
 - If the union is exhaustive: return `DecodeError::UnknownUnionVariant`.
 
 The length-prefixed payload enables skipping unknown variants without

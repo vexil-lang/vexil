@@ -188,11 +188,18 @@ class TestComplianceUnions:
     def test_encode_matches_expected_bytes(self, vec) -> None:
         w = BitWriter()
         union_val = vec["value"]["v"]
-        variant = union_val["variant"]
-        discriminant = 0 if variant == "Circle" else 1
+        variant = union_val.get("variant")
+        discriminant = (
+            union_val["discriminant"]
+            if union_val.get("unknown") is True
+            else (0 if variant == "Circle" else 1)
+        )
 
         payload_w = BitWriter()
-        if variant == "Circle":
+        if union_val.get("unknown") is True:
+            data = bytes(union_val["data"])
+            payload_w.write_raw_bytes(data, len(data))
+        elif variant == "Circle":
             payload_w.write_f32(float(union_val["radius"]))
         else:
             payload_w.write_f32(float(union_val["w"]))

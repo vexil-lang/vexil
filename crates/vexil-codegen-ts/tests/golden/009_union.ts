@@ -58,6 +58,9 @@ export function decodeShape(r: BitReader): Shape {
   r.flushToByteBoundary();
   const disc = r.readLeb128();
   const len = r.readLeb128();
+  if (len > 67_108_864) {
+    throw new Error(`Shape payload length ${len} exceeds limit 67108864`);
+  }
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
@@ -79,6 +82,7 @@ export function decodeShape(r: BitReader): Shape {
       return { tag: 'Point' as const };
     }
     default: {
+      r.readRawBytes(len);
       throw new Error(`Unknown Shape discriminant: ${disc}`);
     }
   }
@@ -102,13 +106,13 @@ export interface Color_Reset {
   tag: 'Reset';
 }
 
-export interface Color_Unknown {
-  tag: '__unknown';
+export interface Color__VexilUnknown {
+  tag: '__vexil_unknown';
   discriminant: number;
   data: Uint8Array;
 }
 
-export type Color = Color_Ansi | Color_Rgb | Color_Reset | Color_Unknown;
+export type Color = Color_Ansi | Color_Rgb | Color_Reset | Color__VexilUnknown;
 
 export function encodeColor(v: Color, w: BitWriter): void {
   switch (v.tag) {
@@ -139,7 +143,10 @@ export function encodeColor(v: Color, w: BitWriter): void {
       w.writeLeb128(0);
       break;
     }
-    case '__unknown': {
+    case '__vexil_unknown': {
+      if (v.data.length > 67_108_864) {
+        throw new Error(`Color payload length ${v.data.length} exceeds limit 67108864`);
+      }
       w.writeLeb128(v.discriminant);
       w.writeLeb128(v.data.length);
       w.writeRawBytes(v.data);
@@ -152,6 +159,9 @@ export function decodeColor(r: BitReader): Color {
   r.flushToByteBoundary();
   const disc = r.readLeb128();
   const len = r.readLeb128();
+  if (len > 67_108_864) {
+    throw new Error(`Color payload length ${len} exceeds limit 67108864`);
+  }
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
@@ -175,7 +185,7 @@ export function decodeColor(r: BitReader): Color {
     }
     default: {
       const data = r.readRawBytes(len);
-      return { tag: '__unknown' as const, discriminant: disc, data };
+      return { tag: '__vexil_unknown' as const, discriminant: disc, data };
     }
   }
 }
@@ -225,6 +235,9 @@ export function decodeEvent(r: BitReader): Event {
   r.flushToByteBoundary();
   const disc = r.readLeb128();
   const len = r.readLeb128();
+  if (len > 67_108_864) {
+    throw new Error(`Event payload length ${len} exceeds limit 67108864`);
+  }
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
@@ -242,6 +255,7 @@ export function decodeEvent(r: BitReader): Event {
       return { tag: 'Scroll' as const, delta: _vexilField0 };
     }
     default: {
+      r.readRawBytes(len);
       throw new Error(`Unknown Event discriminant: ${disc}`);
     }
   }

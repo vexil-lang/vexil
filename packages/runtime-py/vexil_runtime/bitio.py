@@ -23,6 +23,7 @@ class DecodeError(Exception):
 
 MAX_RECURSION_DEPTH = 64
 MAX_BYTES_LENGTH = 64 * 1024 * 1024  # 64 MiB
+MAX_LENGTH_PREFIX_BYTES = 4
 
 
 class BitWriter:
@@ -431,16 +432,20 @@ class BitReader:
         self._byte_pos += 8
         return struct.unpack('<d', struct.pack('<Q', bits))[0]
     
-    def read_leb128(self) -> int:
+    def read_leb128(self, max_bytes: int | None = None) -> int:
         """Read an unsigned LEB128-encoded integer, byte-aligned."""
         self._align()
         result = 0
         shift = 0
+        byte_count = 0
         while True:
+            if max_bytes is not None and byte_count >= max_bytes:
+                raise DecodeError("invalid or overlong varint encoding")
             if self._byte_pos >= len(self._data):
                 raise DecodeError("Unexpected end of data")
             byte = self._data[self._byte_pos]
             self._byte_pos += 1
+            byte_count += 1
             result |= (byte & 0x7F) << shift
             if byte & 0x80 == 0:
                 break

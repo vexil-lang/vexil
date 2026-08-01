@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError, MAX_BYTES_LENGTH, MAX_LENGTH_PREFIX_BYTES
 
 SCHEMA_HASH: tuple[int, ...] = (0xe8, 0x9e, 0x3d, 0xf3, 0xbb, 0xd3, 0xf0, 0x51, 0x30, 0xe2, 0xa4, 0x92, 0x1c, 0x77, 0xdf, 0x4a, 0xaf, 0x61, 0x5b, 0x1e, 0x7c, 0x62, 0x54, 0xea, 0xae, 0x92, 0xa8, 0xc9, 0x5e, 0x27, 0x82, 0xf6)
 
@@ -105,7 +105,9 @@ class ChoiceNamed(Choice):
 def decode_Choice_from(_vexil_reader: _BitReader) -> Choice:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"Choice payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -113,10 +115,11 @@ def decode_Choice_from(_vexil_reader: _BitReader) -> Choice:
         _vexil_field_1 = _vexil_payload_reader.read_u16()
         return ChoiceNamed(_vexil_field_0, _vexil_field_1)
     else:
+        _vexil_reader.read_bytes(_vexil_length)
         raise ValueError(f"unknown Choice discriminant: {_vexil_discriminant}")
 
 def decode_Choice(data: bytes) -> Choice:
     _vexil_reader = _BitReader(data)
     return decode_Choice_from(_vexil_reader)
 
-__all__ = ["dataclass", "Protocol", "runtime_checkable", "SCHEMA_HASH", "Settings", "Fields", "Collision", "Choice", "ChoiceNamed", "decode_Choice_from", "decode_Choice"]
+__all__ = ["dataclass", "Protocol", "runtime_checkable", "DecodeError", "MAX_BYTES_LENGTH", "MAX_LENGTH_PREFIX_BYTES", "SCHEMA_HASH", "Settings", "Fields", "Collision", "Choice", "ChoiceNamed", "decode_Choice_from", "decode_Choice"]

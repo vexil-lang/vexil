@@ -308,17 +308,23 @@ func TestComplianceEnums(t *testing.T) {
 func TestComplianceUnions(t *testing.T) {
 	vectors := loadVectors[primitiveVector](t, "unions.json")
 	for _, v := range vectors {
-		t.Run(v.Name, func(t *testing.T) {
+			t.Run(v.Name, func(t *testing.T) {
 			w := NewBitWriter()
 			unionVal := v.Value["v"].(map[string]interface{})
-			variant := unionVal["variant"].(string)
+			variant, _ := unionVal["variant"].(string)
 			discriminant := 0
-			if variant == "Rect" {
+			if unknown, _ := unionVal["unknown"].(bool); unknown {
+				discriminant = int(toFloat64(unionVal["discriminant"]))
+			} else if variant == "Rect" {
 				discriminant = 1
 			}
 
 			pw := NewBitWriter()
-			if variant == "Circle" {
+			if unknown, _ := unionVal["unknown"].(bool); unknown {
+				for _, value := range unionVal["data"].([]interface{}) {
+					pw.WriteU8(uint8(toFloat64(value)))
+				}
+			} else if variant == "Circle" {
 				pw.WriteF32(float32(toFloat64(unionVal["radius"])))
 			} else {
 				pw.WriteF32(float32(toFloat64(unionVal["w"])))

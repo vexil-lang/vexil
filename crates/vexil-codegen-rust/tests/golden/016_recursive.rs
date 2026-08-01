@@ -181,7 +181,11 @@ impl vexil_runtime::Unpack for ExprKind {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
         let disc = r.read_leb128(10_u8)?;
-        let len = r.read_leb128(10_u8)? as usize;
+        let len = r.read_leb128(vexil_runtime::MAX_LENGTH_PREFIX_BYTES)?;
+        if len > vexil_runtime::MAX_BYTES_LENGTH {
+            return Err(vexil_runtime::DecodeError::LimitExceeded { field: "ExprKind", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: len });
+        }
+        let len = len as usize;
         match disc {
             0_u64 => {
                 let payload = r.read_raw_bytes(len)?;

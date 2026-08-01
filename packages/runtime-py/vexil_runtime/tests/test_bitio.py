@@ -6,6 +6,7 @@ These tests verify byte-for-byte identical output to the Rust vexil-runtime.
 import struct
 import sys
 import math
+import pytest
 from vexil_runtime.bitio import BitWriter, BitReader, EncodeError, DecodeError
 
 
@@ -412,6 +413,11 @@ class TestBitReaderLeb128:
     def test_read_leb128_300(self):
         r = BitReader(b'\xac\x02')
         assert r.read_leb128() == 300
+
+    def test_read_leb128_respects_explicit_byte_limit(self):
+        r = BitReader(bytes([0x80, 0x80, 0x80, 0x80, 0x00]))
+        with pytest.raises(DecodeError, match="overlong varint"):
+            r.read_leb128(4)
 
 
 class TestBitReaderStringBytes:

@@ -7,6 +7,7 @@ use crate::types::{py_ident, py_type};
 /// Emit a complete Python union: base class + variant classes + encode/decode.
 pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     let name = un.name.as_str();
+    let non_exhaustive = un.annotations.non_exhaustive;
 
     // Base class
     w.open_block(&format!("class {name}"));
@@ -90,6 +91,28 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         w.blank();
     }
 
+    if non_exhaustive {
+        let class_name = format!("{name}__VexilUnknown");
+        w.open_block(&format!("class {class_name}({name})"));
+        w.open_block("def __init__(self, discriminant: int, data: bytes)");
+        w.line("self.discriminant = discriminant");
+        w.line("self.data = data");
+        w.close_block();
+        w.blank();
+        w.open_block("def encode_to(self, _vexil_writer: _BitWriter) -> None");
+        w.open_block("if len(self.data) > MAX_BYTES_LENGTH");
+        w.line(&format!(
+            "raise EncodeError(f\"{name} payload length {{len(self.data)}} exceeds limit {{MAX_BYTES_LENGTH}}\")"
+        ));
+        w.close_block();
+        w.line("_vexil_writer.write_leb128(self.discriminant)");
+        w.line("_vexil_writer.write_leb128(len(self.data))");
+        w.line("_vexil_writer.write_raw_bytes(self.data, len(self.data))");
+        w.close_block();
+        w.close_block();
+        w.blank();
+    }
+
     // Reader-level decode lets messages consume one union value without
     // guessing its size. The byte-array convenience wrapper follows below.
     w.open_block(&format!(
@@ -97,7 +120,12 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     ));
     w.line("_vexil_reader.flush_to_byte_boundary()");
     w.line("_vexil_discriminant = _vexil_reader.read_leb128()");
-    w.line("_vexil_length = _vexil_reader.read_leb128()");
+    w.line("_vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)");
+    w.open_block("if _vexil_length > MAX_BYTES_LENGTH");
+    w.line(&format!(
+        "raise DecodeError(f\"{name} payload length {{_vexil_length}} exceeds limit {{MAX_BYTES_LENGTH}}\")"
+    ));
+    w.close_block();
 
     for variant in &un.variants {
         let vname = variant.name.as_str();
@@ -111,6 +139,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         }
 
         if variant.fields.is_empty() {
+            w.line("_vexil_reader.read_bytes(_vexil_length)");
             w.line(&format!("return {class_name}()"));
         } else {
             w.line("_vexil_payload = _vexil_reader.read_bytes(_vexil_length)");
@@ -139,9 +168,17 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
     // default case
     w.open_block("else");
-    w.line(&format!(
-        "raise ValueError(f\"unknown {name} discriminant: {{_vexil_discriminant}}\")"
-    ));
+    if non_exhaustive {
+        w.line("_vexil_data = _vexil_reader.read_bytes(_vexil_length)");
+        w.line(&format!(
+            "return {name}__VexilUnknown(_vexil_discriminant, _vexil_data)"
+        ));
+    } else {
+        w.line("_vexil_reader.read_bytes(_vexil_length)");
+        w.line(&format!(
+            "raise ValueError(f\"unknown {name} discriminant: {{_vexil_discriminant}}\")"
+        ));
+    }
     w.close_block();
 
     w.close_block();

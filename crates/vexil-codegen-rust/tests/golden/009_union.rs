@@ -47,7 +47,11 @@ impl vexil_runtime::Unpack for Shape {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
         let disc = r.read_leb128(10_u8)?;
-        let len = r.read_leb128(10_u8)? as usize;
+        let len = r.read_leb128(vexil_runtime::MAX_LENGTH_PREFIX_BYTES)?;
+        if len > vexil_runtime::MAX_BYTES_LENGTH {
+            return Err(vexil_runtime::DecodeError::LimitExceeded { field: "Shape", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: len });
+        }
+        let len = len as usize;
         match disc {
             0_u64 => {
                 let payload = r.read_raw_bytes(len)?;
@@ -84,7 +88,8 @@ pub enum Color {
     Ansi { code: u8 },
     Rgb { r: u8, g: u8, b: u8 },
     Reset {},
-    Unknown { discriminant: u64, data: Vec<u8> },
+    #[allow(non_camel_case_types)]
+    __VexilUnknown { discriminant: u64, data: Vec<u8> },
 }
 
 impl vexil_runtime::Pack for Color {
@@ -114,7 +119,10 @@ impl vexil_runtime::Pack for Color {
                 w.write_leb128(2_u64);
                 w.write_leb128(0_u64);
             }
-            Self::Unknown { discriminant, data } => {
+            Self::__VexilUnknown { discriminant, data } => {
+                if data.len() as u64 > vexil_runtime::MAX_BYTES_LENGTH {
+                    return Err(vexil_runtime::EncodeError::LimitExceeded { field: "Color", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: data.len() as u64 });
+                }
                 w.write_leb128(*discriminant);
                 w.write_leb128(data.len() as u64);
                 w.write_raw_bytes(data);
@@ -128,7 +136,11 @@ impl vexil_runtime::Unpack for Color {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
         let disc = r.read_leb128(10_u8)?;
-        let len = r.read_leb128(10_u8)? as usize;
+        let len = r.read_leb128(vexil_runtime::MAX_LENGTH_PREFIX_BYTES)?;
+        if len > vexil_runtime::MAX_BYTES_LENGTH {
+            return Err(vexil_runtime::DecodeError::LimitExceeded { field: "Color", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: len });
+        }
+        let len = len as usize;
         match disc {
             0_u64 => {
                 let payload = r.read_raw_bytes(len)?;
@@ -152,7 +164,7 @@ impl vexil_runtime::Unpack for Color {
             }
             other => {
                 let data = r.read_raw_bytes(len)?;
-                Ok(Self::Unknown { discriminant: other, data })
+                Ok(Self::__VexilUnknown { discriminant: other, data })
             }
         }
     }
@@ -201,7 +213,11 @@ impl vexil_runtime::Unpack for Event {
     fn unpack(r: &mut vexil_runtime::BitReader<'_>) -> Result<Self, vexil_runtime::DecodeError> {
         r.flush_to_byte_boundary();
         let disc = r.read_leb128(10_u8)?;
-        let len = r.read_leb128(10_u8)? as usize;
+        let len = r.read_leb128(vexil_runtime::MAX_LENGTH_PREFIX_BYTES)?;
+        if len > vexil_runtime::MAX_BYTES_LENGTH {
+            return Err(vexil_runtime::DecodeError::LimitExceeded { field: "Event", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: len });
+        }
+        let len = len as usize;
         match disc {
             0_u64 => {
                 let payload = r.read_raw_bytes(len)?;

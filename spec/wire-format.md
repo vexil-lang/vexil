@@ -378,7 +378,9 @@ Unions encode as: `[discriminant LEB128][payload length LEB128][variant fields]`
 3. Write payload byte length as unsigned LEB128
 4. Write variant fields in ascending ordinal order
 
-The length prefix enables skipping unknown variants for `@non_exhaustive` unions.
+The length prefix enables bounded preservation of unknown variants for
+`@non_exhaustive` unions. The prefix MUST use no more than four LEB128 bytes and
+the payload length MUST NOT exceed 67,108,864 bytes (64 MiB).
 
 **Example:**
 ```vexil
@@ -403,8 +405,13 @@ Variants with no fields write discriminant + zero length:
 
 For `@non_exhaustive` unions, decoders:
 1. Read discriminant
-2. Read payload length
-3. Skip exactly that many bytes if discriminant is unknown
+2. Read and validate the payload length
+3. Read exactly that many bytes if the discriminant is unknown
+4. Return an opaque value containing the discriminant and payload bytes
+
+Re-encoding that opaque value MUST reproduce the same discriminant and payload
+bytes. Exhaustive unions continue to reject unknown discriminants after safely
+consuming their bounded payload.
 
 ---
 

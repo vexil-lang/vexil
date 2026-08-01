@@ -321,6 +321,7 @@ jobs:
           python crates/vexil-codegen-py/tests/recursion_runtime_probe.py
           python crates/vexil-codegen-py/tests/tombstone_runtime_probe.py
           python crates/vexil-codegen-py/tests/trait_runtime_probe.py
+          python crates/vexil-codegen-py/tests/union_runtime_probe.py
 
   # Native static checkers validate generated target code against the checked-in
   # runtimes. The lockfile pins both tools so local and CI diagnostics agree.

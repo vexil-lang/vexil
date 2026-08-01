@@ -319,7 +319,10 @@ fn required_runtime_imports(body: &str) -> Vec<&'static str> {
     [
         ("_BitWriter", "BitWriter as _BitWriter"),
         ("_BitReader", "BitReader as _BitReader"),
+        ("EncodeError", "EncodeError"),
         ("DecodeError", "DecodeError"),
+        ("MAX_BYTES_LENGTH", "MAX_BYTES_LENGTH"),
+        ("MAX_LENGTH_PREFIX_BYTES", "MAX_LENGTH_PREFIX_BYTES"),
     ]
     .into_iter()
     .filter_map(|(symbol, import)| body.contains(symbol).then_some(import))

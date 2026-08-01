@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError, MAX_BYTES_LENGTH, MAX_LENGTH_PREFIX_BYTES
 
 SCHEMA_HASH: tuple[int, ...] = (0x06, 0xd9, 0x95, 0xe1, 0xc7, 0x2a, 0xef, 0xec, 0x68, 0x94, 0xe9, 0x71, 0x21, 0x92, 0x96, 0x74, 0xb6, 0xaa, 0xb0, 0x66, 0x4b, 0x64, 0x27, 0x91, 0x85, 0x34, 0x22, 0x3e, 0xdc, 0xeb, 0x60, 0x31)
 
@@ -338,7 +338,9 @@ class DataFixedBytes(Data):
 def decode_Data_from(_vexil_reader: _BitReader) -> Data:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"Data payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -358,6 +360,7 @@ def decode_Data_from(_vexil_reader: _BitReader) -> Data:
         _vexil_field_0 = tuple(_vexil__5f_vexil_5f_field_5f_0_fixed_items)
         return DataFixedBytes(_vexil_field_0)
     else:
+        _vexil_reader.read_bytes(_vexil_length)
         raise ValueError(f"unknown Data discriminant: {_vexil_discriminant}")
 
 def decode_Data(data: bytes) -> Data:
@@ -424,4 +427,4 @@ class EdgeCases:
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "Basic", "Point", "Nested", "WithOptional", "WithUnion", "Data", "DataFixedInts", "DataFixedBytes", "decode_Data_from", "decode_Data", "EdgeCases"]
+__all__ = ["dataclass", "DecodeError", "MAX_BYTES_LENGTH", "MAX_LENGTH_PREFIX_BYTES", "SCHEMA_HASH", "Basic", "Point", "Nested", "WithOptional", "WithUnion", "Data", "DataFixedInts", "DataFixedBytes", "decode_Data_from", "decode_Data", "EdgeCases"]

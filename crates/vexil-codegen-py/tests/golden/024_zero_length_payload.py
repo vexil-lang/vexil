@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError, MAX_BYTES_LENGTH, MAX_LENGTH_PREFIX_BYTES
 
 SCHEMA_HASH: tuple[int, ...] = (0xc4, 0x4e, 0x40, 0xb2, 0xf3, 0x59, 0x8c, 0xc5, 0xf4, 0x0d, 0xfe, 0xbc, 0x69, 0x4b, 0x7c, 0xcf, 0xee, 0x8b, 0x02, 0x52, 0xd5, 0x4f, 0xc1, 0x80, 0xb7, 0xa2, 0xd0, 0xc0, 0xca, 0x3c, 0xa0, 0x55)
 
@@ -144,10 +144,14 @@ class EventData(Event):
 def decode_Event_from(_vexil_reader: _BitReader) -> Event:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"Event payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
+        _vexil_reader.read_bytes(_vexil_length)
         return EventPing()
     elif _vexil_discriminant == 1:
+        _vexil_reader.read_bytes(_vexil_length)
         return EventPong()
     elif _vexil_discriminant == 2:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
@@ -156,10 +160,11 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
         _vexil_field_0 = _vexil_payload_reader.read_bytes(_vexil__5f_vexil_5f_field_5f_0_length)
         return EventData(_vexil_field_0)
     else:
+        _vexil_reader.read_bytes(_vexil_length)
         raise ValueError(f"unknown Event discriminant: {_vexil_discriminant}")
 
 def decode_Event(data: bytes) -> Event:
     _vexil_reader = _BitReader(data)
     return decode_Event_from(_vexil_reader)
 
-__all__ = ["dataclass", "SCHEMA_HASH", "Empty", "Wrapper", "Event", "EventPing", "EventPong", "EventData", "decode_Event_from", "decode_Event"]
+__all__ = ["dataclass", "DecodeError", "MAX_BYTES_LENGTH", "MAX_LENGTH_PREFIX_BYTES", "SCHEMA_HASH", "Empty", "Wrapper", "Event", "EventPing", "EventPong", "EventData", "decode_Event_from", "decode_Event"]

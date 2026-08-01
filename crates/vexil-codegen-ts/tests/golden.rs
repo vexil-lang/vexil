@@ -161,6 +161,11 @@ fn test_049_trait_function_portable_body() {
 }
 
 #[test]
+fn test_050_non_exhaustive_union_unknown_collision() {
+    golden_test("050_non_exhaustive_union_unknown_collision");
+}
+
+#[test]
 fn trait_field_tags_do_not_change_generated_output() {
     let first = "namespace test.trait_tags\ntrait Tagged { value @0 : i32 label @1 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";
     let retagged = "namespace test.trait_tags\ntrait Tagged { value @9 : i32 label @9 : string }\nmessage Item { value @0 : i32 label @1 : string }\nimpl Tagged for Item { }";

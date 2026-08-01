@@ -118,6 +118,52 @@ fn test_008_flags() {
 }
 
 #[test]
+fn non_exhaustive_union_unknown_round_trips_and_is_bounded() {
+    let source = r#"
+namespace test.union_unknown
+@non_exhaustive
+union Event {
+    Unknown @0 { reason @0 : string }
+    Data @1 { value @0 : u16 }
+}
+"#;
+    let output = run_generated_project(
+        "unknown-union",
+        source,
+        r#"
+
+#[cfg(test)]
+mod unknown_union_contract {
+    use super::*;
+    use vexil_runtime::{BitReader, BitWriter, DecodeError, Pack, Unpack};
+
+    #[test]
+    fn preserves_unknown_payload() {
+        let bytes = [0x09, 0x02, 0xde, 0xad];
+        let decoded = Event::unpack(&mut BitReader::new(&bytes)).unwrap();
+        assert_eq!(decoded, Event::__VexilUnknown { discriminant: 9, data: vec![0xde, 0xad] });
+        let mut writer = BitWriter::new();
+        decoded.pack(&mut writer).unwrap();
+        assert_eq!(writer.finish(), bytes);
+    }
+
+    #[test]
+    fn rejects_over_limit_payload_before_allocation() {
+        let bytes = [0x09, 0x81, 0x80, 0x80, 0x20];
+        let error = Event::unpack(&mut BitReader::new(&bytes)).unwrap_err();
+        assert!(matches!(error, DecodeError::LimitExceeded { .. }));
+    }
+}
+"#,
+    );
+    assert!(
+        output.status.success(),
+        "generated Rust unknown-union contract failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn test_009_union() {
     check_compiles("009_union");
 }

@@ -9,6 +9,7 @@ use crate::types::{go_type, to_pascal_case};
 /// Wire format: discriminant (LEB128) + payload byte length (LEB128) + payload bytes.
 pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     let name = un.name.as_str();
+    let non_exhaustive = un.annotations.non_exhaustive;
 
     // Interface type with marker method
     w.open_block(&format!("type {name} interface"));
@@ -32,6 +33,18 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
         // Marker method
         w.open_block(&format!("func ({struct_name}) is{name}()"));
+        w.close_block();
+        w.blank();
+    }
+
+    if non_exhaustive {
+        let unknown_name = format!("{name}__VexilUnknown");
+        w.open_block(&format!("type {unknown_name} struct"));
+        w.line("Discriminant uint64");
+        w.line("Data []byte");
+        w.close_block();
+        w.blank();
+        w.open_block(&format!("func ({unknown_name}) is{name}()"));
         w.close_block();
         w.blank();
     }
@@ -75,6 +88,20 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         w.close_block();
     }
 
+    if non_exhaustive {
+        let unknown_name = format!("{name}__VexilUnknown");
+        w.open_block(&format!("case *{unknown_name}:"));
+        w.open_block("if len(t.Data) > vexil.MaxBytesLength");
+        w.line(&format!(
+            "return &vexil.EncodeError{{Field: \"{name}\", Message: fmt.Sprintf(\"payload length %d exceeds limit %d\", len(t.Data), vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}}"
+        ));
+        w.close_block();
+        w.line("w.WriteLeb128(t.Discriminant)");
+        w.line("w.WriteLeb128(uint64(len(t.Data)))");
+        w.line("w.WriteRawBytes(t.Data)");
+        w.close_block();
+    }
+
     w.close_block(); // switch
     w.line("return nil");
     w.close_block(); // function
@@ -93,6 +120,11 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     w.line("length, err := r.ReadLeb128(4)");
     w.open_block("if err != nil");
     w.line(unpack_err_return);
+    w.close_block();
+    w.open_block("if length > vexil.MaxBytesLength");
+    w.line(&format!(
+        "return nil, &vexil.DecodeError{{Field: \"{name}\", Message: fmt.Sprintf(\"payload length %d exceeds limit %d\", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}}"
+    ));
     w.close_block();
     w.open_block("switch disc");
 
@@ -139,13 +171,24 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
     // Default case
     w.open_block("default:");
-    w.open_block("");
-    w.line("_, err := r.ReadRawBytes(int(length))");
-    w.open_block("if err != nil");
-    w.line(unpack_err_return);
-    w.close_block();
-    w.close_block();
-    w.line("return nil, fmt.Errorf(\"unknown discriminant %d\", disc)");
+    if non_exhaustive {
+        let unknown_name = format!("{name}__VexilUnknown");
+        w.line("data, err := r.ReadRawBytes(int(length))");
+        w.open_block("if err != nil");
+        w.line(unpack_err_return);
+        w.close_block();
+        w.line(&format!(
+            "return &{unknown_name}{{Discriminant: disc, Data: data}}, nil"
+        ));
+    } else {
+        w.open_block("");
+        w.line("_, err := r.ReadRawBytes(int(length))");
+        w.open_block("if err != nil");
+        w.line(unpack_err_return);
+        w.close_block();
+        w.close_block();
+        w.line("return nil, fmt.Errorf(\"unknown discriminant %d\", disc)");
+    }
     w.close_block();
 
     w.close_block(); // switch

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError, MAX_BYTES_LENGTH, MAX_LENGTH_PREFIX_BYTES
 
 SCHEMA_HASH: tuple[int, ...] = (0xa1, 0x25, 0xcb, 0x50, 0x29, 0x3e, 0xa3, 0x25, 0x60, 0x73, 0x08, 0x42, 0x52, 0xc5, 0xca, 0xf0, 0x83, 0xf5, 0xdd, 0xf7, 0x30, 0x18, 0xf8, 0x51, 0x8e, 0x54, 0xa9, 0xfd, 0xbe, 0xeb, 0x91, 0xae)
 
@@ -234,7 +234,9 @@ class ExprKindBinary(ExprKind):
 def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"ExprKind payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -256,10 +258,11 @@ def decode_ExprKind_from(_vexil_reader: _BitReader) -> ExprKind:
             _vexil_payload_reader.leave_nested()
         return ExprKindBinary(_vexil_field_0, _vexil_field_1, _vexil_field_2)
     else:
+        _vexil_reader.read_bytes(_vexil_length)
         raise ValueError(f"unknown ExprKind discriminant: {_vexil_discriminant}")
 
 def decode_ExprKind(data: bytes) -> ExprKind:
     _vexil_reader = _BitReader(data)
     return decode_ExprKind_from(_vexil_reader)
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "TreeNode", "LinkedList", "Expr", "ExprKind", "ExprKindLiteral", "ExprKindBinary", "decode_ExprKind_from", "decode_ExprKind"]
+__all__ = ["dataclass", "DecodeError", "MAX_BYTES_LENGTH", "MAX_LENGTH_PREFIX_BYTES", "SCHEMA_HASH", "TreeNode", "LinkedList", "Expr", "ExprKind", "ExprKindLiteral", "ExprKindBinary", "decode_ExprKind_from", "decode_ExprKind"]
