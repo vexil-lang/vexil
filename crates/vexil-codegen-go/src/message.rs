@@ -410,10 +410,10 @@ fn emit_write_type(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("{writer}.WriteBool({access} != nil)"));
+            w.open_block(&format!("if {access} != nil"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{writer}.FlushToByteBoundary()"));
             }
-            w.open_block(&format!("if {access} != nil"));
             // For Named types (messages, etc.), the pointer is already the right type
             // for method calls. For primitives, we need to dereference.
             match inner.as_ref() {
@@ -776,10 +776,10 @@ fn emit_read_type(
             w.line(err_return);
             w.close_block();
             w.open_block("if err == nil");
+            w.open_block("if present");
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.FlushToByteBoundary()"));
             }
-            w.open_block("if present");
             let inner_go = go_collection_key_type(inner, registry);
             let opt_value = if target == "optVal" || target.ends_with("OptVal") {
                 format!("nested{}", to_pascal_case(target))

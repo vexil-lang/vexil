@@ -223,8 +223,8 @@ func (m *Config) Pack(w *vexil.BitWriter) error {
 		}
 	}
 	w.WriteBool(m.Port != nil)
-	w.FlushToByteBoundary()
 	if m.Port != nil {
+		w.FlushToByteBoundary()
 		w.WriteU16((*m.Port))
 	}
 	w.FlushToByteBoundary()
@@ -241,8 +241,8 @@ func (m *Config) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal uint16
 				{
 					v, err := r.ReadU16()

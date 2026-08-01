@@ -489,6 +489,13 @@ runBasic(
   "M(v=(None,))",
 );
 runBasic(
+  "nested-optional-some-none-u16-tail-bool",
+  "generated_wire.json",
+  "nested_optional_some_none_u16_tail_bool",
+  "func() *M { var inner *uint16; return &M{V: &inner, Tail: true} }()",
+  "M(v=(None,), tail=True)",
+);
+runBasic(
   "nested-optional-some-u16",
   "generated_wire.json",
   "nested_optional_some_u16",

@@ -370,15 +370,10 @@ fn emit_write_type(
         ResolvedType::Optional(inner) => {
             // Presence bit
             w.line(&format!("w.write_bool({access}.is_some());"));
-            // If inner is byte-aligned, flush before conditional
+            w.open_block(&format!("if let Some(ref inner_val) = {access}"));
             if is_byte_aligned(inner, registry) {
                 w.line("w.flush_to_byte_boundary();");
-                // Hmm, actually flush is on writer side. We only flush after the presence
-                // bit if the inner type requires byte alignment. The spec says flush the
-                // bit-stream before writing the inner value. Let's keep the flush here
-                // only when needed.
             }
-            w.open_block(&format!("if let Some(ref inner_val) = {access}"));
             let inner_access = if is_copy_type(inner) {
                 "*inner_val"
             } else {
@@ -667,10 +662,10 @@ fn emit_read_type(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("let {var_name}_present = r.read_bool()?;"));
+            w.open_block(&format!("let {var_name} = if {var_name}_present"));
             if is_byte_aligned(inner, registry) {
                 w.line("r.flush_to_byte_boundary();");
             }
-            w.open_block(&format!("let {var_name} = if {var_name}_present"));
             emit_read_type(
                 w,
                 &format!("{var_name}_inner"),

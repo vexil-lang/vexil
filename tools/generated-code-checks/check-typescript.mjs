@@ -18,6 +18,10 @@ const golden = resolve(
   repoRoot,
   "crates/vexil-codegen-ts/tests/golden/049_trait_function_portable_body.ts",
 );
+const nestedOptionalTailGolden = resolve(
+  repoRoot,
+  "crates/vexil-codegen-ts/tests/golden/nested_optional_tail.ts",
+);
 const runtimePackage = resolve(repoRoot, "packages/runtime-ts");
 
 function runTsc(project) {
@@ -60,6 +64,35 @@ function writeProject(temp, source, emit = false) {
     ),
   );
   return config;
+}
+
+function runGeneratedContract(goldenPath, contractSource, label) {
+  const temp = mkdtempSync(join(tmpdir(), `vexil-ts-${label}-`));
+  try {
+    installRuntime(temp);
+    const source = readFileSync(goldenPath, "utf8");
+    const emitted = runTsc(writeProject(temp, source, true));
+    if (emitted.status !== 0) {
+      process.stderr.write(emitted.stdout);
+      process.stderr.write(emitted.stderr);
+      process.stderr.write(`${label}: TypeScript compilation failed.\n`);
+      process.exit(emitted.status ?? 1);
+    }
+    const contract = join(temp, "contract.mjs");
+    writeFileSync(contract, contractSource);
+    const runtime = spawnSync(process.execPath, [contract], {
+      cwd: temp,
+      encoding: "utf8",
+    });
+    if (runtime.status !== 0) {
+      process.stderr.write(runtime.stdout);
+      process.stderr.write(runtime.stderr);
+      process.stderr.write(`${label}: generated runtime contract failed.\n`);
+      process.exit(runtime.status ?? 1);
+    }
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
 }
 
 function checkAliasedTraitProject() {
@@ -193,6 +226,29 @@ if (counter.value !== 0) {
     process.stderr.write(runtime.stderr);
     process.exit(runtime.status ?? 1);
   }
+  runGeneratedContract(
+    nestedOptionalTailGolden,
+    `import { BitReader, BitWriter } from '@vexil-lang/runtime';
+import { decodeM, encodeM } from './out/generated.js';
+
+function encode(v, tail) {
+  const writer = new BitWriter();
+  encodeM({ v, tail, _unknown: new Uint8Array(0) }, writer);
+  return writer.finish();
+}
+function hex(bytes) { return Buffer.from(bytes).toString('hex'); }
+
+const innerNoneBytes = encode([null], true);
+if (hex(innerNoneBytes) !== '05') throw new Error(\`inner-none tail packing: \${hex(innerNoneBytes)}\`);
+const innerNone = decodeM(new BitReader(Uint8Array.from([0x05])));
+if (!Array.isArray(innerNone.v) || innerNone.v[0] !== null || !innerNone.tail) {
+  throw new Error('inner-none tail decode');
+}
+if (hex(encode(innerNone.v, innerNone.tail)) !== '05') throw new Error('inner-none tail round trip');
+if (hex(encode(null, true)) !== '02') throw new Error('outer-none tail packing');
+`,
+    "nested-optional-tail",
+  );
   checkAliasedTraitProject();
 } finally {
   rmSync(temp, { recursive: true, force: true });

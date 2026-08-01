@@ -469,9 +469,9 @@ config Settings {
         );
         assert!(
             code.contains(
-                "w.write_bool(inner_val.is_some());\n            w.flush_to_byte_boundary();"
+                "w.write_bool(inner_val.is_some());\n            if let Some(ref inner_val) = inner_val {\n                w.flush_to_byte_boundary();"
             ),
-            "inner presence bit must flush before its u16 payload:\n{code}"
+            "inner presence bit must flush only for a present u16 payload:\n{code}"
         );
         assert!(
             code.contains("let v_present = r.read_bool()?;\n        let v = if v_present"),

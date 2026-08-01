@@ -17,13 +17,13 @@ type WithOptionals struct {
 
 func (m *WithOptionals) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Name != nil)
-	w.FlushToByteBoundary()
 	if m.Name != nil {
+		w.FlushToByteBoundary()
 		w.WriteString((*m.Name))
 	}
 	w.WriteBool(m.Value != nil)
-	w.FlushToByteBoundary()
 	if m.Value != nil {
+		w.FlushToByteBoundary()
 		w.WriteU32((*m.Value))
 	}
 	w.WriteBool(m.Flag != nil)
@@ -44,8 +44,8 @@ func (m *WithOptionals) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal string
 				{
 					v, err := r.ReadString()
@@ -64,8 +64,8 @@ func (m *WithOptionals) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal uint32
 				{
 					v, err := r.ReadU32()
@@ -113,8 +113,8 @@ func (m *NestedOptional) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Inner != nil)
 	if m.Inner != nil {
 		w.WriteBool((*m.Inner) != nil)
-		w.FlushToByteBoundary()
 		if (*m.Inner) != nil {
+			w.FlushToByteBoundary()
 			w.WriteU32((*(*m.Inner)))
 		}
 	}
@@ -140,8 +140,8 @@ func (m *NestedOptional) Unpack(r *vexil.BitReader) error {
 						return err
 					}
 					if err == nil {
-						r.FlushToByteBoundary()
 						if present {
+							r.FlushToByteBoundary()
 							var nestedOptVal uint32
 							{
 								v, err := r.ReadU32()
@@ -174,13 +174,13 @@ type AllEmpty struct {
 
 func (m *AllEmpty) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
-	w.FlushToByteBoundary()
 	if m.A != nil {
+		w.FlushToByteBoundary()
 		w.WriteString((*m.A))
 	}
 	w.WriteBool(m.B != nil)
-	w.FlushToByteBoundary()
 	if m.B != nil {
+		w.FlushToByteBoundary()
 		w.WriteU32((*m.B))
 	}
 	w.WriteBool(m.C != nil)
@@ -201,8 +201,8 @@ func (m *AllEmpty) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal string
 				{
 					v, err := r.ReadString()
@@ -221,8 +221,8 @@ func (m *AllEmpty) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal uint32
 				{
 					v, err := r.ReadU32()

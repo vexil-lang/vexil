@@ -5,7 +5,7 @@
   { "scenario": "unknown non-exhaustive enum ordinal and unknown flags bits", "authority": "compliance/vectors/generated_wire.json#non_exhaustive_enum_unknown,flags_unknown_bits", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "numeric map and set canonical order", "authority": "compliance/vectors/generated_wire.json#map_i16_canonical_order,set_u16_canonical_order", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "nested optional map set", "authority": "compliance/vectors/generated_wire.json#nested_optional_map_set", "targets": ["go", "python"], "status": "covered" },
-  { "scenario": "nested optional presence states", "authority": "compliance/vectors/generated_wire.json#nested_optional_some_none_u16,nested_optional_some_u16", "targets": ["rust", "typescript", "go", "python"], "status": "covered" },
+  { "scenario": "nested optional presence states and absent-payload continuation", "authority": "compliance/vectors/generated_wire.json#nested_optional_some_none_u16,nested_optional_some_none_u16_tail_bool,nested_optional_some_u16", "targets": ["rust", "typescript", "go", "python"], "status": "covered" },
   { "scenario": "constraints through nested optionals", "authority": "compliance/vectors/generated_wire.json#nested_optional_constrained_u16", "targets": ["rust", "typescript", "go", "python"], "status": "covered" },
   { "scenario": "truncated required primitive", "authority": "spec/wire-format.md section 12", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "recursive depth 64 success and depth 65 rejection", "authority": "spec/wire-format.md section 12 MAX_RECURSION_DEPTH", "targets": ["go", "python"], "status": "covered" },

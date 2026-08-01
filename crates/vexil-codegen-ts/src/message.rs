@@ -5,7 +5,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::ts_type;
+use crate::types::{optional_payload_needs_wrapper, ts_type};
 use vexil_lang::codegen::portable::PortableFunction;
 
 // ---------------------------------------------------------------------------
@@ -163,18 +163,19 @@ fn emit_field_constraint_validation_ts(
     field_name: &str,
 ) {
     let mut guards = Vec::new();
+    let mut value = access.to_string();
     let mut current = ty;
     while let ResolvedType::Optional(inner) = current {
-        let guard = format!("{access} !== null");
-        if guards.last() != Some(&guard) {
-            guards.push(guard);
+        guards.push(format!("{value} !== null"));
+        if optional_payload_needs_wrapper(inner) {
+            value = format!("{value}[0]");
         }
         current = inner;
     }
     if !guards.is_empty() {
         w.open_block(&format!("if ({})", guards.join(" && ")));
     }
-    emit_constraint_validation_ts(w, constraint, access, field_name);
+    emit_constraint_validation_ts(w, constraint, &value, field_name);
     if !guards.is_empty() {
         w.close_block();
     }
@@ -296,11 +297,16 @@ fn emit_write_type(
         ResolvedType::Optional(inner) => {
             // Presence bit
             w.line(&format!("{writer}.writeBool({access} !== null);"));
+            w.open_block(&format!("if ({access} !== null)"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{writer}.flushToByteBoundary();"));
             }
-            w.open_block(&format!("if ({access} !== null)"));
-            emit_write_type(w, access, inner, registry, writer);
+            let inner_access = if optional_payload_needs_wrapper(inner) {
+                format!("{access}[0]")
+            } else {
+                access.to_string()
+            };
+            emit_write_type(w, &inner_access, inner, registry, writer);
             w.close_block();
         }
         ResolvedType::Array(inner) => {
@@ -520,14 +526,23 @@ fn emit_read_type(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("const {var_name}_present = {reader}.readBool();"));
+            let inner_ts = ts_type(inner, registry);
+            let optional_ts = if optional_payload_needs_wrapper(inner) {
+                format!("[{inner_ts}] | null")
+            } else {
+                format!("{inner_ts} | null")
+            };
+            w.line(&format!("let {var_name}: {optional_ts};"));
+            w.open_block(&format!("if ({var_name}_present)"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.flushToByteBoundary();"));
             }
-            let inner_ts = ts_type(inner, registry);
-            w.line(&format!("let {var_name}: {inner_ts} | null;",));
-            w.open_block(&format!("if ({var_name}_present)"));
             emit_read_type(w, &format!("{var_name}_inner"), inner, registry, reader);
-            w.line(&format!("{var_name} = {var_name}_inner;"));
+            if optional_payload_needs_wrapper(inner) {
+                w.line(&format!("{var_name} = [{var_name}_inner];"));
+            } else {
+                w.line(&format!("{var_name} = {var_name}_inner;"));
+            }
             w.dedent();
             w.line("} else {");
             w.indent();

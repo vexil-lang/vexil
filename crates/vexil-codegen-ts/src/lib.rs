@@ -446,12 +446,22 @@ mod tests {
             "outer presence bit must not flush before the inner optional:\n{code}"
         );
         assert!(
-            code.contains("w.writeBool(v.v !== null);\n    w.flushToByteBoundary();"),
-            "inner presence bit must flush before its u16 payload:\n{code}"
+            code.contains(
+                "w.writeBool(v.v[0] !== null);\n    if (v.v[0] !== null) {\n      w.flushToByteBoundary();"
+            ),
+            "inner presence bit must flush only for a present u16 payload:\n{code}"
         );
         assert!(
-            code.contains("const v_present = r.readBool();\n  let v: number | null | null;"),
+            code.contains("v: [number | null] | null;"),
+            "nested optional states need a distinct TypeScript representation:\n{code}"
+        );
+        assert!(
+            code.contains("const v_present = r.readBool();\n  let v: [number | null] | null;"),
             "outer decode presence bit must not flush before the inner optional:\n{code}"
+        );
+        assert!(
+            code.contains("v = [v_inner];"),
+            "a present outer optional must retain the inner optional state:\n{code}"
         );
     }
 

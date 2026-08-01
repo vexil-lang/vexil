@@ -167,6 +167,16 @@ fn verify_nested_optional_some_none_u16() {
 }
 
 #[test]
+fn verify_nested_optional_some_none_u16_tail_bool() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.write_bool(false);
+    w.write_bool(true);
+    w.flush_to_byte_boundary();
+    assert_eq!(hex(&w.finish()), "05");
+}
+
+#[test]
 fn verify_nested_optional_some_u16() {
     let mut w = BitWriter::new();
     w.write_bool(true);

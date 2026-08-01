@@ -22,8 +22,8 @@ type Basic struct {
 
 func (m *Basic) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
-	w.FlushToByteBoundary()
 	if m.A != nil {
+		w.FlushToByteBoundary()
 		w.WriteU32((*m.A))
 	}
 	w.WriteLeb128(uint64(len(m.B)))
@@ -64,8 +64,8 @@ func (m *Basic) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal uint32
 				{
 					v, err := r.ReadU32()
@@ -165,8 +165,8 @@ type Nested struct {
 
 func (m *Nested) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.A != nil)
-	w.FlushToByteBoundary()
 	if m.A != nil {
+		w.FlushToByteBoundary()
 		w.WriteLeb128(uint64(len((*m.A))))
 		for _, item := range (*m.A) {
 			w.WriteString(item)
@@ -175,8 +175,8 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 	w.WriteLeb128(uint64(len(m.B)))
 	for _, item := range m.B {
 		w.WriteBool(item != nil)
-		w.FlushToByteBoundary()
 		if item != nil {
+			w.FlushToByteBoundary()
 			w.WriteU32((*item))
 		}
 	}
@@ -214,8 +214,8 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 		w.WriteBool(false)
 	}
 	w.WriteBool(m.G != nil)
-	w.FlushToByteBoundary()
 	if m.G != nil {
+		w.FlushToByteBoundary()
 		if (*m.G).Ok != nil {
 			w.WriteBool(true)
 			w.WriteLeb128(uint64(len(*(*m.G).Ok)))
@@ -253,8 +253,8 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal []string
 				{
 					arrLen, err := r.ReadLeb128(4)
@@ -289,8 +289,8 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 					return err
 				}
 				if err == nil {
-					r.FlushToByteBoundary()
 					if present {
+						r.FlushToByteBoundary()
 						var optVal uint32
 						{
 							v, err := r.ReadU32()
@@ -393,8 +393,8 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal Result[[]string, map[uint32]string]
 				{
 					isOk, err := r.ReadBool()

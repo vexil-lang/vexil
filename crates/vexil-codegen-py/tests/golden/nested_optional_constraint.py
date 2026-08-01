@@ -34,8 +34,8 @@ class M:
         if _vexil_self_2e_v_optional is not None:
             _vexil__5f_vexil_5f_self_5f_2e_5f_v_5f_optional_5b_0_5d__optional = _vexil_self_2e_v_optional[0]
             w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_v_5f_optional_5b_0_5d__optional is not None)
-            w.flush_to_byte_boundary()
             if _vexil__5f_vexil_5f_self_5f_2e_5f_v_5f_optional_5b_0_5d__optional is not None:
+                w.flush_to_byte_boundary()
                 w.write_u16(_vexil__5f_vexil_5f_self_5f_2e_5f_v_5f_optional_5b_0_5d__optional)
         w.flush_to_byte_boundary()
         if self.unknown:
@@ -64,8 +64,8 @@ class M:
                 except DecodeError:
                     _vexil_m_2e_v_optional_value = None
                 else:
-                    r.flush_to_byte_boundary()
                     if _vexil__5f_vexil_5f_m_5f_2e_5f_v_5f_optional_5f_value_present:
+                        r.flush_to_byte_boundary()
                         _vexil_m_2e_v_optional_value = r.read_u16()
                     else:
                         _vexil_m_2e_v_optional_value = None

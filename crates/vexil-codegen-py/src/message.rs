@@ -312,10 +312,10 @@ fn emit_write_type(
             let value = local_name(access, "optional");
             w.line(&format!("{value} = {access}"));
             w.line(&format!("{writer}.write_bool({value} is not None)"));
+            w.open_block(&format!("if {value} is not None"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{writer}.flush_to_byte_boundary()"));
             }
-            w.open_block(&format!("if {value} is not None"));
             if optional_payload_needs_wrapper(inner) {
                 emit_write_type(w, &format!("{value}[0]"), inner, registry, writer);
             } else {
@@ -540,10 +540,10 @@ fn emit_read_type(
             w.dedent();
             w.line("else:");
             w.indent();
+            w.open_block(&format!("if {present}"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.flush_to_byte_boundary()"));
             }
-            w.open_block(&format!("if {present}"));
             if optional_payload_needs_wrapper(inner) {
                 let value = local_name(target, "optional_value");
                 emit_read_type(w, &value, inner, registry, reader);

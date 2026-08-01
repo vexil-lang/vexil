@@ -75,8 +75,8 @@ type LinkedList struct {
 func (m *LinkedList) Pack(w *vexil.BitWriter) error {
 	w.WriteI64(m.Value)
 	w.WriteBool(m.Next != nil)
-	w.FlushToByteBoundary()
 	if m.Next != nil {
+		w.FlushToByteBoundary()
 		if err := w.EnterRecursive(); err != nil {
 			return err
 		}
@@ -106,8 +106,8 @@ func (m *LinkedList) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal LinkedList
 				{
 					if err := r.EnterRecursive(); err != nil {

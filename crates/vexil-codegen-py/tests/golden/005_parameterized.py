@@ -32,8 +32,8 @@ class Basic:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_a_optional = self.a
         w.write_bool(_vexil_self_2e_a_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_a_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_u32(_vexil_self_2e_a_optional)
         w.write_leb128(len(self.b))
         for _vexil_self_2e_b_array_item in self.b:
@@ -71,8 +71,8 @@ class Basic:
         except DecodeError:
             m.a = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_a_present:
+                r.flush_to_byte_boundary()
                 m.a = r.read_u32()
             else:
                 m.a = None
@@ -126,8 +126,8 @@ class Nested:
     def encode_to(self, w: _BitWriter) -> None:
         _vexil_self_2e_a_optional = self.a
         w.write_bool(_vexil_self_2e_a_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_a_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_leb128(len(_vexil_self_2e_a_optional))
             for _vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_optional_array_item in _vexil_self_2e_a_optional:
                 w.write_string(_vexil__5f_vexil_5f_self_5f_2e_5f_a_5f_optional_array_item)
@@ -135,8 +135,8 @@ class Nested:
         for _vexil_self_2e_b_array_item in self.b:
             _vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional = _vexil_self_2e_b_array_item
             w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional is not None)
-            w.flush_to_byte_boundary()
             if _vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional is not None:
+                w.flush_to_byte_boundary()
                 w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_b_5f_array_5f_item_optional)
         w.write_leb128(len(self.c))
         for _vexil_self_2e_c_map_key in sorted(self.c, key=lambda _vexil_self_2e_c_map_key: _vexil_self_2e_c_map_key):
@@ -164,8 +164,8 @@ class Nested:
             w.write_bool(False)
         _vexil_self_2e_g_optional = self.g
         w.write_bool(_vexil_self_2e_g_optional is not None)
-        w.flush_to_byte_boundary()
         if _vexil_self_2e_g_optional is not None:
+            w.flush_to_byte_boundary()
             _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result = _vexil_self_2e_g_optional
             if _vexil__5f_vexil_5f_self_5f_2e_5f_g_5f_optional_result[0] is True:
                 w.write_bool(True)
@@ -200,8 +200,8 @@ class Nested:
         except DecodeError:
             m.a = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_a_present:
+                r.flush_to_byte_boundary()
                 _vexil_m_2e_a_array_length = r.read_leb128()
                 _vexil_m_2e_a_array_items: list[str] = []
                 for _ in range(_vexil_m_2e_a_array_length):
@@ -218,8 +218,8 @@ class Nested:
             except DecodeError:
                 _vexil_m_2e_b_array_item = None
             else:
-                r.flush_to_byte_boundary()
                 if _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present:
+                    r.flush_to_byte_boundary()
                     _vexil_m_2e_b_array_item = r.read_u32()
                 else:
                     _vexil_m_2e_b_array_item = None
@@ -263,8 +263,8 @@ class Nested:
         except DecodeError:
             m.g = None
         else:
-            r.flush_to_byte_boundary()
             if _vexil_m_2e_g_present:
+                r.flush_to_byte_boundary()
                 _vexil_m_2e_g_result_is_ok = r.read_bool()
                 if _vexil_m_2e_g_result_is_ok:
                     _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length = r.read_leb128()
