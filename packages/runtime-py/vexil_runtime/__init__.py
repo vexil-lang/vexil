@@ -7,14 +7,13 @@ from .bitio import (
     BitReader,
     _BitWriter,
     _BitReader,
-    pack,
-    unpack,
     EncodeError,
     DecodeError,
     MAX_RECURSION_DEPTH,
     MAX_BYTES_LENGTH,
     MAX_LENGTH_PREFIX_BYTES,
 )
+from .pack import Pack, Unpack, pack, unpack
 
 __all__ = [
     "BitWriter",
