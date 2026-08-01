@@ -33,6 +33,23 @@ fn canonical_sort_key_expr(ty: &ResolvedType, registry: &TypeRegistry, value: &s
     }
 }
 
+fn canonical_sort_key_callable(ty: &ResolvedType, registry: &TypeRegistry, value: &str) -> String {
+    match ty {
+        ResolvedType::Named(id)
+            if matches!(
+                registry.get(*id),
+                Some(TypeDef::Enum(_) | TypeDef::Flags(_))
+            ) =>
+        {
+            "int".to_string()
+        }
+        _ => format!(
+            "lambda {value}: {}",
+            canonical_sort_key_expr(ty, registry, value)
+        ),
+    }
+}
+
 fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     match ty {
         ResolvedType::Primitive(PrimitiveType::Bool) | ResolvedType::SubByte(_) => false,
@@ -334,10 +351,8 @@ fn emit_write_type(
             let map_k = local_name(access, "map_key");
             let map_v = local_name(access, "map_value");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            let sort_key = canonical_sort_key_expr(k, registry, &map_k);
-            w.open_block(&format!(
-                "for {map_k} in sorted({access}, key=lambda {map_k}: {sort_key})"
-            ));
+            let sort_key = canonical_sort_key_callable(k, registry, &map_k);
+            w.open_block(&format!("for {map_k} in sorted({access}, key={sort_key})"));
             w.line(&format!("{map_v} = {access}[{map_k}]"));
             emit_write_type(w, &map_k, k, registry, writer);
             emit_write_type(w, &map_v, v, registry, writer);
@@ -346,10 +361,8 @@ fn emit_write_type(
         ResolvedType::Set(inner) => {
             let item = local_name(access, "set_item");
             w.line(&format!("{writer}.write_leb128(len({access}))"));
-            let sort_key = canonical_sort_key_expr(inner, registry, &item);
-            w.open_block(&format!(
-                "for {item} in sorted({access}, key=lambda {item}: {sort_key})"
-            ));
+            let sort_key = canonical_sort_key_callable(inner, registry, &item);
+            w.open_block(&format!("for {item} in sorted({access}, key={sort_key})"));
             emit_write_type(w, &item, inner, registry, writer);
             w.close_block();
         }

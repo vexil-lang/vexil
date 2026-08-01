@@ -206,7 +206,7 @@ class MapKeyTest:
             w.write_raw_bytes(_vexil_self_2e_uuid_5f_map_map_key, 16)
             w.write_string(_vexil_self_2e_uuid_5f_map_map_value)
         w.write_leb128(len(self.enum_map))
-        for _vexil_self_2e_enum_5f_map_map_key in sorted(self.enum_map, key=lambda _vexil_self_2e_enum_5f_map_map_key: int(_vexil_self_2e_enum_5f_map_map_key)):
+        for _vexil_self_2e_enum_5f_map_map_key in sorted(self.enum_map, key=int):
             _vexil_self_2e_enum_5f_map_map_value = self.enum_map[_vexil_self_2e_enum_5f_map_map_key]
             try:
                 w.enter_nested()
@@ -215,7 +215,7 @@ class MapKeyTest:
                 w.leave_nested()
             w.write_string(_vexil_self_2e_enum_5f_map_map_value)
         w.write_leb128(len(self.flags_map))
-        for _vexil_self_2e_flags_5f_map_map_key in sorted(self.flags_map, key=lambda _vexil_self_2e_flags_5f_map_map_key: int(_vexil_self_2e_flags_5f_map_map_key)):
+        for _vexil_self_2e_flags_5f_map_map_key in sorted(self.flags_map, key=int):
             _vexil_self_2e_flags_5f_map_map_value = self.flags_map[_vexil_self_2e_flags_5f_map_map_key]
             try:
                 w.enter_nested()
