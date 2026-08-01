@@ -1,0 +1,5 @@
+# §6.3: schema versions use SemVer 2.0.0.
+# EXPECTED ERROR: invalid schema version
+
+@version("next")
+namespace test.invalid_version

@@ -263,20 +263,52 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
             .collect::<Vec<_>>()
             .join(".");
 
-        // Emit warning for version constraints (deferred to Milestone G).
-        if let Some(ref ver) = imp.node.version {
-            ctx.diagnostics.push(Diagnostic::warning(
-                ver.span,
-                ErrorClass::UnexpectedToken,
-                format!(
-                    "version constraints are not yet enforced; ignoring `@ {}`",
-                    ver.node
-                ),
-            ));
-        }
-
         match deps.and_then(|d| d.schemas.get(&ns_key)) {
             Some(dep_compiled) => {
+                if let Some(requirement) = &imp.node.version {
+                    let parsed_requirement = semver::VersionReq::parse(&requirement.node);
+                    match (&dep_compiled.annotations.version, parsed_requirement) {
+                        (Some(version), Ok(requirement_value)) => {
+                            match semver::Version::parse(version) {
+                                Ok(version_value) if !requirement_value.matches(&version_value) => {
+                                    ctx.emit(
+                                        requirement.span,
+                                        ErrorClass::ImportVersionMismatch,
+                                        format!(
+                                            "import `{ns_key}` requires `{}` but schema declares `{version}`",
+                                            requirement.node
+                                        ),
+                                    );
+                                }
+                                Ok(_) => {}
+                                Err(error) => ctx.emit(
+                                    requirement.span,
+                                    ErrorClass::VersionInvalidSemver,
+                                    format!(
+                                        "imported schema `{ns_key}` declares invalid version `{version}`: {error}"
+                                    ),
+                                ),
+                            }
+                        }
+                        (None, Ok(_)) => ctx.diagnostics.push(
+                            Diagnostic::warning(
+                                requirement.span,
+                                ErrorClass::ImportVersionUnavailable,
+                                format!(
+                                    "cannot verify import requirement `{}` because schema `{ns_key}` has no @version",
+                                    requirement.node
+                                ),
+                            )
+                            .with_help("add @version to the imported schema"),
+                        ),
+                        (_, Err(error)) => ctx.emit(
+                            requirement.span,
+                            ErrorClass::VersionInvalidSemver,
+                            format!("invalid import version requirement: {error}"),
+                        ),
+                    }
+                }
+
                 // Real dependency available — inject types by import kind.
                 match &imp.node.kind {
                     ImportKind::Named { names } => {

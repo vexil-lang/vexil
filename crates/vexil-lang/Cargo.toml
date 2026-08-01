@@ -13,6 +13,7 @@ categories = ["compilers", "encoding", "development-tools"]
 
 [dependencies]
 blake3 = "1.8.5"
+semver = "1.0.28"
 smol_str = "0.3"
 thiserror = "2.0.18"
 

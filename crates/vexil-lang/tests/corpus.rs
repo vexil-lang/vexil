@@ -676,6 +676,14 @@ fn invalid_066_invariant_unsupported() {
 }
 
 #[test]
+fn invalid_067_schema_version_semver() {
+    parse_invalid(
+        "067_schema_version_semver.vexil",
+        ErrorClass::VersionInvalidSemver,
+    );
+}
+
+#[test]
 fn invalid_025() {
     parse_invalid(
         "025_varint_on_subbyte.vexil",

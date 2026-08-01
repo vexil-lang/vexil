@@ -116,6 +116,8 @@ pub enum ErrorCode {
     E131, // Ambiguous import
     E132, // Import name not found in namespace
     E133, // Impl function external (no body)
+    E134, // Imported schema version does not satisfy requirement
+    W135, // Imported schema has no declared version
 
     // Trait function errors (E140-E149)
     E140, // Duplicate trait function
@@ -213,6 +215,8 @@ impl ErrorCode {
             ErrorCode::E131 => "E131",
             ErrorCode::E132 => "E132",
             ErrorCode::E133 => "E133",
+            ErrorCode::E134 => "E134",
+            ErrorCode::W135 => "W135",
             ErrorCode::E140 => "E140",
             ErrorCode::E141 => "E141",
             ErrorCode::E142 => "E142",
@@ -325,6 +329,8 @@ pub enum ErrorClass {
 
     // Impl
     ImplFnExternal,
+    ImportVersionMismatch,
+    ImportVersionUnavailable,
     TraitFnDuplicate,
     FnParamDuplicate,
     ImplFnMissing,
@@ -434,6 +440,8 @@ impl ErrorClass {
 
             // Impl
             ErrorClass::ImplFnExternal => ErrorCode::E133,
+            ErrorClass::ImportVersionMismatch => ErrorCode::E134,
+            ErrorClass::ImportVersionUnavailable => ErrorCode::W135,
             ErrorClass::TraitFnDuplicate => ErrorCode::E140,
             ErrorClass::FnParamDuplicate => ErrorCode::E141,
             ErrorClass::ImplFnMissing => ErrorCode::E142,

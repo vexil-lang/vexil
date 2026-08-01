@@ -418,6 +418,95 @@ mod tests {
     }
 
     #[test]
+    fn import_version_requirement_accepts_matching_schema() {
+        let loader = make_loader(&[(
+            "dep",
+            "@version(\"1.4.2\")\nnamespace dep\nmessage Value { value @0 : u8 }",
+        )]);
+        let root =
+            "namespace app\nimport { Value } from dep @ ^1.2.0\nmessage Root { value @0 : Value }";
+        let result = compile_project(root, &PathBuf::from("<memory>/app.vexil"), &loader).unwrap();
+
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != Severity::Error),
+            "{:#?}",
+            result.diagnostics
+        );
+    }
+
+    #[test]
+    fn import_version_requirement_rejects_mismatch_on_import_span() {
+        let loader = make_loader(&[(
+            "dep",
+            "@version(\"2.0.0\")\nnamespace dep\nmessage Value { value @0 : u8 }",
+        )]);
+        let root =
+            "namespace app\nimport dep @ ^1.2.0 as Dep\nmessage Root { value @0 : Dep.Value }";
+        let result = compile_project(root, &PathBuf::from("<memory>/app.vexil"), &loader).unwrap();
+        let mismatch = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.class == ErrorClass::ImportVersionMismatch)
+            .expect("version mismatch");
+
+        assert_eq!(mismatch.code.as_str(), "E134");
+        assert_eq!(root[mismatch.span.range()].trim_end(), "@ ^1.2.0");
+        assert_eq!(
+            mismatch.source_file,
+            Some(PathBuf::from("<memory>/app.vexil"))
+        );
+    }
+
+    #[test]
+    fn import_version_requirement_warns_when_schema_is_unversioned() {
+        let loader = make_loader(&[("dep", "namespace dep\nmessage Value { value @0 : u8 }")]);
+        let root = "namespace app\nimport dep @ ^1.0.0";
+        let result = compile_project(root, &PathBuf::from("<memory>/app.vexil"), &loader).unwrap();
+        let warning = result
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.class == ErrorClass::ImportVersionUnavailable)
+            .expect("missing-version warning");
+
+        assert_eq!(warning.severity, Severity::Warning);
+        assert_eq!(warning.code.as_str(), "W135");
+    }
+
+    #[test]
+    fn transitive_and_diamond_import_requirements_are_enforced_per_edge() {
+        let loader = make_loader(&[
+            (
+                "base",
+                "@version(\"1.5.0\")\nnamespace base\nmessage Value { value @0 : u8 }",
+            ),
+            (
+                "left",
+                "@version(\"1.0.0\")\nnamespace left\nimport base @ ^1.0.0",
+            ),
+            (
+                "right",
+                "@version(\"1.0.0\")\nnamespace right\nimport base @ ^2.0.0",
+            ),
+        ]);
+        let root = "namespace app\nimport left @ ^1.0.0\nimport right @ ^1.0.0";
+        let result = compile_project(root, &PathBuf::from("<memory>/app.vexil"), &loader).unwrap();
+        let mismatches: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.class == ErrorClass::ImportVersionMismatch)
+            .collect();
+
+        assert_eq!(mismatches.len(), 1, "{:#?}", result.diagnostics);
+        assert_eq!(
+            mismatches[0].source_file,
+            Some(PathBuf::from("<memory>/right"))
+        );
+    }
+
+    #[test]
     fn typed_tombstone_metadata_preserves_imported_type_identity() {
         let loader = make_loader(&[(
             "history",

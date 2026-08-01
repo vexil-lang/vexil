@@ -107,6 +107,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 042_version_not_semver.vexil | §6.3 | Parse | Version constraint ^1.0 missing patch |
 | 043_non_exhaustive_on_message.vexil | §12.2 | Semantic | @non_exhaustive on message (enum/union only) |
 | 066_invariant_unsupported.vexil | §4.11 | Semantic | Message invariants are reserved but rejected until portable enforcement exists |
+| 067_schema_version_semver.vexil | §6.3 | Semantic | Schema @version must be a complete SemVer version |
 | 044_limit_on_invalid_type.vexil | §12.5 | Semantic | @limit on u32 (string/bytes/array/map only) |
 | 045_limit_exceeds_global.vexil | §12.5 | Semantic | @limit(16777217) exceeds array max |
 | 046_type_unknown.vexil | §3.5 | Type | Reference to undefined type |

@@ -245,6 +245,26 @@ fn check_schema_annotations(schema: &Schema, diags: &mut Vec<Diagnostic>) {
                     "@version must not appear more than once",
                 ));
             }
+            if let Some(version) = ann
+                .args
+                .as_ref()
+                .and_then(|args| args.first())
+                .and_then(|arg| match &arg.value.node {
+                    AnnotationValue::Str(value) => Some(value.as_str()),
+                    _ => None,
+                })
+            {
+                if let Err(error) = semver::Version::parse(version) {
+                    diags.push(
+                        Diagnostic::error(
+                            ann.span,
+                            ErrorClass::VersionInvalidSemver,
+                            format!("invalid schema version `{version}`: {error}"),
+                        )
+                        .with_help("use a complete SemVer version such as `1.2.3`"),
+                    );
+                }
+            }
         }
     }
 
