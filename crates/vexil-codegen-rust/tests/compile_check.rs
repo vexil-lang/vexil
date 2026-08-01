@@ -234,10 +234,50 @@ fn trait_only_generic_map() {
 }
 
 #[test]
-fn nested_optional_constraints_compile() {
-    check_source_compiles(
+fn nested_optional_constraints_execute() {
+    let output = run_generated_project(
         "nested-optional-constraint",
         "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+        r#"
+
+#[cfg(test)]
+mod nested_optional_constraint_contract {
+    use super::M;
+    use vexil_runtime::{BitReader, BitWriter, Pack, Unpack};
+
+    fn encode(value: Option<Option<u16>>) -> Result<Vec<u8>, vexil_runtime::EncodeError> {
+        let mut writer = BitWriter::new();
+        M { v: value, _unknown: Vec::new() }.pack(&mut writer)?;
+        Ok(writer.finish())
+    }
+
+    #[test]
+    fn constraints_apply_only_to_present_scalars() {
+        assert_eq!(encode(Some(Some(258))).unwrap(), [0x03, 0x02, 0x01]);
+        assert_eq!(encode(None).unwrap(), [0x00]);
+        assert_eq!(encode(Some(None)).unwrap(), [0x01]);
+
+        let mut reader = BitReader::new(&[0x03, 0x02, 0x01]);
+        assert_eq!(M::unpack(&mut reader).unwrap().v, Some(Some(258)));
+        let mut reader = BitReader::new(&[0x00]);
+        assert_eq!(M::unpack(&mut reader).unwrap().v, None);
+        let mut reader = BitReader::new(&[0x01]);
+        assert_eq!(M::unpack(&mut reader).unwrap().v, Some(None));
+
+        let mut writer = BitWriter::new();
+        let invalid = M { v: Some(Some(0)), _unknown: Vec::new() };
+        assert!(invalid.pack(&mut writer).is_err());
+
+        let mut reader = BitReader::new(&[0x03, 0x00, 0x00]);
+        assert!(M::unpack(&mut reader).is_err());
+    }
+}
+"#,
+    );
+    assert!(
+        output.status.success(),
+        "generated nested optional constraint contract failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 

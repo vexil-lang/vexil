@@ -18,6 +18,10 @@ const golden = resolve(
   repoRoot,
   "crates/vexil-codegen-ts/tests/golden/049_trait_function_portable_body.ts",
 );
+const nestedOptionalConstraintGolden = resolve(
+  repoRoot,
+  "crates/vexil-codegen-ts/tests/golden/nested_optional_constraint.ts",
+);
 const nestedOptionalTailGolden = resolve(
   repoRoot,
   "crates/vexil-codegen-ts/tests/golden/nested_optional_tail.ts",
@@ -226,6 +230,44 @@ if (counter.value !== 0) {
     process.stderr.write(runtime.stderr);
     process.exit(runtime.status ?? 1);
   }
+  runGeneratedContract(
+    nestedOptionalConstraintGolden,
+    `import { BitReader, BitWriter } from '@vexil-lang/runtime';
+import { decodeM, encodeM } from './out/generated.js';
+
+function encode(v) {
+  const writer = new BitWriter();
+  encodeM({ v, _unknown: new Uint8Array(0) }, writer);
+  return writer.finish();
+}
+function hex(bytes) { return Buffer.from(bytes).toString('hex'); }
+function requireConstraintFailure(run, label) {
+  try { run(); } catch (error) {
+    if (error instanceof Error && error.message.includes('Constraint violation')) return;
+    throw error;
+  }
+  throw new Error(\`\${label}: expected constraint failure\`);
+}
+
+if (hex(encode([258])) !== '030201') throw new Error('nested constraint valid encode');
+if (hex(encode(null)) !== '00') throw new Error('nested constraint outer-none encode');
+if (hex(encode([null])) !== '01') throw new Error('nested constraint inner-none encode');
+
+const valid = decodeM(new BitReader(Uint8Array.from([0x03, 0x02, 0x01])));
+if (!Array.isArray(valid.v) || valid.v[0] !== 258) throw new Error('nested constraint valid decode');
+const outerNone = decodeM(new BitReader(Uint8Array.from([0x00])));
+if (outerNone.v !== null) throw new Error('nested constraint outer-none decode');
+const innerNone = decodeM(new BitReader(Uint8Array.from([0x01])));
+if (!Array.isArray(innerNone.v) || innerNone.v[0] !== null) throw new Error('nested constraint inner-none decode');
+
+requireConstraintFailure(() => encode([0]), 'nested constraint invalid encode');
+requireConstraintFailure(
+  () => decodeM(new BitReader(Uint8Array.from([0x03, 0x00, 0x00]))),
+  'nested constraint invalid decode',
+);
+`,
+    "nested-optional-constraint",
+  );
   runGeneratedContract(
     nestedOptionalTailGolden,
     `import { BitReader, BitWriter } from '@vexil-lang/runtime';
