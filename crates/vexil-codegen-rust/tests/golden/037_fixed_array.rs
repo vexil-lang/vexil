@@ -181,8 +181,8 @@ impl vexil_runtime::Pack for WithOptional {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         for item in self.a.iter() {
             w.write_bool(item.is_some());
-            w.flush_to_byte_boundary();
             if let Some(ref inner_val) = item {
+                w.flush_to_byte_boundary();
                 w.write_u32(*inner_val);
             }
         }
@@ -199,8 +199,8 @@ impl vexil_runtime::Unpack for WithOptional {
         let mut a_vec = Vec::with_capacity(10_usize);
         for _ in 0..10_usize {
             let a_item_present = r.read_bool()?;
-            r.flush_to_byte_boundary();
             let a_item = if a_item_present {
+                r.flush_to_byte_boundary();
                 let a_item_inner = r.read_u32()?;
                 Some(a_item_inner)
             }

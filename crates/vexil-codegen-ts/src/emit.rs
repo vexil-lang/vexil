@@ -60,7 +60,10 @@ impl CodeWriter {
     }
 
     /// Consume and return the built string.
-    pub fn finish(self) -> String {
+    pub fn finish(mut self) -> String {
+        while self.buf.ends_with("\n\n") {
+            self.buf.pop();
+        }
         self.buf
     }
 }

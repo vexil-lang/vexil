@@ -105,10 +105,14 @@ fn project_type(
             "{name}<{}>",
             project_type(&arg.node, params, args, registry)
         ),
-        TypeExpr::Optional(inner) => format!(
-            "{} | null",
-            project_type(&inner.node, params, args, registry)
-        ),
+        TypeExpr::Optional(inner) => {
+            let inner_type = project_type(&inner.node, params, args, registry);
+            if matches!(inner.node, TypeExpr::Optional(_)) {
+                format!("[{inner_type}] | null")
+            } else {
+                format!("{inner_type} | null")
+            }
+        }
         TypeExpr::Array(inner) | TypeExpr::FixedArray(inner, _) => {
             format!("{}[]", project_type(&inner.node, params, args, registry))
         }

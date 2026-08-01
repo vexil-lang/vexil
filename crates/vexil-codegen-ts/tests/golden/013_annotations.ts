@@ -237,4 +237,3 @@ export function decodeDocumented(r: BitReader): Documented {
   const _unknown = new Uint8Array(0);
   return { value, _unknown };
 }
-

@@ -5,7 +5,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::{go_type, to_pascal_case};
+use crate::types::{go_collection_key_type, go_type, to_pascal_case};
 
 // ---------------------------------------------------------------------------
 // Byte-alignment helper
@@ -16,6 +16,7 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
     match ty {
         ResolvedType::Primitive(PrimitiveType::Bool) => false,
         ResolvedType::SubByte(_) => false,
+        ResolvedType::BitsInline(names) => names.len() >= 8,
         ResolvedType::Named(id) => {
             if let Some(TypeDef::Enum(e)) = registry.get(*id) {
                 e.wire_bits >= 8
@@ -23,9 +24,65 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
                 true
             }
         }
-        ResolvedType::Optional(inner) => is_byte_aligned(inner, registry),
+        // An optional always starts with a one-bit presence flag. Nested
+        // optional flags therefore remain contiguous until a present payload
+        // itself requires byte alignment.
+        ResolvedType::Optional(_) => false,
         _ => true,
     }
+}
+
+fn canonical_less_expr(
+    ty: &ResolvedType,
+    registry: &TypeRegistry,
+    left: &str,
+    right: &str,
+) -> String {
+    match ty {
+        ResolvedType::Primitive(PrimitiveType::Bool) => format!("!{left} && {right}"),
+        ResolvedType::Semantic(SemanticType::Uuid) => {
+            format!("string({left}[:]) < string({right}[:])")
+        }
+        ResolvedType::Named(id) => match registry.get(*id) {
+            Some(TypeDef::Newtype(newtype)) => {
+                canonical_less_expr(&newtype.inner_type, registry, left, right)
+            }
+            _ => format!("{left} < {right}"),
+        },
+        _ => format!("{left} < {right}"),
+    }
+}
+
+fn emit_sorted_collection_keys(
+    w: &mut CodeWriter,
+    access: &str,
+    key_type: &ResolvedType,
+    registry: &TypeRegistry,
+    prefix: &str,
+) -> String {
+    let keys = format!(
+        "{prefix}{}",
+        access
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect::<String>()
+    );
+    let key_go = go_collection_key_type(key_type, registry);
+    w.line(&format!("{keys} := make([]{key_go}, 0, len({access}))"));
+    w.open_block(&format!("for key := range {access}"));
+    w.line(&format!("{keys} = append({keys}, key)"));
+    w.close_block();
+    w.open_block(&format!("sort.Slice({keys}, func(i, j int) bool"));
+    let less = canonical_less_expr(
+        key_type,
+        registry,
+        &format!("{keys}[i]"),
+        &format!("{keys}[j]"),
+    );
+    w.line(&format!("return {less}"));
+    w.dedent();
+    w.line("})");
+    keys
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +222,36 @@ fn emit_constraint_validation_go(
     w.close_block();
 }
 
+fn constraint_value_access_go(ty: &ResolvedType, access: &str) -> (Vec<String>, String) {
+    let mut guards = Vec::new();
+    let mut value = access.to_string();
+    let mut current = ty;
+    while let ResolvedType::Optional(inner) = current {
+        guards.push(format!("{value} != nil"));
+        value = format!("(*{value})");
+        current = inner;
+    }
+    (guards, value)
+}
+
+fn emit_field_constraint_validation_go(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+    err_return: &str,
+) {
+    let (guards, value) = constraint_value_access_go(ty, access);
+    if !guards.is_empty() {
+        w.open_block(&format!("if {}", guards.join(" && ")));
+    }
+    emit_constraint_validation_go(w, constraint, &value, field_name, err_return);
+    if !guards.is_empty() {
+        w.close_block();
+    }
+}
+
 /// Emit code to write a value to a BitWriter.
 ///
 /// `access` is the Go expression for the value.
@@ -257,6 +344,10 @@ fn emit_write_type(
             let bits = s.bits;
             w.line(&format!("{writer}.WriteBits(uint64({access}), {bits})"));
         }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            w.line(&format!("{writer}.WriteBits(uint64({access}), {bits})"));
+        }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => w.line(&format!("{writer}.WriteString({access})")),
             SemanticType::Bytes => w.line(&format!("{writer}.WriteBytes({access})")),
@@ -319,10 +410,10 @@ fn emit_write_type(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("{writer}.WriteBool({access} != nil)"));
+            w.open_block(&format!("if {access} != nil"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{writer}.FlushToByteBoundary()"));
             }
-            w.open_block(&format!("if {access} != nil"));
             // For Named types (messages, etc.), the pointer is already the right type
             // for method calls. For primitives, we need to dereference.
             match inner.as_ref() {
@@ -330,7 +421,7 @@ fn emit_write_type(
                     emit_write_type(w, access, inner, registry, writer, err_return);
                 }
                 _ => {
-                    let deref = format!("*{access}");
+                    let deref = format!("(*{access})");
                     emit_write_type(w, &deref, inner, registry, writer, err_return);
                 }
             }
@@ -344,24 +435,15 @@ fn emit_write_type(
         }
         ResolvedType::Set(inner) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
-            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                let keys = format!(
-                    "setKeys{}",
-                    access
-                        .chars()
-                        .filter(char::is_ascii_alphanumeric)
-                        .collect::<String>()
-                );
-                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
-                w.open_block(&format!("for item := range {access}"));
-                w.line(&format!("{keys} = append({keys}, item)"));
-                w.close_block();
-                w.line(&format!("sort.Strings({keys})"));
-                w.open_block(&format!("for _, item := range {keys}"));
-            } else {
-                w.open_block(&format!("for item := range {access}"));
-            }
-            emit_write_type(w, "item", inner, registry, writer, err_return);
+            let keys = emit_sorted_collection_keys(w, access, inner, registry, "setKeys");
+            w.open_block(&format!("for _, item := range {keys}"));
+            let item_access =
+                if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                    "[]byte(item)"
+                } else {
+                    "item"
+                };
+            emit_write_type(w, item_access, inner, registry, writer, err_return);
             w.close_block();
         }
         ResolvedType::FixedArray(inner, _) => {
@@ -369,29 +451,27 @@ fn emit_write_type(
             emit_write_type(w, "item", inner, registry, writer, err_return);
             w.close_block();
         }
+        ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => {
+            w.open_block(&format!("for _, item := range {access}"));
+            emit_write_type(w, "item", inner, registry, writer, err_return);
+            w.close_block();
+        }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.WriteLeb128(uint64(len({access})))"));
-            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::String)) {
-                // String keys have a canonical lexical order. Go deliberately
-                // randomizes map iteration, so encode through a sorted key slice.
-                let keys = format!(
-                    "mapKeys{}",
-                    access
-                        .chars()
-                        .filter(char::is_ascii_alphanumeric)
-                        .collect::<String>()
-                );
-                w.line(&format!("{keys} := make([]string, 0, len({access}))"));
-                w.open_block(&format!("for mapK := range {access}"));
-                w.line(&format!("{keys} = append({keys}, mapK)"));
-                w.close_block();
-                w.line(&format!("sort.Strings({keys})"));
-                w.open_block(&format!("for _, mapK := range {keys}"));
-                w.line(&format!("mapV := {access}[mapK]"));
+            let keys = emit_sorted_collection_keys(w, access, k, registry, "mapKeys");
+            w.open_block(&format!("for _, mapK := range {keys}"));
+            w.line(&format!("mapV := {access}[mapK]"));
+            let key_access = if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                "[]byte(mapK)"
             } else {
-                w.open_block(&format!("for mapK, mapV := range {access}"));
-            }
-            emit_write_type(w, "mapK", k, registry, writer, err_return);
+                "mapK"
+            };
+            emit_write_type(w, key_access, k, registry, writer, err_return);
             emit_write_type(w, "mapV", v, registry, writer, err_return);
             w.close_block();
         }
@@ -545,6 +625,17 @@ fn emit_read_type(
             }
             w.close_block();
         }
+        ResolvedType::BitsInline(names) => {
+            let bits = names.len();
+            let go_ty = go_type(ty, registry);
+            w.open_block("");
+            w.line(&format!("v, err := {reader}.ReadBits({bits})"));
+            w.open_block("if err != nil");
+            w.line(err_return);
+            w.close_block();
+            w.line(&format!("{target} = {go_ty}(v)"));
+            w.close_block();
+        }
         ResolvedType::Semantic(s) => match s {
             SemanticType::String => {
                 w.open_block("");
@@ -685,14 +776,19 @@ fn emit_read_type(
             w.line(err_return);
             w.close_block();
             w.open_block("if err == nil");
+            w.open_block("if present");
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.FlushToByteBoundary()"));
             }
-            w.open_block("if present");
-            let inner_go = go_type(inner, registry);
-            w.line(&format!("var optVal {inner_go}"));
-            emit_read_type(w, "optVal", inner, registry, reader, err_return);
-            w.line(&format!("{target} = &optVal"));
+            let inner_go = go_collection_key_type(inner, registry);
+            let opt_value = if target == "optVal" || target.ends_with("OptVal") {
+                format!("nested{}", to_pascal_case(target))
+            } else {
+                "optVal".to_string()
+            };
+            w.line(&format!("var {opt_value} {inner_go}"));
+            emit_read_type(w, &opt_value, inner, registry, reader, err_return);
+            w.line(&format!("{target} = &{opt_value}"));
             w.close_block();
             w.close_block();
             w.close_block();
@@ -728,8 +824,14 @@ fn emit_read_type(
                 "{target} = make(map[{inner_go}]struct{{}}, setLen)"
             ));
             w.open_block("for i := uint64(0); i < setLen; i++");
-            w.line(&format!("var item {inner_go}"));
-            emit_read_type(w, "item", inner, registry, reader, err_return);
+            if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                w.line("var itemBytes []byte");
+                emit_read_type(w, "itemBytes", inner, registry, reader, err_return);
+                w.line("item := string(itemBytes)");
+            } else {
+                w.line(&format!("var item {inner_go}"));
+                emit_read_type(w, "item", inner, registry, reader, err_return);
+            }
             w.line(&format!("{target}[item] = struct{{}}{{}}"));
             w.close_block();
             w.close_block();
@@ -782,13 +884,22 @@ fn emit_read_type(
             w.open_block("if err != nil");
             w.line(err_return);
             w.close_block();
-            let k_go = go_type(k, registry);
+            let k_go = go_collection_key_type(k, registry);
             let v_go = go_type(v, registry);
             w.line(&format!("{target} = make(map[{k_go}]{v_go}, mapLen)"));
             w.open_block("for i := uint64(0); i < mapLen; i++");
-            w.line(&format!("var mapKey {k_go}"));
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                w.line("var mapKeyBytes []byte");
+            } else {
+                w.line(&format!("var mapKey {k_go}"));
+            }
             w.line(&format!("var mapVal {v_go}"));
-            emit_read_type(w, "mapKey", k, registry, reader, err_return);
+            if matches!(k.as_ref(), ResolvedType::Semantic(SemanticType::Bytes)) {
+                emit_read_type(w, "mapKeyBytes", k, registry, reader, err_return);
+                w.line("mapKey := string(mapKeyBytes)");
+            } else {
+                emit_read_type(w, "mapKey", k, registry, reader, err_return);
+            }
             emit_read_type(w, "mapVal", v, registry, reader, err_return);
             w.line(&format!("{target}[mapKey] = mapVal"));
             w.close_block();
@@ -850,7 +961,14 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         let access = format!("m.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_go(w, constraint, &access, field.name.as_str(), err_ret);
+            emit_field_constraint_validation_go(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+                err_ret,
+            );
         }
         emit_write(
             w,
@@ -891,7 +1009,14 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         );
         // Validate constraint after decoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_go(w, constraint, &target, field.name.as_str(), err_ret);
+            emit_field_constraint_validation_go(
+                w,
+                constraint,
+                &field.resolved_type,
+                &target,
+                field.name.as_str(),
+                err_ret,
+            );
         }
     }
     w.line("r.FlushToByteBoundary()");

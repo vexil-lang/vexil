@@ -46,6 +46,21 @@ function vector(file, name) {
   return found;
 }
 
+function validateCoverageTable() {
+  const coverage = JSON.parse(readFileSync(join(toolDir, "wire-coverage.json"), "utf8"));
+  if (!Array.isArray(coverage) || coverage.length === 0) {
+    throw new Error("generated wire coverage table must contain scenarios");
+  }
+  for (const item of coverage) {
+    if (!item.scenario || !item.authority || !["covered", "blocked"].includes(item.status)) {
+      throw new Error(`invalid generated wire coverage row: ${JSON.stringify(item)}`);
+    }
+    if (item.status === "blocked" && !item.reason) {
+      throw new Error(`blocked generated wire coverage row needs a reason: ${item.scenario}`);
+    }
+  }
+}
+
 function hexBytes(hex) {
   return hex.match(/../g).map((byte) => `0x${byte}`).join(", ");
 }
@@ -56,7 +71,7 @@ function namespacePackage(source) {
   return match[1].split(".").at(-1);
 }
 
-function writeGoHarness(dir, source, expected, value, valueCheck = "reflect.DeepEqual(decoded, value)", scenario = "unnamed") {
+function writeGoHarness(dir, source, expected, value, valueCheck = "reflect.DeepEqual(decoded, value)", scenario = "unnamed", typeName = "M") {
   writeFileSync(join(dir, "schema.vexil"), source);
   run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], dir, `${scenario}: generate Go contract source`);
   const pkg = namespacePackage(source);
@@ -65,12 +80,14 @@ function writeGoHarness(dir, source, expected, value, valueCheck = "reflect.Deep
 
 import (
   "bytes"
+  "math"
   "reflect"
   "testing"
   vexil "github.com/vexil-lang/vexil/packages/runtime-go"
 )
 
 var _ = reflect.DeepEqual
+var _ = math.IsNaN
 
 func TestGeneratedWireContract(t *testing.T) {
   want := []byte{${hexBytes(expected)}}
@@ -78,7 +95,7 @@ func TestGeneratedWireContract(t *testing.T) {
   writer := vexil.NewBitWriter()
   if err := value.Pack(writer); err != nil { t.Fatal(err) }
   if got := writer.Finish(); !bytes.Equal(got, want) { t.Fatalf("${scenario} encode: got %x want %x", got, want) }
-  decoded := &M{}
+  decoded := &${typeName}{}
   if err := decoded.Unpack(vexil.NewBitReader(want)); err != nil { t.Fatalf("${scenario} decode: %v", err) }
   if !(${valueCheck}) { t.Fatalf("${scenario} decode: got %#v want %#v", decoded, value) }
   round := vexil.NewBitWriter()
@@ -89,7 +106,7 @@ func TestGeneratedWireContract(t *testing.T) {
   run("go", ["test", "./..."], dir, `${scenario}: Go generated wire contract`);
 }
 
-function writePythonHarness(dir, source, expected, value, check = "decoded == value", scenario = "unnamed") {
+function writePythonHarness(dir, source, expected, value, check = "decoded == value", scenario = "unnamed", typeName = "M") {
   writeFileSync(join(dir, "schema.vexil"), source);
   run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], dir, `${scenario}: generate Python contract source`);
   writeFileSync(join(dir, "run.py"), `from generated import *
@@ -98,7 +115,7 @@ want = bytes.fromhex("${expected}")
 value = ${value}
 got = value.encode()
 assert got == want, f"${scenario} encode: got {got.hex()} want {want.hex()}"
-decoded = M.decode(want)
+decoded = ${typeName}.decode(want)
 assert ${check}, f"${scenario} decode: got {decoded!r} want {value!r}"
 round = decoded.encode()
 assert round == want, f"${scenario} roundtrip: got {round.hex()} want {want.hex()}"
@@ -117,8 +134,8 @@ function runBasic(label, file, name, goValue, pyValue, goCheck, pyCheck) {
     for (const dir of [go, py]) {
       mkdirSync(dir, { recursive: true });
     }
-    writeGoHarness(go, item.schema, item.expected_bytes, goValue, goCheck, label);
-    writePythonHarness(py, item.schema, item.expected_bytes, pyValue, pyCheck, label);
+    writeGoHarness(go, item.schema, item.expected_bytes, goValue, goCheck, label, item.type);
+    writePythonHarness(py, item.schema, item.expected_bytes, pyValue, pyCheck, label, item.type);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -259,29 +276,241 @@ function runTraitInvariance() {
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
+function runNestedOptionalConstraint() {
+  const item = vector("generated_wire.json", "nested_optional_constrained_u16");
+  const root = mkdtempSync(join(tmpdir(), "vexil-wire-nested-constraint-"));
+  try {
+    const go = join(root, "go");
+    const py = join(root, "python");
+    mkdirSync(go, { recursive: true });
+    mkdirSync(py, { recursive: true });
+
+    writeFileSync(join(go, "schema.vexil"), item.schema);
+    run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], go, "nested-optional-constraint: generate Go source");
+    writeFileSync(join(go, "go.mod"), `module vexil-generated-nested-constraint\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => ${runtimeGo}\n`);
+    writeFileSync(join(go, "generated_test.go"), `package ${namespacePackage(item.schema)}
+
+import (
+  "bytes"
+  "testing"
+  vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
+
+func nested(value uint16) **uint16 { inner := &value; return &inner }
+func nestedNone() **uint16 { var inner *uint16; return &inner }
+func encodeNested(value **uint16) ([]byte, error) {
+  writer := vexil.NewBitWriter()
+  if err := (&M{V: value}).Pack(writer); err != nil { return nil, err }
+  return writer.Finish(), nil
+}
+
+func TestNestedOptionalConstraint(t *testing.T) {
+  want := []byte{${hexBytes(item.expected_bytes)}}
+  got, err := encodeNested(nested(258))
+  if err != nil || !bytes.Equal(got, want) { t.Fatalf("nested constraint valid encode: got %x err %v want %x", got, err, want) }
+  decoded := &M{}
+  if err := decoded.Unpack(vexil.NewBitReader(want)); err != nil || decoded.V == nil || *decoded.V == nil || **decoded.V != 258 {
+    t.Fatalf("nested constraint valid decode: got %#v err %v", decoded.V, err)
+  }
+  if got, err := encodeNested(nil); err != nil || !bytes.Equal(got, []byte{0}) { t.Fatalf("nested constraint outer none: got %x err %v", got, err) }
+  if got, err := encodeNested(nestedNone()); err != nil || !bytes.Equal(got, []byte{1}) { t.Fatalf("nested constraint inner none: got %x err %v", got, err) }
+  if _, err := encodeNested(nested(0)); err == nil { t.Fatal("nested constraint invalid encode: expected constraint error") }
+  if err := (&M{}).Unpack(vexil.NewBitReader([]byte{3, 0, 0})); err == nil { t.Fatal("nested constraint invalid decode: expected constraint error") }
+  outerNone := &M{}
+  if err := outerNone.Unpack(vexil.NewBitReader([]byte{0})); err != nil || outerNone.V != nil { t.Fatalf("nested constraint outer-none decode: %#v %v", outerNone.V, err) }
+  innerNone := &M{}
+  if err := innerNone.Unpack(vexil.NewBitReader([]byte{1})); err != nil || innerNone.V == nil || *innerNone.V != nil { t.Fatalf("nested constraint inner-none decode: %#v %v", innerNone.V, err) }
+}
+`);
+    run("go", ["test", "./..."], go, "nested-optional-constraint: Go generated contract");
+
+    writeFileSync(join(py, "schema.vexil"), item.schema);
+    run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], py, "nested-optional-constraint: generate Python source");
+    writeFileSync(join(py, "run.py"), `from generated import M
+
+want = bytes.fromhex("${item.expected_bytes}")
+value = M(v=(258,))
+assert value.encode() == want, f"nested constraint valid encode: {value.encode().hex()} != {want.hex()}"
+assert M.decode(want) == value, f"nested constraint valid decode: {M.decode(want)!r} != {value!r}"
+assert M(v=None).encode() == bytes([0]), "nested constraint outer none"
+assert M(v=(None,)).encode() == bytes([1]), "nested constraint inner none"
+assert M.decode(bytes([0])).v is None, "nested constraint outer-none decode"
+assert M.decode(bytes([1])).v == (None,), "nested constraint inner-none decode"
+try:
+    M(v=(0,)).encode()
+except ValueError:
+    pass
+else:
+    raise AssertionError("nested constraint invalid encode: expected constraint error")
+try:
+    M.decode(bytes([3, 0, 0]))
+except ValueError:
+    pass
+else:
+    raise AssertionError("nested constraint invalid decode: expected constraint error")
+`);
+    run(python, ["run.py"], py, "nested-optional-constraint: Python generated contract", {
+      ...process.env,
+      PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${py}`,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function runFailurePaths() {
+  const root = mkdtempSync(join(tmpdir(), "vexil-wire-failures-"));
+  const cases = {
+    truncated: "namespace test.truncated\nmessage M { value @0 : u32 }\n",
+    recursion: "namespace test.recursion_limit\nmessage Node { next @0 : optional<Node> }\n",
+  };
+  try {
+    for (const [name, source] of Object.entries(cases)) {
+      const go = join(root, "go", name);
+      const py = join(root, "python", name);
+      mkdirSync(go, { recursive: true });
+      mkdirSync(py, { recursive: true });
+      writeFileSync(join(go, "schema.vexil"), source);
+      writeFileSync(join(py, "schema.vexil"), source);
+      run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], go, `${name}: generate Go source`);
+      run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], py, `${name}: generate Python source`);
+      writeFileSync(join(go, "go.mod"), `module vexil-generated-${name}\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => ${runtimeGo}\n`);
+      if (name === "truncated") {
+        writeFileSync(join(go, "generated_test.go"), `package truncated
+import ("testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")
+func TestTruncatedGeneratedDecode(t *testing.T) { if err := (&M{}).Unpack(vexil.NewBitReader([]byte{1, 2})); err == nil { t.Fatal("truncated-u32: expected decode error") } }
+`);
+        writeFileSync(join(py, "run.py"), `from generated import M
+from vexil_runtime import DecodeError
+try:
+    M.decode(bytes([1, 2]))
+except DecodeError:
+    pass
+else:
+    raise AssertionError("truncated-u32: expected decode error")
+`);
+      } else {
+        writeFileSync(join(go, "generated_test.go"), `package recursion_limit
+import ("bytes"; "testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")
+func chain(count int) *Node { var next *Node; for i := 0; i < count; i++ { next = &Node{Next: next} }; return next }
+func encodeRoot(value *Node) error { w := vexil.NewBitWriter(); if err := w.EnterRecursive(); err != nil { return err }; defer w.LeaveRecursive(); return value.Pack(w) }
+func decodeRoot(data []byte) error { r := vexil.NewBitReader(data); if err := r.EnterRecursive(); err != nil { return err }; defer r.LeaveRecursive(); return (&Node{}).Unpack(r) }
+func TestGeneratedRecursionLimit(t *testing.T) {
+  if err := encodeRoot(chain(64)); err != nil { t.Fatalf("depth-64 encode: %v", err) }
+  if err := encodeRoot(chain(65)); err == nil { t.Fatal("depth-65 encode: expected recursion error") }
+  if err := decodeRoot(append(bytes.Repeat([]byte{1}, 63), 0)); err != nil { t.Fatalf("depth-64 decode: %v", err) }
+  if err := decodeRoot(append(bytes.Repeat([]byte{1}, 64), 0)); err == nil { t.Fatal("depth-65 decode: expected recursion error") }
+}
+`);
+        writeFileSync(join(py, "run.py"), `from generated import Node
+def chain(count: int) -> Node:
+    value = None
+    for _ in range(count): value = Node(next=value)
+    assert value is not None
+    return value
+chain(64).encode()
+try:
+    chain(65).encode()
+except Exception as error:
+    assert "nesting exceeded 64" in str(error), f"depth-65 encode: {error}"
+else:
+    raise AssertionError("depth-65 encode: expected recursion error")
+Node.decode(bytes([1] * 63 + [0]))
+try:
+    Node.decode(bytes([1] * 64 + [0]))
+except Exception as error:
+    assert "nesting exceeded 64" in str(error), f"depth-65 decode: {error}"
+else:
+    raise AssertionError("depth-65 decode: expected recursion error")
+`);
+      }
+      run("go", ["test", "./..."], go, `${name}: Go generated failure contract`);
+      run(python, ["run.py"], py, `${name}: Python generated failure contract`, {
+        ...process.env,
+        PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${py}`,
+      });
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}
+
 requireTool("go", "Go", ["version"]);
 requireTool(python, "Python");
+validateCoverageTable();
 if (!existsSync(join(repoRoot, "Cargo.toml"))) throw new Error("repository root not found");
 run("cargo", ["build", "-p", "vexilc"], repoRoot, "build vexilc");
 
 // The selected vectors collectively cover primitives/LSB packing, aggregates,
 // optionals, collections, encoding annotations, and the stateful delta reset.
 runBasic("primitives", "messages.json", "mixed_bool_u16_string", "&M{Flag: true, Count: 42, Name: \"test\"}", "M(flag=True, count=42, name='test')");
+runBasic("bool-false", "primitives.json", "bool_false", "&M{V: false}", "M(v=False)");
+runBasic("bool-true", "primitives.json", "bool_true", "&M{V: true}", "M(v=True)");
+runBasic("u8-zero", "primitives.json", "u8_zero", "&M{V: 0}", "M(v=0)");
+runBasic("u8-max", "primitives.json", "u8_max", "&M{V: 255}", "M(v=255)");
+runBasic("u16-le", "primitives.json", "u16_le", "&M{V: 258}", "M(v=258)");
+runBasic("u32-le", "primitives.json", "u32_le", "&M{V: 305419896}", "M(v=305419896)");
 runBasic("signed-primitive", "primitives.json", "i32_negative", "&M{V: -1}", "M(v=-1)");
+runBasic("nan-canonical", "primitives.json", "f32_nan_canonical", "&M{V: float32(math.NaN())}", "M(v=float('nan'))", "math.IsNaN(float64(decoded.V))", "__import__('math').isnan(decoded.v)");
+runBasic("negative-zero", "primitives.json", "f64_negative_zero", "&M{V: math.Copysign(0, -1)}", "M(v=-0.0)", "math.Signbit(decoded.V)", "__import__('math').copysign(1.0, decoded.v) < 0");
+runBasic("string-hello", "primitives.json", "string_hello", "&M{V: \"hello\"}", "M(v='hello')");
+runBasic("string-empty", "primitives.json", "string_empty", "&M{V: \"\"}", "M(v='')");
 runBasic("finite-float", "primitives.json", "f32_finite_one_point_five", "&M{V: 1.5}", "M(v=1.5)");
 runBasic("bytes", "primitives.json", "bytes_three", "&M{V: []byte{0xde, 0xad, 0xbe}}", "M(v=bytes([0xde, 0xad, 0xbe]))");
 runBasic("subbyte", "sub_byte.json", "u3_u5_packed", "&M{A: 5, B: 18}", "M(a=5, b=18)");
+runBasic("subbyte-cross-byte", "sub_byte.json", "u3_u5_u6_cross_byte", "&M{A: 7, B: 31, C: 63}", "M(a=7, b=31, c=63)");
+runBasic("subbyte-u1", "sub_byte.json", "u1_one", "&M{V: 1}", "M(v=1)");
+runBasic("empty-message", "messages.json", "empty_message", "&Empty{}", "Empty()");
+runBasic("two-u32-fields", "messages.json", "two_u32_fields", "&M{X: 1, Y: 2}", "M(x=1, y=2)");
 runBasic("nested-message", "messages.json", "nested_message_u16", "&M{Child: Child{Value: 7}}", "M(child=Child(value=7))");
+runBasic("enum-first", "enums.json", "enum_first_variant", "&M{V: StatusActive}", "M(v=Status(Status.ACTIVE))");
 runBasic("enum", "enums.json", "enum_second_variant", "&M{V: StatusInactive}", "M(v=Status(Status.INACTIVE))");
 runBasic("union", "unions.json", "union_first_variant", "&M{V: &ShapeCircle{Radius: 1.5}}", "M(v=ShapeCircle(1.5))", "func() bool { circle, ok := decoded.V.(*ShapeCircle); return ok && circle.Radius == 1.5 }()", "type(decoded.v) is ShapeCircle and decoded.v.radius == value.v.radius");
 { const present = "uint32(42)"; runBasic("optional", "optionals.json", "optional_some_u32", `func() *M { v := ${present}; return &M{V: &v} }()`, "M(v=42)"); }
 runBasic("optional-absent", "optionals.json", "optional_none", "&M{V: nil}", "M(v=None)");
+runBasic("array-empty", "arrays_maps.json", "array_empty", "&M{V: []uint32{}}", "M(v=[])");
 runBasic("array", "arrays_maps.json", "array_three_u32", "&M{V: []uint32{1, 2, 3}}", "M(v=[1, 2, 3])");
+runBasic("map-one", "arrays_maps.json", "map_one_entry", "&M{V: map[string]uint32{\"key\": 42}}", "M(v={'key': 42})");
 runBasic("map", "arrays_maps.json", "map_two_string_entries_canonical_order", "&M{V: map[string]uint32{\"z\": 2, \"a\": 1}}", "M(v={'z': 2, 'a': 1})");
+runBasic("set-empty", "v1_types.json", "set_empty", "&M{Tags: map[string]struct{}{}}", "M(tags=set())");
 runBasic("set", "v1_types.json", "set_strings", "&M{Tags: map[string]struct{}{\"beta\": {}, \"alpha\": {}}}", "M(tags={'beta', 'alpha'})");
 runBasic("fixed-array", "v1_types.json", "fixed_array_u8", "&M{Data: [4]uint8{1,2,3,4}}", "M(data=(1,2,3,4))");
+runBasic("fixed32-zero", "v1_types.json", "fixed32_zero", "&M{V: 0}", "M(v=0)");
+runBasic("fixed32-one", "v1_types.json", "fixed32_one", "&M{V: 65536}", "M(v=65536)");
+runBasic("fixed64-zero", "v1_types.json", "fixed64_zero", "&M{V: 0}", "M(v=0)");
+runBasic("vec3-f32", "v1_types.json", "vec3_f32", "&M{Pos: [3]float32{1,2,3}}", "M(pos=(1.0,2.0,3.0))");
+runBasic("vec2-fixed64", "v1_types.json", "vec2_fixed64", "&M{Pos: [2]int64{0,0}}", "M(pos=(0,0))");
+runBasic("bits-inline", "v1_types.json", "bits_inline", "&M{Perms: 3}", "M(perms=3)");
+runBasic("newtype-u32", "generated_wire.json", "newtype_u32", "&M{V: UserId(16909060)}", "M(v=UserId(16909060))");
+runBasic("alias-u16", "generated_wire.json", "alias_u16", "&M{V: 258}", "M(v=258)");
+runBasic(
+  "nested-optional-some-none-u16",
+  "generated_wire.json",
+  "nested_optional_some_none_u16",
+  "func() *M { var inner *uint16; return &M{V: &inner} }()",
+  "M(v=(None,))",
+);
+runBasic(
+  "nested-optional-some-none-u16-tail-bool",
+  "generated_wire.json",
+  "nested_optional_some_none_u16_tail_bool",
+  "func() *M { var inner *uint16; return &M{V: &inner, Tail: true} }()",
+  "M(v=(None,), tail=True)",
+);
+runBasic(
+  "nested-optional-some-u16",
+  "generated_wire.json",
+  "nested_optional_some_u16",
+  "func() *M { scalar := uint16(258); inner := &scalar; return &M{V: &inner} }()",
+  "M(v=(258,))",
+);
+runBasic("unknown-enum", "generated_wire.json", "non_exhaustive_enum_unknown", "&M{V: Status(7)}", "M(v=Status(7))");
+runBasic("unknown-flags", "generated_wire.json", "flags_unknown_bits", "&M{V: Permissions(128)}", "M(v=Permissions(128))");
+runBasic("map-i16-order", "generated_wire.json", "map_i16_canonical_order", "&M{V: map[int16]uint8{2: 22, -1: 11}}", "M(v={2: 22, -1: 11})");
+runBasic("set-u16-order", "generated_wire.json", "set_u16_canonical_order", "&M{V: map[uint16]struct{}{2: {}, 1: {}}}", "M(v={2, 1})");
+runBasic("nested-optional-map-set", "generated_wire.json", "nested_optional_map_set", "func() *M { value := map[uint8]map[uint16]struct{}{2: {2: {}, 1: {}}}; return &M{V: &value} }()", "M(v={2: {2, 1}})");
 runBasic("annotations", "annotations.json", "varint_and_zigzag", "&M{Count: 300, Delta: -5}", "M(count=300, delta=-5)");
 runDeltaReset();
 runOptionalEvolution();
 runTraitInvariance();
+runNestedOptionalConstraint();
+runFailurePaths();
 process.stdout.write("Generated Go/Python wire contract matrix passed.\n");

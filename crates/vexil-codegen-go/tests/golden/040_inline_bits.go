@@ -14,6 +14,7 @@ type Header struct {
 }
 
 func (m *Header) Pack(w *vexil.BitWriter) error {
+	w.WriteBits(uint64(m.Perms), 4)
 	w.FlushToByteBoundary()
 	if len(m.Unknown) > 0 {
 		w.WriteRawBytes(m.Unknown)
@@ -22,8 +23,14 @@ func (m *Header) Pack(w *vexil.BitWriter) error {
 }
 
 func (m *Header) Unpack(r *vexil.BitReader) error {
+	{
+		v, err := r.ReadBits(4)
+		if err != nil {
+			return err
+		}
+		m.Perms = uint8(v)
+	}
 	r.FlushToByteBoundary()
 	m.Unknown = nil
 	return nil
 }
-

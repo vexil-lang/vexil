@@ -86,4 +86,3 @@ export function decodeColor(r: BitReader): Color {
   const value: [number, number, number] = [value_0, value_1, value_2];
   return value;
 }
-

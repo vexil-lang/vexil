@@ -28,4 +28,3 @@ export function decodeConfig(r: BitReader): Config {
   const _unknown = new Uint8Array(0);
   return { name, timeout_ms, _unknown };
 }
-

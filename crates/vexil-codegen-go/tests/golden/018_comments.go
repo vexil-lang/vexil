@@ -66,4 +66,3 @@ func (s *Bar) Unpack(r *vexil.BitReader) error {
 	*s = Bar(v)
 	return nil
 }
-

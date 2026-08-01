@@ -157,6 +157,35 @@ fn verify_optional_some_u32() {
     assert_eq!(hex(&w.finish()), "012a000000");
 }
 
+#[test]
+fn verify_nested_optional_some_none_u16() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.write_bool(false);
+    w.flush_to_byte_boundary();
+    assert_eq!(hex(&w.finish()), "01");
+}
+
+#[test]
+fn verify_nested_optional_some_none_u16_tail_bool() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.write_bool(false);
+    w.write_bool(true);
+    w.flush_to_byte_boundary();
+    assert_eq!(hex(&w.finish()), "05");
+}
+
+#[test]
+fn verify_nested_optional_some_u16() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.write_bool(true);
+    w.flush_to_byte_boundary();
+    w.write_u16(258);
+    assert_eq!(hex(&w.finish()), "030201");
+}
+
 // --- Arrays ---
 
 #[test]
@@ -287,4 +316,58 @@ fn verify_bits_all_set() {
     w.write_bool(true); // bit 4
     w.flush_to_byte_boundary();
     assert_eq!(hex(&w.finish()), "1f");
+}
+
+// --- Generated Go/Python expansion vectors ---
+
+#[test]
+fn verify_newtype_and_alias_have_no_wire_overhead() {
+    let mut newtype = BitWriter::new();
+    newtype.write_u32(0x0102_0304);
+    assert_eq!(hex(&newtype.finish()), "04030201");
+
+    let mut alias = BitWriter::new();
+    alias.write_u16(0x0102);
+    assert_eq!(hex(&alias.finish()), "0201");
+}
+
+#[test]
+fn verify_unknown_enum_and_flags_values_are_numeric() {
+    let mut unknown_enum = BitWriter::new();
+    unknown_enum.write_bits(7, 8);
+    assert_eq!(hex(&unknown_enum.finish()), "07");
+
+    let mut unknown_flags = BitWriter::new();
+    unknown_flags.write_u8(0x80);
+    assert_eq!(hex(&unknown_flags.finish()), "80");
+}
+
+#[test]
+fn verify_numeric_collection_canonical_order() {
+    let mut map = BitWriter::new();
+    map.write_leb128(2);
+    map.write_i16(-1);
+    map.write_u8(11);
+    map.write_i16(2);
+    map.write_u8(22);
+    assert_eq!(hex(&map.finish()), "02ffff0b020016");
+
+    let mut set = BitWriter::new();
+    set.write_leb128(2);
+    set.write_u16(1);
+    set.write_u16(2);
+    assert_eq!(hex(&set.finish()), "0201000200");
+}
+
+#[test]
+fn verify_nested_optional_map_set() {
+    let mut w = BitWriter::new();
+    w.write_bool(true);
+    w.flush_to_byte_boundary();
+    w.write_leb128(1);
+    w.write_u8(2);
+    w.write_leb128(2);
+    w.write_u16(1);
+    w.write_u16(2);
+    assert_eq!(hex(&w.finish()), "0101020201000200");
 }

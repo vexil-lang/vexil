@@ -56,4 +56,3 @@ export function encodeFileMode(v: FileMode, w: BitWriter): void {
 export function decodeFileMode(r: BitReader): FileMode {
   return r.readU8();
 }
-

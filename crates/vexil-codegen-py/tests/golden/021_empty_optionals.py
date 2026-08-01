@@ -31,10 +31,12 @@ class WithOptionals:
         _vexil_self_2e_name_optional = self.name
         w.write_bool(_vexil_self_2e_name_optional is not None)
         if _vexil_self_2e_name_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_string(_vexil_self_2e_name_optional)
         _vexil_self_2e_value_optional = self.value
         w.write_bool(_vexil_self_2e_value_optional is not None)
         if _vexil_self_2e_value_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_u32(_vexil_self_2e_value_optional)
         _vexil_self_2e_flag_optional = self.flag
         w.write_bool(_vexil_self_2e_flag_optional is not None)
@@ -62,6 +64,7 @@ class WithOptionals:
             m.name = None
         else:
             if _vexil_m_2e_name_present:
+                r.flush_to_byte_boundary()
                 m.name = r.read_string()
             else:
                 m.name = None
@@ -71,6 +74,7 @@ class WithOptionals:
             m.value = None
         else:
             if _vexil_m_2e_value_present:
+                r.flush_to_byte_boundary()
                 m.value = r.read_u32()
             else:
                 m.value = None
@@ -111,6 +115,7 @@ class NestedOptional:
             _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional = _vexil_self_2e_inner_optional[0]
             w.write_bool(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional is not None)
             if _vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional is not None:
+                w.flush_to_byte_boundary()
                 w.write_u32(_vexil__5f_vexil_5f_self_5f_2e_5f_inner_5f_optional_5b_0_5d__optional)
         w.flush_to_byte_boundary()
         if self.unknown:
@@ -140,6 +145,7 @@ class NestedOptional:
                     _vexil_m_2e_inner_optional_value = None
                 else:
                     if _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present:
+                        r.flush_to_byte_boundary()
                         _vexil_m_2e_inner_optional_value = r.read_u32()
                     else:
                         _vexil_m_2e_inner_optional_value = None
@@ -173,10 +179,12 @@ class AllEmpty:
         _vexil_self_2e_a_optional = self.a
         w.write_bool(_vexil_self_2e_a_optional is not None)
         if _vexil_self_2e_a_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_string(_vexil_self_2e_a_optional)
         _vexil_self_2e_b_optional = self.b
         w.write_bool(_vexil_self_2e_b_optional is not None)
         if _vexil_self_2e_b_optional is not None:
+            w.flush_to_byte_boundary()
             w.write_u32(_vexil_self_2e_b_optional)
         _vexil_self_2e_c_optional = self.c
         w.write_bool(_vexil_self_2e_c_optional is not None)
@@ -204,6 +212,7 @@ class AllEmpty:
             m.a = None
         else:
             if _vexil_m_2e_a_present:
+                r.flush_to_byte_boundary()
                 m.a = r.read_string()
             else:
                 m.a = None
@@ -213,6 +222,7 @@ class AllEmpty:
             m.b = None
         else:
             if _vexil_m_2e_b_present:
+                r.flush_to_byte_boundary()
                 m.b = r.read_u32()
             else:
                 m.b = None

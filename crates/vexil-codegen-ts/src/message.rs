@@ -5,7 +5,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::ts_type;
+use crate::types::{optional_payload_needs_wrapper, ts_type};
 use vexil_lang::codegen::portable::PortableFunction;
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,10 @@ pub fn is_byte_aligned(ty: &ResolvedType, registry: &TypeRegistry) -> bool {
                 true
             }
         }
-        ResolvedType::Optional(inner) => is_byte_aligned(inner, registry),
+        // An optional always starts with a one-bit presence flag. Nested
+        // optional flags therefore remain contiguous until a present payload
+        // itself requires byte alignment.
+        ResolvedType::Optional(_) => false,
         _ => true,
     }
 }
@@ -152,6 +155,32 @@ fn emit_constraint_validation_ts(
     w.close_block();
 }
 
+fn emit_field_constraint_validation_ts(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+) {
+    let mut guards = Vec::new();
+    let mut value = access.to_string();
+    let mut current = ty;
+    while let ResolvedType::Optional(inner) = current {
+        guards.push(format!("{value} !== null"));
+        if optional_payload_needs_wrapper(inner) {
+            value = format!("{value}[0]");
+        }
+        current = inner;
+    }
+    if !guards.is_empty() {
+        w.open_block(&format!("if ({})", guards.join(" && ")));
+    }
+    emit_constraint_validation_ts(w, constraint, &value, field_name);
+    if !guards.is_empty() {
+        w.close_block();
+    }
+}
+
 /// Emit code to write a value to a BitWriter.
 ///
 /// `access` is the TypeScript expression for the value.
@@ -268,11 +297,16 @@ fn emit_write_type(
         ResolvedType::Optional(inner) => {
             // Presence bit
             w.line(&format!("{writer}.writeBool({access} !== null);"));
+            w.open_block(&format!("if ({access} !== null)"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{writer}.flushToByteBoundary();"));
             }
-            w.open_block(&format!("if ({access} !== null)"));
-            emit_write_type(w, access, inner, registry, writer);
+            let inner_access = if optional_payload_needs_wrapper(inner) {
+                format!("{access}[0]")
+            } else {
+                access.to_string()
+            };
+            emit_write_type(w, &inner_access, inner, registry, writer);
             w.close_block();
         }
         ResolvedType::Array(inner) => {
@@ -492,14 +526,23 @@ fn emit_read_type(
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("const {var_name}_present = {reader}.readBool();"));
+            let inner_ts = ts_type(inner, registry);
+            let optional_ts = if optional_payload_needs_wrapper(inner) {
+                format!("[{inner_ts}] | null")
+            } else {
+                format!("{inner_ts} | null")
+            };
+            w.line(&format!("let {var_name}: {optional_ts};"));
+            w.open_block(&format!("if ({var_name}_present)"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.flushToByteBoundary();"));
             }
-            let inner_ts = ts_type(inner, registry);
-            w.line(&format!("let {var_name}: {inner_ts} | null;",));
-            w.open_block(&format!("if ({var_name}_present)"));
             emit_read_type(w, &format!("{var_name}_inner"), inner, registry, reader);
-            w.line(&format!("{var_name} = {var_name}_inner;"));
+            if optional_payload_needs_wrapper(inner) {
+                w.line(&format!("{var_name} = [{var_name}_inner];"));
+            } else {
+                w.line(&format!("{var_name} = {var_name}_inner;"));
+            }
             w.dedent();
             w.line("} else {");
             w.indent();
@@ -647,7 +690,13 @@ pub fn emit_message(
         let access = format!("v.{}", field.name);
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_ts(w, constraint, &access, field.name.as_str());
+            emit_field_constraint_validation_ts(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+            );
         }
         emit_write(
             w,
@@ -684,7 +733,13 @@ pub fn emit_message(
         );
         // Validate constraint after decoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_ts(w, constraint, var_name, var_name);
+            emit_field_constraint_validation_ts(
+                w,
+                constraint,
+                &field.resolved_type,
+                var_name,
+                var_name,
+            );
         }
     }
     w.line("r.flushToByteBoundary();");

@@ -52,8 +52,8 @@ export interface LinkedList {
 export function encodeLinkedList(v: LinkedList, w: BitWriter): void {
   w.writeString(v.value);
   w.writeBool(v.next !== null);
-  w.flushToByteBoundary();
   if (v.next !== null) {
+    w.flushToByteBoundary();
     w.enterNested();
     encodeLinkedList(v.next, w);
     w.leaveNested();
@@ -67,9 +67,9 @@ export function encodeLinkedList(v: LinkedList, w: BitWriter): void {
 export function decodeLinkedList(r: BitReader): LinkedList {
   const value = r.readString();
   const next_present = r.readBool();
-  r.flushToByteBoundary();
   let next: LinkedList | null;
   if (next_present) {
+    r.flushToByteBoundary();
     r.enterNested();
     const next_inner = decodeLinkedList(r);
     r.leaveNested();
@@ -185,4 +185,3 @@ export function decodeExprKind(r: BitReader): ExprKind {
     }
   }
 }
-

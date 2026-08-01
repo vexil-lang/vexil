@@ -144,4 +144,3 @@ export class FieldAnnotationsDecoder {
     this.prevd = 0;
   }
 }
-

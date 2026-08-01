@@ -272,3 +272,34 @@ fn trait_only_schema() {
         "{code}"
     );
 }
+
+#[test]
+fn bytes_map_keys_compile() {
+    check_compiles("041_map_key_ordering");
+}
+
+#[test]
+fn transparent_alias_fields_compile() {
+    check_compiles("034_type_alias");
+}
+
+#[test]
+fn optional_container_access_compiles() {
+    check_source_compiles(
+        "optional-container-access",
+        "namespace test.optional_container\nmessage M { value @0 : optional<map<u8, set<u16>>> }",
+    );
+}
+
+#[test]
+fn constrained_fields_compile() {
+    check_compiles("036_where_clause");
+}
+
+#[test]
+fn nested_optional_constraints_compile() {
+    check_source_compiles(
+        "nested-optional-constraint",
+        "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+    );
+}

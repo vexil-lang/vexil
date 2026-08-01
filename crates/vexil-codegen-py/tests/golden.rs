@@ -389,6 +389,14 @@ fn trait_only_non_generic() {
 }
 
 #[test]
+fn nested_optional_constraint() {
+    golden_source_test(
+        "nested_optional_constraint",
+        "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+    );
+}
+
+#[test]
 fn identifier_conflicts() {
     golden_source_test(
         "identifier_conflicts",

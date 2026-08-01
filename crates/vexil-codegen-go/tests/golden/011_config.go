@@ -62,4 +62,3 @@ type WithArrays struct {
 type Nested struct {
 	Level LogLevel
 }
-

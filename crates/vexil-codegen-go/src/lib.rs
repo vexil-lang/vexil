@@ -17,7 +17,6 @@ pub mod union_gen;
 
 pub use backend::GoBackend;
 
-use vexil_lang::ast::SemanticType;
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef};
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -81,12 +80,18 @@ pub(crate) fn generate_with_imports(
     // Check if we need cross-package imports
     let has_cross_imports = import_types.is_some_and(|m| !m.is_empty());
 
-    let needs_fmt = has_unions;
+    let needs_fmt = has_unions
+        || compiled.declarations.iter().any(|&id| {
+            compiled
+                .registry
+                .get(id)
+                .is_some_and(type_def_has_constraints)
+        });
     let needs_sort = compiled.declarations.iter().any(|&id| {
         compiled
             .registry
             .get(id)
-            .is_some_and(type_def_has_string_map)
+            .is_some_and(type_def_has_ordered_collection)
     });
     let needs_grouped = has_cross_imports || (has_codecs && (needs_fmt || needs_sort));
 
@@ -132,6 +137,12 @@ pub(crate) fn generate_with_imports(
     // Schema version
     if let Some(ref version) = compiled.annotations.version {
         w.line(&format!("const SchemaVersion = \"{version}\""));
+    }
+
+    let mut constants: Vec<_> = compiled.constants.iter().collect();
+    constants.sort_by_key(|(name, _)| name.as_str());
+    for (name, value) in constants {
+        w.line(&format!("const {name} = {}", value.value));
     }
 
     // Emit each declared type
@@ -181,20 +192,13 @@ pub(crate) fn generate_with_imports(
         trait_gen::emit_impl(&mut w, impl_def, compiled, import_types)?;
     }
 
-    Ok(w.finish())
+    Ok(format!("{}\n", w.finish().trim_end()))
 }
 
-fn type_def_has_string_map(type_def: &TypeDef) -> bool {
-    fn contains_string_map(ty: &ResolvedType) -> bool {
+fn type_def_has_ordered_collection(type_def: &TypeDef) -> bool {
+    fn contains_ordered_collection(ty: &ResolvedType) -> bool {
         match ty {
-            ResolvedType::Map(key, _) => {
-                matches!(key.as_ref(), ResolvedType::Semantic(SemanticType::String))
-            }
-            ResolvedType::Set(inner)
-                if matches!(inner.as_ref(), ResolvedType::Semantic(SemanticType::String)) =>
-            {
-                true
-            }
+            ResolvedType::Map(_, _) | ResolvedType::Set(_) => true,
             ResolvedType::Optional(inner)
             | ResolvedType::Array(inner)
             | ResolvedType::FixedArray(inner, _)
@@ -203,8 +207,10 @@ fn type_def_has_string_map(type_def: &TypeDef) -> bool {
             | ResolvedType::Vec4(inner)
             | ResolvedType::Quat(inner)
             | ResolvedType::Mat3(inner)
-            | ResolvedType::Mat4(inner) => contains_string_map(inner),
-            ResolvedType::Result(ok, err) => contains_string_map(ok) || contains_string_map(err),
+            | ResolvedType::Mat4(inner) => contains_ordered_collection(inner),
+            ResolvedType::Result(ok, err) => {
+                contains_ordered_collection(ok) || contains_ordered_collection(err)
+            }
             _ => false,
         }
     }
@@ -213,21 +219,36 @@ fn type_def_has_string_map(type_def: &TypeDef) -> bool {
         TypeDef::Message(message) => message
             .fields
             .iter()
-            .any(|field| contains_string_map(&field.resolved_type)),
+            .any(|field| contains_ordered_collection(&field.resolved_type)),
         TypeDef::Union(union) => union
             .variants
             .iter()
             .flat_map(|variant| &variant.fields)
-            .any(|field| contains_string_map(&field.resolved_type)),
-        TypeDef::Newtype(newtype) => contains_string_map(&newtype.inner_type),
+            .any(|field| contains_ordered_collection(&field.resolved_type)),
+        TypeDef::Newtype(newtype) => contains_ordered_collection(&newtype.inner_type),
         TypeDef::Config(config) => config
             .fields
             .iter()
-            .any(|field| contains_string_map(&field.resolved_type)),
+            .any(|field| contains_ordered_collection(&field.resolved_type)),
         TypeDef::Trait(trait_def) => trait_def
             .fields
             .iter()
-            .any(|field| contains_string_map(&field.ty)),
+            .any(|field| contains_ordered_collection(&field.ty)),
+        _ => false,
+    }
+}
+
+fn type_def_has_constraints(type_def: &TypeDef) -> bool {
+    match type_def {
+        TypeDef::Message(message) => message
+            .fields
+            .iter()
+            .any(|field| field.constraint.is_some()),
+        TypeDef::Union(union) => union
+            .variants
+            .iter()
+            .flat_map(|variant| &variant.fields)
+            .any(|field| field.constraint.is_some()),
         _ => false,
     }
 }

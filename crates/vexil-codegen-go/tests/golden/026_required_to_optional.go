@@ -54,9 +54,9 @@ type SettingsV2 struct {
 
 func (m *SettingsV2) Pack(w *vexil.BitWriter) error {
 	w.WriteBool(m.Timeout != nil)
-	w.FlushToByteBoundary()
 	if m.Timeout != nil {
-		w.WriteU32(*m.Timeout)
+		w.FlushToByteBoundary()
+		w.WriteU32((*m.Timeout))
 	}
 	w.WriteString(m.Name)
 	w.FlushToByteBoundary()
@@ -73,8 +73,8 @@ func (m *SettingsV2) Unpack(r *vexil.BitReader) error {
 			return err
 		}
 		if err == nil {
-			r.FlushToByteBoundary()
 			if present {
+				r.FlushToByteBoundary()
 				var optVal uint32
 				{
 					v, err := r.ReadU32()
@@ -98,4 +98,3 @@ func (m *SettingsV2) Unpack(r *vexil.BitReader) error {
 	m.Unknown = nil
 	return nil
 }
-
