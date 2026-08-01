@@ -295,3 +295,11 @@ fn optional_container_access_compiles() {
 fn constrained_fields_compile() {
     check_compiles("036_where_clause");
 }
+
+#[test]
+fn nested_optional_constraints_compile() {
+    check_source_compiles(
+        "nested-optional-constraint",
+        "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+    );
+}

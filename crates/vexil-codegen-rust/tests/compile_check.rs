@@ -234,6 +234,14 @@ fn trait_only_generic_map() {
 }
 
 #[test]
+fn nested_optional_constraints_compile() {
+    check_source_compiles(
+        "nested-optional-constraint",
+        "namespace test.nested_optional_constraint\nmessage M { v @0 : optional<optional<u16>> where value in 1..1000 }",
+    );
+}
+
+#[test]
 fn portable_functions_preserve_non_copy_values_and_unused_locals() {
     check_source_compiles(
         "portable-non-copy-values",

@@ -179,7 +179,7 @@ fn emit_constraint_validation(
     let negated_condition = format!("!({})", condition);
     w.open_block(&format!("if {}", negated_condition));
     w.line(&format!(
-        "return Err(vexil_runtime::EncodeError::ConstraintViolation {{ field: \"{}\", message: format!(\"value violates constraint: expected `{}`\", {}) }});",
+        "return Err(vexil_runtime::EncodeError::ConstraintViolation {{ field: \"{}\", message: format!(\"value {{:?}} violates constraint: expected `{}`\", {}) }});",
         field_name,
         condition.replace("\\\"", "\"").replace("\n", ""),
         access
@@ -198,12 +198,49 @@ fn emit_constraint_validation_unpack(
     let negated_condition = format!("!({})", condition);
     w.open_block(&format!("if {}", negated_condition));
     w.line(&format!(
-        "return Err(vexil_runtime::DecodeError::InvalidValue {{ field: \"{}\", message: format!(\"value violates constraint: expected `{}`\", {}) }});",
+        "return Err(vexil_runtime::DecodeError::InvalidValue {{ field: \"{}\", message: format!(\"value {{:?}} violates constraint: expected `{}`\", {}) }});",
         field_name,
         condition.replace("\\\"", "\"").replace("\n", ""),
         access
     ));
     w.close_block();
+}
+
+fn emit_field_constraint_validation(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+    decode: bool,
+    depth: usize,
+) {
+    if let ResolvedType::Optional(inner) = ty {
+        let binding = format!("constraint_value_{depth}");
+        w.open_block(&format!("if let Some({binding}) = ({access}).as_ref()"));
+        emit_field_constraint_validation(
+            w,
+            constraint,
+            inner,
+            &binding,
+            field_name,
+            decode,
+            depth + 1,
+        );
+        w.close_block();
+        return;
+    }
+
+    let value = if depth == 0 {
+        access.to_string()
+    } else {
+        format!("*({access})")
+    };
+    if decode {
+        emit_constraint_validation_unpack(w, constraint, &value, field_name);
+    } else {
+        emit_constraint_validation(w, constraint, &value, field_name);
+    }
 }
 
 /// Emit code to write (pack) a field to a `BitWriter`.
@@ -1305,7 +1342,15 @@ pub fn emit_message(
         let access = format!("self.{}", field.name);
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation(w, constraint, &access, field.name.as_str());
+            emit_field_constraint_validation(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+                false,
+                0,
+            );
         }
         emit_write(
             w,
@@ -1360,7 +1405,15 @@ pub fn emit_message(
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_unpack(w, constraint, var_name, var_name);
+                    emit_field_constraint_validation(
+                        w,
+                        constraint,
+                        &field.resolved_type,
+                        var_name,
+                        var_name,
+                        true,
+                        0,
+                    );
                 }
             }
             DecodeAction::Tombstone(tombstone) => {

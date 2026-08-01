@@ -155,6 +155,31 @@ fn emit_constraint_validation_ts(
     w.close_block();
 }
 
+fn emit_field_constraint_validation_ts(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+) {
+    let mut guards = Vec::new();
+    let mut current = ty;
+    while let ResolvedType::Optional(inner) = current {
+        let guard = format!("{access} !== null");
+        if guards.last() != Some(&guard) {
+            guards.push(guard);
+        }
+        current = inner;
+    }
+    if !guards.is_empty() {
+        w.open_block(&format!("if ({})", guards.join(" && ")));
+    }
+    emit_constraint_validation_ts(w, constraint, access, field_name);
+    if !guards.is_empty() {
+        w.close_block();
+    }
+}
+
 /// Emit code to write a value to a BitWriter.
 ///
 /// `access` is the TypeScript expression for the value.
@@ -757,7 +782,13 @@ pub fn emit_message(
         let access = format!("v.{}", field.name);
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            emit_constraint_validation_ts(w, constraint, &access, field.name.as_str());
+            emit_field_constraint_validation_ts(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+            );
         }
         emit_write(
             w,
@@ -811,7 +842,13 @@ pub fn emit_message(
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    emit_constraint_validation_ts(w, constraint, var_name, var_name);
+                    emit_field_constraint_validation_ts(
+                        w,
+                        constraint,
+                        &field.resolved_type,
+                        var_name,
+                        var_name,
+                    );
                 }
             }
             DecodeAction::Tombstone(tombstone) => {

@@ -222,6 +222,36 @@ fn emit_constraint_validation_go(
     w.close_block();
 }
 
+fn constraint_value_access_go(ty: &ResolvedType, access: &str) -> (Vec<String>, String) {
+    let mut guards = Vec::new();
+    let mut value = access.to_string();
+    let mut current = ty;
+    while let ResolvedType::Optional(inner) = current {
+        guards.push(format!("{value} != nil"));
+        value = format!("(*{value})");
+        current = inner;
+    }
+    (guards, value)
+}
+
+fn emit_field_constraint_validation_go(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+    err_return: &str,
+) {
+    let (guards, value) = constraint_value_access_go(ty, access);
+    if !guards.is_empty() {
+        w.open_block(&format!("if {}", guards.join(" && ")));
+    }
+    emit_constraint_validation_go(w, constraint, &value, field_name, err_return);
+    if !guards.is_empty() {
+        w.close_block();
+    }
+}
+
 /// Emit code to write a value to a BitWriter.
 ///
 /// `access` is the Go expression for the value.
@@ -1089,19 +1119,14 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
         let access = format!("m.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            if matches!(field.resolved_type, ResolvedType::Optional(_)) {
-                w.open_block(&format!("if {access} != nil"));
-                emit_constraint_validation_go(
-                    w,
-                    constraint,
-                    &format!("(*{access})"),
-                    field.name.as_str(),
-                    err_ret,
-                );
-                w.close_block();
-            } else {
-                emit_constraint_validation_go(w, constraint, &access, field.name.as_str(), err_ret);
-            }
+            emit_field_constraint_validation_go(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+                err_ret,
+            );
         }
         emit_write(
             w,
@@ -1157,25 +1182,14 @@ pub fn emit_message(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistr
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    if matches!(field.resolved_type, ResolvedType::Optional(_)) {
-                        w.open_block(&format!("if {target} != nil"));
-                        emit_constraint_validation_go(
-                            w,
-                            constraint,
-                            &format!("(*{target})"),
-                            field.name.as_str(),
-                            err_ret,
-                        );
-                        w.close_block();
-                    } else {
-                        emit_constraint_validation_go(
-                            w,
-                            constraint,
-                            &target,
-                            field.name.as_str(),
-                            err_ret,
-                        );
-                    }
+                    emit_field_constraint_validation_go(
+                        w,
+                        constraint,
+                        &field.resolved_type,
+                        &target,
+                        field.name.as_str(),
+                        err_ret,
+                    );
                 }
             }
             DecodeAction::Tombstone(tombstone) => {

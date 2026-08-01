@@ -276,6 +276,88 @@ function runTraitInvariance() {
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
+function runNestedOptionalConstraint() {
+  const item = vector("generated_wire.json", "nested_optional_constrained_u16");
+  const root = mkdtempSync(join(tmpdir(), "vexil-wire-nested-constraint-"));
+  try {
+    const go = join(root, "go");
+    const py = join(root, "python");
+    mkdirSync(go, { recursive: true });
+    mkdirSync(py, { recursive: true });
+
+    writeFileSync(join(go, "schema.vexil"), item.schema);
+    run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], go, "nested-optional-constraint: generate Go source");
+    writeFileSync(join(go, "go.mod"), `module vexil-generated-nested-constraint\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => ${runtimeGo}\n`);
+    writeFileSync(join(go, "generated_test.go"), `package ${namespacePackage(item.schema)}
+
+import (
+  "bytes"
+  "testing"
+  vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
+
+func nested(value uint16) **uint16 { inner := &value; return &inner }
+func nestedNone() **uint16 { var inner *uint16; return &inner }
+func encodeNested(value **uint16) ([]byte, error) {
+  writer := vexil.NewBitWriter()
+  if err := (&M{V: value}).Pack(writer); err != nil { return nil, err }
+  return writer.Finish(), nil
+}
+
+func TestNestedOptionalConstraint(t *testing.T) {
+  want := []byte{${hexBytes(item.expected_bytes)}}
+  got, err := encodeNested(nested(258))
+  if err != nil || !bytes.Equal(got, want) { t.Fatalf("nested constraint valid encode: got %x err %v want %x", got, err, want) }
+  decoded := &M{}
+  if err := decoded.Unpack(vexil.NewBitReader(want)); err != nil || decoded.V == nil || *decoded.V == nil || **decoded.V != 258 {
+    t.Fatalf("nested constraint valid decode: got %#v err %v", decoded.V, err)
+  }
+  if got, err := encodeNested(nil); err != nil || !bytes.Equal(got, []byte{0}) { t.Fatalf("nested constraint outer none: got %x err %v", got, err) }
+  if got, err := encodeNested(nestedNone()); err != nil || !bytes.Equal(got, []byte{1}) { t.Fatalf("nested constraint inner none: got %x err %v", got, err) }
+  if _, err := encodeNested(nested(0)); err == nil { t.Fatal("nested constraint invalid encode: expected constraint error") }
+  if err := (&M{}).Unpack(vexil.NewBitReader([]byte{3, 0, 0})); err == nil { t.Fatal("nested constraint invalid decode: expected constraint error") }
+  outerNone := &M{}
+  if err := outerNone.Unpack(vexil.NewBitReader([]byte{0})); err != nil || outerNone.V != nil { t.Fatalf("nested constraint outer-none decode: %#v %v", outerNone.V, err) }
+  innerNone := &M{}
+  if err := innerNone.Unpack(vexil.NewBitReader([]byte{1})); err != nil || innerNone.V == nil || *innerNone.V != nil { t.Fatalf("nested constraint inner-none decode: %#v %v", innerNone.V, err) }
+}
+`);
+    run("go", ["test", "./..."], go, "nested-optional-constraint: Go generated contract");
+
+    writeFileSync(join(py, "schema.vexil"), item.schema);
+    run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], py, "nested-optional-constraint: generate Python source");
+    writeFileSync(join(py, "run.py"), `from generated import M
+
+want = bytes.fromhex("${item.expected_bytes}")
+value = M(v=(258,))
+assert value.encode() == want, f"nested constraint valid encode: {value.encode().hex()} != {want.hex()}"
+assert M.decode(want) == value, f"nested constraint valid decode: {M.decode(want)!r} != {value!r}"
+assert M(v=None).encode() == bytes([0]), "nested constraint outer none"
+assert M(v=(None,)).encode() == bytes([1]), "nested constraint inner none"
+assert M.decode(bytes([0])).v is None, "nested constraint outer-none decode"
+assert M.decode(bytes([1])).v == (None,), "nested constraint inner-none decode"
+try:
+    M(v=(0,)).encode()
+except ValueError:
+    pass
+else:
+    raise AssertionError("nested constraint invalid encode: expected constraint error")
+try:
+    M.decode(bytes([3, 0, 0]))
+except ValueError:
+    pass
+else:
+    raise AssertionError("nested constraint invalid decode: expected constraint error")
+`);
+    run(python, ["run.py"], py, "nested-optional-constraint: Python generated contract", {
+      ...process.env,
+      PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${py}`,
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function runFailurePaths() {
   const root = mkdtempSync(join(tmpdir(), "vexil-wire-failures-"));
   const cases = {
@@ -421,5 +503,6 @@ runBasic("annotations", "annotations.json", "varint_and_zigzag", "&M{Count: 300,
 runDeltaReset();
 runOptionalEvolution();
 runTraitInvariance();
+runNestedOptionalConstraint();
 runFailurePaths();
 process.stdout.write("Generated Go/Python wire contract matrix passed.\n");

@@ -144,6 +144,37 @@ fn emit_constraint_validation_py(
     w.close_block();
 }
 
+fn constraint_value_access_py(ty: &ResolvedType, access: &str) -> (Vec<String>, String) {
+    let mut guards = Vec::new();
+    let mut value = access.to_string();
+    let mut current = ty;
+    while let ResolvedType::Optional(inner) = current {
+        guards.push(format!("{value} is not None"));
+        if optional_payload_needs_wrapper(inner) {
+            value = format!("{value}[0]");
+        }
+        current = inner;
+    }
+    (guards, value)
+}
+
+fn emit_field_constraint_validation_py(
+    w: &mut CodeWriter,
+    constraint: &FieldConstraint,
+    ty: &ResolvedType,
+    access: &str,
+    field_name: &str,
+) {
+    let (guards, value) = constraint_value_access_py(ty, access);
+    if !guards.is_empty() {
+        w.open_block(&format!("if {}", guards.join(" and ")));
+    }
+    emit_constraint_validation_py(w, constraint, &value, field_name);
+    if !guards.is_empty() {
+        w.close_block();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // emit_write - write a value to BitWriter
 // ---------------------------------------------------------------------------
@@ -809,13 +840,13 @@ pub fn emit_message(
         let access = format!("self.{field_name}");
         // Validate constraint before encoding
         if let Some(constraint) = &field.constraint {
-            if matches!(field.resolved_type, ResolvedType::Optional(_)) {
-                w.open_block(&format!("if {access} is not None"));
-                emit_constraint_validation_py(w, constraint, &access, field.name.as_str());
-                w.close_block();
-            } else {
-                emit_constraint_validation_py(w, constraint, &access, field.name.as_str());
-            }
+            emit_field_constraint_validation_py(
+                w,
+                constraint,
+                &field.resolved_type,
+                &access,
+                field.name.as_str(),
+            );
         }
         emit_write(
             w,
@@ -882,13 +913,13 @@ pub fn emit_message(
                 );
                 // Validate constraint after decoding
                 if let Some(constraint) = &field.constraint {
-                    if matches!(field.resolved_type, ResolvedType::Optional(_)) {
-                        w.open_block(&format!("if {target} is not None"));
-                        emit_constraint_validation_py(w, constraint, &target, field.name.as_str());
-                        w.close_block();
-                    } else {
-                        emit_constraint_validation_py(w, constraint, &target, field.name.as_str());
-                    }
+                    emit_field_constraint_validation_py(
+                        w,
+                        constraint,
+                        &field.resolved_type,
+                        &target,
+                        field.name.as_str(),
+                    );
                 }
             }
             DecodeAction::Tombstone(tombstone) => {

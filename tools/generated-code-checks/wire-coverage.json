@@ -6,6 +6,7 @@
   { "scenario": "numeric map and set canonical order", "authority": "compliance/vectors/generated_wire.json#map_i16_canonical_order,set_u16_canonical_order", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "nested optional map set", "authority": "compliance/vectors/generated_wire.json#nested_optional_map_set", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "nested optional presence states", "authority": "compliance/vectors/generated_wire.json#nested_optional_some_none_u16,nested_optional_some_u16", "targets": ["rust", "typescript", "go", "python"], "status": "covered" },
+  { "scenario": "constraints through nested optionals", "authority": "compliance/vectors/generated_wire.json#nested_optional_constrained_u16", "targets": ["rust", "typescript", "go", "python"], "status": "covered" },
   { "scenario": "truncated required primitive", "authority": "spec/wire-format.md section 12", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "recursive depth 64 success and depth 65 rejection", "authority": "spec/wire-format.md section 12 MAX_RECURSION_DEPTH", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "result discriminant", "authority": "spec/wire-format.md section 6.6", "targets": ["rust", "typescript", "go", "python"], "status": "blocked", "reason": "The specification assigns 0 to Ok and 1 to Err, while every generator currently emits and reads the inverse. Correcting this is a cross-target wire change requiring an explicit contract decision." },
