@@ -2241,6 +2241,80 @@ mod dep_tests {
     }
 
     #[test]
+    fn imported_alias_targets_remap_through_transitive_and_diamond_graphs() {
+        let leaf = crate::compile("namespace dep.leaf\nmessage Item { id @0 : u32 }")
+            .compiled
+            .expect("leaf compiles");
+
+        let compile_branch = |namespace: &str, alias: &str| {
+            let source = format!(
+                "namespace {namespace}\nimport {{ Item }} from dep.leaf\ntype {alias} = array<Item>"
+            );
+            let schema = crate::parse(&source).schema.expect("branch parses");
+            let mut dependencies = DependencyContext {
+                schemas: HashMap::new(),
+            };
+            dependencies
+                .schemas
+                .insert("dep.leaf".to_owned(), leaf.clone());
+            let (compiled, diagnostics) = lower_with_deps(&schema, Some(&dependencies));
+            assert!(
+                diagnostics.iter().all(|diagnostic| {
+                    diagnostic.severity != crate::diagnostic::Severity::Error
+                }),
+                "branch errors: {diagnostics:?}"
+            );
+            compiled.expect("branch compiles")
+        };
+
+        let left = compile_branch("dep.left", "LeftItems");
+        let right = compile_branch("dep.right", "RightItems");
+        let root = crate::parse(
+            "namespace root\n\
+             import { LeftItems } from dep.left\n\
+             import { RightItems } from dep.right\n\
+             message M { left @0 : LeftItems right @1 : RightItems }",
+        )
+        .schema
+        .expect("root parses");
+        let mut dependencies = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dependencies.schemas.insert("dep.left".to_owned(), left);
+        dependencies.schemas.insert("dep.right".to_owned(), right);
+
+        let (compiled, diagnostics) = lower_with_deps(&root, Some(&dependencies));
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != crate::diagnostic::Severity::Error),
+            "root errors: {diagnostics:?}"
+        );
+        let compiled = compiled.expect("root compiles");
+        let message = compiled
+            .declarations
+            .iter()
+            .filter_map(|id| compiled.registry.get(*id))
+            .find_map(|definition| match definition {
+                TypeDef::Message(message) => Some(message),
+                _ => None,
+            })
+            .expect("message declaration");
+        let element_id = |field: &FieldDef| match &field.resolved_type {
+            ResolvedType::Array(inner) => match **inner {
+                ResolvedType::Named(id) => id,
+                _ => panic!("array element must remain named"),
+            },
+            _ => panic!("alias must remain an array"),
+        };
+        assert_eq!(
+            element_id(&message.fields[0]),
+            element_id(&message.fields[1]),
+            "diamond imports must deduplicate the defining Item identity"
+        );
+    }
+
+    #[test]
     fn lower_with_dependency_resolves_named_import() {
         let dep_result = crate::compile("namespace dep.types\nmessage Foo { x @0 : u32 }");
         let dep_compiled = dep_result.compiled.unwrap();
