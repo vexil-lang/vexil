@@ -87,6 +87,7 @@ Evolution vectors test backward/forward compatibility:
 | `arrays_maps.json` | Variable-length arrays and maps |
 | `annotations.json` | `@varint` and `@zigzag` field encoding annotations |
 | `optionals.json` | Optional presence flags |
+| `results.json` | Result discriminants, void alternatives, and packed adjacency |
 | `messages.json` | Message field ordering and padding |
 | `unions.json` | Union discriminant + length prefix |
 | `delta.json` | Delta/differential encoding |
@@ -140,6 +141,7 @@ Special value formats in JSON:
 | `enum` | String (variant name) | `"Active"` |
 | `flags` | Object of bools | `{"Read": true, "Write": false}` |
 | `optional<T>` | `null` or value | `null`, `42` |
+| `result<T,E>` | Object with exactly one `ok` or `err` key | `{"ok": 42}`, `{"err": "oops"}` |
 | `array<T>` | Array | `[1, 2, 3]` |
 | `map<K,V>` | Object (string keys) | `{"key": "value"}` |
 | `set<T>` | Array (sorted, unique) | `["a", "b"]` |

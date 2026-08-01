@@ -271,10 +271,14 @@ Wire format identical to `array<T>`, but elements MUST be sorted and deduplicate
 
 ### 6.6 Result<T, E>
 
-Wire format: `[1-bit discriminant][T if 0, E if 1]`
+Wire format: `[1-bit discriminant][E if 0, T if 1]`
 
-- Discriminant 0 = Ok(T)
-- Discriminant 1 = Err(E)
+- Discriminant 0 = Err(E)
+- Discriminant 1 = Ok(T)
+
+This mapping preserves the wire behaviour of the published Vexil generators.
+Because the one-bit alternatives are ambiguous without a schema-generation
+marker, decoders MUST NOT attempt to infer or accept the inverse mapping.
 
 Either T or E MAY be `void` (no additional bits for that variant).
 

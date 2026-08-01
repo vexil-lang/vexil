@@ -346,7 +346,7 @@ standard library in a future version. Implementations MUST support it.
 | `optional<T>`   | 1-bit presence flag (packed); if 1, T follows; if 0, nothing       |
 | `array<T>`      | unsigned LEB128 count, then each element in order                  |
 | `map<K, V>`     | unsigned LEB128 pair count, then alternating K, V pairs            |
-| `result<T, E>`  | 1-bit discriminant (packed); 0 = Ok (T follows); 1 = Err (E)      |
+| `result<T, E>`  | 1-bit discriminant (packed); 0 = Err (E follows); 1 = Ok (T follows)      |
 
 **`optional<T>`:** The 1-bit presence flag participates in sub-byte packing with
 surrounding fields. When the flag is 0, no bits are written for the absent value

@@ -152,28 +152,28 @@ fn optional_sub_byte_present() {
 #[test]
 fn result_ok_round_trip() {
     let mut w = BitWriter::new();
-    w.write_bool(false); // 0 = Ok
+    w.write_bool(true); // 1 = Ok
     w.write_u32(42);
     w.flush_to_byte_boundary();
     let buf = w.finish();
 
     let mut r = BitReader::new(&buf);
-    let is_err = r.read_bool().unwrap();
-    assert!(!is_err);
+    let is_ok = r.read_bool().unwrap();
+    assert!(is_ok);
     assert_eq!(r.read_u32().unwrap(), 42);
 }
 
 #[test]
 fn result_err_round_trip() {
     let mut w = BitWriter::new();
-    w.write_bool(true); // 1 = Err
+    w.write_bool(false); // 0 = Err
     w.write_string("oops");
     w.flush_to_byte_boundary();
     let buf = w.finish();
 
     let mut r = BitReader::new(&buf);
-    let is_err = r.read_bool().unwrap();
-    assert!(is_err);
+    let is_ok = r.read_bool().unwrap();
+    assert!(!is_ok);
     assert_eq!(r.read_string().unwrap(), "oops");
 }
 

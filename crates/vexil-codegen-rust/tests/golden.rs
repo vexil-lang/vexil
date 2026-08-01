@@ -77,6 +77,11 @@ fn test_003_sub_byte() {
 }
 
 #[test]
+fn test_005_parameterized() {
+    golden_test("005_parameterized");
+}
+
+#[test]
 fn test_006_message() {
     golden_test("006_message");
 }

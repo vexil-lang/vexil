@@ -77,6 +77,11 @@ fn test_006_message() {
 }
 
 #[test]
+fn test_005_parameterized() {
+    golden_test("005_parameterized");
+}
+
+#[test]
 fn test_007_enum() {
     golden_test("007_enum");
 }
