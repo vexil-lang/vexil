@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.5.0] - 2026-08-03
+
+### Added
+
+- **codegen:** Preserve unknown union payloads ([d18c3b0](https://github.com/vexil-lang/vexil/commit/d18c3b0756ecb0b57971332d1308433ceab0df57))
+- **lang:** Support concrete type aliases ([0a3c42a](https://github.com/vexil-lang/vexil/commit/0a3c42ac883603e856ac0c97f6ed83a3424fbb42))
+- Complete trait function codegen readiness ([#119](https://github.com/vexil-lang/vexil/issues/119)) ([42a2434](https://github.com/vexil-lang/vexil/commit/42a2434374cd9d6ea5b7b7b3b448d61e1fd34ef9))
+
+### Fixed
+
+- **codegen:** Repair generic trait projection ([8a9df39](https://github.com/vexil-lang/vexil/commit/8a9df391a669c86495691cff731159aa88c1bb12))
+- **codegen:** Close revival contract gaps ([407f490](https://github.com/vexil-lang/vexil/commit/407f490f233508a58025ec23ceefdfcde0c46ffa))
+- **codegen-rust:** Emit lint-clean Rust ([#106](https://github.com/vexil-lang/vexil/issues/106)) ([1b44cbc](https://github.com/vexil-lang/vexil/commit/1b44cbc32d1bf9db7e194a37c0add32ff679ddd5))
+- **lang:** Reject unsupported invariants ([6a208f6](https://github.com/vexil-lang/vexil/commit/6a208f6273e54828b33c8f36b3837f8b40ca5e76))
+- **lang:** Enforce import version constraints ([3bfee23](https://github.com/vexil-lang/vexil/commit/3bfee23a93e3913b3b3de0fdc1bc289473fa06f1))
+### Documentation
+
+- Relaunch Vexil for revival release ([f3529ff](https://github.com/vexil-lang/vexil/commit/f3529ff42869199156ef2f114ad220d1d462d8e8))
+
+- Give Vexil a fresh public face ([e833356](https://github.com/vexil-lang/vexil/commit/e833356fb67b42cf3dce7e19092a8a332749eb82))
+
+### Testing
+
+- **corpus:** Rename trait function signature fixture ([#122](https://github.com/vexil-lang/vexil/issues/122)) ([3b70f5c](https://github.com/vexil-lang/vexil/commit/3b70f5cab9b7b2c59d5e50537d6de0e01e3a2162))
+- **lang:** Cover diamond alias remapping ([7e8184f](https://github.com/vexil-lang/vexil/commit/7e8184f3e70ff0926660404e4acbafae9c3ba455))
+### Other
+
+- **deps:** Refresh Rust and example toolchain dependencies ([#93](https://github.com/vexil-lang/vexil/issues/93)) ([bb93fb2](https://github.com/vexil-lang/vexil/commit/bb93fb2a27104e5600adb735c54415682d1d5938))
+- Align published crate metadata ([fa36e68](https://github.com/vexil-lang/vexil/commit/fa36e6890df0e5d14c45a322eeacd4269d77b529))
+
+
 ## Unreleased
 
 ### Added
