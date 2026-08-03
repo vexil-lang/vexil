@@ -83,6 +83,12 @@ cargo run --manifest-path examples/quickstart/Cargo.toml
 The [quickstart guide](examples/quickstart/) explains the schema, generated
 source, exact bytes, and round trip.
 
+For editor diagnostics from an unsaved single-file document, configure the
+editor's language-client command as `vexilc lsp`. This first LSP surface reports
+compiler errors and warnings; it does not yet load projects or provide
+completion, navigation, hover, formatting, or a bundled editor extension. See
+the [LSP reference](docs/book/src/cli/lsp.md) for the exact capability boundary.
+
 ## Why Vexil
 
 ### Wire choices are reviewable

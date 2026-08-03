@@ -3,6 +3,8 @@ use serde::Serialize;
 use vexil_lang::compat::{BumpKind, ChangeKind, CompatResult};
 use vexil_lang::diagnostic::{Diagnostic, Severity};
 
+mod lsp;
+
 /// Returns true if color output should be disabled.
 /// Respects the NO_COLOR convention: https://no-color.org/
 fn no_color() -> bool {
@@ -877,6 +879,7 @@ Subcommands:
   watch    <file.vexil> [options]              Watch and rebuild on changes
   compat   <old.vexil> <new.vexil> [--format]  Compare schemas for breaking changes
   hash     <file.vexil>                        Print BLAKE3 schema hash
+  lsp                                          Start the diagnostics language server
   init     [name]                              Create a new schema file
   format   <file.vx> --schema <s> --type <T>   Format a .vx text file
   pack     <file.vx> --schema <s> --type <T>   Encode .vx to .vxb binary
@@ -1063,6 +1066,13 @@ fn main() {
     }
 
     match args.get(1).map(|s| s.as_str()) {
+        Some("lsp") => {
+            if args.len() != 2 {
+                eprintln!("Usage: vexilc lsp");
+                std::process::exit(1);
+            }
+            std::process::exit(lsp::cmd_lsp());
+        }
         Some("check") => {
             if args.len() < 3 {
                 eprintln!("Usage: vexilc check <file.vexil> [--include <dir> ...]");

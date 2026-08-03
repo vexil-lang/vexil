@@ -6,6 +6,8 @@
 
 ### Added
 
+- Add a diagnostics-first `vexilc lsp` stdio server with full-document
+  synchronization and UTF-16-safe source ranges.
 - Surface import-version mismatches and unsupported invariant diagnostics through
   single-file and project commands.
 - Generate stabilized Rust, TypeScript, Go, and Python union and Result codecs.

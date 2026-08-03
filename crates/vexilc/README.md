@@ -27,6 +27,21 @@ vexilc build root.vexil --include schemas --target rust --output generated
 vexilc compat old.vexil new.vexil
 ```
 
+## Editor diagnostics
+
+`vexilc lsp` starts a Language Server Protocol process over standard input and
+output. Editors can use it for diagnostics from unsaved, single-file Vexil
+documents:
+
+```sh
+vexilc lsp
+```
+
+This first LSP surface supports full-document open, change, and close
+synchronization only. It does not yet provide project/import loading,
+completion, navigation, hover, formatting, or an editor extension. See the
+[LSP reference](../../docs/book/src/cli/lsp.md) for the exact boundary.
+
 ## Data and schema tools
 
 ```sh

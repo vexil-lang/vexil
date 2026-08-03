@@ -39,6 +39,8 @@ safer, and refreshes the path from installation to a working schema.
 
 ### Tooling and release preparation
 
+- Add a diagnostics-first `vexilc lsp` stdio server for unsaved single-file
+  documents, with full-document synchronization and UTF-16-safe ranges.
 - Make generated Rust, TypeScript, Go, and Python code part of enforced native
   validation rather than relying on textual goldens alone.
 - Prepare `vexil-runtime` 0.1.0 for its first PyPI release with a tested public
