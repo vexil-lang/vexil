@@ -107,7 +107,7 @@ schema changes and reports the required SemVer level before a protocol ships.
 | Rust | `vexil-runtime` | Broad compile, golden, Clippy, and byte-vector coverage |
 | TypeScript | `@vexil-lang/runtime` | Native build/tests and broad byte-vector coverage |
 | Go | `packages/runtime-go` | Native execution over a representative shared wire matrix |
-| Python | `packages/runtime-py` | Static and native execution over a representative shared wire matrix |
+| Python | [`vexil-runtime`](https://pypi.org/project/vexil-runtime/) | Static and native execution over a representative shared wire matrix |
 
 “Representative” is intentional. Go and Python do not yet have the same breadth
 of generated-code evidence as Rust and TypeScript. Verify the schemas and target

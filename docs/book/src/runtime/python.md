@@ -2,22 +2,19 @@
 
 The Python runtime provides bit-level I/O for Vexil-generated Python code.
 
-## Source installation
+## Install
 
-Version 0.1.0 is prepared for its first PyPI release. Until the tagged Trusted
-Publishing workflow succeeds, install it from a repository checkout:
+```sh
+python -m pip install vexil-runtime
+```
+
+It requires Python 3.10 or later.
+
+To work from a repository checkout instead:
 
 ```sh
 python -m pip install ./packages/runtime-py
 ```
-
-Or, from `packages/runtime-py` itself:
-
-```sh
-python -m pip install .
-```
-
-It requires Python 3.10 or later.
 
 ## Compatibility
 
