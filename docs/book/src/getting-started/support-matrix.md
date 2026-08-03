@@ -7,6 +7,7 @@ specific schemas and environments your application will ship.
 | Surface | Distribution | Evidence in this repository |
 | --- | --- | --- |
 | Compiler and CLI | Rust crates and release binaries | Workspace tests, corpus, project graphs, diagnostics, and compatibility checks |
+| Editor diagnostics | `vexilc lsp` over stdio | Full-document single-file synchronization, compiler diagnostics, and UTF-16 range tests |
 | Rust generated code | `vexil-runtime` | Broad golden, native compile, Clippy, and byte-vector coverage |
 | TypeScript generated code | `@vexil-lang/runtime` | Native type-check/build/tests and broad byte-vector coverage |
 | Go generated code | versioned Go module | Native compile and execution over a representative shared wire matrix |
@@ -34,6 +35,9 @@ wire bytes for the same schema and value are defects.
 ## Current boundaries
 
 - Go and Python coverage is representative, not exhaustive.
+- The language server is diagnostics-only and single-file. It does not load
+  imports or projects and does not advertise completion, navigation, hover,
+  formatting, incremental synchronization, or a bundled editor extension.
 - The Python runtime is prepared for its first PyPI release but should be
   installed from source until the tagged Trusted Publishing workflow succeeds.
 - No independent implementation or external security audit has been completed.

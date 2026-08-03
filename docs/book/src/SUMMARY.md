@@ -38,6 +38,7 @@
 - [compat](./cli/compat.md)
 - [init](./cli/init.md)
 - [hash](./cli/hash.md)
+- [lsp](./cli/lsp.md)
 
 # Generated Targets
 

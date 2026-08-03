@@ -19,6 +19,7 @@ vexilc <subcommand> [args]
 | [`compat`](./compat.md) | Compare schemas for breaking changes |
 | [`init`](./init.md) | Create a new schema file |
 | [`hash`](./hash.md) | Print the BLAKE3 schema hash |
+| [`lsp`](./lsp.md) | Publish compiler diagnostics to an editor |
 | `pack` | Encode a `.vx` text file to `.vxb` binary |
 | `unpack` | Decode a `.vxb` binary file to `.vx` text |
 | `format` | Format a `.vx` text file |
