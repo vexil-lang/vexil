@@ -36,5 +36,12 @@ Documentation = "https://vexil-lang.github.io/vexil/"
 Repository = "https://github.com/vexil-lang/vexil.git"
 "Bug Tracker" = "https://github.com/vexil-lang/vexil/issues"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.python-version",
+    "/vexil_runtime/tests",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["vexil_runtime"]
+exclude = ["/vexil_runtime/tests"]
