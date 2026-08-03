@@ -133,4 +133,3 @@ impl vexil_runtime::Unpack for Color {
         Ok(Self(value))
     }
 }
-

@@ -15,7 +15,7 @@ stable_since: 2026-04-10
 
 "1.0" here names the target format generation this document specifies — it
 is not a claim about the maturity of any published crate or package. See
-[`VERSIONING.md`](../../VERSIONING.md) for how spec and implementation
+[`VERSIONING.md`](../VERSIONING.md) for how spec and implementation
 versions relate.
 
 ---
@@ -271,10 +271,14 @@ Wire format identical to `array<T>`, but elements MUST be sorted and deduplicate
 
 ### 6.6 Result<T, E>
 
-Wire format: `[1-bit discriminant][T if 0, E if 1]`
+Wire format: `[1-bit discriminant][E if 0, T if 1]`
 
-- Discriminant 0 = Ok(T)
-- Discriminant 1 = Err(E)
+- Discriminant 0 = Err(E)
+- Discriminant 1 = Ok(T)
+
+This mapping preserves the wire behaviour of the published Vexil generators.
+Because the one-bit alternatives are ambiguous without a schema-generation
+marker, decoders MUST NOT attempt to infer or accept the inverse mapping.
 
 Either T or E MAY be `void` (no additional bits for that variant).
 
@@ -374,7 +378,9 @@ Unions encode as: `[discriminant LEB128][payload length LEB128][variant fields]`
 3. Write payload byte length as unsigned LEB128
 4. Write variant fields in ascending ordinal order
 
-The length prefix enables skipping unknown variants for `@non_exhaustive` unions.
+The length prefix enables bounded preservation of unknown variants for
+`@non_exhaustive` unions. The prefix MUST use no more than four LEB128 bytes and
+the payload length MUST NOT exceed 67,108,864 bytes (64 MiB).
 
 **Example:**
 ```vexil
@@ -399,8 +405,13 @@ Variants with no fields write discriminant + zero length:
 
 For `@non_exhaustive` unions, decoders:
 1. Read discriminant
-2. Read payload length
-3. Skip exactly that many bytes if discriminant is unknown
+2. Read and validate the payload length
+3. Read exactly that many bytes if the discriminant is unknown
+4. Return an opaque value containing the discriminant and payload bytes
+
+Re-encoding that opaque value MUST reproduce the same discriminant and payload
+bytes. Exhaustive unions continue to reject unknown discriminants after safely
+consuming their bounded payload.
 
 ---
 

@@ -6,5 +6,13 @@
     "value": { "v": { "variant": "Circle", "radius": 1.5 } },
     "expected_bytes": "00040000c03f",
     "notes": "discriminant LEB128(0) + length LEB128(4) + f32 LE(1.5)"
+  },
+  {
+    "name": "non_exhaustive_union_unknown_roundtrip",
+    "schema": "namespace test.uni\n@non_exhaustive\nunion Event { Known @0 { value @0 : u8 } }\nmessage M { v @0 : Event }",
+    "type": "M",
+    "value": { "v": { "unknown": true, "discriminant": 9, "data": [222, 173] } },
+    "expected_bytes": "0902dead",
+    "notes": "Unknown discriminant and bounded opaque payload are preserved byte-for-byte."
   }
 ]

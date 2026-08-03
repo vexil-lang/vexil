@@ -17,7 +17,7 @@ Created myapp.vexil
 
 This creates `myapp.vexil` with a starter schema:
 
-```vexil
+```text
 namespace myapp
 
 message Hello {

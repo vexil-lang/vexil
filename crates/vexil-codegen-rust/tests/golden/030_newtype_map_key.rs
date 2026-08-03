@@ -63,14 +63,14 @@ impl vexil_runtime::Pack for UserProfile {
         self.id.pack(w)?;
         w.leave_recursive();
         w.write_leb128(self.friends.len() as u64);
-        for (map_k, map_v) in &self.friends {
+        for (map_k, map_v) in self.friends.iter() {
             w.enter_recursive()?;
             map_k.pack(w)?;
             w.leave_recursive();
             w.write_string(map_v.as_str());
         }
         w.write_leb128(self.tags.len() as u64);
-        for (map_k, map_v) in &self.tags {
+        for (map_k, map_v) in self.tags.iter() {
             w.enter_recursive()?;
             map_k.pack(w)?;
             w.leave_recursive();
@@ -117,4 +117,3 @@ impl vexil_runtime::Unpack for UserProfile {
         })
     }
 }
-

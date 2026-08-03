@@ -34,6 +34,14 @@ type ShapeV1Rect struct {
 func (ShapeV1Rect) isShapeV1() {
 }
 
+type ShapeV1__VexilUnknown struct {
+	Discriminant uint64
+	Data []byte
+}
+
+func (ShapeV1__VexilUnknown) isShapeV1() {
+}
+
 func PackShapeV1(v ShapeV1, w *vexil.BitWriter) error {
 	switch t := v.(type) {
 		case *ShapeV1Circle: {
@@ -55,6 +63,14 @@ func PackShapeV1(v ShapeV1, w *vexil.BitWriter) error {
 			w.WriteLeb128(uint64(len(payload)))
 			w.WriteRawBytes(payload)
 		}
+		case *ShapeV1__VexilUnknown: {
+			if len(t.Data) > vexil.MaxBytesLength {
+				return &vexil.EncodeError{Field: "ShapeV1", Message: fmt.Sprintf("payload length %d exceeds limit %d", len(t.Data), vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
+			}
+			w.WriteLeb128(t.Discriminant)
+			w.WriteLeb128(uint64(len(t.Data)))
+			w.WriteRawBytes(t.Data)
+		}
 	}
 	return nil
 }
@@ -68,6 +84,9 @@ func UnpackShapeV1(r *vexil.BitReader) (ShapeV1, error) {
 	length, err := r.ReadLeb128(4)
 	if err != nil {
 		return nil, err
+	}
+	if length > vexil.MaxBytesLength {
+		return nil, &vexil.DecodeError{Field: "ShapeV1", Message: fmt.Sprintf("payload length %d exceeds limit %d", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
 	}
 	switch disc {
 		case 0: {
@@ -114,13 +133,11 @@ func UnpackShapeV1(r *vexil.BitReader) (ShapeV1, error) {
 			return result, nil
 		}
 		default: {
-			{
-				_, err := r.ReadRawBytes(int(length))
-				if err != nil {
-					return nil, err
-				}
+			data, err := r.ReadRawBytes(int(length))
+			if err != nil {
+				return nil, err
 			}
-			return nil, fmt.Errorf("unknown discriminant %d", disc)
+			return &ShapeV1__VexilUnknown{Discriminant: disc, Data: data}, nil
 		}
 	}
 }
@@ -157,6 +174,14 @@ type ShapeV2Triangle struct {
 func (ShapeV2Triangle) isShapeV2() {
 }
 
+type ShapeV2__VexilUnknown struct {
+	Discriminant uint64
+	Data []byte
+}
+
+func (ShapeV2__VexilUnknown) isShapeV2() {
+}
+
 func PackShapeV2(v ShapeV2, w *vexil.BitWriter) error {
 	switch t := v.(type) {
 		case *ShapeV2Circle: {
@@ -188,6 +213,14 @@ func PackShapeV2(v ShapeV2, w *vexil.BitWriter) error {
 			w.WriteLeb128(uint64(len(payload)))
 			w.WriteRawBytes(payload)
 		}
+		case *ShapeV2__VexilUnknown: {
+			if len(t.Data) > vexil.MaxBytesLength {
+				return &vexil.EncodeError{Field: "ShapeV2", Message: fmt.Sprintf("payload length %d exceeds limit %d", len(t.Data), vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
+			}
+			w.WriteLeb128(t.Discriminant)
+			w.WriteLeb128(uint64(len(t.Data)))
+			w.WriteRawBytes(t.Data)
+		}
 	}
 	return nil
 }
@@ -201,6 +234,9 @@ func UnpackShapeV2(r *vexil.BitReader) (ShapeV2, error) {
 	length, err := r.ReadLeb128(4)
 	if err != nil {
 		return nil, err
+	}
+	if length > vexil.MaxBytesLength {
+		return nil, &vexil.DecodeError{Field: "ShapeV2", Message: fmt.Sprintf("payload length %d exceeds limit %d", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
 	}
 	switch disc {
 		case 0: {
@@ -272,13 +308,11 @@ func UnpackShapeV2(r *vexil.BitReader) (ShapeV2, error) {
 			return result, nil
 		}
 		default: {
-			{
-				_, err := r.ReadRawBytes(int(length))
-				if err != nil {
-					return nil, err
-				}
+			data, err := r.ReadRawBytes(int(length))
+			if err != nil {
+				return nil, err
 			}
-			return nil, fmt.Errorf("unknown discriminant %d", disc)
+			return &ShapeV2__VexilUnknown{Discriminant: disc, Data: data}, nil
 		}
 	}
 }

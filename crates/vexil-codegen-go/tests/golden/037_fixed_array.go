@@ -327,6 +327,9 @@ func UnpackData(r *vexil.BitReader) (Data, error) {
 	if err != nil {
 		return nil, err
 	}
+	if length > vexil.MaxBytesLength {
+		return nil, &vexil.DecodeError{Field: "Data", Message: fmt.Sprintf("payload length %d exceeds limit %d", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
+	}
 	switch disc {
 		case 0: {
 			payloadBytes, err := r.ReadRawBytes(int(length))

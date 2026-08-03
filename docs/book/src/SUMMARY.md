@@ -2,14 +2,15 @@
 
 [Introduction](./introduction.md)
 
-# Getting Started
+# Start Here
 
 - [Installation](./getting-started/installation.md)
 - [Your First Schema](./getting-started/first-schema.md)
 - [Generating Code](./getting-started/generating-code.md)
-- [Compatibility and limitations](./getting-started/compatibility.md)
+- [Choose a Target](./getting-started/support-matrix.md)
+- [Compatibility and Limits](./getting-started/compatibility.md)
 
-# Language Guide
+# Language and Wire Model
 
 - [Types](./language/types.md)
 - [Messages](./language/messages.md)
@@ -19,9 +20,13 @@
 - [Type Aliases and Constants](./language/aliases-const.md)
 - [Where Clauses](./language/where-clauses.md)
 - [Annotations](./language/annotations.md)
+
+# Project Workflows
+
 - [Imports](./language/imports.md)
 - [Schema Evolution](./language/evolution.md)
 - [Delta Encoding](./language/delta.md)
+- [Compression Layering](./getting-started/compression.md)
 
 # CLI Reference
 
@@ -34,7 +39,7 @@
 - [init](./cli/init.md)
 - [hash](./cli/hash.md)
 
-# Runtime APIs
+# Generated Targets
 
 - [Rust](./runtime/rust.md)
 - [TypeScript](./runtime/typescript.md)
@@ -43,12 +48,16 @@
 
 # Examples
 
-- [Sensor Telemetry](./examples/sensor.md)
+- [Quickstart](./examples/quickstart.md)
+- [Project Evolution](./examples/project-evolution.md)
 - [Cross-Language Interop](./examples/cross-language.md)
-- [Real-Time Dashboard](./examples/system-monitor.md)
+- [Live Telemetry](./examples/live-telemetry.md)
+
+# Project Status
+
+- [Revival Release Candidate](./releases/revival.md)
 
 # Contributing
 
 - [Development Setup](./contributing/setup.md)
 - [Architecture](./contributing/architecture.md)
-

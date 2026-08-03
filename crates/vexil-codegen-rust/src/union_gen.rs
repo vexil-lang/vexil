@@ -102,7 +102,8 @@ fn emit_read_from_payload(
 /// Each variant is emitted as a struct variant.  Empty variants still write
 /// discriminant + 0-length payload on the wire.
 ///
-/// When `annotations.non_exhaustive` is true an extra `Unknown { discriminant: u64, data: Vec<u8> }`
+/// When `annotations.non_exhaustive` is true an extra
+/// `__VexilUnknown { discriminant: u64, data: Vec<u8> }`
 /// catch-all variant is appended.
 pub fn emit_union(
     w: &mut CodeWriter,
@@ -155,7 +156,8 @@ pub fn emit_union(
         }
     }
     if non_exhaustive {
-        w.line("Unknown { discriminant: u64, data: Vec<u8> },");
+        w.line("#[allow(non_camel_case_types)]");
+        w.line("__VexilUnknown { discriminant: u64, data: Vec<u8> },");
     }
     w.close_block();
     w.blank();
@@ -205,7 +207,12 @@ pub fn emit_union(
     }
 
     if non_exhaustive {
-        w.open_block("Self::Unknown { discriminant, data } =>");
+        w.open_block("Self::__VexilUnknown { discriminant, data } =>");
+        w.open_block("if data.len() as u64 > vexil_runtime::MAX_BYTES_LENGTH");
+        w.line(&format!(
+            "return Err(vexil_runtime::EncodeError::LimitExceeded {{ field: \"{name}\", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: data.len() as u64 }});"
+        ));
+        w.close_block();
         w.line("w.write_leb128(*discriminant);");
         w.line("w.write_leb128(data.len() as u64);");
         w.line("w.write_raw_bytes(data);");
@@ -225,7 +232,13 @@ pub fn emit_union(
     );
     w.line("r.flush_to_byte_boundary();");
     w.line("let disc = r.read_leb128(10_u8)?;");
-    w.line("let len = r.read_leb128(10_u8)? as usize;");
+    w.line("let len = r.read_leb128(vexil_runtime::MAX_LENGTH_PREFIX_BYTES)?;");
+    w.open_block("if len > vexil_runtime::MAX_BYTES_LENGTH");
+    w.line(&format!(
+        "return Err(vexil_runtime::DecodeError::LimitExceeded {{ field: \"{name}\", limit: vexil_runtime::MAX_BYTES_LENGTH, actual: len }});"
+    ));
+    w.close_block();
+    w.line("let len = len as usize;");
     w.open_block("match disc");
 
     for variant in &un.variants {
@@ -265,7 +278,7 @@ pub fn emit_union(
     if non_exhaustive {
         w.open_block("other =>");
         w.line("let data = r.read_raw_bytes(len)?;");
-        w.line("Ok(Self::Unknown { discriminant: other, data })");
+        w.line("Ok(Self::__VexilUnknown { discriminant: other, data })");
         w.close_block();
     } else {
         w.open_block("_ =>");

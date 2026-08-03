@@ -1,6 +1,7 @@
 # TypeScript Runtime
 
-The `@vexil-lang/runtime` npm package provides BitWriter and BitReader for Vexil-generated TypeScript code. It produces byte-identical output to the Rust runtime, verified by compliance vectors.
+The `@vexil-lang/runtime` npm package provides the bit reader and writer used by
+Vexil-generated TypeScript code.
 
 ## Installation
 
@@ -20,7 +21,7 @@ import { BitWriter } from '@vexil-lang/runtime';
 const w = new BitWriter();
 w.writeBits(0b1010, 4);   // write 4 bits
 w.writeU8(255);            // write a full byte
-w.writeVarint(12345n);     // write LEB128-encoded integer (BigInt)
+w.writeLeb128(12345);      // write an unsigned LEB128 integer
 const bytes = w.finish();  // flush and return Uint8Array
 ```
 
@@ -32,7 +33,7 @@ import { BitReader } from '@vexil-lang/runtime';
 const r = new BitReader(bytes);
 const nibble = r.readBits(4);   // read 4 bits
 const byte = r.readU8();        // read a full byte
-const value = r.readVarint();   // read LEB128-encoded integer
+const value = r.readLeb128();   // read an unsigned LEB128 integer
 ```
 
 ## Generated code usage
@@ -53,7 +54,9 @@ const decoded = decodeMyMessage(r);
 
 ## Compliance
 
-The TypeScript runtime is tested against the same compliance vectors as the Rust runtime. Both must produce identical bytes for every test case.
+Generated TypeScript has broad coverage against the same byte vectors as the
+Rust reference implementation. See the [support matrix](../getting-started/support-matrix.md)
+for the exact project-level claim.
 
 ## Source
 

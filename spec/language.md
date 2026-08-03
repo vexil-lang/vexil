@@ -3,7 +3,7 @@
 Version: 1.0.0-draft
 Date: 2026-04-09
 Status: Draft (pre-conformance — Phase 2-4 features added, awaiting compliance verification)
-Authors: Orix Systems
+Authors: Vexil contributors
 License: CC-BY 4.0 (this document) / Apache-2.0 (reference implementation)
 
 ## Abstract
@@ -346,7 +346,7 @@ standard library in a future version. Implementations MUST support it.
 | `optional<T>`   | 1-bit presence flag (packed); if 1, T follows; if 0, nothing       |
 | `array<T>`      | unsigned LEB128 count, then each element in order                  |
 | `map<K, V>`     | unsigned LEB128 pair count, then alternating K, V pairs            |
-| `result<T, E>`  | 1-bit discriminant (packed); 0 = Ok (T follows); 1 = Err (E)      |
+| `result<T, E>`  | 1-bit discriminant (packed); 0 = Err (E follows); 1 = Ok (T follows)      |
 
 **`optional<T>`:** The 1-bit presence flag participates in sub-byte packing with
 surrounding fields. When the flag is 0, no bits are written for the absent value
@@ -697,8 +697,11 @@ Empty variants (no fields, e.g. `Reset @2 {}`) encode the discriminant (step 2)
 and a zero byte length (step 3). No field bytes follow.
 
 For exhaustive unions, a decoder MUST reject unknown discriminant values. For
-`@non_exhaustive` unions, a decoder MUST read the byte length prefix and skip
-exactly that many bytes, then continue decoding.
+`@non_exhaustive` unions, a decoder MUST read the byte length prefix, preserve
+exactly that many bytes with the unknown discriminant in an opaque generated
+value, and reproduce them unchanged if the value is re-encoded. The length
+prefix MUST use no more than four LEB128 bytes and the payload MUST NOT exceed
+67,108,864 bytes (64 MiB).
 
 Variant ordinals MUST NOT exceed 65535.
 
@@ -909,9 +912,10 @@ target-specific suffix.
 
 Impls have ZERO wire impact.
 
-### 4.11  invariant
+### 4.11  invariant (reserved)
 
-An invariant is a named or unnamed condition within a message body.
+The grammar reserves named and unnamed invariant conditions within a message
+body for a future portable validation contract.
 
 ```vexil
 message Balance {
@@ -921,14 +925,13 @@ message Balance {
 }
 ```
 
-Invariants use the same expression syntax as where clauses. The `value`
-keyword refers to the most recently declared field's value.
+Current conforming compilers MUST reject every invariant with diagnostic
+`E126 InvariantUnsupported`. They MUST NOT silently discard an invariant or
+produce partial generated output. Expression scope, encode/decode timing, and
+generated validation APIs remain undefined until a later specification change.
 
-Invariants are checked on encode and decode. A violation MUST produce
-an error and MUST NOT write data to the wire.
-
-Invariants have zero wire impact — they generate validation code, not
-wire data.
+The reserved syntax has zero wire impact because invariant-bearing schemas do
+not currently compile.
 
 ---
 
@@ -1235,8 +1238,9 @@ after reading all known fields, before checking for trailing bytes.
 If a decoder encounters a union discriminant value that does not match
 any known variant:
 
-- If the union is `@non_exhaustive`: skip the length-prefixed payload.
-  The application receives an opaque discriminant + raw bytes.
+- If the union is `@non_exhaustive`: preserve the bounded length-prefixed
+  payload. The application receives an opaque discriminant + raw bytes, and
+  re-encoding reproduces them unchanged.
 - If the union is exhaustive: return `DecodeError::UnknownUnionVariant`.
 
 The length-prefixed payload enables skipping unknown variants without

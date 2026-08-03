@@ -38,6 +38,19 @@ pub(crate) fn clone_types_into_unbound(
     clone_types_into_with_bindings(source, declarations, target, false)
 }
 
+/// Clone the named-type closure of a resolved alias target without binding
+/// source declaration names, then remap the target to the destination IDs.
+pub(crate) fn clone_resolved_type_into_unbound(
+    source: &TypeRegistry,
+    resolved: &ResolvedType,
+    target: &mut TypeRegistry,
+) -> ResolvedType {
+    let mut roots = Vec::new();
+    collect_type_ids_from_resolved(resolved, &mut roots);
+    let id_map = clone_types_into_unbound(source, &roots, target);
+    remap_resolved_type(resolved, &id_map)
+}
+
 fn clone_types_into_with_bindings(
     source: &TypeRegistry,
     declarations: &[TypeId],

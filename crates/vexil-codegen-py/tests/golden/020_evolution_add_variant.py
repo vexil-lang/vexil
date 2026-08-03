@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, EncodeError, DecodeError, MAX_BYTES_LENGTH, MAX_LENGTH_PREFIX_BYTES
 
 SCHEMA_HASH: tuple[int, ...] = (0xb1, 0x0f, 0x2e, 0x28, 0x31, 0xe3, 0xae, 0x61, 0xa2, 0x0f, 0x7c, 0xcb, 0x87, 0x0e, 0xeb, 0x2c, 0x7a, 0x7d, 0x09, 0x08, 0x40, 0xf9, 0x13, 0xb0, 0x96, 0xe9, 0x8d, 0x3c, 0x2e, 0x8a, 0xf8, 0x74)
 SCHEMA_VERSION: str = "1.0.0"
@@ -51,10 +51,24 @@ class ShapeV1Rect(ShapeV1):
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
 
 
+class ShapeV1__VexilUnknown(ShapeV1):
+    def __init__(self, discriminant: int, data: bytes):
+        self.discriminant = discriminant
+        self.data = data
+
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        if len(self.data) > MAX_BYTES_LENGTH:
+            raise EncodeError(f"ShapeV1 payload length {len(self.data)} exceeds limit {MAX_BYTES_LENGTH}")
+        _vexil_writer.write_leb128(self.discriminant)
+        _vexil_writer.write_leb128(len(self.data))
+        _vexil_writer.write_raw_bytes(self.data, len(self.data))
+
 def decode_ShapeV1_from(_vexil_reader: _BitReader) -> ShapeV1:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"ShapeV1 payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -67,7 +81,8 @@ def decode_ShapeV1_from(_vexil_reader: _BitReader) -> ShapeV1:
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeV1Rect(_vexil_field_0, _vexil_field_1)
     else:
-        raise ValueError(f"unknown ShapeV1 discriminant: {_vexil_discriminant}")
+        _vexil_data = _vexil_reader.read_bytes(_vexil_length)
+        return ShapeV1__VexilUnknown(_vexil_discriminant, _vexil_data)
 
 def decode_ShapeV1(data: bytes) -> ShapeV1:
     _vexil_reader = _BitReader(data)
@@ -131,10 +146,24 @@ class ShapeV2Triangle(ShapeV2):
         _vexil_writer.write_raw_bytes(_vexil_payload, len(_vexil_payload))
 
 
+class ShapeV2__VexilUnknown(ShapeV2):
+    def __init__(self, discriminant: int, data: bytes):
+        self.discriminant = discriminant
+        self.data = data
+
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        if len(self.data) > MAX_BYTES_LENGTH:
+            raise EncodeError(f"ShapeV2 payload length {len(self.data)} exceeds limit {MAX_BYTES_LENGTH}")
+        _vexil_writer.write_leb128(self.discriminant)
+        _vexil_writer.write_leb128(len(self.data))
+        _vexil_writer.write_raw_bytes(self.data, len(self.data))
+
 def decode_ShapeV2_from(_vexil_reader: _BitReader) -> ShapeV2:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"ShapeV2 payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -153,10 +182,11 @@ def decode_ShapeV2_from(_vexil_reader: _BitReader) -> ShapeV2:
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeV2Triangle(_vexil_field_0, _vexil_field_1)
     else:
-        raise ValueError(f"unknown ShapeV2 discriminant: {_vexil_discriminant}")
+        _vexil_data = _vexil_reader.read_bytes(_vexil_length)
+        return ShapeV2__VexilUnknown(_vexil_discriminant, _vexil_data)
 
 def decode_ShapeV2(data: bytes) -> ShapeV2:
     _vexil_reader = _BitReader(data)
     return decode_ShapeV2_from(_vexil_reader)
 
-__all__ = ["SCHEMA_HASH", "SCHEMA_VERSION", "ShapeV1", "ShapeV1Circle", "ShapeV1Rect", "decode_ShapeV1_from", "decode_ShapeV1", "ShapeV2", "ShapeV2Circle", "ShapeV2Rect", "ShapeV2Triangle", "decode_ShapeV2_from", "decode_ShapeV2"]
+__all__ = ["EncodeError", "DecodeError", "MAX_BYTES_LENGTH", "MAX_LENGTH_PREFIX_BYTES", "SCHEMA_HASH", "SCHEMA_VERSION", "ShapeV1", "ShapeV1Circle", "ShapeV1Rect", "ShapeV1__VexilUnknown", "decode_ShapeV1_from", "decode_ShapeV1", "ShapeV2", "ShapeV2Circle", "ShapeV2Rect", "ShapeV2Triangle", "ShapeV2__VexilUnknown", "decode_ShapeV2_from", "decode_ShapeV2"]

@@ -1,42 +1,42 @@
-# Versioning
+# Versioning Vexil
 
-Vexil has two independent version axes: the **spec** (what "Vexil" means)
-and **implementations** (the crates and packages that implement it). They
-move on different schedules and don't need to match.
+Vexil has two independent version axes:
 
-## Spec versions
+1. specification generations describe the language and wire contract;
+2. component versions describe individual crates and runtime packages.
 
-- [`spec/language.md`](spec/language.md) — the language specification
-  (syntax, type system). Currently `1.0.0-draft`: still evolving.
-- [`spec/wire-format.md`](spec/wire-format.md) — the binary wire format. Currently
-  `STABILIZING`: unchanged since April 2026, and breaking it would mean
-  moving to a new format generation — but it hasn't been exercised by an
-  external implementation or independently audited, so it isn't an ironclad
-  guarantee yet.
+They do not move in lockstep.
 
-"1.0" in either document names the target generation, not a maturity claim
-about any published crate or package. A future breaking change to the wire
-format would be a new spec generation (e.g. "Vexil 2.0 Binary Format"),
-independent of whatever version numbers the crates happen to be at when
-that happens.
+## Specification generations
 
-## Implementation versions
+[`spec/language.md`](spec/language.md) is currently a `1.0.0-draft` language
+specification. [`spec/wire-format.md`](spec/wire-format.md) describes the
+stabilizing first wire-format generation.
 
-Every crate and package has its own independent semver, bumped only when it
-actually changes:
+“1.0” here identifies the target contract generation. It is not a claim that a
+compiler, generator, runtime, or the project as a whole has reached a final 1.0
+release. The wire format has internal conformance evidence but no independent
+implementation or external audit.
 
-| Component | Where | Versioned independently because |
-|---|---|---|
-| `vexil-lang`, `vexil-runtime`, `vexil-store`, `vexilc`, codegen crates | crates.io | each has its own rate of change |
-| `@vexil-lang/runtime` (TS) | npm | own release cadence |
-| Go runtime | Go module proxy, tag-only | newest, least proven target — its low version number (`v0.1.x`) is an honest signal of that, not a gap to close |
+A future incompatible wire contract would require a new specification
+generation. That decision is separate from the SemVer level of whichever
+components implement it.
 
-There is no single "Vexil version" number, and no attempt to keep crate
-version numbers in lockstep with each other or with the spec version. If
-you need to know what a specific crate/package actually guarantees, check
-that component's own version and changelog — not the spec status, and not
-any other component's version.
+## Component versions
 
-See [`spec/wire-format.md`](spec/wire-format.md) and
-[`FAQ.md`](FAQ.md#is-vexil-production-ready) for what the spec's current
-status does and doesn't promise.
+Each published component follows SemVer on its own public API and behavior:
+
+| Component family | Distribution |
+| --- | --- |
+| Compiler, CLI, Rust runtime, store, and code generators | crates.io |
+| TypeScript runtime | npm |
+| Go runtime | versioned module tag and Go proxy |
+| Python runtime | PyPI |
+
+Different version numbers are expected. A low version is an honest statement
+about that component's maturity and release history, not a synchronization bug.
+
+When selecting dependencies, check the exact component version, its changelog,
+the [support matrix](docs/book/src/getting-started/support-matrix.md), and the
+[compatibility limits](FAQ.md#is-vexil-production-ready). Do not infer one
+component's guarantees from another component or from the draft spec number.

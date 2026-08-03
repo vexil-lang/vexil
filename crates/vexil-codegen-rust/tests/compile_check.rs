@@ -108,6 +108,27 @@ fn test_006_message() {
 }
 
 #[test]
+fn delta_message_with_named_field_compiles() {
+    check_source_compiles(
+        "delta-named-field",
+        r#"
+namespace test.delta_named
+
+enum Status {
+    Ready @0
+    Busy @1
+}
+
+@delta
+message Snapshot {
+    sequence @0 : u32
+    status   @1 : Status
+}
+"#,
+    );
+}
+
+#[test]
 fn test_007_enum() {
     check_compiles("007_enum");
 }
@@ -115,6 +136,52 @@ fn test_007_enum() {
 #[test]
 fn test_008_flags() {
     check_compiles("008_flags");
+}
+
+#[test]
+fn non_exhaustive_union_unknown_round_trips_and_is_bounded() {
+    let source = r#"
+namespace test.union_unknown
+@non_exhaustive
+union Event {
+    Unknown @0 { reason @0 : string }
+    Data @1 { value @0 : u16 }
+}
+"#;
+    let output = run_generated_project(
+        "unknown-union",
+        source,
+        r#"
+
+#[cfg(test)]
+mod unknown_union_contract {
+    use super::*;
+    use vexil_runtime::{BitReader, BitWriter, DecodeError, Pack, Unpack};
+
+    #[test]
+    fn preserves_unknown_payload() {
+        let bytes = [0x09, 0x02, 0xde, 0xad];
+        let decoded = Event::unpack(&mut BitReader::new(&bytes)).unwrap();
+        assert_eq!(decoded, Event::__VexilUnknown { discriminant: 9, data: vec![0xde, 0xad] });
+        let mut writer = BitWriter::new();
+        decoded.pack(&mut writer).unwrap();
+        assert_eq!(writer.finish(), bytes);
+    }
+
+    #[test]
+    fn rejects_over_limit_payload_before_allocation() {
+        let bytes = [0x09, 0x81, 0x80, 0x80, 0x20];
+        let error = Event::unpack(&mut BitReader::new(&bytes)).unwrap_err();
+        assert!(matches!(error, DecodeError::LimitExceeded { .. }));
+    }
+}
+"#,
+    );
+    assert!(
+        output.status.success(),
+        "generated Rust unknown-union contract failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -179,6 +246,7 @@ mod generated_contract {
         assert_eq!(counter.value, 0);
     }
 }
+
 "#,
     );
     assert!(
@@ -186,6 +254,11 @@ mod generated_contract {
         "generated trait behavior failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn concrete_type_aliases_compile() {
+    check_compiles("051_concrete_type_aliases");
 }
 
 #[test]

@@ -188,11 +188,18 @@ class TestComplianceUnions:
     def test_encode_matches_expected_bytes(self, vec) -> None:
         w = BitWriter()
         union_val = vec["value"]["v"]
-        variant = union_val["variant"]
-        discriminant = 0 if variant == "Circle" else 1
+        variant = union_val.get("variant")
+        discriminant = (
+            union_val["discriminant"]
+            if union_val.get("unknown") is True
+            else (0 if variant == "Circle" else 1)
+        )
 
         payload_w = BitWriter()
-        if variant == "Circle":
+        if union_val.get("unknown") is True:
+            data = bytes(union_val["data"])
+            payload_w.write_raw_bytes(data, len(data))
+        elif variant == "Circle":
             payload_w.write_f32(float(union_val["radius"]))
         else:
             payload_w.write_f32(float(union_val["w"]))
@@ -203,6 +210,36 @@ class TestComplianceUnions:
         w.write_leb128(len(payload))
         w.write_raw_bytes(payload, len(payload))
         assert to_hex(w.finish()) == vec["expected_bytes"]
+
+
+class TestComplianceResults:
+    vectors = load_vectors("results.json")
+
+    @pytest.mark.parametrize("vec", vectors, ids=[v["name"] for v in vectors])
+    def test_encode_and_decode(self, vec) -> None:
+        result = vec["value"]["value"]
+        is_ok = "ok" in result
+        w = BitWriter()
+        w.write_bool(is_ok)
+        if vec["name"] == "result_ok_u8":
+            w.write_u8(result["ok"])
+        elif vec["name"] == "result_err_string":
+            w.write_string(result["err"])
+        elif vec["name"] == "result_packed_bool_adjacency":
+            w.write_bool(result["ok"])
+            w.write_bool(vec["value"]["tail"])
+        encoded = w.finish()
+        assert to_hex(encoded) == vec["expected_bytes"]
+
+        r = BitReader(hex_to_bytes(vec["expected_bytes"]))
+        assert r.read_bool() is is_ok
+        if vec["name"] == "result_ok_u8":
+            assert r.read_u8() == result["ok"]
+        elif vec["name"] == "result_err_string":
+            assert r.read_string() == result["err"]
+        elif vec["name"] == "result_packed_bool_adjacency":
+            assert r.read_bool() is result["ok"]
+            assert r.read_bool() is vec["value"]["tail"]
 
 
 class TestComplianceArraysMaps:

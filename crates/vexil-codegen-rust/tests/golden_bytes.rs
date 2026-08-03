@@ -371,3 +371,24 @@ fn verify_nested_optional_map_set() {
     w.write_u16(2);
     assert_eq!(hex(&w.finish()), "0101020201000200");
 }
+
+// --- Results ---
+
+#[test]
+fn verify_result_discriminants_and_packed_payload() {
+    let mut ok = BitWriter::new();
+    ok.write_bool(true);
+    ok.write_u8(42);
+    assert_eq!(hex(&ok.finish()), "012a");
+
+    let mut err = BitWriter::new();
+    err.write_bool(false);
+    err.write_string("oops");
+    assert_eq!(hex(&err.finish()), "00046f6f7073");
+
+    let mut packed = BitWriter::new();
+    packed.write_bool(true);
+    packed.write_bool(true);
+    packed.write_bool(true);
+    assert_eq!(hex(&packed.finish()), "07");
+}

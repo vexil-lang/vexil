@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Consume the stabilized compiler metadata and wire contracts without changing
+  `.vx` or `.vxb` formats.
+
 ## [0.4.1] - 2026-03-28
 
 ### Fixed

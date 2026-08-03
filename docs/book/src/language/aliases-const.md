@@ -4,10 +4,12 @@
 
 A type alias gives an existing type a new name. It's transparent — same wire encoding, same codegen, just a different name in the schema.
 
-```vexil
+```text
 type UserId = u64
 type Token = bytes
 type DFixed = fixed64
+type Labels = array<string>
+type Lookup = map<string, optional<u32>>
 ```
 
 `UserId` and `u64` produce identical bytes. The alias exists only in the schema source, making fields more readable.
@@ -22,7 +24,7 @@ type DFixed = fixed64
 
 Constants are named compile-time values. They don't exist on the wire — they're resolved during compilation and disappear.
 
-```vexil
+```text
 const MaxHealth : u32 = 100
 const TickRate : u32 = 64
 ```
@@ -37,7 +39,7 @@ const TickRate : u32 = 64
 
 Constants can reference each other with `+`, `-`, `*`, `/`:
 
-```vexil
+```text
 const TicksPerSec : u32 = 64
 const TickMs : u32 = 1000 / TicksPerSec   # 15
 const TwoSecTicks : u32 = TicksPerSec * 2  # 128

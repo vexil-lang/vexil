@@ -12,7 +12,10 @@
 | `fixed32` | 32 bits | Q16.16 fixed-point (two's complement) |
 | `fixed64` | 64 bits | Q32.32 fixed-point (two's complement) |
 
-Fixed-point types (`fixed32`, `fixed64`) give you deterministic fractional arithmetic. The same operation gives the same result on every platform — unlike IEEE 754 floats, which can vary between ARM and x86 due to rounding mode differences. We use fixed-point for simulation in the Orix ecosystem where every node must compute identical results.
+Fixed-point types (`fixed32`, `fixed64`) give the protocol an explicit scaled
+integer representation. That avoids platform-dependent wire representation for
+fractional values. Applications still choose their arithmetic, overflow, and
+rounding policy.
 
 The `@varint` annotation is valid on `fixed32` and `fixed64`, encoding the raw `i32`/`i64` as unsigned LEB128 for variable-length wire representation.
 
@@ -23,7 +26,9 @@ The `@varint` annotation is valid on `fixed32` and `fixed64`, encoding the raw `
 | `u1` -- `u7` | 1--7 bits | Unsigned sub-byte integers |
 | `i2` -- `i7` | 2--7 bits | Signed sub-byte integers |
 
-Sub-byte fields are packed LSB-first within each byte. Protobuf and FlatBuffers can't do sub-byte fields — everything has to be at least a byte.
+Sub-byte fields are packed LSB-first within each byte. Use them when the wire
+contract needs widths smaller than a byte, rather than modelling a packed value
+through application-side masks.
 
 ## Semantic types
 
@@ -68,7 +73,7 @@ Valid element types: `fixed32`, `fixed64`, `f32`, `f64`.
 
 Examples:
 
-```vexil
+```text
 message Transform {
     position @0 : vec3<fixed64>   # deterministic simulation position
     rotation @1 : quat<fixed64>   # deterministic quaternion
@@ -83,7 +88,7 @@ Wire encoding: components written in order (x, y, z, w), no padding, no count pr
 
 Anonymous flags for compact permission or storage bits:
 
-```vexil
+```text
 message FileHeader {
     perms @0 : bits { r, w, x, hidden, system }
 }

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, EncodeError, DecodeError, MAX_BYTES_LENGTH, MAX_LENGTH_PREFIX_BYTES
 
 SCHEMA_HASH: tuple[int, ...] = (0x2f, 0x63, 0x8f, 0x3e, 0x17, 0x8f, 0x50, 0x9c, 0x8f, 0x7b, 0xfb, 0x6d, 0x38, 0xa8, 0x56, 0x8f, 0x6e, 0x8c, 0xc9, 0xad, 0xe3, 0xf0, 0xa5, 0x06, 0x9a, 0x5c, 0x9d, 0x97, 0x97, 0x71, 0xa7, 0xb9)
 
@@ -62,7 +62,9 @@ class ShapePoint(Shape):
 def decode_Shape_from(_vexil_reader: _BitReader) -> Shape:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"Shape payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -75,8 +77,10 @@ def decode_Shape_from(_vexil_reader: _BitReader) -> Shape:
         _vexil_field_1 = _vexil_payload_reader.read_f32()
         return ShapeRectangle(_vexil_field_0, _vexil_field_1)
     elif _vexil_discriminant == 2:
+        _vexil_reader.read_bytes(_vexil_length)
         return ShapePoint()
     else:
+        _vexil_reader.read_bytes(_vexil_length)
         raise ValueError(f"unknown Shape discriminant: {_vexil_discriminant}")
 
 def decode_Shape(data: bytes) -> Shape:
@@ -136,10 +140,24 @@ class ColorReset(Color):
         _vexil_writer.write_leb128(0)
 
 
+class Color__VexilUnknown(Color):
+    def __init__(self, discriminant: int, data: bytes):
+        self.discriminant = discriminant
+        self.data = data
+
+    def encode_to(self, _vexil_writer: _BitWriter) -> None:
+        if len(self.data) > MAX_BYTES_LENGTH:
+            raise EncodeError(f"Color payload length {len(self.data)} exceeds limit {MAX_BYTES_LENGTH}")
+        _vexil_writer.write_leb128(self.discriminant)
+        _vexil_writer.write_leb128(len(self.data))
+        _vexil_writer.write_raw_bytes(self.data, len(self.data))
+
 def decode_Color_from(_vexil_reader: _BitReader) -> Color:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"Color payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -153,9 +171,11 @@ def decode_Color_from(_vexil_reader: _BitReader) -> Color:
         _vexil_field_2 = _vexil_payload_reader.read_u8()
         return ColorRgb(_vexil_field_0, _vexil_field_1, _vexil_field_2)
     elif _vexil_discriminant == 2:
+        _vexil_reader.read_bytes(_vexil_length)
         return ColorReset()
     else:
-        raise ValueError(f"unknown Color discriminant: {_vexil_discriminant}")
+        _vexil_data = _vexil_reader.read_bytes(_vexil_length)
+        return Color__VexilUnknown(_vexil_discriminant, _vexil_data)
 
 def decode_Color(data: bytes) -> Color:
     _vexil_reader = _BitReader(data)
@@ -206,7 +226,9 @@ class EventScroll(Event):
 def decode_Event_from(_vexil_reader: _BitReader) -> Event:
     _vexil_reader.flush_to_byte_boundary()
     _vexil_discriminant = _vexil_reader.read_leb128()
-    _vexil_length = _vexil_reader.read_leb128()
+    _vexil_length = _vexil_reader.read_leb128(MAX_LENGTH_PREFIX_BYTES)
+    if _vexil_length > MAX_BYTES_LENGTH:
+        raise DecodeError(f"Event payload length {_vexil_length} exceeds limit {MAX_BYTES_LENGTH}")
     if _vexil_discriminant == 0:
         _vexil_payload = _vexil_reader.read_bytes(_vexil_length)
         _vexil_payload_reader = _BitReader(_vexil_payload)
@@ -219,10 +241,11 @@ def decode_Event_from(_vexil_reader: _BitReader) -> Event:
         _vexil_field_0 = _vexil_payload_reader.read_i16()
         return EventScroll(_vexil_field_0)
     else:
+        _vexil_reader.read_bytes(_vexil_length)
         raise ValueError(f"unknown Event discriminant: {_vexil_discriminant}")
 
 def decode_Event(data: bytes) -> Event:
     _vexil_reader = _BitReader(data)
     return decode_Event_from(_vexil_reader)
 
-__all__ = ["SCHEMA_HASH", "Shape", "ShapeCircle", "ShapeRectangle", "ShapePoint", "decode_Shape_from", "decode_Shape", "Color", "ColorAnsi", "ColorRgb", "ColorReset", "decode_Color_from", "decode_Color", "Event", "EventClick", "EventScroll", "decode_Event_from", "decode_Event"]
+__all__ = ["EncodeError", "DecodeError", "MAX_BYTES_LENGTH", "MAX_LENGTH_PREFIX_BYTES", "SCHEMA_HASH", "Shape", "ShapeCircle", "ShapeRectangle", "ShapePoint", "decode_Shape_from", "decode_Shape", "Color", "ColorAnsi", "ColorRgb", "ColorReset", "Color__VexilUnknown", "decode_Color_from", "decode_Color", "Event", "EventClick", "EventScroll", "decode_Event_from", "decode_Event"]

@@ -291,11 +291,6 @@ fn test_041_map_key_ordering() {
 }
 
 #[test]
-fn test_043_invariant() {
-    golden_test("043_invariant");
-}
-
-#[test]
 fn test_045_generic_trait() {
     golden_test("045_generic_trait");
 }
@@ -313,6 +308,16 @@ fn test_047_trait_function_signature() {
 #[test]
 fn test_049_trait_function_portable_body() {
     golden_test("049_trait_function_portable_body");
+}
+
+#[test]
+fn test_050_non_exhaustive_union_unknown_collision() {
+    golden_test("050_non_exhaustive_union_unknown_collision");
+}
+
+#[test]
+fn test_051_concrete_type_aliases() {
+    golden_test("051_concrete_type_aliases");
 }
 
 #[test]

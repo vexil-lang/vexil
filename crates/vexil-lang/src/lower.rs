@@ -95,6 +95,10 @@ pub fn lower_with_deps(
     deps: Option<&DependencyContext>,
 ) -> (Option<CompiledSchema>, Vec<Diagnostic>) {
     let mut ctx = LowerCtx::new();
+    reject_unsupported_invariants(schema, &mut ctx);
+    if !ctx.diagnostics.is_empty() {
+        return (None, ctx.diagnostics);
+    }
     ctx.local_names.extend(
         schema
             .declarations
@@ -137,6 +141,11 @@ pub fn lower_with_deps(
         .unwrap_or_default();
 
     register_import_types(schema, &mut ctx, deps);
+    let diagnostic_count = ctx.diagnostics.len();
+    reject_imported_alias_chains(schema, &mut ctx);
+    if ctx.diagnostics.len() > diagnostic_count {
+        return (None, ctx.diagnostics);
+    }
     let decl_ids = register_declarations(schema, &namespace_key, &mut ctx);
 
     // First pass: lower non-alias, non-const, non-impl declarations
@@ -166,7 +175,7 @@ pub fn lower_with_deps(
     // Register transparent aliases once all concrete names have stable TypeIds,
     // before fields and trait signatures resolve those aliases.
     for alias in alias_decls {
-        lower_alias(alias, &mut ctx);
+        lower_alias(alias, &namespace_key, &mut ctx);
     }
     ctx.deferred_alias_names.clear();
 
@@ -253,6 +262,92 @@ pub fn lower_with_deps(
     (Some(compiled), ctx.diagnostics)
 }
 
+fn reject_unsupported_invariants(schema: &Schema, ctx: &mut LowerCtx) {
+    for declaration in &schema.declarations {
+        let Decl::Message(message) = &declaration.node else {
+            continue;
+        };
+        for item in &message.body {
+            if let MessageBodyItem::Invariant(invariant) = item {
+                ctx.emit(
+                    invariant.span,
+                    ErrorClass::InvariantUnsupported,
+                    "message invariants are not yet supported",
+                );
+            }
+        }
+    }
+}
+
+fn reject_imported_alias_chains(schema: &Schema, ctx: &mut LowerCtx) {
+    for declaration in &schema.declarations {
+        let Decl::Alias(alias) = &declaration.node else {
+            continue;
+        };
+        let type_params: HashSet<&str> = alias
+            .type_params
+            .iter()
+            .map(|parameter| parameter.name.node.as_str())
+            .collect();
+        if type_expr_references_registered_alias(&alias.target.node, ctx, &type_params) {
+            ctx.emit(
+                alias.target.span,
+                ErrorClass::AliasTargetIsAlias,
+                format!(
+                    "alias `{}` references an imported alias; must reference a terminal type directly",
+                    alias.name.node
+                ),
+            );
+        }
+    }
+}
+
+fn type_expr_references_registered_alias(
+    target: &TypeExpr,
+    ctx: &LowerCtx,
+    type_params: &HashSet<&str>,
+) -> bool {
+    let is_alias_name = |name: &str| {
+        ctx.registry.lookup_alias(name).is_some()
+            || ctx
+                .registry
+                .lookup(name)
+                .and_then(|id| ctx.registry.get(id))
+                .is_some_and(|definition| matches!(definition, TypeDef::GenericAlias(_)))
+    };
+
+    match target {
+        TypeExpr::Named(name) => {
+            !type_params.contains(name.as_str()) && is_alias_name(name.as_str())
+        }
+        TypeExpr::Qualified(namespace, name) => is_alias_name(&format!("{namespace}.{name}")),
+        TypeExpr::Generic(name, argument) => {
+            is_alias_name(name.as_str())
+                || type_expr_references_registered_alias(&argument.node, ctx, type_params)
+        }
+        TypeExpr::Optional(inner)
+        | TypeExpr::Array(inner)
+        | TypeExpr::FixedArray(inner, _)
+        | TypeExpr::Set(inner)
+        | TypeExpr::Vec2(inner)
+        | TypeExpr::Vec3(inner)
+        | TypeExpr::Vec4(inner)
+        | TypeExpr::Quat(inner)
+        | TypeExpr::Mat3(inner)
+        | TypeExpr::Mat4(inner) => {
+            type_expr_references_registered_alias(&inner.node, ctx, type_params)
+        }
+        TypeExpr::Map(key, value) | TypeExpr::Result(key, value) => {
+            type_expr_references_registered_alias(&key.node, ctx, type_params)
+                || type_expr_references_registered_alias(&value.node, ctx, type_params)
+        }
+        TypeExpr::Primitive(_)
+        | TypeExpr::SubByte(_)
+        | TypeExpr::Semantic(_)
+        | TypeExpr::BitsInline(_) => false,
+    }
+}
+
 fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&DependencyContext>) {
     for imp in &schema.imports {
         let ns_key: String = imp
@@ -263,20 +358,52 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
             .collect::<Vec<_>>()
             .join(".");
 
-        // Emit warning for version constraints (deferred to Milestone G).
-        if let Some(ref ver) = imp.node.version {
-            ctx.diagnostics.push(Diagnostic::warning(
-                ver.span,
-                ErrorClass::UnexpectedToken,
-                format!(
-                    "version constraints are not yet enforced; ignoring `@ {}`",
-                    ver.node
-                ),
-            ));
-        }
-
         match deps.and_then(|d| d.schemas.get(&ns_key)) {
             Some(dep_compiled) => {
+                if let Some(requirement) = &imp.node.version {
+                    let parsed_requirement = semver::VersionReq::parse(&requirement.node);
+                    match (&dep_compiled.annotations.version, parsed_requirement) {
+                        (Some(version), Ok(requirement_value)) => {
+                            match semver::Version::parse(version) {
+                                Ok(version_value) if !requirement_value.matches(&version_value) => {
+                                    ctx.emit(
+                                        requirement.span,
+                                        ErrorClass::ImportVersionMismatch,
+                                        format!(
+                                            "import `{ns_key}` requires `{}` but schema declares `{version}`",
+                                            requirement.node
+                                        ),
+                                    );
+                                }
+                                Ok(_) => {}
+                                Err(error) => ctx.emit(
+                                    requirement.span,
+                                    ErrorClass::VersionInvalidSemver,
+                                    format!(
+                                        "imported schema `{ns_key}` declares invalid version `{version}`: {error}"
+                                    ),
+                                ),
+                            }
+                        }
+                        (None, Ok(_)) => ctx.diagnostics.push(
+                            Diagnostic::warning(
+                                requirement.span,
+                                ErrorClass::ImportVersionUnavailable,
+                                format!(
+                                    "cannot verify import requirement `{}` because schema `{ns_key}` has no @version",
+                                    requirement.node
+                                ),
+                            )
+                            .with_help("add @version to the imported schema"),
+                        ),
+                        (_, Err(error)) => ctx.emit(
+                            requirement.span,
+                            ErrorClass::VersionInvalidSemver,
+                            format!("invalid import version requirement: {error}"),
+                        ),
+                    }
+                }
+
                 // Real dependency available — inject types by import kind.
                 match &imp.node.kind {
                     ImportKind::Named { names } => {
@@ -306,8 +433,12 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                     .map(|d| crate::remap::type_def_name(d) == name.as_str())
                                     .unwrap_or(false)
                             });
-                            match found {
-                                Some(&id) => {
+                            let alias_target = dep_compiled
+                                .registry
+                                .find_alias_origin(&ns_key, name.as_str())
+                                .cloned();
+                            match (found, alias_target) {
+                                (Some(&id), _) => {
                                     let id_map = crate::remap::clone_types_into_unbound(
                                         &dep_compiled.registry,
                                         &[id],
@@ -317,9 +448,22 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                         ctx.registry.bind_name(name.clone(), new_id);
                                     }
                                 }
-                                None => {
+                                (None, Some(target)) => {
+                                    let remapped = crate::remap::clone_resolved_type_into_unbound(
+                                        &dep_compiled.registry,
+                                        &target,
+                                        &mut ctx.registry,
+                                    );
+                                    ctx.registry.register_resolved_alias(name.clone(), remapped);
+                                    ctx.registry.set_alias_origin(
+                                        name.as_str(),
+                                        SmolStr::new(&ns_key),
+                                        name.clone(),
+                                    );
+                                }
+                                (None, None) => {
                                     // Collect available export names for suggestions
-                                    let available_names: Vec<&str> = dep_compiled
+                                    let mut available_names: Vec<&str> = dep_compiled
                                         .declarations
                                         .iter()
                                         .filter_map(|&id| {
@@ -329,6 +473,12 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                                 .map(crate::remap::type_def_name)
                                         })
                                         .collect();
+                                    available_names.extend(
+                                        dep_compiled
+                                            .registry
+                                            .aliases_from_origin(&ns_key)
+                                            .map(|(name, _)| name),
+                                    );
 
                                     // Find closest match using edit distance (threshold 3)
                                     let target_lower = name.as_str().to_lowercase();
@@ -415,6 +565,34 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                 }
                             }
                         }
+                        let aliases: Vec<_> = dep_compiled
+                            .registry
+                            .aliases_from_origin(&ns_key)
+                            .map(|(name, target)| (SmolStr::new(name), target.clone()))
+                            .collect();
+                        for (name, target) in aliases {
+                            match ctx.wildcard_origins.get(&name) {
+                                None => {
+                                    ctx.wildcard_origins
+                                        .insert(name.clone(), Some(ns_key.clone()));
+                                    if !ctx.local_names.contains(name.as_str())
+                                        && !ctx.explicit_import_names.contains(name.as_str())
+                                    {
+                                        let remapped =
+                                            crate::remap::clone_resolved_type_into_unbound(
+                                                &dep_compiled.registry,
+                                                &target,
+                                                &mut ctx.registry,
+                                            );
+                                        ctx.registry.register_resolved_alias(name, remapped);
+                                    }
+                                }
+                                Some(Some(existing_ns)) if *existing_ns != ns_key => {
+                                    ctx.wildcard_origins.insert(name, None);
+                                }
+                                _ => {}
+                            }
+                        }
                         ctx.wildcard_imports.insert(SmolStr::new(&ns_key));
                     }
                     ImportKind::Aliased { alias } => {
@@ -453,6 +631,20 @@ fn register_import_types(schema: &Schema, ctx: &mut LowerCtx, deps: Option<&Depe
                                 ));
                                 ctx.registry.register_alias(qualified, new_id);
                             }
+                        }
+                        let aliases: Vec<_> = dep_compiled
+                            .registry
+                            .aliases_from_origin(&ns_key)
+                            .map(|(name, target)| (SmolStr::new(name), target.clone()))
+                            .collect();
+                        for (name, target) in aliases {
+                            let remapped = crate::remap::clone_resolved_type_into_unbound(
+                                &dep_compiled.registry,
+                                &target,
+                                &mut ctx.registry,
+                            );
+                            let qualified = SmolStr::new(format!("{}.{}", alias.node, name));
+                            ctx.registry.register_resolved_alias(qualified, remapped);
                         }
                     }
                 }
@@ -547,7 +739,7 @@ fn lower_message(msg: &crate::ast::MessageDecl, span: Span, ctx: &mut LowerCtx) 
         match item {
             MessageBodyItem::Field(f) => fields.push(lower_field(&f.node, f.span, ctx)),
             MessageBodyItem::Tombstone(t) => tombstones.push(lower_tombstone(&t.node, t.span, ctx)),
-            MessageBodyItem::Invariant(_) => {} // invariants lowered with message
+            MessageBodyItem::Invariant(_) => {} // rejected by the lowering entry-point guard
         }
     }
 
@@ -712,9 +904,9 @@ fn lower_newtype(nt: &crate::ast::NewtypeDecl, span: Span, ctx: &mut LowerCtx) -
 
 /// Lower a type alias declaration.
 /// Non-generic aliases are transparent — they don't create TypeDef entries.
-/// Instead, they add name→TypeId mappings in the registry alias_map.
+/// Instead, they add name-to-resolved-type mappings in the registry.
 /// Generic aliases are stored as GenericAlias TypeDef entries.
-fn lower_alias(alias: &crate::ast::AliasDecl, ctx: &mut LowerCtx) {
+fn lower_alias(alias: &crate::ast::AliasDecl, namespace: &str, ctx: &mut LowerCtx) {
     // Check if this is a generic alias (has type parameters)
     if !alias.type_params.is_empty() {
         // Generic alias: store as GenericAlias TypeDef
@@ -740,30 +932,15 @@ fn lower_alias(alias: &crate::ast::AliasDecl, ctx: &mut LowerCtx) {
         return;
     }
 
-    // Non-generic alias: use existing transparent alias behavior
+    // Non-generic aliases remain transparent regardless of their concrete target.
     let target_type = resolve_type_expr(&alias.target.node, alias.target.span, ctx);
-
-    // Handle different target types
-    match target_type {
-        ResolvedType::Named(id) => {
-            // Register the alias mapping to the named type
-            ctx.registry.register_alias(alias.name.node.clone(), id);
-        }
-        ResolvedType::Primitive(p) => {
-            // Register a primitive type alias
-            ctx.registry
-                .register_primitive_alias(alias.name.node.clone(), p);
-        }
-        _ => {
-            // Container types (optional, array, map, result) as alias targets
-            // are more complex - for now we emit an error
-            ctx.emit(
-                alias.target.span,
-                ErrorClass::AliasTargetNotFound,
-                "alias to container type not yet supported",
-            );
-        }
-    }
+    ctx.registry
+        .register_resolved_alias(alias.name.node.clone(), target_type);
+    ctx.registry.set_alias_origin(
+        alias.name.node.as_str(),
+        SmolStr::new(namespace),
+        alias.name.node.clone(),
+    );
 }
 
 fn lower_config(cfg: &crate::ast::ConfigDecl, span: Span, ctx: &mut LowerCtx) -> ConfigDef {
@@ -1269,8 +1446,8 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
         TypeExpr::SubByte(s) => ResolvedType::SubByte(*s),
         TypeExpr::Semantic(s) => ResolvedType::Semantic(*s),
         TypeExpr::Named(name) => {
-            if let Some(primitive) = ctx.registry.lookup_primitive_alias(name.as_str()) {
-                return ResolvedType::Primitive(primitive);
+            if let Some(target) = ctx.registry.lookup_alias(name.as_str()) {
+                return target.clone();
             }
             // 1. Local declarations always win (shadow wildcards).
             if ctx.local_names.contains(name.as_str()) {
@@ -1342,7 +1519,9 @@ fn resolve_type_expr(expr: &TypeExpr, span: Span, ctx: &mut LowerCtx) -> Resolve
         }
         TypeExpr::Qualified(ns, name) => {
             let qualified_name: SmolStr = format!("{ns}.{name}").into();
-            if let Some(id) = ctx.registry.lookup(qualified_name.as_str()) {
+            if let Some(target) = ctx.registry.lookup_alias(qualified_name.as_str()) {
+                target.clone()
+            } else if let Some(id) = ctx.registry.lookup(qualified_name.as_str()) {
                 ResolvedType::Named(id)
             } else if ctx.registry.lookup(ns.as_str()).is_some() {
                 // Namespace alias is known — register qualified stub.
@@ -2072,6 +2251,239 @@ mod dep_tests {
             message.fields[0].resolved_type,
             ResolvedType::Primitive(PrimitiveType::U16)
         ));
+    }
+
+    #[test]
+    fn public_lowering_api_rejects_invariants_without_partial_ir() {
+        let parsed = crate::parse(
+            "namespace test.guard\nmessage M { value @0 : u32 invariant { value > 0 } }",
+        );
+        let schema = parsed.schema.expect("schema parses");
+        let (compiled, diagnostics) = lower(&schema);
+        assert!(compiled.is_none());
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.class == ErrorClass::InvariantUnsupported
+                && diagnostic.message == "message invariants are not yet supported"
+        }));
+    }
+
+    #[test]
+    fn nested_alias_chains_are_rejected_regardless_of_source_order() {
+        for source in [
+            "namespace test.alias_order\ntype Base = u32\ntype Wrapped = optional<Base>",
+            "namespace test.alias_order\ntype Wrapped = optional<Base>\ntype Base = u32",
+        ] {
+            let result = crate::compile(source);
+            assert!(result.compiled.is_none());
+            assert!(result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| { diagnostic.class == ErrorClass::AliasTargetIsAlias }));
+        }
+    }
+
+    #[test]
+    fn concrete_alias_spelling_has_no_hash_wire_or_compatibility_effect() {
+        let aliased = crate::compile(
+            "namespace test.alias_contract\ntype Values = array<u16>\nmessage M { values @0 : Values }",
+        )
+        .compiled
+        .expect("aliased schema compiles");
+        let expanded =
+            crate::compile("namespace test.alias_contract\nmessage M { values @0 : array<u16> }")
+                .compiled
+                .expect("expanded schema compiles");
+
+        assert_eq!(
+            crate::canonical::schema_hash(&aliased),
+            crate::canonical::schema_hash(&expanded)
+        );
+        let report = crate::compat::check(&aliased, &expanded);
+        assert_eq!(report.result, crate::compat::CompatResult::Compatible);
+        assert!(report.changes.is_empty(), "{:?}", report.changes);
+    }
+
+    #[test]
+    fn concrete_container_aliases_resolve_transparently() {
+        let result = crate::compile(
+            "namespace test.container_aliases\n\
+             type Names = array<string>\n\
+             type Lookup = map<string, optional<u32>>\n\
+             type Outcome = result<array<string>, string>\n\
+             message M { names @0 : Names lookup @1 : Lookup outcome @2 : Outcome }",
+        );
+        let compiled = result.compiled.expect("schema should compile");
+        let message = compiled
+            .declarations
+            .iter()
+            .filter_map(|id| compiled.registry.get(*id))
+            .find_map(|definition| match definition {
+                TypeDef::Message(message) => Some(message),
+                _ => None,
+            })
+            .expect("message declaration");
+        assert!(matches!(
+            message.fields[0].resolved_type,
+            ResolvedType::Array(_)
+        ));
+        assert!(matches!(
+            message.fields[1].resolved_type,
+            ResolvedType::Map(_, _)
+        ));
+        assert!(matches!(
+            message.fields[2].resolved_type,
+            ResolvedType::Result(_, _)
+        ));
+    }
+
+    #[test]
+    fn concrete_aliases_are_importable_by_name_wildcard_and_namespace() {
+        let dep = crate::compile(
+            "namespace dep.aliases\nmessage Item { id @0 : u32 }\ntype Names = array<Item>",
+        )
+        .compiled
+        .expect("dependency compiles");
+
+        for source in [
+            "namespace root.named\nimport { Names } from dep.aliases\nmessage M { value @0 : Names }",
+            "namespace root.wildcard\nimport dep.aliases\nmessage M { value @0 : Names }",
+            "namespace root.qualified\nimport dep.aliases as DT\nmessage M { value @0 : DT.Names }",
+        ] {
+            let schema = crate::parse(source).schema.expect("root parses");
+            let mut deps = DependencyContext {
+                schemas: HashMap::new(),
+            };
+            deps.schemas.insert("dep.aliases".to_owned(), dep.clone());
+            let (compiled, diagnostics) = lower_with_deps(&schema, Some(&deps));
+            let errors: Vec<_> = diagnostics
+                .iter()
+                .filter(|diagnostic| {
+                    diagnostic.severity == crate::diagnostic::Severity::Error
+                })
+                .collect();
+            assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+            let compiled = compiled.expect("root compiles");
+            let message = compiled
+                .declarations
+                .iter()
+                .filter_map(|id| compiled.registry.get(*id))
+                .find_map(|definition| match definition {
+                    TypeDef::Message(message) => Some(message),
+                    _ => None,
+                })
+                .expect("message declaration");
+            let ResolvedType::Array(inner) = &message.fields[0].resolved_type else {
+                panic!("alias should resolve to an array");
+            };
+            let ResolvedType::Named(item_id) = **inner else {
+                panic!("alias target should retain its named element type");
+            };
+            assert!(matches!(
+                compiled.registry.get(item_id),
+                Some(TypeDef::Message(item)) if item.name == "Item"
+            ));
+        }
+    }
+
+    #[test]
+    fn imported_alias_targets_remap_through_transitive_and_diamond_graphs() {
+        let leaf = crate::compile("namespace dep.leaf\nmessage Item { id @0 : u32 }")
+            .compiled
+            .expect("leaf compiles");
+
+        let compile_branch = |namespace: &str, alias: &str| {
+            let source = format!(
+                "namespace {namespace}\nimport {{ Item }} from dep.leaf\ntype {alias} = array<Item>"
+            );
+            let schema = crate::parse(&source).schema.expect("branch parses");
+            let mut dependencies = DependencyContext {
+                schemas: HashMap::new(),
+            };
+            dependencies
+                .schemas
+                .insert("dep.leaf".to_owned(), leaf.clone());
+            let (compiled, diagnostics) = lower_with_deps(&schema, Some(&dependencies));
+            assert!(
+                diagnostics.iter().all(|diagnostic| {
+                    diagnostic.severity != crate::diagnostic::Severity::Error
+                }),
+                "branch errors: {diagnostics:?}"
+            );
+            compiled.expect("branch compiles")
+        };
+
+        let left = compile_branch("dep.left", "LeftItems");
+        let right = compile_branch("dep.right", "RightItems");
+        let root = crate::parse(
+            "namespace root\n\
+             import { LeftItems } from dep.left\n\
+             import { RightItems } from dep.right\n\
+             message M { left @0 : LeftItems right @1 : RightItems }",
+        )
+        .schema
+        .expect("root parses");
+        let mut dependencies = DependencyContext {
+            schemas: HashMap::new(),
+        };
+        dependencies.schemas.insert("dep.left".to_owned(), left);
+        dependencies.schemas.insert("dep.right".to_owned(), right);
+
+        let (compiled, diagnostics) = lower_with_deps(&root, Some(&dependencies));
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != crate::diagnostic::Severity::Error),
+            "root errors: {diagnostics:?}"
+        );
+        let compiled = compiled.expect("root compiles");
+        let message = compiled
+            .declarations
+            .iter()
+            .filter_map(|id| compiled.registry.get(*id))
+            .find_map(|definition| match definition {
+                TypeDef::Message(message) => Some(message),
+                _ => None,
+            })
+            .expect("message declaration");
+        let element_id = |field: &FieldDef| match &field.resolved_type {
+            ResolvedType::Array(inner) => match **inner {
+                ResolvedType::Named(id) => id,
+                _ => panic!("array element must remain named"),
+            },
+            _ => panic!("alias must remain an array"),
+        };
+        assert_eq!(
+            element_id(&message.fields[0]),
+            element_id(&message.fields[1]),
+            "diamond imports must deduplicate the defining Item identity"
+        );
+    }
+
+    #[test]
+    fn imported_aliases_cannot_be_targets_by_name_wildcard_or_namespace() {
+        let dependency = crate::compile("namespace dep.aliases\ntype Names = array<string>")
+            .compiled
+            .expect("dependency compiles");
+
+        for source in [
+            "namespace root.named\nimport { Names } from dep.aliases\ntype Local = optional<Names>",
+            "namespace root.wildcard\nimport dep.aliases\ntype Local = optional<Names>",
+            "namespace root.qualified\nimport dep.aliases as DT\ntype Local = optional<DT.Names>",
+        ] {
+            let schema = crate::parse(source).schema.expect("root parses");
+            let mut dependencies = DependencyContext {
+                schemas: HashMap::new(),
+            };
+            dependencies
+                .schemas
+                .insert("dep.aliases".to_owned(), dependency.clone());
+            let (compiled, diagnostics) = lower_with_deps(&schema, Some(&dependencies));
+            assert!(compiled.is_none(), "alias chain emitted partial IR");
+            assert!(diagnostics.iter().any(|diagnostic| {
+                diagnostic.class == ErrorClass::AliasTargetIsAlias
+                    && diagnostic.message.contains("imported alias")
+            }));
+        }
     }
 
     #[test]

@@ -551,8 +551,8 @@ fn emit_read_type(
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
-            let inner_ts = ts_type(inner, registry);
-            w.line(&format!("const {var_name}: {inner_ts}[] = [];"));
+            let array_ts = ts_type(ty, registry);
+            w.line(&format!("const {var_name}: {array_ts} = [];"));
             w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
             emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
             w.line(&format!("{var_name}.push({var_name}_item);"));
@@ -569,12 +569,14 @@ fn emit_read_type(
         }
         ResolvedType::FixedArray(inner, size) => {
             let n = *size;
-            let inner_ts = ts_type(inner, registry);
-            w.line(&format!("const {var_name}: {inner_ts}[] = [];"));
-            w.open_block(&format!("for (let i = 0; i < {n}; i++)"));
-            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
-            w.line(&format!("{var_name}.push({var_name}_item);"));
-            w.close_block();
+            let mut items = Vec::new();
+            for index in 0..n {
+                let item = format!("{var_name}_{index}");
+                emit_read_type(w, &item, inner, registry, reader);
+                items.push(item);
+            }
+            let ty = ts_type(ty, registry);
+            w.line(&format!("const {var_name}: {ty} = [{}];", items.join(", ")));
         }
         ResolvedType::Vec2(inner)
         | ResolvedType::Vec3(inner)
@@ -590,12 +592,14 @@ fn emit_read_type(
                 ResolvedType::Mat4(_) => 16,
                 _ => unreachable!(),
             };
-            let inner_ts = ts_type(inner, registry);
-            w.line(&format!("const {var_name}: {inner_ts}[] = [];"));
-            w.open_block(&format!("for (let i = 0; i < {n}; i++)"));
-            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
-            w.line(&format!("{var_name}.push({var_name}_item);"));
-            w.close_block();
+            let mut items = Vec::new();
+            for index in 0..n {
+                let item = format!("{var_name}_{index}");
+                emit_read_type(w, &item, inner, registry, reader);
+                items.push(item);
+            }
+            let ty = ts_type(ty, registry);
+            w.line(&format!("const {var_name}: {ty} = [{}];", items.join(", ")));
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));

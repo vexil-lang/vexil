@@ -19,7 +19,7 @@ pub struct EventList {
 impl vexil_runtime::Pack for EventList {
     fn pack(&self, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError> {
         w.write_leb128(self.items.len() as u64);
-        for item in &self.items {
+        for item in self.items.iter() {
             w.write_u64(*item);
         }
         w.flush_to_byte_boundary();

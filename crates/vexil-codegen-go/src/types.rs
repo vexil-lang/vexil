@@ -26,10 +26,12 @@ pub fn go_type(ty: &ResolvedType, registry: &TypeRegistry) -> String {
             format!("map[{k_str}]{v_str}")
         }
         ResolvedType::Result(ok, err) => {
-            // Go doesn't have a native Result type; use a struct
+            // Keep the sum representation local to the field so generated
+            // packages do not depend on a synthetic global name that can
+            // collide with a schema declaration.
             let ok_str = go_type(ok, registry);
             let err_str = go_type(err, registry);
-            format!("Result[{ok_str}, {err_str}]")
+            format!("struct {{ Ok *{ok_str}; Err *{err_str} }}")
         }
         ResolvedType::BitsInline(names) => {
             let bits = names.len() as u8;

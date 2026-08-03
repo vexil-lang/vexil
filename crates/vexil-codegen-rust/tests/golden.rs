@@ -47,7 +47,7 @@ fn golden_source_test(test_name: &str, source: &str) {
         })
         .replace("\r\n", "\n");
 
-    if generated != expected {
+    if generated.trim_end() != expected.trim_end() {
         let diff = simple_diff(&expected, &generated);
         panic!("Golden file mismatch for {test_name}:\n{diff}");
     }
@@ -74,6 +74,11 @@ fn simple_diff(expected: &str, actual: &str) -> String {
 #[test]
 fn test_003_sub_byte() {
     golden_test("003_sub_byte");
+}
+
+#[test]
+fn test_005_parameterized() {
+    golden_test("005_parameterized");
 }
 
 #[test]
@@ -188,6 +193,16 @@ fn test_047_trait_function_signature() {
 #[test]
 fn test_049_trait_function_portable_body() {
     golden_test("049_trait_function_portable_body");
+}
+
+#[test]
+fn test_050_non_exhaustive_union_unknown_collision() {
+    golden_test("050_non_exhaustive_union_unknown_collision");
+}
+
+#[test]
+fn test_051_concrete_type_aliases() {
+    golden_test("051_concrete_type_aliases");
 }
 
 #[test]

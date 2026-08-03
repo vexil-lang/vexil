@@ -77,6 +77,11 @@ fn test_006_message() {
 }
 
 #[test]
+fn test_005_parameterized() {
+    golden_test("005_parameterized");
+}
+
+#[test]
 fn test_007_enum() {
     golden_test("007_enum");
 }
@@ -153,6 +158,16 @@ fn test_047_trait_function_signature() {
 #[test]
 fn test_049_trait_function_portable_body() {
     golden_test("049_trait_function_portable_body");
+}
+
+#[test]
+fn test_050_non_exhaustive_union_unknown_collision() {
+    golden_test("050_non_exhaustive_union_unknown_collision");
+}
+
+#[test]
+fn test_051_concrete_type_aliases() {
+    golden_test("051_concrete_type_aliases");
 }
 
 #[test]

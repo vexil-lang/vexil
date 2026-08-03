@@ -1,56 +1,52 @@
 # Your First Schema
 
-Create a file called `hello.vexil`:
+Create `hello.vexil`:
 
-```vexil
+```text
 namespace hello
 
 message Greeting {
-    name    @0 : string
-    message @1 : string
-    count   @2 : u32
+    priority @0 : u3
+    name     @1 : string @limit(64)
+    count    @2 : u32 @varint
 }
 ```
 
-Or use `vexilc init`:
+Or ask the CLI for a starting file:
 
 ```sh
 vexilc init hello
-# Creates hello.vexil
 ```
 
-## Check for errors
+## Check the contract
 
 ```sh
 vexilc check hello.vexil
 ```
 
-If the schema is valid, vexilc prints the schema hash and exits with code 0. Errors show source spans:
+On success, `vexilc` prints the canonical BLAKE3 schema hash and exits with
+status 0. On failure, it reports the source span and a diagnostic explaining the
+rejected contract.
 
-```
-Error: unknown type `strin`
-   ╭─[ hello.vexil:3:18 ]
-   │
- 3 │     name    @0 : strin
-   │                  ──┬──
-   │                    ╰── UnknownType
-───╯
-```
+## Read the schema as wire instructions
 
-## Understand the schema
+- `namespace hello` gives declarations a stable namespace.
+- `priority @0 : u3` assigns ordinal 0 and exactly three wire bits.
+- `name @1 : string @limit(64)` uses a length-prefixed UTF-8 string with an
+  application-visible bound.
+- `count @2 : u32 @varint` uses unsigned LEB128 instead of fixed-width `u32`.
 
-- `namespace hello` -- every schema needs a namespace, keeps types from colliding
-- `message Greeting` -- a struct-like type with named, ordered fields
-- `@0`, `@1`, `@2` -- ordinals determine wire order, not source order. Swap lines around, the wire format stays the same
-- `: string`, `: u32` -- field types determine encoding and size
+Ordinals are durable wire identities. Reordering source lines does not reorder
+the encoded fields.
 
-## Schema hash
-
-Every schema has a deterministic BLAKE3 hash:
+## Inspect the hash
 
 ```sh
 vexilc hash hello.vexil
-# a1b2c3d4...  hello.vexil
 ```
 
-Two schemas with identical content produce identical hashes regardless of whitespace or comments. The hash is computed from the canonical form, not the raw source text.
+Comments and formatting do not affect the hash. A change to the compiled
+contract does.
+
+Next: [Generating Code](./generating-code.md), or run the complete
+[Quickstart](../examples/quickstart.md).

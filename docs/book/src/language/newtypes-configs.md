@@ -4,7 +4,7 @@
 
 A newtype wraps an existing type with a distinct name. On the wire, it encodes identically to the underlying type.
 
-```vexil
+```text
 newtype UserId = u64
 newtype Temperature = f32
 ```
@@ -13,7 +13,7 @@ Newtypes provide type safety in generated code -- a `UserId` and a raw `u64` are
 
 ### Newtypes with annotations
 
-```vexil
+```text
 newtype CompactId = u64 @varint
 ```
 
@@ -23,7 +23,7 @@ The annotation applies to the wire encoding of the underlying type.
 
 Configs are compile-time constant declarations. They do not appear on the wire but are available in generated code as constants.
 
-```vexil
+```text
 config MAX_PACKET_SIZE : u32 = 1500
 config VERSION : string = "1.0.0"
 ```

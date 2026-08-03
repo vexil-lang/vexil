@@ -4,7 +4,7 @@ Where clauses add validation constraints to fields. They run automatically on en
 
 ## Basic Syntax
 
-```vexil
+```text
 message Player {
     health @0 : u8 where value >= 0 && value <= 100
     name   @1 : string where len(value) >= 1 && len(value) <= 32
@@ -22,7 +22,7 @@ message Player {
 
 `&&`, `||`, `!`. Standard boolean logic.
 
-```vexil
+```text
 message Request {
     code @0 : u16 where value >= 100 && value < 600
     flag @1 : u8 where value == 0 || value == 1 || value == 255
@@ -31,7 +31,7 @@ message Request {
 
 ## Range Expressions
 
-```vexil
+```text
 # Inclusive: 0 to 100 (both endpoints included)
 health @0 : u8 where value in 0..100
 
@@ -41,7 +41,7 @@ age @1 : u8 where value in 0..<100
 
 Bounds can be constants:
 
-```vexil
+```text
 const MaxLevel : u16 = 999
 
 level @0 : u16 where value in 1..MaxLevel
@@ -51,7 +51,7 @@ level @0 : u16 where value in 1..MaxLevel
 
 Returns the length of a string, bytes, array, map, or set:
 
-```vexil
+```text
 message User {
     username @0 : string where len(value) in 3..32
     tags     @1 : array<string> where len(value) <= 10
@@ -59,16 +59,17 @@ message User {
 }
 ```
 
-## What's Not Supported (Yet)
+## Current boundaries
 
-- **Cross-field constraints**: `where amount <= balance` can't reference other fields. Deferred to 1.1.
+- **Cross-field constraints**: `where amount <= balance` cannot reference other
+  fields. This is backlog work, not a promise for a named release.
 - **Regex**: `where value matches "..."` doesn't exist. Use a length check and validate regex in application code.
 - **User-defined functions**: you can only use the built-in operators and `len()`.
 
 ## Error Behavior
 
 On constraint violation:
-- Encode: returns `PackError::ConstraintViolation`, nothing written
+- Encode: returns `EncodeError::ConstraintViolation`, nothing written
 - Decode: returns `DecodeError::ConstraintViolation`, partial data discarded
 
 Invalid data never makes it onto the wire. That's the whole point.

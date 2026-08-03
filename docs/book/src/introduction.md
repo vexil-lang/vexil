@@ -1,55 +1,56 @@
 # Vexil
 
-Vexil (Validated Exchange Language) is a typed schema language where the wire encoding is part of the type system. It describes the shape, constraints, and wire encoding of data crossing system boundaries.
+Vexil is a schema language and toolchain for exact binary protocols. The schema
+defines the data model and its representation: bit widths, field ordinals,
+integer encodings, collection bounds, and evolution metadata are reviewable in
+one contract.
 
 <div class="vexil-start">
-  <a href="getting-started/installation.html">Install the CLI</a>
-  <a href="getting-started/first-schema.html">Write a first schema</a>
-  <a href="https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md">Review compatibility limits</a>
+  <a href="getting-started/installation.html">Install vexilc</a>
+  <a href="getting-started/first-schema.html">Write a schema</a>
+  <a href="examples/quickstart.html">Run the quickstart</a>
 </div>
 
-> **Choose a verified path.** Rust and TypeScript have broad cross-language byte-vector coverage. Generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.
+> **Revival release:** Vexil is preparing a focused 0.x stabilization release,
+> not a project-wide 1.0. Read the [support matrix](getting-started/support-matrix.md)
+> and [compatibility limits](getting-started/compatibility.md) before adoption.
 
-## What makes Vexil different?
+## The defining choice
 
-**Encoding is part of the type system.** `u4` means exactly 4 bits on the wire. `@varint` on a `u64` switches to unsigned LEB128. The schema IS the wire contract, not a hint about the wire format.
+In many schema systems, a type describes a value while the codec decides how it
+is represented. Vexil makes representation part of the type contract:
 
-**Deterministic encoding.** Same data always produces identical bytes. This enables BLAKE3 content addressing, deduplication, and replay detection. These are things Protobuf, Cap'n Proto, and FlatBuffers don't guarantee.
-
-**Multi-language.** Generate Rust, TypeScript, Go, and Python from the same `.vexil` schema. Rust and TypeScript have broad compliance-vector coverage; generated Go and Python exercise a representative shared wire matrix.
-
-## Quick example
-
-```vexil
-namespace sensor.packet
-
-enum SensorKind : u8 {
-    Temperature @0
-    Humidity    @1
-    Pressure    @2
-}
-
-message SensorReading {
-    channel  @0 : u4              # 4 bits on the wire
-    kind     @1 : SensorKind
-    value    @2 : u16
-    sequence @3 : u32 @varint     # variable-length encoding
+```text
+message Reading {
+    channel  @0 : u4
+    value    @1 : u16
+    sequence @2 : u32 @varint
+    offset   @3 : i32 @zigzag
 }
 ```
 
-Generate code:
+`channel` is four bits. `sequence` uses unsigned LEB128. `offset` uses ZigZag
+followed by LEB128. Those are language rules rather than conventions hidden in
+application code.
 
-```sh
-vexilc codegen sensor.vexil --target rust
-vexilc codegen sensor.vexil --target typescript
-vexilc codegen sensor.vexil --target go
-vexilc codegen sensor.vexil --target python
-```
+## What the toolchain provides
 
-## Installation
+- a compiler with source-spanned diagnostics;
+- Rust, TypeScript, Go, and Python code generation;
+- deterministic canonical schema hashes using BLAKE3;
+- compatibility classification for schema evolution;
+- Rust, TypeScript, Go, and Python runtimes with different documented evidence
+  levels;
+- a conformance corpus and golden byte vectors.
 
-```sh
-cargo install vexilc
-```
+The wire is not self-describing, and Vexil does not define transport,
+authentication, discovery, or compression. Applications own those layers.
 
-Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/vexil-lang/vexil/releases).
+## A practical path
+
+1. [Install the compiler](getting-started/installation.md).
+2. [Write and check a schema](getting-started/first-schema.md).
+3. [Generate code for your target](getting-started/generating-code.md).
+4. [Run the curated examples](examples/quickstart.md).
+5. Review the [support matrix](getting-started/support-matrix.md) for the exact
+   target combination you intend to ship.

@@ -159,6 +159,9 @@ export function decodeExprKind(r: BitReader): ExprKind {
   r.flushToByteBoundary();
   const disc = r.readLeb128();
   const len = r.readLeb128();
+  if (len > 67_108_864) {
+    throw new Error(`ExprKind payload length ${len} exceeds limit 67108864`);
+  }
   switch (disc) {
     case 0: {
       const payloadBytes = r.readRawBytes(len);
@@ -181,6 +184,7 @@ export function decodeExprKind(r: BitReader): ExprKind {
       return { tag: 'Binary' as const, left: _vexilField0, op: _vexilField1, right: _vexilField2 };
     }
     default: {
+      r.readRawBytes(len);
       throw new Error(`Unknown ExprKind discriminant: ${disc}`);
     }
   }

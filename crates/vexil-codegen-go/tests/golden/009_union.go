@@ -79,6 +79,9 @@ func UnpackShape(r *vexil.BitReader) (Shape, error) {
 	if err != nil {
 		return nil, err
 	}
+	if length > vexil.MaxBytesLength {
+		return nil, &vexil.DecodeError{Field: "Shape", Message: fmt.Sprintf("payload length %d exceeds limit %d", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
+	}
 	switch disc {
 		case 0: {
 			payloadBytes, err := r.ReadRawBytes(int(length))
@@ -175,6 +178,14 @@ type ColorReset struct {
 func (ColorReset) isColor() {
 }
 
+type Color__VexilUnknown struct {
+	Discriminant uint64
+	Data []byte
+}
+
+func (Color__VexilUnknown) isColor() {
+}
+
 func PackColor(v Color, w *vexil.BitWriter) error {
 	switch t := v.(type) {
 		case *ColorAnsi: {
@@ -201,6 +212,14 @@ func PackColor(v Color, w *vexil.BitWriter) error {
 			w.WriteLeb128(2)
 			w.WriteLeb128(0)
 		}
+		case *Color__VexilUnknown: {
+			if len(t.Data) > vexil.MaxBytesLength {
+				return &vexil.EncodeError{Field: "Color", Message: fmt.Sprintf("payload length %d exceeds limit %d", len(t.Data), vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
+			}
+			w.WriteLeb128(t.Discriminant)
+			w.WriteLeb128(uint64(len(t.Data)))
+			w.WriteRawBytes(t.Data)
+		}
 	}
 	return nil
 }
@@ -214,6 +233,9 @@ func UnpackColor(r *vexil.BitReader) (Color, error) {
 	length, err := r.ReadLeb128(4)
 	if err != nil {
 		return nil, err
+	}
+	if length > vexil.MaxBytesLength {
+		return nil, &vexil.DecodeError{Field: "Color", Message: fmt.Sprintf("payload length %d exceeds limit %d", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
 	}
 	switch disc {
 		case 0: {
@@ -276,13 +298,11 @@ func UnpackColor(r *vexil.BitReader) (Color, error) {
 			return &ColorReset{}, nil
 		}
 		default: {
-			{
-				_, err := r.ReadRawBytes(int(length))
-				if err != nil {
-					return nil, err
-				}
+			data, err := r.ReadRawBytes(int(length))
+			if err != nil {
+				return nil, err
 			}
-			return nil, fmt.Errorf("unknown discriminant %d", disc)
+			return &Color__VexilUnknown{Discriminant: disc, Data: data}, nil
 		}
 	}
 }
@@ -344,6 +364,9 @@ func UnpackEvent(r *vexil.BitReader) (Event, error) {
 	length, err := r.ReadLeb128(4)
 	if err != nil {
 		return nil, err
+	}
+	if length > vexil.MaxBytesLength {
+		return nil, &vexil.DecodeError{Field: "Event", Message: fmt.Sprintf("payload length %d exceeds limit %d", length, vexil.MaxBytesLength), Err: vexil.ErrLimitExceeded}
 	}
 	switch disc {
 		case 0: {

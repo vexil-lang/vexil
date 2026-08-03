@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/vexil-lang", "crates/vexilc", "crates/vexil-runtime", "crates/vexil-codegen-rust", "crates/vexil-codegen-ts", "crates/vexil-codegen-go", "crates/vexil-codegen-py", "crates/vexil-store"]
-exclude = ["crates/vexil-bench", "examples/sensor-packet", "examples/command-protocol", "examples/multi-file-project", "examples/cross-language/rust-device", "examples/system-monitor"]
+exclude = ["crates/vexil-bench", "examples/quickstart", "examples/project-evolution", "examples/cross-language/rust-device", "examples/live-telemetry"]
 
 [workspace.package]
 version = "0.4.2"
@@ -9,7 +9,7 @@ edition = "2021"
 rust-version = "1.94"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/vexil-lang/vexil"
-authors = ["Orix Systems contributors"]
+authors = ["Vexil contributors"]
 readme = "README.md"
 
 # Profile used by cargo-dist for release builds

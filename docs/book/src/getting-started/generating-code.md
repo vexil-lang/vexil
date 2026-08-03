@@ -141,3 +141,23 @@ decoded.Unpack(r)
 ```
 
 The versioned Go runtime module is available as `github.com/vexil-lang/vexil/packages/runtime-go@v0.1.1`. See the [Go runtime](../runtime/go.md) page for installation details.
+
+### Python
+
+Install the prepared runtime from the repository until its first PyPI release
+is confirmed:
+
+```sh
+python -m pip install ./packages/runtime-py
+```
+
+```python
+from hello import Greeting
+
+encoded = Greeting(name="world", message="hello", count=42).encode()
+decoded = Greeting.decode(encoded)
+assert decoded.count == 42
+```
+
+See the [support matrix](./support-matrix.md) before choosing a production
+target combination.

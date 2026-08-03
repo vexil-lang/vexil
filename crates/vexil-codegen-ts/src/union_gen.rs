@@ -27,8 +27,8 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
 
     // Non-exhaustive unknown variant
     if non_exhaustive {
-        w.open_block(&format!("export interface {name}_Unknown"));
-        w.line("tag: '__unknown';");
+        w.open_block(&format!("export interface {name}__VexilUnknown"));
+        w.line("tag: '__vexil_unknown';");
         w.line("discriminant: number;");
         w.line("data: Uint8Array;");
         w.close_block();
@@ -43,7 +43,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         .collect();
     let mut all_types = variant_types;
     if non_exhaustive {
-        all_types.push(format!("{name}_Unknown"));
+        all_types.push(format!("{name}__VexilUnknown"));
     }
     w.line(&format!("export type {name} = {};", all_types.join(" | ")));
     w.blank();
@@ -86,7 +86,12 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     }
 
     if non_exhaustive {
-        w.open_block("case '__unknown':");
+        w.open_block("case '__vexil_unknown':");
+        w.open_block("if (v.data.length > 67_108_864)");
+        w.line(&format!(
+            "throw new Error(`{name} payload length ${{v.data.length}} exceeds limit 67108864`);"
+        ));
+        w.close_block();
         w.line("w.writeLeb128(v.discriminant);");
         w.line("w.writeLeb128(v.data.length);");
         w.line("w.writeRawBytes(v.data);");
@@ -105,6 +110,11 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     w.line("r.flushToByteBoundary();");
     w.line("const disc = r.readLeb128();");
     w.line("const len = r.readLeb128();");
+    w.open_block("if (len > 67_108_864)");
+    w.line(&format!(
+        "throw new Error(`{name} payload length ${{len}} exceeds limit 67108864`);"
+    ));
+    w.close_block();
     w.open_block("switch (disc)");
 
     for variant in &un.variants {
@@ -146,10 +156,11 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
     if non_exhaustive {
         w.open_block("default:");
         w.line("const data = r.readRawBytes(len);");
-        w.line("return { tag: '__unknown' as const, discriminant: disc, data };");
+        w.line("return { tag: '__vexil_unknown' as const, discriminant: disc, data };");
         w.close_block();
     } else {
         w.open_block("default:");
+        w.line("r.readRawBytes(len);");
         w.line(&format!(
             "throw new Error(`Unknown {name} discriminant: ${{disc}}`);"
         ));

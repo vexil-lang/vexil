@@ -9,16 +9,18 @@ requires = [
 build-backend = "hatchling.build"
 
 [project]
-name = "vexil_runtime"
+name = "vexil-runtime"
 version = "0.1.0"
-description = "Vexil runtime for Python - binary serialization support"
+description = "Python runtime support for Vexil-generated binary codecs"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
 requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -26,6 +28,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
 ]
+keywords = ["serialization", "schema", "binary", "codegen", "vexil"]
 
 [project.urls]
 Homepage = "https://github.com/vexil-lang/vexil"

@@ -1,12 +1,12 @@
 # Vexil Test Corpus Manifest
 
 Version: 1.0.0-draft
-Generated: 2026-04-09
+Generated: 2026-08-01
 
 This corpus exercises every normative MUST/MUST NOT in the Vexil spec.
 A conformant implementation MUST accept all valid files and reject all invalid files.
 
-## Valid Corpus (49 files)
+## Valid Corpus (50 files)
 
 | File | Spec sections | What it exercises |
 |------|--------------|-------------------|
@@ -51,7 +51,6 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 039_geometric.vexil | §3.1, §3.4 | Geometric types: vec2, vec3, vec4, quat, mat3, mat4 with element types |
 | 040_inline_bits.vexil | §3.4 | Inline bitfield type: `bits { r, w, x }` with named bits |
 | 041_map_key_ordering.vexil | §3.4 | Map key canonical sort order for all valid key types |
-| 043_invariant.vexil | §4.1 | Named and unnamed invariant conditions in message bodies |
 | 044_generic_alias.vexil | §4.7 | Generic type alias with type parameter substitution |
 | 044_generic_simple.vexil | §4.7 | Simple generic type alias with direct type parameter |
 | 045_generic_trait.vexil | §4.9 | Generic trait impl with type arguments (`impl Tagged<u64>`) |
@@ -59,8 +58,10 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 047_trait_function_signature.vexil | §4.9 | Function-bearing trait signature accepted and projected by all reference generators |
 | 048_generic_trait_nested.vexil | §4.9 | Generic trait with a nested `array<T>` field and concrete implementation |
 | 049_trait_function_portable_body.vexil | §4.9–4.10 | Generic trait functions with immutable local, arithmetic, receiver mutation, and value/void returns |
+| 050_non_exhaustive_union_unknown_collision.vexil | §4.4, §11.10 | Unknown non-exhaustive union payload preservation with authored `Unknown` variant |
+| 051_concrete_type_aliases.vexil | §3.4, §4.7 | Transparent aliases for concrete container types |
 
-## Invalid Corpus (76 files)
+## Invalid Corpus (79 files)
 
 | File | Spec section | Error class | What it rejects |
 |------|-------------|-------------|-----------------|
@@ -107,6 +108,8 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 041_removed_reuses_ordinal.vexil | §12.3 | Semantic | Active field reusing tombstoned ordinal |
 | 042_version_not_semver.vexil | §6.3 | Parse | Version constraint ^1.0 missing patch |
 | 043_non_exhaustive_on_message.vexil | §12.2 | Semantic | @non_exhaustive on message (enum/union only) |
+| 066_invariant_unsupported.vexil | §4.11 | Semantic | Message invariants are reserved but rejected until portable enforcement exists |
+| 067_schema_version_semver.vexil | §6.3 | Semantic | Schema @version must be a complete SemVer version |
 | 044_limit_on_invalid_type.vexil | §12.5 | Semantic | @limit on u32 (string/bytes/array/map only) |
 | 045_limit_exceeds_global.vexil | §12.5 | Semantic | @limit(16777217) exceeds array max |
 | 046_type_unknown.vexil | §3.5 | Type | Reference to undefined type |
@@ -140,6 +143,7 @@ A conformant implementation MUST accept all valid files and reject all invalid f
 | 074_impl_body_type_mismatch.vexil | §4.10 | Type | Impl local annotation conflicts with the inferred expression type |
 | 075_impl_bare_expression_statement.vexil | §4.10 | Type | Impl body contains a bare expression statement |
 | 076_impl_trait_path_too_deep.vexil | §4.10 | Parse | Impl trait path contains more than one alias qualifier |
+| 077_nested_alias_chain.vexil | §4.7 | Type | Alias chain hidden inside a concrete container |
 
 ## Error class taxonomy
 

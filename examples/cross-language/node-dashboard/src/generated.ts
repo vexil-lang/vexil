@@ -3,7 +3,7 @@
 
 import { BitReader, BitWriter } from '@vexil-lang/runtime';
 
-export const SCHEMA_HASH = new Uint8Array([0xb1, 0x3d, 0xa4, 0x8d, 0x34, 0xbf, 0xd6, 0xc9, 0x4b, 0x13, 0xa3, 0x27, 0x52, 0x48, 0x5b, 0x9e, 0xf9, 0x6e, 0x6d, 0x16, 0x4d, 0x1c, 0xbc, 0x3f, 0x34, 0x8e, 0x34, 0x21, 0x37, 0x5f, 0x51, 0xa0]);
+export const SCHEMA_HASH = new Uint8Array([0x62, 0x19, 0xa3, 0xc2, 0x34, 0x2a, 0xd0, 0xaf, 0x3e, 0xaa, 0xbe, 0x11, 0xca, 0xe9, 0x6c, 0x23, 0x76, 0x6e, 0x62, 0x27, 0xb4, 0xc1, 0xce, 0x0f, 0x2e, 0x5d, 0xbd, 0x08, 0xdf, 0xec, 0x70, 0x93]);
 
 // ── DeviceStatus ──
 export type DeviceStatus = 'Online' | 'Degraded' | 'Offline' | 'Error';
@@ -49,6 +49,7 @@ export interface SensorReading {
   label: string;
   gps_lat: number | null;
   gps_lon: number | null;
+  _unknown: Uint8Array;
 }
 
 export function encodeSensorReading(v: SensorReading, w: BitWriter): void {
@@ -62,16 +63,19 @@ export function encodeSensorReading(v: SensorReading, w: BitWriter): void {
   w.writeF32(v.humidity);
   w.writeString(v.label);
   w.writeBool(v.gps_lat !== null);
-  w.flushToByteBoundary();
   if (v.gps_lat !== null) {
+    w.flushToByteBoundary();
     w.writeF64(v.gps_lat);
   }
   w.writeBool(v.gps_lon !== null);
-  w.flushToByteBoundary();
   if (v.gps_lon !== null) {
+    w.flushToByteBoundary();
     w.writeF64(v.gps_lon);
   }
   w.flushToByteBoundary();
+  if (v._unknown.length > 0) {
+    w.writeRawBytes(v._unknown);
+  }
 }
 
 export function decodeSensorReading(r: BitReader): SensorReading {
@@ -85,53 +89,24 @@ export function decodeSensorReading(r: BitReader): SensorReading {
   const humidity = r.readF32();
   const label = r.readString();
   const gps_lat_present = r.readBool();
-  r.flushToByteBoundary();
   let gps_lat: number | null;
   if (gps_lat_present) {
+    r.flushToByteBoundary();
     const gps_lat_inner = r.readF64();
     gps_lat = gps_lat_inner;
   } else {
     gps_lat = null;
   }
   const gps_lon_present = r.readBool();
-  r.flushToByteBoundary();
   let gps_lon: number | null;
   if (gps_lon_present) {
+    r.flushToByteBoundary();
     const gps_lon_inner = r.readF64();
     gps_lon = gps_lon_inner;
   } else {
     gps_lon = null;
   }
   r.flushToByteBoundary();
-  return { device_id, battery, signal, status, temperature, humidity, label, gps_lat, gps_lon };
+  const _unknown = new Uint8Array(0);
+  return { device_id, battery, signal, status, temperature, humidity, label, gps_lat, gps_lon, _unknown };
 }
-
-
-// ── DeviceConfig ──
-export interface DeviceConfig {
-  device_id: number;
-  report_interval: number;
-  high_temp_alert: number;
-  low_temp_alert: number;
-  label: string;
-}
-
-export function encodeDeviceConfig(v: DeviceConfig, w: BitWriter): void {
-  w.writeU32(v.device_id);
-  w.writeU16(v.report_interval);
-  w.writeF32(v.high_temp_alert);
-  w.writeF32(v.low_temp_alert);
-  w.writeString(v.label);
-  w.flushToByteBoundary();
-}
-
-export function decodeDeviceConfig(r: BitReader): DeviceConfig {
-  const device_id = r.readU32();
-  const report_interval = r.readU16();
-  const high_temp_alert = r.readF32();
-  const low_temp_alert = r.readF32();
-  const label = r.readString();
-  r.flushToByteBoundary();
-  return { device_id, report_interval, high_temp_alert, low_temp_alert, label };
-}
-

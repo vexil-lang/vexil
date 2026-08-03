@@ -446,6 +446,37 @@ describe('Compliance: optionals.json', () => {
   }
 });
 
+describe('Compliance: results.json', () => {
+  const vectors: Vector[] = JSON.parse(
+    readFileSync(join(vectorsDir, 'results.json'), 'utf-8'),
+  );
+
+  for (const vec of vectors) {
+    it(`${vec.name} encodes and decodes`, () => {
+      const result = vec.value.value as Record<string, unknown>;
+      const w = new BitWriter();
+      const isOk = Object.hasOwn(result, 'ok');
+      w.writeBool(isOk);
+      if (vec.name === 'result_ok_u8') w.writeU8(result.ok as number);
+      if (vec.name === 'result_err_string') w.writeString(result.err as string);
+      if (vec.name === 'result_packed_bool_adjacency') {
+        w.writeBool(result.ok as boolean);
+        w.writeBool(vec.value.tail as boolean);
+      }
+      expect(toHex(w.finish())).toBe(vec.expected_bytes);
+
+      const r = new BitReader(hexToBytes(vec.expected_bytes));
+      expect(r.readBool()).toBe(isOk);
+      if (vec.name === 'result_ok_u8') expect(r.readU8()).toBe(result.ok);
+      if (vec.name === 'result_err_string') expect(r.readString()).toBe(result.err);
+      if (vec.name === 'result_packed_bool_adjacency') {
+        expect(r.readBool()).toBe(result.ok);
+        expect(r.readBool()).toBe(vec.value.tail);
+      }
+    });
+  }
+});
+
 describe('Compliance: enums.json', () => {
   interface EnumVector {
     name: string;
@@ -500,11 +531,18 @@ describe('Compliance: unions.json', () => {
       it('encode matches expected bytes', () => {
         const w = new BitWriter();
         const unionVal = vec.value.v as Record<string, unknown>;
-        const variant = unionVal.variant as string;
-        const discriminant = variant === 'Circle' ? 0 : 1;
+        const unknown = unionVal.unknown === true;
+        const variant = unionVal.variant as string | undefined;
+        const discriminant = unknown
+          ? (unionVal.discriminant as number)
+          : variant === 'Circle'
+            ? 0
+            : 1;
 
         const pw = new BitWriter();
-        if (variant === 'Circle') {
+        if (unknown) {
+          pw.writeRawBytes(Uint8Array.from(unionVal.data as number[]));
+        } else if (variant === 'Circle') {
           pw.writeF32(Math.fround(unionVal.radius as number));
         } else {
           pw.writeF32(Math.fround(unionVal.w as number));
@@ -527,7 +565,10 @@ describe('Compliance: unions.json', () => {
         const pr = new BitReader(payloadBytes);
 
         const unionVal = vec.value.v as Record<string, unknown>;
-        if (discriminant === 0) {
+        if (unionVal.unknown === true) {
+          expect(discriminant).toBe(unionVal.discriminant);
+          expect(Array.from(payloadBytes)).toEqual(unionVal.data);
+        } else if (discriminant === 0) {
           const radius = pr.readF32();
           expect(radius).toBeCloseTo(unionVal.radius as number, 5);
         } else {

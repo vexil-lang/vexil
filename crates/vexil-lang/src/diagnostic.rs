@@ -109,12 +109,15 @@ pub enum ErrorCode {
     E123, // Where clause const not found
     E124, // Where clause operator invalid
     E125, // Where clause constraint failed
+    E126, // Message invariants are not yet supported
 
     // Import errors (E130-E139)
     E130, // Import not found
     E131, // Ambiguous import
     E132, // Import name not found in namespace
     E133, // Impl function external (no body)
+    E134, // Imported schema version does not satisfy requirement
+    W135, // Imported schema has no declared version
 
     // Trait function errors (E140-E149)
     E140, // Duplicate trait function
@@ -207,10 +210,13 @@ impl ErrorCode {
             ErrorCode::E123 => "E123",
             ErrorCode::E124 => "E124",
             ErrorCode::E125 => "E125",
+            ErrorCode::E126 => "E126",
             ErrorCode::E130 => "E130",
             ErrorCode::E131 => "E131",
             ErrorCode::E132 => "E132",
             ErrorCode::E133 => "E133",
+            ErrorCode::E134 => "E134",
+            ErrorCode::W135 => "W135",
             ErrorCode::E140 => "E140",
             ErrorCode::E141 => "E141",
             ErrorCode::E142 => "E142",
@@ -319,9 +325,12 @@ pub enum ErrorClass {
     WhereClauseLenOnNonCollection,
     WhereClauseConstRefNotFound,
     WhereClauseOperatorInvalid,
+    InvariantUnsupported,
 
     // Impl
     ImplFnExternal,
+    ImportVersionMismatch,
+    ImportVersionUnavailable,
     TraitFnDuplicate,
     FnParamDuplicate,
     ImplFnMissing,
@@ -427,9 +436,12 @@ impl ErrorClass {
             ErrorClass::WhereClauseLenOnNonCollection => ErrorCode::E122,
             ErrorClass::WhereClauseConstRefNotFound => ErrorCode::E123,
             ErrorClass::WhereClauseOperatorInvalid => ErrorCode::E124,
+            ErrorClass::InvariantUnsupported => ErrorCode::E126,
 
             // Impl
             ErrorClass::ImplFnExternal => ErrorCode::E133,
+            ErrorClass::ImportVersionMismatch => ErrorCode::E134,
+            ErrorClass::ImportVersionUnavailable => ErrorCode::W135,
             ErrorClass::TraitFnDuplicate => ErrorCode::E140,
             ErrorClass::FnParamDuplicate => ErrorCode::E141,
             ErrorClass::ImplFnMissing => ErrorCode::E142,

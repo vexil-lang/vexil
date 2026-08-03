@@ -254,11 +254,6 @@ fn valid_041_map_key_ordering() {
 }
 
 #[test]
-fn valid_043_invariant() {
-    parse_valid("043_invariant.vexil");
-}
-
-#[test]
 fn valid_044_generic_alias() {
     parse_valid("044_generic_alias.vexil");
 }
@@ -286,6 +281,16 @@ fn valid_047_trait_function_signature() {
 #[test]
 fn valid_049_trait_function_portable_body() {
     parse_valid("049_trait_function_portable_body.vexil");
+}
+
+#[test]
+fn valid_050_non_exhaustive_union_unknown_collision() {
+    parse_valid("050_non_exhaustive_union_unknown_collision.vexil");
+}
+
+#[test]
+fn valid_051_concrete_type_aliases() {
+    parse_valid("051_concrete_type_aliases.vexil");
 }
 
 // =========================================================================
@@ -673,6 +678,22 @@ fn invalid_043() {
 }
 
 #[test]
+fn invalid_066_invariant_unsupported() {
+    parse_invalid(
+        "066_invariant_unsupported.vexil",
+        ErrorClass::InvariantUnsupported,
+    );
+}
+
+#[test]
+fn invalid_067_schema_version_semver() {
+    parse_invalid(
+        "067_schema_version_semver.vexil",
+        ErrorClass::VersionInvalidSemver,
+    );
+}
+
+#[test]
 fn invalid_025() {
     parse_invalid(
         "025_varint_on_subbyte.vexil",
@@ -831,5 +852,13 @@ fn invalid_076_impl_trait_path_too_deep() {
     parse_invalid(
         "076_impl_trait_path_too_deep.vexil",
         ErrorClass::UnexpectedToken,
+    );
+}
+
+#[test]
+fn invalid_077_nested_alias_chain() {
+    compile_invalid(
+        "077_nested_alias_chain.vexil",
+        ErrorClass::AliasTargetIsAlias,
     );
 }

@@ -29,12 +29,10 @@ pub const POISON_TYPE_ID: TypeId = TypeId(u32::MAX);
 pub struct TypeRegistry {
     types: Vec<Option<TypeDef>>,
     by_name: HashMap<SmolStr, TypeId>,
-    /// Secondary name mappings for type aliases (alias name -> target TypeId).
-    /// Aliases are transparent and don't create TypeDef entries.
-    alias_map: HashMap<SmolStr, TypeId>,
-    /// Primitive type aliases (alias name -> PrimitiveType).
-    /// These map alias names directly to primitive types.
-    primitive_aliases: HashMap<SmolStr, PrimitiveType>,
+    /// Transparent aliases, including concrete container targets.
+    aliases: HashMap<SmolStr, ResolvedType>,
+    /// Stable declaration identity for exported aliases.
+    alias_origins: HashMap<SmolStr, (SmolStr, SmolStr)>,
     /// Source-faithful return expressions for trait functions.
     ///
     /// Trait function IR keeps its stable resolved return field. This private
@@ -60,8 +58,8 @@ impl TypeRegistry {
         Self {
             types: Vec::new(),
             by_name: HashMap::new(),
-            alias_map: HashMap::new(),
-            primitive_aliases: HashMap::new(),
+            aliases: HashMap::new(),
+            alias_origins: HashMap::new(),
             trait_fn_return_types: HashMap::new(),
             origins: HashMap::new(),
             impl_trait_ids: HashMap::new(),
@@ -92,23 +90,34 @@ impl TypeRegistry {
     }
 
     /// Look up a type by name, returning its [`TypeId`] if registered.
-    /// Also checks alias_map for type aliases.
+    /// Also checks aliases whose transparent target is a named type.
     pub fn lookup(&self, name: &str) -> Option<TypeId> {
         self.by_name
             .get(name)
             .copied()
-            .or_else(|| self.alias_map.get(name).copied())
+            .or_else(|| match self.aliases.get(name) {
+                Some(ResolvedType::Named(id)) => Some(*id),
+                _ => None,
+            })
     }
 
     /// Look up a primitive type alias by name.
     pub fn lookup_primitive_alias(&self, name: &str) -> Option<PrimitiveType> {
-        self.primitive_aliases.get(name).copied()
+        match self.aliases.get(name) {
+            Some(ResolvedType::Primitive(primitive)) => Some(*primitive),
+            _ => None,
+        }
+    }
+
+    /// Look up the fully resolved transparent target of an alias.
+    pub fn lookup_alias(&self, name: &str) -> Option<&ResolvedType> {
+        self.aliases.get(name)
     }
 
     /// Register a type alias (secondary name mapping).
     /// The target TypeId must already exist in the registry.
     pub fn register_alias(&mut self, alias: SmolStr, target: TypeId) {
-        self.alias_map.insert(alias, target);
+        self.register_resolved_alias(alias, ResolvedType::Named(target));
     }
 
     pub(crate) fn bind_name(&mut self, name: SmolStr, target: TypeId) {
@@ -117,7 +126,51 @@ impl TypeRegistry {
 
     /// Register a primitive type alias.
     pub fn register_primitive_alias(&mut self, alias: SmolStr, primitive: PrimitiveType) {
-        self.primitive_aliases.insert(alias, primitive);
+        self.register_resolved_alias(alias, ResolvedType::Primitive(primitive));
+    }
+
+    /// Register a transparent alias to any fully resolved concrete type.
+    pub fn register_resolved_alias(&mut self, alias: SmolStr, target: ResolvedType) {
+        self.aliases.insert(alias, target);
+    }
+
+    pub(crate) fn set_alias_origin(
+        &mut self,
+        alias: &str,
+        namespace: SmolStr,
+        declaration: SmolStr,
+    ) {
+        self.alias_origins
+            .insert(SmolStr::new(alias), (namespace, declaration));
+    }
+
+    pub(crate) fn find_alias_origin(
+        &self,
+        namespace: &str,
+        declaration: &str,
+    ) -> Option<&ResolvedType> {
+        self.alias_origins.iter().find_map(|(binding, (ns, name))| {
+            (ns == namespace && name == declaration)
+                .then(|| self.aliases.get(binding))
+                .flatten()
+        })
+    }
+
+    pub(crate) fn aliases_from_origin<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> impl Iterator<Item = (&'a str, &'a ResolvedType)> + 'a {
+        self.alias_origins
+            .iter()
+            .filter_map(move |(binding, (ns, name))| {
+                (ns == namespace)
+                    .then(|| {
+                        self.aliases
+                            .get(binding)
+                            .map(|target| (name.as_str(), target))
+                    })
+                    .flatten()
+            })
     }
 
     /// Get a reference to the type definition for `id`, if it exists and is not a stub.

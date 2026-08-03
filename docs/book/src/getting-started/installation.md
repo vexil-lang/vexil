@@ -1,36 +1,28 @@
 # Installation
 
-## Pre-built binaries
+`vexilc` is the compiler and command-line entry point. The generated target
+runtimes are installed separately by the applications that use them.
 
-Download from the [Releases page](https://github.com/vexil-lang/vexil/releases). Binaries are available for:
+## Install from crates.io
 
-- Linux x86-64
-- Linux ARM64
-- macOS Apple Silicon
-- macOS Intel
-- Windows x86-64
-
-### Shell installer (Linux/macOS)
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/vexil-lang/vexil/releases/latest/download/vexilc-installer.sh | sh
-```
-
-### PowerShell installer (Windows)
-
-```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://github.com/vexil-lang/vexil/releases/latest/download/vexilc-installer.ps1 | iex"
-```
-
-## From crates.io
+With Rust installed:
 
 ```sh
 cargo install vexilc
 ```
 
-Requires Rust 1.94 or later.
+## Use a release binary
 
-## From source
+Tagged `vexilc` releases publish archives and installers for supported Linux,
+macOS, and Windows targets on the repository's
+[Releases page](https://github.com/vexil-lang/vexil/releases).
+
+Use an asset from the exact release you selected; a local build does not prove
+that a newer release artifact has been published.
+
+## Build this checkout
+
+The workspace minimum supported Rust version is 1.94.
 
 ```sh
 git clone https://github.com/vexil-lang/vexil
@@ -38,12 +30,17 @@ cd vexil
 cargo build --release --bin vexilc
 ```
 
-The binary will be at `target/release/vexilc`.
+The binary is written under `target/release/`.
 
 ## Verify
 
 ```sh
 vexilc --version
+vexilc --help
 ```
 
-For runtime-specific installation and compatibility notes, continue to [Generating Code](./generating-code.md) and review the [limitations](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md) before using a cross-language target combination.
+Then continue to [Your First Schema](./first-schema.md).
+
+Target runtime installation belongs in [Generating Code](./generating-code.md)
+and the target-specific runtime chapters. Check the [support matrix](./support-matrix.md)
+before selecting a new cross-language combination.

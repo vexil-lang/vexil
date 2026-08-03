@@ -70,6 +70,7 @@ namespace test.trait_function_unused_local
 trait Identity {
     fn identity(input: i32) -> i32
 }
+
 message Counter {
     value @0 : i32
 }
@@ -83,6 +84,63 @@ impl Identity for Counter {
     );
     assert!(code.contains("var unused int32 = input"), "{code}");
     assert!(code.contains("_ = unused"), "{code}");
+}
+
+#[test]
+fn non_exhaustive_union_unknown_round_trips_and_is_bounded() {
+    let source = r#"
+namespace test.union_unknown
+@non_exhaustive
+union Event {
+    Unknown @0 { reason @0 : string }
+    Data @1 { value @0 : u16 }
+}
+"#;
+    let Some(output) = run_generated_go(
+        "unknown-union",
+        source,
+        r#"package union_unknown
+
+import (
+    "bytes"
+    "errors"
+    "testing"
+
+    vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
+
+func TestUnknownUnionContract(t *testing.T) {
+    encoded := []byte{0x09, 0x02, 0xde, 0xad}
+    decoded, err := UnpackEvent(vexil.NewBitReader(encoded))
+    if err != nil {
+        t.Fatal(err)
+    }
+    unknown, ok := decoded.(*Event__VexilUnknown)
+    if !ok || unknown.Discriminant != 9 || !bytes.Equal(unknown.Data, []byte{0xde, 0xad}) {
+        t.Fatalf("unexpected decoded value: %#v", decoded)
+    }
+    writer := vexil.NewBitWriter()
+    if err := PackEvent(decoded, writer); err != nil {
+        t.Fatal(err)
+    }
+    if got := writer.Finish(); !bytes.Equal(got, encoded) {
+        t.Fatalf("roundtrip mismatch: got %x want %x", got, encoded)
+    }
+
+    _, err = UnpackEvent(vexil.NewBitReader([]byte{0x09, 0x81, 0x80, 0x80, 0x20}))
+    if !errors.Is(err, vexil.ErrLimitExceeded) {
+        t.Fatalf("expected limit error, got %v", err)
+    }
+}
+"#,
+    ) else {
+        return;
+    };
+    assert!(
+        output.status.success(),
+        "generated Go unknown-union contract failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn run_generated_go(test_name: &str, source: &str, extra_go: &str) -> Option<std::process::Output> {
@@ -281,6 +339,65 @@ fn bytes_map_keys_compile() {
 #[test]
 fn transparent_alias_fields_compile() {
     check_compiles("034_type_alias");
+}
+
+#[test]
+fn concrete_type_aliases_compile() {
+    check_compiles("051_concrete_type_aliases");
+}
+
+#[test]
+fn result_containers_compile() {
+    check_compiles("005_parameterized");
+}
+
+#[test]
+fn result_discriminants_round_trip_with_native_go() {
+    let source = "namespace test.result_native\nmessage M { value @0 : result<u8, string> }";
+    let Some(output) = run_generated_go(
+        "result-native",
+        source,
+        r#"package result_native
+
+import (
+    "bytes"
+    "testing"
+
+    vexil "github.com/vexil-lang/vexil/packages/runtime-go"
+)
+
+func TestResultDiscriminants(t *testing.T) {
+    okValue := uint8(42)
+    ok := &M{Value: struct { Ok *uint8; Err *string }{Ok: &okValue}}
+    writer := vexil.NewBitWriter()
+    if err := ok.Pack(writer); err != nil { t.Fatal(err) }
+    if got, want := writer.Finish(), []byte{0x01, 0x2a}; !bytes.Equal(got, want) {
+        t.Fatalf("ok bytes: got %x want %x", got, want)
+    }
+
+    errValue := "oops"
+    failed := &M{Value: struct { Ok *uint8; Err *string }{Err: &errValue}}
+    writer = vexil.NewBitWriter()
+    if err := failed.Pack(writer); err != nil { t.Fatal(err) }
+    if got, want := writer.Finish(), []byte{0x00, 0x04, 'o', 'o', 'p', 's'}; !bytes.Equal(got, want) {
+        t.Fatalf("err bytes: got %x want %x", got, want)
+    }
+
+    var decoded M
+    if err := decoded.Unpack(vexil.NewBitReader([]byte{0x01, 0x2a})); err != nil { t.Fatal(err) }
+    if decoded.Value.Ok == nil || *decoded.Value.Ok != 42 || decoded.Value.Err != nil {
+        t.Fatalf("decoded result: %#v", decoded.Value)
+    }
+}
+"#,
+    ) else {
+        return;
+    };
+    assert!(
+        output.status.success(),
+        "generated Go result contract failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]

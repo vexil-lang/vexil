@@ -1,0 +1,34 @@
+[
+  {
+    "name": "result_ok_u8",
+    "schema": "namespace test.result\nmessage M { value @0 : result<u8, string> }",
+    "type": "M",
+    "value": { "value": { "ok": 42 } },
+    "expected_bytes": "012a",
+    "notes": "Discriminant 1 means Ok; u8 begins after byte alignment."
+  },
+  {
+    "name": "result_err_string",
+    "schema": "namespace test.result\nmessage M { value @0 : result<u8, string> }",
+    "type": "M",
+    "value": { "value": { "err": "oops" } },
+    "expected_bytes": "00046f6f7073",
+    "notes": "Discriminant 0 means Err; the string is length-prefixed after byte alignment."
+  },
+  {
+    "name": "result_ok_void",
+    "schema": "namespace test.result\nmessage M { value @0 : result<void, u8> }",
+    "type": "M",
+    "value": { "value": { "ok": null } },
+    "expected_bytes": "01",
+    "notes": "The Ok discriminant is the only bit because void has no payload."
+  },
+  {
+    "name": "result_packed_bool_adjacency",
+    "schema": "namespace test.result\nmessage M { value @0 : result<bool, u8> tail @1 : bool }",
+    "type": "M",
+    "value": { "value": { "ok": true }, "tail": true },
+    "expected_bytes": "07",
+    "notes": "LSB-first packed bits are Ok=1, payload true=1, then tail true=1."
+  }
+]

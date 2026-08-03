@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
+- Keep published Result discriminants and correct nested optional, constraint,
+  project export, runtime-import, and trait-method generation behavior.
+
 ## [0.4.3] - 2026-03-29
 
 ### Fixed
@@ -43,7 +51,6 @@
 - chore(release): bump crate versions
 
 All notable changes to this project will be documented in this file.
-
 
 
 

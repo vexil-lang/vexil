@@ -4,12 +4,16 @@ on:
   push:
     branches: [main]
     paths:
+      - '**/*.md'
       - 'docs/book/**'
+      - 'scripts/check-doc-links.py'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [main]
     paths:
+      - '**/*.md'
       - 'docs/book/**'
+      - 'scripts/check-doc-links.py'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -36,6 +40,9 @@ jobs:
 
       - name: Install mdbook
         run: cargo install mdbook --version 0.4.44 --locked
+
+      - name: Check local documentation links
+        run: python3 scripts/check-doc-links.py
 
       - name: Build book
         run: cd docs/book && mdbook build

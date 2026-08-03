@@ -158,4 +158,3 @@ impl vexil_runtime::Unpack for FileMode {
         Ok(Self(raw))
     }
 }
-
