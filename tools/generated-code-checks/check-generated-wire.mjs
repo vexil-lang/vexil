@@ -508,6 +508,43 @@ runBasic("map-i16-order", "generated_wire.json", "map_i16_canonical_order", "&M{
 runBasic("set-u16-order", "generated_wire.json", "set_u16_canonical_order", "&M{V: map[uint16]struct{}{2: {}, 1: {}}}", "M(v={2, 1})");
 runBasic("nested-optional-map-set", "generated_wire.json", "nested_optional_map_set", "func() *M { value := map[uint8]map[uint16]struct{}{2: {2: {}, 1: {}}}; return &M{V: &value} }()", "M(v={2: {2, 1}})");
 runBasic("annotations", "annotations.json", "varint_and_zigzag", "&M{Count: 300, Delta: -5}", "M(count=300, delta=-5)");
+runBasic(
+  "result-ok-u8",
+  "results.json",
+  "result_ok_u8",
+  "func() *M { value := uint8(42); result := &M{}; result.Value.Ok = &value; return result }()",
+  "M(value=(True, 42))",
+);
+runBasic(
+  "result-err-string",
+  "results.json",
+  "result_err_string",
+  "func() *M { value := \"oops\"; result := &M{}; result.Value.Err = &value; return result }()",
+  "M(value=(False, 'oops'))",
+);
+runBasic(
+  "result-ok-void",
+  "results.json",
+  "result_ok_void",
+  "func() *M { value := struct{}{}; result := &M{}; result.Value.Ok = &value; return result }()",
+  "M(value=(True, None))",
+);
+runBasic(
+  "result-packed-bool-adjacency",
+  "results.json",
+  "result_packed_bool_adjacency",
+  "func() *M { value := true; result := &M{Tail: true}; result.Value.Ok = &value; return result }()",
+  "M(value=(True, True), tail=True)",
+);
+runBasic(
+  "unknown-union-roundtrip",
+  "unions.json",
+  "non_exhaustive_union_unknown_roundtrip",
+  "&M{V: &Event__VexilUnknown{Discriminant: 9, Data: []byte{0xde, 0xad}}}",
+  "M(v=Event__VexilUnknown(9, bytes([0xde, 0xad])))",
+  "func() bool { unknown, ok := decoded.V.(*Event__VexilUnknown); return ok && unknown.Discriminant == 9 && bytes.Equal(unknown.Data, []byte{0xde, 0xad}) }()",
+  "type(decoded.v) is Event__VexilUnknown and decoded.v.discriminant == 9 and decoded.v.data == bytes([0xde, 0xad])",
+);
 runDeltaReset();
 runOptionalEvolution();
 runTraitInvariance();
