@@ -73,7 +73,7 @@ Valid element types: `fixed32`, `fixed64`, `f32`, `f64`.
 
 Examples:
 
-```vexil
+```text
 message Transform {
     position @0 : vec3<fixed64>   # deterministic simulation position
     rotation @1 : quat<fixed64>   # deterministic quaternion
@@ -88,7 +88,7 @@ Wire encoding: components written in order (x, y, z, w), no padding, no count pr
 
 Anonymous flags for compact permission or storage bits:
 
-```vexil
+```text
 message FileHeader {
     perms @0 : bits { r, w, x, hidden, system }
 }

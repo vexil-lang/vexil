@@ -2,7 +2,7 @@
 
 Unions represent a value that can be one of several typed variants. They are Vexil's tagged union / sum type.
 
-```vexil
+```text
 union Shape {
     Circle    @0 : f32          # radius
     Rectangle @1 : Dimensions
@@ -18,7 +18,7 @@ A union encodes as a discriminant tag followed by the variant payload. The tag t
 
 Like enums, unions can be marked `@non_exhaustive` to allow adding variants without breaking existing decoders:
 
-```vexil
+```text
 @non_exhaustive
 union Event {
     Click  @0 : ClickData
@@ -30,7 +30,7 @@ union Event {
 
 Variants can carry a payload type or be empty:
 
-```vexil
+```text
 union Result {
     Ok    @0 : Data
     Error @1 : string

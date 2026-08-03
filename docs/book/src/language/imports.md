@@ -4,7 +4,7 @@ Vexil supports multi-file schemas with explicit imports. This allows you to spli
 
 ## Basic imports
 
-```vexil
+```text
 import common.types
 
 namespace myapp.protocol

@@ -20,7 +20,7 @@ one contract.
 In many schema systems, a type describes a value while the codec decides how it
 is represented. Vexil makes representation part of the type contract:
 
-```vexil
+```text
 message Reading {
     channel  @0 : u4
     value    @1 : u16

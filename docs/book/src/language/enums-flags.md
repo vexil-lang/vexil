@@ -4,7 +4,7 @@
 
 Enums define a closed set of named variants with a fixed-width backing type.
 
-```vexil
+```text
 enum Direction : u8 {
     North @0
     East  @1
@@ -19,7 +19,7 @@ The backing type (`: u8`) determines the wire size. Variant ordinals (`@N`) are 
 
 By default, enums are exhaustive -- receiving an unknown variant is an error. Use `@non_exhaustive` to allow future additions:
 
-```vexil
+```text
 @non_exhaustive
 enum Status : u8 {
     Active   @0
@@ -33,7 +33,7 @@ A non-exhaustive enum can safely add variants in newer schema versions without b
 
 Flags are bitmask types where each named bit occupies a specific position in a fixed-width integer.
 
-```vexil
+```text
 flags Permissions : u8 {
     Read    @0
     Write   @1

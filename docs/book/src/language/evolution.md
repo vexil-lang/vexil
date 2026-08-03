@@ -58,7 +58,7 @@ The ignored bytes are discarded, not retained -- a v1 decoder cannot re-encode t
 When removing a field, use `@removed` to reserve its ordinal and document why
 it disappeared. You can retain the original type as historical metadata:
 
-```vexil
+```text
 message Config {
     name       @0 : string
     @removed(1, reason: "migrated to timeout_ms") : u32

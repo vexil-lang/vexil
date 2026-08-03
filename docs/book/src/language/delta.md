@@ -2,7 +2,7 @@
 
 Delta encoding is an annotation that instructs the encoder to write differences between consecutive values instead of absolute values. This is useful for time-series data where consecutive readings are close together.
 
-```vexil
+```text
 message TimeSeries {
     timestamps @0 : array<u64 @delta>
     values     @1 : array<i32 @delta @zigzag>
@@ -29,7 +29,7 @@ Delta encoding is most effective when:
 
 Delta encoding composes with other encoding annotations:
 
-```vexil
+```text
 message GpsTrack {
     timestamps @0 : array<u64 @delta @varint>    # monotonic, small deltas
     latitudes  @1 : array<i32 @delta @zigzag>    # signed deltas near zero

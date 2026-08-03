@@ -12,7 +12,7 @@ These change how a field is encoded on the wire:
 | `@zigzag` | signed integers | ZigZag encoding (small magnitudes use fewer bytes) |
 | `@delta` | numeric fields in arrays | Delta encoding (store differences, not absolute values) |
 
-```vexil
+```text
 message Packet {
     sequence @0 : u32 @varint
     offset   @1 : i32 @zigzag
@@ -27,7 +27,7 @@ message Packet {
 | `@deprecated` | fields, variants | Marks as deprecated in generated code |
 | `@removed(ordinal, reason: "...")` | declaration bodies | Reserves a removed ordinal; optional original type is history metadata |
 
-```vexil
+```text
 @non_exhaustive
 enum Status : u8 {
     Active     @0
@@ -43,7 +43,7 @@ When evolving a schema, use `@removed` to reserve the old ordinal and explain
 the removal. An optional type records the old field's type for readers of the
 schema:
 
-```vexil
+```text
 message Config {
     name       @0 : string
     @removed(1, reason: "migrated to timeout_ms") : u32

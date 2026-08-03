@@ -2,7 +2,7 @@
 
 Create `hello.vexil`:
 
-```vexil
+```text
 namespace hello
 
 message Greeting {
