@@ -42,6 +42,9 @@ jobs:
         working-directory: packages/runtime-py
         run: python -m twine check dist/*
 
+      - name: Verify distribution contents
+        run: python .github/scripts/check-python-distributions.py packages/runtime-py/dist/*
+
       - name: Verify wheel public API
         shell: bash
         working-directory: packages/runtime-py
