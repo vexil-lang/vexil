@@ -753,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-runtime"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "proptest",
  "serde",
@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "vexil-store"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "blake3",
  "smol_str",
