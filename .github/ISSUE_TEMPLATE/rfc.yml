@@ -1,7 +1,7 @@
 name: RFC (Request for Comments)
 description: Propose a language feature, encoding change, or protocol modification
 title: "[RFC]: "
-labels: ["rfc"]
+labels: ["kind: rfc", "status: needs triage"]
 body:
   - type: markdown
     attributes:
