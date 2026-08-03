@@ -1,7 +1,7 @@
 name: Feature Request
 description: Propose a new feature or improvement
 title: "[Feature]: "
-labels: ["enhancement"]
+labels: ["kind: feature", "status: needs triage"]
 body:
   - type: markdown
     attributes:
@@ -17,13 +17,15 @@ body:
       label: Area
       description: Which part of the project does this relate to?
       options:
-        - Language (syntax / semantics)
-        - Type system / encoding
-        - Compiler library (vexil-lang)
-        - CLI (vexilc)
-        - Specification / grammar
-        - Corpus / tests
-        - Other
+        - Compiler and schema checking
+        - CLI and project commands
+        - Code generation
+        - Language runtimes
+        - Language or wire specification
+        - Corpus and conformance vectors
+        - Documentation and examples
+        - CI, packaging, or release infrastructure
+        - Not sure
     validations:
       required: true
 

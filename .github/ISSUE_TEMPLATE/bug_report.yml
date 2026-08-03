@@ -1,7 +1,7 @@
 name: Bug Report
 description: Something isn't working as expected
 title: "[Bug]: "
-labels: ["bug", "needs-triage"]
+labels: ["kind: bug", "status: needs triage"]
 body:
   - type: markdown
     attributes:
@@ -14,6 +14,24 @@ body:
       label: Description
       description: A clear description of the bug.
       placeholder: When I do X, Y happens instead of Z.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which maintained surface is affected?
+      options:
+        - Compiler and schema checking
+        - CLI and project commands
+        - Code generation
+        - Language runtimes
+        - Language or wire specification
+        - Corpus and conformance vectors
+        - Documentation and examples
+        - CI, packaging, or release infrastructure
+        - Not sure
     validations:
       required: true
 
