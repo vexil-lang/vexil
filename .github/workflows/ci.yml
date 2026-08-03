@@ -409,6 +409,12 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
 
+      - name: Build local TypeScript runtime
+        working-directory: packages/runtime-ts
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
       - name: Install TypeScript example dependencies
         run: |
           npm ci --ignore-scripts --prefix examples/cross-language/node-dashboard
