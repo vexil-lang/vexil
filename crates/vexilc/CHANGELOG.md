@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+## [0.6.0] - 2026-08-03
+
 ### Added
 
 - Surface import-version mismatches and unsupported invariant diagnostics through
   single-file and project commands.
 - Generate stabilized Rust, TypeScript, Go, and Python union and Result codecs.
+
+### Changed
+
+- Align the CLI with the revival releases of the compiler, all four code
+  generators, and the schema store.
 
 ## [0.5.1] - 2026-03-29
 
