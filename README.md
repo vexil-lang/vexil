@@ -17,9 +17,9 @@ Generate Rust, TypeScript, Go, or Python codecs from the same contract. Every
 generated target carries the schema's canonical BLAKE3 hash, while `vexilc
 compat` makes compatible and breaking schema changes explicit.
 
-> Vexil is being actively revived through a focused 0.x stabilization release.
-> Start with the [support matrix](docs/book/src/getting-started/support-matrix.md)
-> and [current limitations](docs/limitations-and-gaps.md), especially for new
+> Vexil is pre-1.0. Start with the
+> [support matrix](docs/book/src/getting-started/support-matrix.md) and
+> [current limitations](docs/limitations-and-gaps.md), especially for new
 > cross-language deployments.
 
 ## See the contract
@@ -83,11 +83,13 @@ cargo run --manifest-path examples/quickstart/Cargo.toml
 The [quickstart guide](examples/quickstart/) explains the schema, generated
 source, exact bytes, and round trip.
 
-For editor diagnostics from an unsaved single-file document, configure the
-editor's language-client command as `vexilc lsp`. This first LSP surface reports
-compiler errors and warnings; it does not yet load projects or provide
-completion, navigation, hover, formatting, or a bundled editor extension. See
-the [LSP reference](docs/book/src/cli/lsp.md) for the exact capability boundary.
+Current `main` includes editor diagnostics for unsaved single-file documents,
+but this work is newer than the published `vexilc` 0.6.0 CLI. To try it, build
+`vexilc` from source and configure the editor's language-client command as
+`vexilc lsp`. This first LSP surface reports compiler errors and warnings; it
+does not yet load projects or provide completion, navigation, hover,
+formatting, or a bundled editor extension. See the
+[LSP reference](docs/book/src/cli/lsp.md) for the exact capability boundary.
 
 ## Why Vexil
 

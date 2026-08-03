@@ -11,9 +11,9 @@ one contract.
   <a href="examples/quickstart.html">Run the quickstart</a>
 </div>
 
-> **Revival release:** Vexil is preparing a focused 0.x stabilization release,
-> not a project-wide 1.0. Read the [support matrix](getting-started/support-matrix.md)
-> and [compatibility limits](getting-started/compatibility.md) before adoption.
+> **Pre-1.0:** Vexil's components version independently. Read the
+> [support matrix](getting-started/support-matrix.md) and
+> [compatibility limits](getting-started/compatibility.md) before adoption.
 
 ## The defining choice
 

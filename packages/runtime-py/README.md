@@ -7,11 +7,13 @@ dataclasses. Python 3.10 or newer is required.
 
 ## Install
 
+Install the published package from PyPI:
+
 ```sh
 python -m pip install vexil-runtime
 ```
 
-To work from a repository checkout instead:
+To test the current checkout instead, install from the repository root:
 
 ```sh
 python -m pip install ./packages/runtime-py

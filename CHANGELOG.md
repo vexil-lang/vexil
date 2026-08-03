@@ -3,11 +3,20 @@
 This file summarizes repository-wide release milestones. Detailed Rust crate
 changes remain in each crate's changelog.
 
-## Unreleased — revival release candidate
+## Unreleased
 
-Vexil is returning with a focused 0.x release. This is a stabilization release,
-not a 1.0 declaration: it closes known contract gaps, makes generated output
-safer, and refreshes the path from installation to a working schema.
+### Tooling
+
+- Add a diagnostics-first `vexilc lsp` stdio server for unsaved single-file
+  documents, with full-document synchronization and UTF-16-safe ranges. This
+  is available from current source builds and was not included in `vexilc`
+  0.6.0.
+
+## 0.6.0 release wave — 2026-08-03
+
+This focused 0.x stabilization wave is not a 1.0 declaration. It closes known
+contract gaps, makes generated output safer, and refreshes the path from
+installation to a working schema.
 
 ### Language and compiler
 
@@ -39,13 +48,10 @@ safer, and refreshes the path from installation to a working schema.
 
 ### Tooling and release preparation
 
-- Add a diagnostics-first `vexilc lsp` stdio server for unsaved single-file
-  documents, with full-document synchronization and UTF-16-safe ranges.
 - Make generated Rust, TypeScript, Go, and Python code part of enforced native
   validation rather than relying on textual goldens alone.
-- Prepare `vexil-runtime` 0.1.0 for its first PyPI release with a tested public
-  API, dual-license metadata, built-distribution checks, and a SHA-pinned
-  Trusted Publishing workflow.
+- Publish Python `vexil-runtime` 0.1.0 through Trusted Publishing with a tested
+  public API, dual-license metadata, and built-distribution checks.
 - Refresh the README and book around a tested first-run path, target support
   boundaries, release notes, and version-neutral future work.
 - Replace the accumulated example collection with a guided path: quickstart,
@@ -65,17 +71,19 @@ safer, and refreshes the path from installation to a working schema.
 - Cross-field constraints, regex constraints, invariants, RPC, a standard
   library, and other roadmap ideas have no promised release number.
 
-## Published baseline
+## Published component versions
 
-There has been no Vexil 1.0 release. The latest repository tags before this
-candidate are:
+There has been no Vexil 1.0 release. Components version independently; the
+versions published in this release wave are:
 
-| Component | Latest tag |
+| Component | Published version |
 | --- | --- |
-| `vexil-lang` and Rust/TypeScript/Go generators | `0.4.3` |
-| `vexil-runtime` and `vexilc` | `0.5.1` |
-| `vexil-store` | `0.4.2` |
+| `vexil-lang` and Rust/TypeScript/Go/Python generators | `0.5.0` |
+| Rust `vexil-runtime` and `vexilc` | `0.6.0` |
+| `vexil-store` | `0.5.0` |
+| TypeScript runtime | `0.5.2` |
 | Go runtime module | `0.1.1` |
+| Python `vexil-runtime` | `0.1.0` |
 
 Earlier root tags `v0.1.0` and `v0.2.0` established the compiler, schema hash,
 project compilation, store formats, and initial release pipeline. Component
