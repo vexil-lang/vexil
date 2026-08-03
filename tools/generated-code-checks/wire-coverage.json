@@ -10,5 +10,8 @@
   { "scenario": "truncated required primitive", "authority": "spec/wire-format.md section 12", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "recursive depth 64 success and depth 65 rejection", "authority": "spec/wire-format.md section 12 MAX_RECURSION_DEPTH", "targets": ["go", "python"], "status": "covered" },
   { "scenario": "result alternatives, void payload, and packed adjacency", "authority": "compliance/vectors/results.json", "targets": ["go", "python"], "status": "covered" },
-  { "scenario": "unknown non-exhaustive union discriminant and payload", "authority": "compliance/vectors/unions.json#non_exhaustive_union_unknown_roundtrip", "targets": ["go", "python"], "status": "covered" }
+  { "scenario": "unknown non-exhaustive union discriminant and payload", "authority": "compliance/vectors/unions.json#non_exhaustive_union_unknown_roundtrip", "targets": ["go", "python"], "status": "covered" },
+  { "scenario": "delta sequences, mixed fields, and reset", "authority": "compliance/vectors/delta.json", "targets": ["go", "python"], "status": "covered" },
+  { "scenario": "appended optional field evolution in both directions", "authority": "compliance/vectors/evolution.json#v1_encode_v2_decode_appended_optional_field,v2_encode_v1_decode_appended_optional_field", "targets": ["go", "python"], "status": "covered" },
+  { "scenario": "appended required field evolution in both directions", "authority": "compliance/vectors/evolution.json#v1_encode_v2_decode_appended_field,v2_encode_v1_decode_trailing_ignored", "targets": ["go", "python"], "status": "blocked", "reason": "VBL-042: generated v2 decoders do not yet default a missing appended required field at a clean field boundary" }
 ]

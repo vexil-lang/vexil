@@ -318,10 +318,28 @@ def parse_delta_fields(schema: str) -> list[dict]:
         if colon_idx == -1:
             next_is_delta = False
             continue
-        type_str = line[at_idx + colon_idx + 1 :].strip().rstrip(" }")
-        fields.append({"name": name, "type": type_str, "is_delta": next_is_delta})
+        type_and_annotations = line[at_idx + colon_idx + 1 :].strip().rstrip(" }")
+        parts = type_and_annotations.split()
+        type_str = parts[0]
+        is_delta = next_is_delta or "@delta" in parts[1:]
+        fields.append({"name": name, "type": type_str, "is_delta": is_delta})
         next_is_delta = False
     return fields
+
+
+def test_parse_delta_fields_supports_prefix_and_post_type_annotations() -> None:
+    schema = """message M {
+  @delta
+  first @0 : i64
+  plain @1 : string
+  second @2 : u32 @delta
+}"""
+
+    assert parse_delta_fields(schema) == [
+        {"name": "first", "type": "i64", "is_delta": True},
+        {"name": "plain", "type": "string", "is_delta": False},
+        {"name": "second", "type": "u32", "is_delta": True},
+    ]
 
 
 class TestComplianceDelta:

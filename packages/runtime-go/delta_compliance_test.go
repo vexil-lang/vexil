@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -57,16 +58,47 @@ func parseDeltaFields(schema string) []deltaFieldInfo {
 			nextIsDelta = false
 			continue
 		}
-		typStr := strings.TrimSpace(line[atIdx+colonIdx+1:])
-		typStr = strings.TrimRight(typStr, " }")
+		typeAndAnnotations := strings.TrimRight(
+			strings.TrimSpace(line[atIdx+colonIdx+1:]),
+			" }",
+		)
+		parts := strings.Fields(typeAndAnnotations)
+		if len(parts) == 0 {
+			nextIsDelta = false
+			continue
+		}
+		isDelta := nextIsDelta
+		for _, annotation := range parts[1:] {
+			if annotation == "@delta" {
+				isDelta = true
+			}
+		}
 		fields = append(fields, deltaFieldInfo{
 			Name:    name,
-			Type:    typStr,
-			IsDelta: nextIsDelta,
+			Type:    parts[0],
+			IsDelta: isDelta,
 		})
 		nextIsDelta = false
 	}
 	return fields
+}
+
+func TestParseDeltaFieldsSupportsPrefixAndPostTypeAnnotations(t *testing.T) {
+	schema := `message M {
+  @delta
+  first @0 : i64
+  plain @1 : string
+  second @2 : u32 @delta
+}`
+	want := []deltaFieldInfo{
+		{Name: "first", Type: "i64", IsDelta: true},
+		{Name: "plain", Type: "string", IsDelta: false},
+		{Name: "second", Type: "u32", IsDelta: true},
+	}
+
+	if got := parseDeltaFields(schema); !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseDeltaFields() = %#v, want %#v", got, want)
+	}
 }
 
 func TestComplianceDelta(t *testing.T) {
