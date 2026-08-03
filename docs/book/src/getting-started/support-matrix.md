@@ -7,11 +7,11 @@ specific schemas and environments your application will ship.
 | Surface | Distribution | Evidence in this repository |
 | --- | --- | --- |
 | Compiler and CLI | Rust crates and release binaries | Workspace tests, corpus, project graphs, diagnostics, and compatibility checks |
-| Editor diagnostics | `vexilc lsp` over stdio | Full-document single-file synchronization, compiler diagnostics, and UTF-16 range tests |
+| Editor diagnostics | Source build from current `main` (`vexilc lsp` over stdio) | Full-document single-file synchronization, compiler diagnostics, and UTF-16 range tests |
 | Rust generated code | `vexil-runtime` | Broad golden, native compile, Clippy, and byte-vector coverage |
 | TypeScript generated code | `@vexil-lang/runtime` | Native type-check/build/tests and broad byte-vector coverage |
 | Go generated code | versioned Go module | Native compile and execution over a representative shared wire matrix |
-| Python generated code | source install; first PyPI release candidate | Static checking and native execution over a representative shared wire matrix |
+| Python generated code | `vexil-runtime` on PyPI | Static checking and native execution over a representative shared wire matrix |
 
 The curated [cross-language example](../examples/cross-language.md) compares one
 readable fixture across all four targets. The generated-wire test suite covers a
@@ -35,11 +35,13 @@ wire bytes for the same schema and value are defects.
 ## Current boundaries
 
 - Go and Python coverage is representative, not exhaustive.
-- The language server is diagnostics-only and single-file. It does not load
-  imports or projects and does not advertise completion, navigation, hover,
-  formatting, incremental synchronization, or a bundled editor extension.
-- The Python runtime is prepared for its first PyPI release but should be
-  installed from source until the tagged Trusted Publishing workflow succeeds.
+- The language server is newer than the published `vexilc` 0.6.0 CLI and is
+  available only from a current source build. It is diagnostics-only and
+  single-file: it does not load imports or projects and does not advertise
+  completion, navigation, hover, formatting, incremental synchronization, or
+  a bundled editor extension.
+- The Python runtime is published on PyPI. Its generated-code evidence remains
+  representative rather than exhaustive.
 - No independent implementation or external security audit has been completed.
 - The compiler does not promise unimplemented constraints, RPC, transport,
   encryption profiles, reflection, or a standard library for a named version.

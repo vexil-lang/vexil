@@ -2,6 +2,10 @@
 
 Start Vexil's diagnostics language server over standard input and output.
 
+> This command is available in current source builds. It is newer than the
+> published `vexilc` 0.6.0 CLI and is not included in `cargo install vexilc`
+> yet.
+
 ## Usage
 
 ```sh

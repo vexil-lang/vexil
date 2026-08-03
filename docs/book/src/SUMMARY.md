@@ -56,7 +56,7 @@
 
 # Project Status
 
-- [Revival Release Candidate](./releases/revival.md)
+- [0.6.0 Release](./releases/v0.6.0.md)
 
 # Contributing
 

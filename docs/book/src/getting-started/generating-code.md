@@ -144,11 +144,14 @@ The versioned Go runtime module is available as `github.com/vexil-lang/vexil/pac
 
 ### Python
 
-Install the Python runtime from PyPI:
+Install the published runtime from PyPI:
 
 ```sh
 python -m pip install vexil-runtime
 ```
+
+When testing changes from this checkout, you can instead install
+`./packages/runtime-py` into an isolated environment.
 
 ```python
 from hello import Greeting
