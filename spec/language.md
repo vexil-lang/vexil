@@ -3,7 +3,7 @@
 Version: 1.0.0-draft
 Date: 2026-04-09
 Status: Draft (pre-conformance — Phase 2-4 features added, awaiting compliance verification)
-Authors: Orix Systems
+Authors: Vexil contributors
 License: CC-BY 4.0 (this document) / Apache-2.0 (reference implementation)
 
 ## Abstract
