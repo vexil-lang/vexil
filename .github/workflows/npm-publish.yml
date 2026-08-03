@@ -21,10 +21,9 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22.22.2"
+          node-version: "24.15.0"
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm install --global npm@11.19.0
       - run: npm version "${GITHUB_REF#refs/tags/vexil-runtime-ts-v}" --no-git-tag-version --allow-same-version
       - run: npm ci
       - run: npm run build
