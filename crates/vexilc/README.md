@@ -1,100 +1,49 @@
 # vexilc
 
-CLI for the [Vexil](https://github.com/vexil-lang/vexil) schema compiler.
-
-## Install
+`vexilc` is the command-line compiler for [Vexil](../../README.md).
 
 ```sh
 cargo install vexilc
+vexilc --help
 ```
 
-Pre-built binaries: [Releases page](https://github.com/vexil-lang/vexil/releases).
-
-## Commands
-
-**check** -- validate a schema and print its BLAKE3 hash:
+## Core workflow
 
 ```sh
+# Validate and identify a schema
 vexilc check schema.vexil
-```
-
-**codegen** -- generate code from a single schema:
-
-```sh
-vexilc codegen schema.vexil --output out.rs                     # Rust (default)
-vexilc codegen schema.vexil --output out.ts --target typescript  # TypeScript
-vexilc codegen schema.vexil --output out.go --target go          # Go
-```
-
-**build** -- compile a multi-file project with import resolution:
-
-```sh
-vexilc build root.vexil --include ./schemas --output ./generated
-vexilc build root.vexil --include ./schemas --output ./generated --target typescript
-```
-
-Writes one file per schema plus a `mod.rs` (Rust) or `index.ts` (TypeScript).
-
-**pack / unpack** -- convert between `.vx` text and `.vxb` binary:
-
-```sh
-vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb
-vexilc unpack data.vxb --schema s.vexil --type T
-```
-
-**format** -- pretty-print a `.vx` text file:
-
-```sh
-vexilc format data.vx --schema s.vexil --type T
-```
-
-**watch** -- auto-rebuild on schema changes:
-
-```sh
-vexilc watch root.vexil --include ./schemas --output ./generated
-```
-
-**init** -- scaffold a new schema file:
-
-```sh
-vexilc init my_schema.vexil --namespace my.namespace
-```
-
-**hash** -- print the BLAKE3 schema hash:
-
-```sh
 vexilc hash schema.vexil
-```
 
-**compat** -- compare schemas for breaking changes:
+# Generate one target
+vexilc codegen schema.vexil --target rust --output generated.rs
+vexilc codegen schema.vexil --target typescript --output generated.ts
+vexilc codegen schema.vexil --target go --output generated.go
+vexilc codegen schema.vexil --target python --output generated.py
 
-```sh
+# Resolve a multi-file project
+vexilc build root.vexil --include schemas --target rust --output generated
+
+# Classify an evolution
 vexilc compat old.vexil new.vexil
 ```
 
-**info** -- inspect a compiled schema or binary file:
+## Data and schema tools
 
 ```sh
-vexilc info file.vxb
+vexilc format value.vx --schema schema.vexil --type Message
+vexilc pack value.vx --schema schema.vexil --type Message --output value.vxb
+vexilc unpack value.vxb --schema schema.vexil --type Message
+vexilc compile schema.vexil --output schema.vxc
+vexilc info value.vxb
 ```
 
-## Flags
+`watch` rebuilds a schema or project when source files change, and `init`
+creates a starting schema. The complete options and exit-code behavior are in
+the [CLI reference](../../docs/book/src/cli/overview.md).
 
-- `--version` -- print the vexilc version
-- `--help` -- print usage information
+The CLI does not define transport or deployment behavior. Generated target
+support and current evidence are documented in the
+[support matrix](../../docs/book/src/getting-started/support-matrix.md).
 
-## Error output
-
-Errors render with source spans via [ariadne](https://crates.io/crates/ariadne):
-
-```
-Error: duplicate field name
-   --> schema.vexil:8:5
-    |
-  8 |     value: u32,
-    |     ^^^^^ field "value" was already declared on line 5
-```
-
-## License
-
-Licensed under either of [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE) at your option.
+Licensed under either [MIT](../../LICENSE-MIT) or
+[Apache-2.0](../../LICENSE-APACHE), at your option.

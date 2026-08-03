@@ -16,6 +16,11 @@ clear package boundaries, and documentation that says exactly what is verified.
   in Rust, TypeScript, Go, and Python.
 - Generated-code checks compile and execute target output, including expanded
   Go and Python compliance coverage.
+- A curated example path now moves from a first schema through evolution,
+  cross-language byte agreement, and stateful telemetry, with regeneration and
+  execution checked in CI.
+- Public documentation has been rewritten around tasks, verified support, and
+  honest 0.x boundaries.
 - The Python runtime is prepared for a first 0.1.0 PyPI publication through
   Trusted Publishing.
 

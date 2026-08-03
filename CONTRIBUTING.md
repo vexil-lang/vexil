@@ -1,87 +1,97 @@
 # Contributing to Vexil
 
-## Code of Conduct
+Focused contributions are welcome: reproducible bugs, clearer documentation,
+new conformance cases, and bounded implementation improvements all help.
 
-This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md). By participating, you agree to uphold it.
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Ways to Contribute
+## Before opening a change
 
-- **Bug reports** -- open an issue. Include the schema that triggers the bug and the error output.
-- **Feature requests** -- open an issue and explain the problem you're solving. "Add X" without context is hard to evaluate.
-- **Spec corrections** -- typos, ambiguities, or things that don't match the implementation. The language specification is in `spec/language.md`; the binary wire-format specification is in `spec/wire-format.md`.
-- **Corpus additions** -- new test cases for `corpus/valid/` or `corpus/invalid/`. Add the `.vexil` file and a line in `corpus/MANIFEST.md`.
-- **Documentation** -- typos, better examples, things that are wrong. If something confused you, it'll confuse someone else.
-- **Code** -- see below.
+- For a bug, include the smallest schema and command that reproduce it.
+- For an ambiguous or missing language rule, point to the relevant
+  [language](spec/language.md) or [wire](spec/wire-format.md) section.
+- For a language feature or wire change, open an RFC issue before implementation
+  as described in [GOVERNANCE.md](GOVERNANCE.md).
+- Keep one concern per pull request whenever practical.
 
-## Development Setup
+Good first contributions include diagnostic corrections, documentation fixes,
+focused regression tests, and corpus cases for already-defined behavior.
 
-You need Rust 1.94 or later. Install via [rustup](https://rustup.rs). To run the
-optional runtime suites, use Node.js 22.12+ for TypeScript, Go 1.22+ for Go,
-and Python 3.10+ for Python.
+## Development setup
+
+The Rust workspace requires Rust 1.94 or later. Optional target suites use
+Node.js 22.12+, Go 1.22+, and Python 3.10+.
 
 ```sh
 git clone https://github.com/vexil-lang/vexil
 cd vexil
-git config core.hooksPath .githooks   # pre-commit fmt hook
 cargo build --workspace
 ```
 
-### Run Tests
+There is no repository pre-commit hook. Formatting is an explicit command and
+CI performs the non-mutating check.
+
+## Validate your change
+
+Run the narrowest relevant test while iterating, then the Rust baseline:
 
 ```sh
+cargo fmt --all
 cargo test --workspace
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
 ```
 
-All 43 valid corpus schemas must compile and all 65 invalid schemas must produce errors. If you add a corpus file, update `corpus/MANIFEST.md`.
-
-### Lint & Format
+Run target-specific suites when their runtime, generator, documentation, or
+examples are affected:
 
 ```sh
-cargo fmt --all -- --check
-cargo clippy --workspace -- -D warnings
+cd packages/runtime-ts && npm ci && npm run build && npm test
+cd packages/runtime-go && go test ./...
+cd packages/runtime-py && python -m pytest
+python scripts/examples.py check all
+cd docs/book && mdbook build
 ```
 
-Both are enforced in CI. Run them before you push.
+The final two commands require their corresponding tools and dependencies.
 
-## Making Changes
+## Tests that express the contract
 
-1. Fork and branch:
-   - Features: `feat/description`
-   - Bug fixes: `fix/description`
-   - Spec/corpus: `spec/description` or `corpus/description`
-2. Make your changes
-3. `cargo test --workspace` -- all pass
-4. `cargo fmt --all` + `cargo clippy --workspace -- -D warnings` -- clean
-5. Push and open a PR
+- Use `corpus/valid/` and `corpus/invalid/` for language acceptance and
+  rejection. Add the schema and its `corpus/MANIFEST.md` entry together.
+- Use `compliance/vectors/` for byte-level wire contracts.
+- Use focused unit or integration tests for local compiler, CLI, generator, and
+  runtime behavior.
+- Use target golden tests for intentional generated-source changes. Inspect the
+  complete generated diff; do not update goldens simply to make a failure pass.
 
-## Submitting a Pull Request
+Avoid hard-coding corpus or test counts in documentation. They change as the
+contract grows.
 
-- **One concern per PR.** Keep parser changes, new language features, and specification updates independently reviewable whenever practical.
-- **Add tests.** For compiler changes, add corpus files where possible -- they're self-documenting and the easiest tests to maintain long-term.
-- **Update `corpus/MANIFEST.md`** if you add corpus entries -- the manifest is what the test runner reads.
-- For language features, wire-format changes, or architectural changes: follow the RFC process in [GOVERNANCE.md](./GOVERNANCE.md) before opening the implementation PR.
+## Implementation expectations
 
-## Commit Messages
+- Preserve the source-faithful AST and resolved IR boundary.
+- Do not use `unwrap()` or `expect()` in production code.
+- Explain every `unsafe` block with a `// SAFETY:` comment.
+- Give public `vexil-lang` APIs useful documentation.
+- Do not add dependencies without a demonstrated need.
+- Keep generated wire behavior stable unless an accepted contract decision says
+  otherwise.
 
-We use [Conventional Commits](https://www.conventionalcommits.org):
+## Pull requests
 
+Explain the problem, the chosen boundary, and the evidence you ran. Call out
+skipped target suites or environmental limits directly. A local test run does
+not prove hosted CI, package publication, or cross-environment compatibility.
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for commit
+subjects:
+
+```text
+feat(vexil-lang): add defined capability
+fix(vexilc): preserve the reported source span
+docs: clarify schema evolution guidance
+test(codegen): cover a generated target contract
 ```
-feat(vexil-lang): add @packed annotation support
-fix(vexilc): handle missing file argument gracefully
-docs: clarify §3.4 encoding semantics in spec
-test: add corpus case for duplicate config default
-chore: bump thiserror to 2.1
-```
 
-Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`
-
-Scope is optional but useful: `vexil-lang`, `vexilc`, `spec`, `corpus`.
-
-## Code Style
-
-- Formatted with `cargo fmt` and enforced in CI.
-- Clippy lints are errors in CI (`-D warnings`); address warnings before opening a PR.
-- No `unwrap()` or `expect()` in non-test code. Use `?` or explicit error handling. If you reach for `expect`, you're probably not thinking about the error case hard enough.
-- All `unsafe` blocks need a `// SAFETY:` comment explaining the invariant. `unsafe` is not an excuse to skip the explanation.
-- Public API items in `vexil-lang` need doc comments. If someone can't understand your API from `cargo doc`, the docs need work.
-- `#[derive(Debug, Clone, PartialEq)]` on all data types unless there's a specific reason not to. These derives enable generic patterns that would otherwise require boilerplate.
+Common types are `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, and `perf`.

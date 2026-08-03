@@ -23,7 +23,7 @@ import vexil "github.com/vexil-lang/vexil/packages/runtime-go"
 w := vexil.NewBitWriter()
 w.WriteBits(0b1010, 4)    // write 4 bits
 w.WriteU8(255)             // write a full byte
-w.WriteVarint(12345)       // write LEB128-encoded integer
+w.WriteLeb128(12345)       // write an unsigned LEB128 integer
 bytes := w.Finish()        // flush and return byte slice
 ```
 
@@ -31,9 +31,18 @@ bytes := w.Finish()        // flush and return byte slice
 
 ```go
 r := vexil.NewBitReader(bytes)
-nibble := r.ReadBits(4)    // read 4 bits
-b := r.ReadU8()            // read a full byte
-value := r.ReadVarint()    // read LEB128-encoded integer
+nibble, err := r.ReadBits(4)
+if err != nil {
+    return err
+}
+b, err := r.ReadU8()
+if err != nil {
+    return err
+}
+value, err := r.ReadLeb128(10)
+if err != nil {
+    return err
+}
 ```
 
 ## Generated code usage

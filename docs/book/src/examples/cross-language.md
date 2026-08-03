@@ -1,33 +1,23 @@
 # Cross-Language Interop
 
-The `examples/cross-language/` directory demonstrates Rust and Node.js exchanging binary data through Vexil-encoded `.vxb` files.
-
-## How it works
-
-1. A shared `.vexil` schema defines the data types
-2. The Rust program encodes data to a `.vxb` binary file
-3. The Node.js program reads the same `.vxb` file and decodes it
-4. Both sides produce and consume byte-identical wire format
-
-This example uses the Rust and TypeScript paths, whose cross-language output has
-broad shared compliance-vector coverage. Generated Go and Python are verified
-against a representative shared wire matrix, not every schema or environment.
-
-## Running
+The cross-language example asks Rust, TypeScript, Go, and Python to encode the
+same fixture from generated code. Each target decodes its payload and prints a
+machine-readable schema hash and hex value. The runner requires all four pairs
+to match.
 
 ```sh
-cd examples/cross-language
-
-# Build and run the Rust encoder
-cd rust-device
-cargo run
-
-# Run the Node.js decoder
-cd ../node-reader
-npm install
-npm start
+python scripts/examples.py check cross-language
 ```
 
-## Source
+The fixture covers sub-byte integers, an enum, floats, a string, and optional
+coordinates. It is deliberately small enough to understand and strict enough
+to fail on a real representation difference.
 
-[`examples/cross-language/`](https://github.com/vexil-lang/vexil/tree/main/examples/cross-language)
+This example is representative evidence. The maintained generated-wire matrix
+and target test suites cover more shapes, but no repository example establishes
+compatibility for every schema, runtime version, or environment.
+
+Read the guided [example README](https://github.com/vexil-lang/vexil/tree/main/examples/cross-language)
+for prerequisites, generated files, and regeneration.
+
+Next: [Live Telemetry](./live-telemetry.md).

@@ -31,6 +31,24 @@ body {
   margin-top: 3.5rem;
 }
 
+.content p,
+.content li {
+  text-wrap: pretty;
+}
+
+.content table {
+  display: table;
+  width: 100%;
+}
+
+.content th {
+  text-align: left;
+}
+
+.content tbody tr:hover {
+  background: color-mix(in srgb, var(--vexil-accent) 8%, transparent);
+}
+
 .content blockquote {
   background: var(--vexil-panel);
   border-left: 0.25rem solid var(--vexil-accent);
@@ -80,5 +98,10 @@ code {
 
   .content h1 {
     font-size: 2.45rem;
+  }
+
+  .content table {
+    display: block;
+    overflow-x: auto;
   }
 }

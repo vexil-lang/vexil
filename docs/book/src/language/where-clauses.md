@@ -59,17 +59,17 @@ message User {
 }
 ```
 
-## What's Not Supported (Yet)
+## Current boundaries
 
-- **Cross-field constraints**: `where amount <= balance` can't reference other
-  fields. This is future language work with no promised release number.
+- **Cross-field constraints**: `where amount <= balance` cannot reference other
+  fields. This is backlog work, not a promise for a named release.
 - **Regex**: `where value matches "..."` doesn't exist. Use a length check and validate regex in application code.
 - **User-defined functions**: you can only use the built-in operators and `len()`.
 
 ## Error Behavior
 
 On constraint violation:
-- Encode: returns `PackError::ConstraintViolation`, nothing written
+- Encode: returns `EncodeError::ConstraintViolation`, nothing written
 - Decode: returns `DecodeError::ConstraintViolation`, partial data discarded
 
 Invalid data never makes it onto the wire. That's the whole point.

@@ -15,7 +15,7 @@ stable_since: 2026-04-10
 
 "1.0" here names the target format generation this document specifies — it
 is not a claim about the maturity of any published crate or package. See
-[`VERSIONING.md`](../../VERSIONING.md) for how spec and implementation
+[`VERSIONING.md`](../VERSIONING.md) for how spec and implementation
 versions relate.
 
 ---

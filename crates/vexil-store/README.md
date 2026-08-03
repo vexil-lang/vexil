@@ -1,40 +1,34 @@
 # vexil-store
 
-Schema-driven file formats for [Vexil](https://github.com/vexil-lang/vexil) data.
+Schema-driven value and file formats for [Vexil](../../README.md):
 
-Encodes and decodes Vexil `Value`s against a compiled schema in two formats:
-- `.vx` -- human-readable text, inspectable and diffable
-- `.vxb` -- compact binary with a typed file header (magic bytes + schema hash)
+- `.vx` is human-readable, inspectable text;
+- `.vxb` is a binary value container with a typed header and schema hash;
+- compiled schema containers use the corresponding `.vxc`/project forms.
 
-## Usage
-
-```toml
-[dependencies]
-vexil-store = "0.2"
-vexil-lang = "0.2"
-```
+The crate validates values against a resolved `CompiledSchema` rather than
+serializing arbitrary Rust memory.
 
 ```rust
-use vexil_store::{encode, decode, Value};
+use vexil_store::{decode, encode, Value};
 
-// encode a value against a compiled schema
-let bytes = encode(&value, "SensorReading", &compiled)?;
-
-// decode it back
-let decoded = decode(&bytes, "SensorReading", &compiled)?;
-assert_eq!(value, decoded);
+let value = Value::U64(42);
+let bytes = encode(&value, "Counter", &compiled)?;
+let decoded = decode(&bytes, "Counter", &compiled)?;
+assert_eq!(decoded, value);
 ```
 
-## CLI
-
-`vexilc` wraps this crate for command-line use:
+The CLI exposes the common value workflow:
 
 ```sh
-vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
-vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
-vexilc format data.vx  --schema s.vexil --type T              # pretty-print text
+vexilc format value.vx --schema schema.vexil --type Counter
+vexilc pack value.vx --schema schema.vexil --type Counter --output value.vxb
+vexilc unpack value.vxb --schema schema.vexil --type Counter
 ```
 
-## License
+The store format does not discover schemas or authenticate input. Applications
+must obtain the expected schema through a trusted channel and apply their own
+filesystem and resource policy.
 
-Licensed under either of [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE) at your option.
+Licensed under either [MIT](../../LICENSE-MIT) or
+[Apache-2.0](../../LICENSE-APACHE), at your option.

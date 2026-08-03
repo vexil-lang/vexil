@@ -32,6 +32,8 @@ safer, and refreshes the path from installation to a working schema.
   and set ordering, inline bitfields, geometric values, newtype keys, and
   target-specific generated-code defects found by native compilation and
   execution.
+- Correct Rust delta encoders for named fields by bringing the generated
+  `Pack` trait call into scope.
 - Expand generated Go and Python execution against the shared compliance
   vectors while retaining an honest, representative-coverage claim.
 
@@ -44,6 +46,11 @@ safer, and refreshes the path from installation to a working schema.
   Trusted Publishing workflow.
 - Refresh the README and book around a tested first-run path, target support
   boundaries, release notes, and version-neutral future work.
+- Replace the accumulated example collection with a guided path: quickstart,
+  project evolution, cross-language wire agreement, and live telemetry. CI now
+  regenerates and runs that path to catch stale generated output.
+- Remove the repository's mutating pre-commit hook. Formatting remains an
+  explicit local command and a CI check instead of silently widening a commit.
 
 ### Compatibility notes
 

@@ -1,59 +1,105 @@
-# Frequently Asked Questions
+# Vexil FAQ
 
-## How is Vexil different from Protocol Buffers / Cap'n Proto / FlatBuffers?
+## What is Vexil for?
 
-Most schema languages describe the *shape* of data ("this field is a 32-bit integer"). Vexil describes the *encoding* too ("this field is 4 bits, LSB-first, packed with its neighbors"). `u4` means exactly 4 bits on the wire. `@varint` on a `u64` switches it to unsigned LEB128. If you've ever hand-rolled a bit-packed protocol because Protobuf couldn't express sub-byte fields, that's the problem Vexil solves.
+Vexil is for binary protocols where representation is part of the contract.
+Use it when bit widths, integer encodings, deterministic bytes, and explicit
+schema evolution matter enough that handwritten codecs become a liability.
 
-Other differences:
-- **Sub-byte types** -- `u1`..`u63` and `i2`..`i63` occupy exactly N bits
-- **Schema hashing** -- BLAKE3 hash of the canonical form catches sender/receiver mismatch before data corruption
-- **No self-description on the wire** -- the schema is the contract, messages are compact
-- **Delta encoding** -- `@delta` generates stateful encoder/decoder pairs for streaming use cases
+Typical fits include device telemetry, simulation state, network messages,
+compact files, and IPC between systems you control.
 
-The trade-off: language targets are Rust, TypeScript, Go, and Python, not the "15 languages" that Protobuf supports. If you need Java or C# today, Vexil isn't ready for you.
+## How is it different from Protobuf, Cap'n Proto, or FlatBuffers?
+
+Those tools make different trade-offs. Vexil's defining choice is to expose
+wire representation directly in the schema: `u4` is four bits, `@varint` is
+unsigned LEB128, and fields are packed in declared ordinal order.
+
+Vexil also emits a canonical BLAKE3 schema hash and provides an explicit
+compatibility checker. Its trade-off is ecosystem breadth: the maintained
+targets are Rust, TypeScript, Go, and Python, with different verification depth
+across them.
+
+Choose the tool whose compatibility model, target support, and operational
+constraints fit your protocol. Vexil is not intended as a universal replacement
+for established serialization systems.
 
 ## Is Vexil production-ready?
 
-The binary wire format hasn't changed since April 2026 and breaking it would require a major version bump, while the language specification remains a draft. The repository includes a 129-file conformance corpus (50 valid and 79 invalid), broad Rust and TypeScript byte-vector coverage, and a representative shared generated-wire matrix for Go and Python. BLAKE3 schema hashes help peers detect incompatible schemas before exchanging application data. Neither the wire format nor the corpus have been exercised by external implementations or independently audited yet.
+Treat Vexil as an actively maintained 0.x toolchain. The repository has a
+normative wire specification, conformance corpus, golden byte vectors, native
+runtime tests, compatibility checks, and generated-code verification. Rust and
+TypeScript have the broadest evidence; Go and Python run a representative shared
+wire matrix.
 
-This is not a claim of a final stable release or a substitute for application-level compatibility testing. The Go and Python matrix is not exhaustive for every schema or environment, and the project has not published a security audit. Review the [limitations](docs/limitations-and-gaps.md) and verify your target combination before shipping a cross-language protocol.
+Important limits remain:
 
-## What languages are supported?
+- there is no independent implementation or external security audit;
+- Go and Python coverage is not exhaustive for every schema or environment;
+- the language specification remains a draft;
+- transport, framing, discovery, and compression are application concerns.
 
-Rust and TypeScript have broad cross-language byte-vector coverage. Generated Go and Python are verified against a representative shared wire matrix, not every schema or environment; verify your application-specific schema and target combination before shipping a protocol.
+Review the [support matrix](docs/book/src/getting-started/support-matrix.md) and
+[limitations](docs/limitations-and-gaps.md), then test the exact schemas and
+target versions you intend to ship.
 
-The [`CodegenBackend`](https://docs.rs/vexil-lang/latest/vexil_lang/codegen/trait.CodegenBackend.html) trait is public. If you want to add a backend, it's a weekend project. Implement `generate()` and `generate_project()`, and the compiler handles the rest.
+## Which languages are supported?
 
-## Why not just use `#[repr(packed)]` or C bitfields?
+Vexil generates Rust, TypeScript, Go, and Python. The compiler's public
+`CodegenBackend` contract supports additional backends, but adding one requires
+target API design, runtime behavior, naming rules, golden output, native
+compilation, and wire evidence. It is a maintained compatibility surface, not a
+small adapter exercise.
 
-Hand-rolled bit packing works when you control one language on one platform. It falls apart the moment you need:
-- A TypeScript client reading the same bytes as a Rust server
-- A wire format that's identical on ARM and x86 (bitfield layout differs)
-- A schema hash to detect version mismatch before data corruption
-- Structured error reporting when a 4-bit field gets a value > 15
+## Why not use packed structs or C bitfields?
 
-Vexil gives you all of that from a single schema file.
+Packed memory layout is not a portable wire contract. Bitfield ordering,
+alignment, padding, integer representation, and language interoperability can
+vary by compiler or platform. Vexil defines these choices independently of an
+in-memory representation and generates the corresponding codecs.
 
-## Does Vexil support schema evolution?
+## How does schema evolution work?
 
-Yes, formally. [Spec §9](spec/language.md) defines schema versioning (`@version`, SemVer 2.0.0) and [§10](spec/language.md) is a normative table classifying every kind of schema change as compatible (patch/minor) or breaking (major) — adding a field, removing one, changing a type or ordinal, adding a variant to a `@non_exhaustive` enum, and so on. §11.10 walks through the actual encode/decode mechanics for each case.
+Field and variant ordinals are durable identities. The language specification
+classifies changes as compatible or breaking, and `vexilc compat` applies those
+rules to two compiled schemas:
 
-`vexilc compat old.vexil new.vexil` implements that table: it diffs two compiled schemas and reports every change, its classification, and the suggested version bump (exit code 0 if compatible, 1 if breaking). Reusing an ordinal after `@removed` is a compile-time error, not just a convention. This repository's own CI runs `vexilc compat` against every PR that touches a versioned `.vexil` file and fails the build if a breaking change isn't paired with at least the required `@version` bump.
+```sh
+vexilc compat old.vexil new.vexil
+```
 
-The wire format itself also tolerates trailing bytes, so an older decoder can read messages with fields appended by a newer schema without any of the above — that's forward compatibility for free, on top of the formal rules.
+Append-only fields, typed tombstones, non-exhaustive variants, version
+constraints, and length-bounded union payloads provide the mechanics. They do
+not remove the need to test rolling upgrades and application behavior.
 
-## Can I use Vexil for network protocols? File formats? IPC?
+Follow the [project-evolution example](examples/project-evolution/) for a
+runnable compatible and breaking comparison.
 
-Yes to all three. The wire encoding is deterministic and compact with no metadata. It works anywhere you control both ends and want minimal overhead. The `vexil-store` crate adds `.vxb` binary files for persisting schema-typed data. We use it for WebSocket streaming in the system-monitor example and for content-addressed storage in the Orix project.
+## Does Vexil define a network protocol?
 
-## What is `@delta` encoding?
+No. Vexil defines typed bytes. Your application still owns transport, message
+framing, authentication, retries, discovery, compression, and resource policy.
+The generated schema hash can be used in a handshake, but it is not a complete
+negotiation or security protocol.
 
-`@delta` on a message generates stateful encoder/decoder pairs. Numeric fields transmit as deltas from the previous frame. Non-numeric fields (strings, arrays, enums) go full-size each frame.
+For schema-driven files, `vexil-store` provides human-readable `.vx` values and
+binary `.vxb` containers with a schema-aware header.
 
-In the system-monitor example, a full `SystemSnapshot` is ~42 bytes. Steady-state delta frames drop to ~25-30 bytes because most deltas are small or zero. It's not compression. It's just not re-transmitting things that didn't change.
+## What does `@delta` do?
 
-## What's the deal with fixed-point types?
+`@delta` generates a stateful encoder and decoder. Numeric fields are sent as
+deltas from the previous frame; other fields keep their normal encoding. Both
+sides must share state, and reconnecting requires a reset followed by a new base
+frame.
 
-`fixed32` is Q16.16. That's 16 bits integer, 16 bits fraction, 32 bits total. `fixed64` is Q32.32. The point is deterministic arithmetic: the same operation gives the same result on every CPU and compiler. IEEE 754 floats don't do that. Rounding modes, denormal handling, and FPU quirks can produce different results on ARM vs x86.
+Delta encoding is not compression. See the [live-telemetry example](examples/live-telemetry/)
+for the full Rust-to-browser path.
 
-If you're building a simulation where every node needs to compute identical results, or a content-addressed system where the same input must produce the same hash, fixed-point is what you want. If you're rendering graphics and don't care about determinism, use `f32` instead.
+## What are the fixed-point types?
+
+`fixed32` uses a Q16.16 representation and `fixed64` uses Q32.32. Their wire
+representation is an explicitly sized signed integer, which is useful when a
+protocol must avoid an implementation-defined floating-point representation.
+
+Vexil defines the stored representation and generated conversions. Applications
+remain responsible for arithmetic policy, overflow handling, and rounding.

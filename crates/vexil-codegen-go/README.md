@@ -1,48 +1,28 @@
 # vexil-codegen-go
 
-Go code generation backend for the [Vexil](https://github.com/vexil-lang/vexil) schema compiler.
-
-Takes a `CompiledSchema` from [`vexil-lang`](https://crates.io/crates/vexil-lang) and emits Go structs, enums, and encode/decode functions. Generated code depends on [`github.com/vexil-lang/vexil/packages/runtime-go`](https://github.com/vexil-lang/vexil/tree/main/packages/runtime-go) for bit-level I/O.
-
-## Single file
+Go backend for the [Vexil](../../README.md) compiler. It emits Go declarations,
+pack/unpack methods, schema constants, and stateful delta codecs that use the
+versioned Go runtime module.
 
 ```rust
-use vexil_lang::compile;
-use vexil_codegen_go::generate;
-
-let result = compile(source);
-let compiled = result.compiled.expect("no errors");
-let code: String = generate(&compiled)?;
-```
-
-## Multi-file project
-
-```rust
-use vexil_lang::{compile_project, codegen::CodegenBackend};
 use vexil_codegen_go::GoBackend;
+use vexil_lang::codegen::CodegenBackend;
 
-let project = compile_project(&root_source, &root_path, &loader)?;
-let files: Vec<(PathBuf, String)> = GoBackend.generate_project(&project)?;
-// one .go file per schema + package-level organization
+let source = GoBackend.generate(&compiled)?;
+let files = GoBackend.generate_project(&project)?;
 ```
-
-## What gets generated
-
-For each message: a Go struct with `Pack`/`Unpack` methods. For enums: typed constants with `iota`. For flags: a named integer type with bitwise helpers. For unions: an interface with per-variant concrete types. For `@delta` messages: a stateful encoder/decoder pair that transmits field-level deltas.
-
-## CLI usage
 
 ```sh
-vexilc codegen schema.vexil --output out.go --target go
-vexilc build root.vexil --include ./schemas --output ./generated --target go
+vexilc codegen schema.vexil --target go --output generated.go
+vexilc build root.vexil --include schemas --target go --output generated
 ```
 
-## Wire compatibility
+Project generation owns Go packages, imports, and file layout. Generated Go and
+the runtime execute a representative shared wire matrix; that evidence is not
+exhaustive for every schema or deployment environment.
 
-Generated Go and its runtime are exercised together against a representative
-shared [wire matrix](../../tools/generated-code-checks/check-generated-wire.mjs).
-This is not exhaustive for every schema or environment.
+See the [Go runtime guide](../../docs/book/src/runtime/go.md) and
+[support matrix](../../docs/book/src/getting-started/support-matrix.md).
 
-## License
-
-Licensed under either of [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE) at your option.
+Licensed under either [MIT](../../LICENSE-MIT) or
+[Apache-2.0](../../LICENSE-APACHE), at your option.

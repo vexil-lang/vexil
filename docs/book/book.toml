@@ -1,7 +1,7 @@
 [book]
 title = "Vexil Documentation"
-description = "A typed schema definition language with first-class encoding semantics"
-authors = ["Orix Systems contributors"]
+description = "Typed schemas and deterministic binary wire contracts"
+authors = ["Vexil contributors"]
 language = "en"
 src = "src"
 

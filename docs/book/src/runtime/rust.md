@@ -21,7 +21,7 @@ use vexil_runtime::BitWriter;
 let mut w = BitWriter::new();
 w.write_bits(0b1010, 4);  // write 4 bits
 w.write_u8(255);           // write a full byte
-w.write_varint(12345);     // write LEB128-encoded integer
+w.write_leb128(12345);     // write an unsigned LEB128 integer
 let bytes = w.finish();    // flush and return the byte buffer
 ```
 
@@ -35,7 +35,7 @@ use vexil_runtime::BitReader;
 let mut r = BitReader::new(&bytes);
 let nibble = r.read_bits(4)?;   // read 4 bits
 let byte = r.read_u8()?;        // read a full byte
-let value = r.read_varint()?;   // read LEB128-encoded integer
+let value = r.read_leb128(10)?; // read an unsigned LEB128 integer
 ```
 
 ### Pack and Unpack traits

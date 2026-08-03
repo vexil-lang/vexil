@@ -1,31 +1,28 @@
 <h1 align="center">Vexil</h1>
-<p align="center"><em>Typed schema language. The encoding is part of the type.</em></p>
+<p align="center"><em>Exact binary protocols, defined as types.</em></p>
 
 <p align="center">
-  <a href="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml">
-    <img src="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml/badge.svg" alt="CI">
-  </a>
-  <a href="https://crates.io/crates/vexilc">
-    <img src="https://img.shields.io/crates/v/vexilc" alt="vexilc on crates.io">
-  </a>
-  <a href="https://crates.io/crates/vexil-lang">
-    <img src="https://img.shields.io/crates/v/vexil-lang?label=vexil-lang" alt="vexil-lang on crates.io">
-  </a>
+  <a href="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml"><img src="https://github.com/vexil-lang/vexil/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://vexil-lang.github.io/vexil/"><img src="https://img.shields.io/badge/docs-mdBook-0f766e" alt="Documentation"></a>
+  <a href="https://crates.io/crates/vexilc"><img src="https://img.shields.io/crates/v/vexilc" alt="vexilc on crates.io"></a>
   <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0">
-  <img src="https://img.shields.io/badge/rust-1.94%2B-orange" alt="Rust 1.94+">
 </p>
 
----
+Vexil is a schema language and toolchain for compact, deterministic binary
+protocols. A schema defines both the data model and its representation on the
+wire: `u4` is four bits, `@varint` selects unsigned LEB128, and fields are packed
+LSB-first without platform-dependent padding.
 
-Vexil describes both the shape *and* the wire encoding of data crossing system boundaries. `u4` is 4 bits, no negotiation. `@varint` on a `u64` makes it unsigned LEB128. The schema is the wire contract, not a hint about the wire format.
+Generate Rust, TypeScript, Go, or Python codecs from the same contract. Every
+generated target carries the schema's canonical BLAKE3 hash, while `vexilc
+compat` makes compatible and breaking schema changes explicit.
 
-> **Project revival:** the next release is a focused 0.x stabilization release,
-> not Vexil 1.0. See the [candidate release notes](docs/book/src/releases/revival.md)
-> and [current support matrix](docs/book/src/getting-started/support-matrix.md).
+> Vexil is being actively revived through a focused 0.x stabilization release.
+> Start with the [support matrix](docs/book/src/getting-started/support-matrix.md)
+> and [current limitations](docs/limitations-and-gaps.md), especially for new
+> cross-language deployments.
 
-Each schema produces a deterministic BLAKE3 hash embedded in generated code at compile time. If two parties compile against different schemas, the mismatch is detectable before data is read. This helps make incompatible schema changes explicit instead of relying on environment-specific behavior.
-
-## Quick look
+## See the contract
 
 ```vexil
 namespace sensor.packet
@@ -34,302 +31,126 @@ enum SensorKind : u8 {
     Temperature @0
     Humidity    @1
     Pressure    @2
-    Light       @3
 }
 
 message SensorReading {
-    channel  @0 : u4              # 4 bits, values 0..15
+    channel  @0 : u4
     kind     @1 : SensorKind
     value    @2 : u16
-    sequence @3 : u32 @varint     # variable-length encoding
-    delta_ts @4 : i32 @zigzag    # signed, ZigZag-encoded
+    sequence @3 : u32 @varint
+    delta_ts @4 : i32 @zigzag
 }
 ```
 
-Generated Rust:
+That schema fixes details which are often left to handwritten codecs:
 
-```rust
-use vexil_runtime::{BitWriter, BitReader, Pack, Unpack};
+- `channel` occupies exactly four bits;
+- `kind` uses its declared ordinal;
+- `sequence` uses unsigned LEB128;
+- `delta_ts` uses ZigZag followed by LEB128;
+- the canonical schema hash is independent of comments and formatting.
 
-let reading = SensorReading {
-    channel: 0, kind: SensorKind::Temperature,
-    value: 2350, sequence: 1, delta_ts: -50,
-};
+The wire is deliberately not self-describing. Both peers compile the schema
+they intend to use and can compare its hash before exchanging application data.
 
-let mut w = BitWriter::new();
-reading.pack(&mut w).unwrap();
-let bytes = w.finish();   // compact, bit-packed
+## Start in five minutes
 
-let mut r = BitReader::new(&bytes);
-let decoded = SensorReading::unpack(&mut r).unwrap();
-assert_eq!(decoded.value, 2350);
-```
-
-The same schema generates TypeScript that produces identical bytes:
-
-```typescript
-import { BitWriter, BitReader } from '@vexil-lang/runtime';
-
-const w = new BitWriter();
-encodeSensorReading({
-  channel: 0, kind: 'Temperature',
-  value: 2350, sequence: 1, delta_ts: -50,
-}, w);
-const bytes = w.finish();  // identical bytes as Rust
-
-const r = new BitReader(bytes);
-const decoded = decodeSensorReading(r);
-// decoded.value === 2350
-```
-
-## What Vexil does
-
-- `u1`..`u64` and `i2`..`i64` -- exactly N bits on the wire, LSB-first
-- `@varint` (unsigned LEB128), `@zigzag` (ZigZag + LEB128), `@delta` (per-field delta from previous) -- declare encoding in the schema
-- **Ten declaration kinds**: `message`, `enum`, `flags`, `union`, `newtype`, `config`, `type` (alias), `const`, `trait`, `impl`
-- **Fixed-point types**: `fixed32` (Q16.16), `fixed64` (Q32.32) -- deterministic fractional arithmetic, no IEEE 754 surprises
-- **Geometric types**: `vec2<T>`, `vec3<T>`, `vec4<T>`, `quat<T>`, `mat3<T>`, `mat4<T>` -- T can be fixed32, fixed64, f32, or f64
-- **Fixed-size arrays**: `array<T, N>` -- no length prefix on wire, size is part of the schema
-- **Set type**: `set<T>` -- sorted on encode, duplicates silently dropped
-- **Inline bitfields**: `bits { a, b, c }` -- anonymous flags, exactly N bits
-- **Type aliases**: `type UserId = u64` or `type Labels = array<string>` -- same wire encoding, better names
-- **Compile-time constants**: `const MaxSize : u32 = 1024` -- usable in array sizes and where clauses
-- **Where clauses**: `field @0 : u32 where value > 0` -- validated on encode and decode, invalid data never touches the wire
-- **Traits and impl**: structural fields and portable generated instance methods, with zero wire impact
-- **Reserved invariants**: parsed for precise diagnostics and rejected until portable encode/decode enforcement is specified
-- **Type param bounds**: `type Sorted<T: Ord> = array<T>` -- constrain generic types
-- BLAKE3 hash of the canonical schema form embedded as a compile-time constant in generated code
-- Rust and TypeScript have broad byte-vector coverage; generated Go and Python are verified against a representative shared wire matrix, not every schema or environment.
-- Same data always produces the same bytes -- no maps with random iteration order, no padding variance
-- Every invalid input yields a distinct error with file, line, column, and a description
-- 129-file conformance corpus (50 valid, 79 invalid) that any conformant implementation must pass
-
-## Fixed-Point Types
-
-`fixed32` is Q16.16 (32 bits, ~0.000015 precision). `fixed64` is Q32.32 (64 bits, ~9 decimal digits). Unlike IEEE 754 floats, the same operation produces the same result on every platform. We use this in the Orix ecosystem for deterministic simulation. Every tick computes identically regardless of CPU or compiler.
-
-```vexil
-message Position {
-    latitude  @0 : fixed32
-    longitude @1 : fixed32
-    altitude  @2 : fixed64
-}
-```
-
-## Geometric Types
-
-These are built-in parameterized types for graphics and simulation code. Wire encoding: components in order (x, y, z, w), no padding, no count prefix. You can mix deterministic (fixed-point) and standard (float) in the same message:
-
-```vexil
-message Transform {
-    position    @0 : vec3<fixed64>   # deterministic simulation
-    gl_pos      @1 : vec3<f32>       # GPU-ready
-    rotation    @2 : quat<fixed64>
-    model       @3 : mat4<f32>       # column-major 4x4
-}
-```
-
-## Fixed-Size Arrays and Sets
-
-`array<T, N>` has no count prefix. Just N elements on the wire. `set<T>` is sorted on encode so the wire is deterministic regardless of insertion order:
-
-```vexil
-const Vertices = 256
-
-message Mesh {
-    positions @0 : array<vec3<f32>, Vertices>
-    indices   @1 : array<u16, 512>
-    tags      @2 : set<string>      # deduplicated, sorted
-}
-```
-
-## Inline Bitfields
-
-```vexil
-message FileHeader {
-    version @0 : u8
-    perms   @1 : bits { r, w, x, hidden, system }
-}
-```
-
-Five flags, five bits on the wire. That's it.
-
-## Type Aliases and Constants
-
-Aliases are transparent. `type UserId = u64` means `UserId` and `u64` produce identical bytes. Constants can reference each other with simple arithmetic:
-
-```vexil
-type UserId = u64
-const TicksPerSec : u32 = 64
-const TickMs : u32 = 1000 / TicksPerSec   # evaluates to 15
-
-message Frame {
-    sender @0 : UserId
-    ts     @1 : u32
-}
-```
-
-## Where Clauses
-
-Constraints are checked on encode and decode. Invalid data never hits the wire:
-
-```vexil
-message UserProfile {
-    age      @0 : u8  where value in 0..150
-    score    @1 : i32 where value >= 0 && value <= 100
-    username @2 : string where len(value) in 3..32
-}
-```
-
-Cross-field constraints (`where amount <= balance`) and regex matching are
-future language work with no promised release number.
-
-## Comparison
-
-| | Vexil | Protobuf | Cap'n Proto | FlatBuffers |
-|---|:---:|:---:|:---:|:---:|
-| Sub-byte types (`u1`..`u63`) | Yes | No | No | No |
-| Encoding annotations in schema | Yes | No | No | No |
-| Schema hash (mismatch detection) | BLAKE3 | No | No | No |
-| LSB-first bit packing | Yes | No | No | No |
-| Self-describing wire format | No | Optional | No | Optional |
-| Zero-copy decode | Yes | No | Yes | Yes |
-| Deterministic encoding | Yes | No (maps) | No (padding) | No (vtables) |
-| Schema evolution | Yes | Yes | Yes | Yes |
-| Language targets | Rust, TS, Go, Python | Many | Many | Many |
-
-## Install
+Install the compiler:
 
 ```sh
 cargo install vexilc
 ```
 
-Pre-built binaries for Linux, Windows, and macOS are on the [Releases page](https://github.com/vexil-lang/vexil/releases).
-
-To build from source -- requires Rust 1.94 or later:
+Or build this checkout with Rust 1.94 or later:
 
 ```sh
-git clone https://github.com/vexil-lang/vexil
-cd vexil
 cargo build --release --bin vexilc
-# binary ends up at target/release/vexilc
 ```
 
-## Usage
-
-### CLI
+Check a schema and generate a Rust codec:
 
 ```sh
-# Check a schema -- prints BLAKE3 hash on success
-vexilc check schema.vexil
-
-# Generate code
-vexilc codegen schema.vexil --output out.rs                    # Rust (default)
-vexilc codegen schema.vexil --output out.ts --target typescript # TypeScript
-vexilc codegen schema.vexil --output out.go --target go         # Go
-vexilc codegen schema.vexil --output out.py --target python      # Python
-
-# Compile a multi-file project
-vexilc build root.vexil --include ./schemas --output ./generated
-
-# Auto-rebuild on schema changes
-vexilc watch root.vexil --include ./schemas --output ./generated
-
-# Print BLAKE3 schema hash
-vexilc hash schema.vexil
-
-# Breaking change detection
-vexilc compat old.vexil new.vexil
-
-# Schema-driven data tools
-vexilc pack  data.vx  --schema s.vexil --type T -o data.vxb  # text -> binary
-vexilc unpack data.vxb --schema s.vexil --type T              # binary -> text
+vexilc check telemetry.vexil
+vexilc codegen telemetry.vexil --target rust --output telemetry.rs
 ```
 
-Errors include source spans:
+For a runnable first project:
 
-```
-Error: duplicate field name
-   --> schema.vexil:8:5
-    |
-  8 |     value: u32,
-    |     ^^^^^ field "value" was already declared on line 5
+```sh
+cargo run --manifest-path examples/quickstart/Cargo.toml
 ```
 
-### Library
+The [quickstart guide](examples/quickstart/) explains the schema, generated
+source, exact bytes, and round trip.
 
-```toml
-[dependencies]
-vexil-lang = "0.4"
-```
+## Why Vexil
 
-```rust
-use vexil_lang::{compile, Severity};
+### Wire choices are reviewable
 
-let result = compile(source);
-if result.diagnostics.iter().any(|d| d.severity == Severity::Error) {
-    // handle errors
-}
-if let Some(compiled) = result.compiled {
-    let hash = vexil_lang::canonical::schema_hash(&compiled);
-    // pass compiled to a CodegenBackend
-}
-```
+Bit widths, field ordinals, integer encodings, collection bounds, and evolution
+annotations live in the schema instead of being scattered across encoders.
 
-The `compile()` function returns a result with diagnostics (warnings and errors) and an optional compiled schema. Pass the compiled schema to any `CodegenBackend` implementation. See the `CodegenBackend` trait docs for the details.
+### Output is deterministic
 
-## Repository layout
+Canonical map and set ordering, defined scalar encodings, and padding rules make
+the same value produce the same bytes for a given schema.
 
-```
-spec/
-  language.md            # Language specification (normative, S1-S14)
-  wire-format.md         # Binary wire-format specification (normative)
-  grammar.peg             # Formal PEG grammar
-corpus/
-  valid/                 # 50 schemas -- a conformant impl must accept all
-  invalid/               # 76 schemas -- a conformant impl must reject all
-  projects/              # Multi-file integration tests
-compliance/
-  vectors/               # Golden byte vectors -- cross-implementation contract
-crates/
-  vexil-lang/            # Compiler: lexer, parser, IR, type checker, canonical hash
-  vexil-codegen-rust/    # Rust code generation
-  vexil-codegen-ts/      # TypeScript code generation
-  vexil-codegen-go/      # Go code generation
-  vexil-codegen-py/      # Python code generation
-  vexil-runtime/         # Rust runtime: BitWriter/BitReader, Pack/Unpack, LEB128, ZigZag
-  vexilc/                # CLI -- check, codegen, build, watch, hash, compat, pack, unpack
-  vexil-store/           # .vx text and .vxb binary file formats
-  vexil-bench/           # Encode/decode benchmarks (Criterion)
-packages/
-  runtime-ts/            # @vexil-lang/runtime -- TypeScript BitWriter/BitReader (npm)
-  runtime-go/            # github.com/vexil-lang/vexil/packages/runtime-go -- Go runtime
-  runtime-py/            # vexil-runtime -- Python BitWriter/BitReader (0.1.0 release candidate)
-examples/
-  sensor-packet/         # Sub-byte types, encoding annotations, compact enums
-  command-protocol/      # Unions, flags, limits -- RPC-style protocol
-  multi-file-project/    # Cross-file imports and project compilation
-  cross-language/        # Rust <-> Node.js interop via binary files
-  system-monitor/        # Live dashboard: Rust -> browser via @delta WebSocket
+### Drift is visible
+
+Generated schema hashes identify the exact contract. `vexilc compat` classifies
+schema changes and reports the required SemVer level before a protocol ships.
+
+## Choose a generated target
+
+| Target | Runtime | Current evidence |
+| --- | --- | --- |
+| Rust | `vexil-runtime` | Broad compile, golden, Clippy, and byte-vector coverage |
+| TypeScript | `@vexil-lang/runtime` | Native build/tests and broad byte-vector coverage |
+| Go | `packages/runtime-go` | Native execution over a representative shared wire matrix |
+| Python | `packages/runtime-py` | Static and native execution over a representative shared wire matrix |
+
+“Representative” is intentional. Go and Python do not yet have the same breadth
+of generated-code evidence as Rust and TypeScript. Verify the schemas and target
+combinations used by your application.
+
+Read [Generating Code](docs/book/src/getting-started/generating-code.md) for
+target-specific commands and [Compatibility and Limitations](docs/book/src/getting-started/compatibility.md)
+for the adoption boundary.
+
+## Follow the examples
+
+1. [Quickstart](examples/quickstart/) — check, generate, encode, and decode one schema.
+2. [Project evolution](examples/project-evolution/) — imports and compatible versus breaking changes.
+3. [Cross-language interop](examples/cross-language/) — one fixture encoded by four generated targets.
+4. [Live telemetry](examples/live-telemetry/) — stateful delta frames from Rust to a browser.
+
+Run the complete checked path with:
+
+```sh
+python scripts/examples.py check all
 ```
 
 ## Documentation
 
-- [Documentation book](docs/book/src/SUMMARY.md) -- installation, language guide, CLI reference, runtimes, and examples
-- [Language Specification](spec/language.md)
-- [Wire-Format Specification](spec/wire-format.md)
+- [Documentation book](https://vexil-lang.github.io/vexil/)
+- [Language specification](spec/language.md)
+- [Binary wire-format specification](spec/wire-format.md)
+- [CLI reference](docs/book/src/cli/overview.md)
+- [Support matrix](docs/book/src/getting-started/support-matrix.md)
 - [FAQ](FAQ.md)
 - [Changelog](CHANGELOG.md)
-- [Support matrix](docs/book/src/getting-started/support-matrix.md)
-- [Examples](examples/)
-- [Limitations and Gaps](docs/limitations-and-gaps.md)
-- [**vexmon**](https://github.com/vexil-lang/vexmon) -- real-time system monitor using Vexil over WebSocket (~300 B/s for full telemetry)
-- API reference: [vexil-lang](https://docs.rs/vexil-lang) | [vexil-runtime](https://docs.rs/vexil-runtime) | [vexil-codegen-rust](https://docs.rs/vexil-codegen-rust) | [vexil-codegen-ts](https://docs.rs/vexil-codegen-ts) | [vexil-codegen-go](https://docs.rs/vexil-codegen-go) | [vexil-store](https://docs.rs/vexil-store) (`vexil-codegen-py` isn't published to crates.io yet, so no docs.rs page exists for it)
+
+The specifications are normative. Guides and examples explain the contract but
+do not replace it.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). Language changes and protocol modifications go through the RFC process in [GOVERNANCE.md](./GOVERNANCE.md).
+Bug reports, focused documentation corrections, corpus cases, and code changes
+are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull
+request. Language or wire changes follow the lightweight RFC process in
+[GOVERNANCE.md](GOVERNANCE.md).
 
 ## License
 
-Licensed under either of [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE) at your option.
+Licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your
+option.

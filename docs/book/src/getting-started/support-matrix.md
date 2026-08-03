@@ -1,41 +1,44 @@
-# Support Matrix
+# Choose a Target
 
-Vexil is a multi-target 0.x project. The language and wire specifications are
-the contract; each target has a different depth of native verification today.
+All four generators consume the same compiled schema, but their native evidence
+is not identical. Choose a target based on what is verified today, then test the
+specific schemas and environments your application will ship.
 
-| Surface | Availability | Verification level |
+| Surface | Distribution | Evidence in this repository |
 | --- | --- | --- |
-| Compiler and CLI | Rust crates and release binaries | Full workspace tests, corpus, project graphs, compatibility checks |
-| Rust generated code | `vexil-runtime` | Broad corpus, golden, compile, Clippy, and byte-vector coverage |
-| TypeScript generated code | `@vexil-lang/runtime` | Native TypeScript build and broad byte-vector coverage |
-| Go generated code | Versioned Go module | Native compile/execute tests over a representative shared wire matrix |
-| Python generated code | Source install; 0.1.0 PyPI candidate | Pyright plus native execution over a representative shared wire matrix |
+| Compiler and CLI | Rust crates and release binaries | Workspace tests, corpus, project graphs, diagnostics, and compatibility checks |
+| Rust generated code | `vexil-runtime` | Broad golden, native compile, Clippy, and byte-vector coverage |
+| TypeScript generated code | `@vexil-lang/runtime` | Native type-check/build/tests and broad byte-vector coverage |
+| Go generated code | versioned Go module | Native compile and execution over a representative shared wire matrix |
+| Python generated code | source install; first PyPI release candidate | Static checking and native execution over a representative shared wire matrix |
 
-“Representative” is deliberate: Go and Python exercise important primitives,
-collections, evolution, optionals, Result values, and unions, but not every
-schema shape or deployment environment. Validate your own schemas in the
-target runtimes you ship.
+The curated [cross-language example](../examples/cross-language.md) compares one
+readable fixture across all four targets. The generated-wire test suite covers a
+larger representative matrix.
 
-## Stable contract points
+## Shared contract points
 
-- Fields are packed LSB-first; multi-byte scalars are little-endian.
-- Unsigned varints use LEB128 and signed varints use ZigZag plus LEB128.
-- `result<T, E>` uses discriminant `0` for `Err` and `1` for `Ok`.
-- Unknown `@non_exhaustive` union values retain both their discriminant and
-  bounded payload bytes in every generated target.
-- Canonical schema hashes use BLAKE3 and are independent of comments and
-  formatting.
+Every maintained target is expected to agree on:
 
-## Deliberate boundaries
+- LSB-first bit packing and little-endian multi-byte scalars;
+- LEB128 and ZigZag integer encodings;
+- field and variant ordinals;
+- canonical collection ordering;
+- Result discriminants (`0 = Err`, `1 = Ok`);
+- bounded preservation of unknown non-exhaustive union variants;
+- canonical BLAKE3 schema hashes.
 
-- The wire is not self-describing. Both sides need the schema.
-- Streaming decode, compression, schema discovery, and transport behavior are
-  application or profile concerns.
-- Message `invariant` syntax is reserved but rejected until portable semantics
-  are specified and implemented.
-- Cross-field constraints, regex constraints, RPC, encryption profiles, and a
-  standard library are future decisions, not promises attached to a version.
+Differences in generated language API shape are target-specific. Differences in
+wire bytes for the same schema and value are defects.
+
+## Current boundaries
+
+- Go and Python coverage is representative, not exhaustive.
+- The Python runtime is prepared for its first PyPI release but should be
+  installed from source until the tagged Trusted Publishing workflow succeeds.
 - No independent implementation or external security audit has been completed.
+- The compiler does not promise unimplemented constraints, RPC, transport,
+  encryption profiles, reflection, or a standard library for a named version.
 
-For details and mitigations, read [Compatibility and Limitations](./compatibility.md)
-and the repository's [limitations document](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md).
+Continue with [Compatibility and Limits](./compatibility.md) before deploying a
+new protocol.

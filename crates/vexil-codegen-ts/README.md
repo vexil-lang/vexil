@@ -1,45 +1,28 @@
 # vexil-codegen-ts
 
-TypeScript code generation backend for the [Vexil](https://github.com/vexil-lang/vexil) schema compiler.
-
-Takes a `CompiledSchema` from [`vexil-lang`](https://crates.io/crates/vexil-lang) and emits TypeScript interfaces, encode functions, and decode functions. Generated code depends on [`@vexil-lang/runtime`](https://www.npmjs.com/package/@vexil-lang/runtime) for bit-level I/O.
-
-## Single file
+TypeScript backend for the [Vexil](../../README.md) compiler. It emits typed
+interfaces, encode/decode functions, schema constants, and stateful delta codecs
+that use `@vexil-lang/runtime`.
 
 ```rust
-use vexil_lang::compile;
-use vexil_codegen_ts::generate;
-
-let result = compile(source);
-let compiled = result.compiled.expect("no errors");
-let code: String = generate(&compiled)?;
-```
-
-## Multi-file project
-
-```rust
-use vexil_lang::{compile_project, codegen::CodegenBackend};
 use vexil_codegen_ts::TypeScriptBackend;
+use vexil_lang::codegen::CodegenBackend;
 
-let project = compile_project(&root_source, &root_path, &loader)?;
-let files: Vec<(PathBuf, String)> = TypeScriptBackend.generate_project(&project)?;
-// one .ts file per schema + barrel index.ts files for namespace directories
+let source = TypeScriptBackend.generate(&compiled)?;
+let files = TypeScriptBackend.generate_project(&project)?;
 ```
 
-## What gets generated
+```sh
+vexilc codegen schema.vexil --target typescript --output generated.ts
+vexilc build root.vexil --include schemas --target typescript --output generated
+```
 
-For each message: a TypeScript interface, an `encode*` function, and a `decode*` function. Enums become string literal union types. Flags become numeric constants with bitwise helpers. Unions become discriminated unions. For `@delta` messages: a stateful encoder/decoder class pair.
+Project generation creates relative imports and namespace barrel files while
+keeping each schema's hash and version distinct. Generated TypeScript is checked
+with native TypeScript tooling and broad byte-vector coverage against Rust.
 
-Cross-file imports use relative paths. Namespace directories get barrel
-`index.ts` files that expose each child as a namespace object named
-`<child>Schema` (for example, `typesSchema`). Namespaced exports keep each
-schema's `SCHEMA_HASH` and `SCHEMA_VERSION` distinct while retaining every
-generated export under the barrel.
+See the [TypeScript runtime guide](../../docs/book/src/runtime/typescript.md) and
+[support matrix](../../docs/book/src/getting-started/support-matrix.md).
 
-## Wire compatibility
-
-Generated TypeScript produces byte-identical output to the Rust backend. This is verified by the [compliance vector suite](../../compliance/vectors/).
-
-## License
-
-Licensed under either of [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE) at your option.
+Licensed under either [MIT](../../LICENSE-MIT) or
+[Apache-2.0](../../LICENSE-APACHE), at your option.
