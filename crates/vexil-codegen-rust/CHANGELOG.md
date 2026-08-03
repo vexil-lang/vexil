@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0] - 2026-08-03
+
+### Other
+
+- Release vexil-lang 0.5.0 ([#128](https://github.com/vexil-lang/vexil/issues/128)) ([0561d72](https://github.com/vexil-lang/vexil/commit/0561d72e084e8a30792076972d2433324ebe5e5f))
+
+
 ## Unreleased
 
 ### Fixed
