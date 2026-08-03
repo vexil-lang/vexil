@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"reflect"
 
 	telemetry "cross-language-go-gateway/telemetry"
 	vexil "github.com/vexil-lang/vexil/packages/runtime-go"
@@ -35,7 +36,7 @@ func run() error {
 	if err := decoded.Unpack(vexil.NewBitReader(bytes)); err != nil {
 		return fmt.Errorf("decode fixture: %w", err)
 	}
-	if decoded.DeviceID != reading.DeviceID || decoded.Label != reading.Label {
+	if !reflect.DeepEqual(decoded, reading) {
 		return fmt.Errorf("round trip mismatch")
 	}
 	fmt.Printf("schema=%s\n", hex.EncodeToString(telemetry.SchemaHash[:]))
