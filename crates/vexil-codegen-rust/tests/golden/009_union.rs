@@ -241,4 +241,3 @@ impl vexil_runtime::Unpack for Event {
         }
     }
 }
-

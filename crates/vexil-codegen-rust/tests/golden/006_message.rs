@@ -223,4 +223,3 @@ impl FieldAnnotationsDecoder {
 impl Default for FieldAnnotationsDecoder {
     fn default() -> Self { Self::new() }
 }
-

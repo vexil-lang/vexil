@@ -41,4 +41,3 @@ impl vexil_runtime::Unpack for Config {
         })
     }
 }
-

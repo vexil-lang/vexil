@@ -254,4 +254,3 @@ impl SystemSnapshotDecoder {
 impl Default for SystemSnapshotDecoder {
     fn default() -> Self { Self::new() }
 }
-

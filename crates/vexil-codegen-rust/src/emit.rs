@@ -72,7 +72,26 @@ impl CodeWriter {
     }
 
     /// Consume and return the built string.
-    pub fn finish(self) -> String {
+    pub fn finish(mut self) -> String {
+        while self.buf.ends_with("\n\n") {
+            self.buf.pop();
+        }
         self.buf
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CodeWriter;
+
+    #[test]
+    fn finish_keeps_one_trailing_newline() {
+        let mut writer = CodeWriter::new();
+        writer.line("first");
+        writer.blank();
+        writer.line("second");
+        writer.blank();
+
+        assert_eq!(writer.finish(), "first\n\nsecond\n");
     }
 }

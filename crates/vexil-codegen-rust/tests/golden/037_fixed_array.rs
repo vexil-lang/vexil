@@ -394,4 +394,3 @@ impl vexil_runtime::Unpack for EdgeCases {
         })
     }
 }
-
