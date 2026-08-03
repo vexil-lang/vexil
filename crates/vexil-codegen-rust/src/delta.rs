@@ -25,6 +25,27 @@ fn is_float(ty: &ResolvedType) -> bool {
     )
 }
 
+/// Returns true when writing this type uses the `Pack` extension method.
+fn requires_pack_trait(ty: &ResolvedType) -> bool {
+    match ty {
+        ResolvedType::Named(_) => true,
+        ResolvedType::Optional(inner)
+        | ResolvedType::Array(inner)
+        | ResolvedType::FixedArray(inner, _)
+        | ResolvedType::Set(inner)
+        | ResolvedType::Vec2(inner)
+        | ResolvedType::Vec3(inner)
+        | ResolvedType::Vec4(inner)
+        | ResolvedType::Quat(inner)
+        | ResolvedType::Mat3(inner)
+        | ResolvedType::Mat4(inner) => requires_pack_trait(inner),
+        ResolvedType::Map(key, value) | ResolvedType::Result(key, value) => {
+            requires_pack_trait(key) || requires_pack_trait(value)
+        }
+        _ => false,
+    }
+}
+
 /// Returns the zero literal for delta prev-state initialisation.
 fn zero_literal(ty: &ResolvedType) -> &'static str {
     match ty {
@@ -100,6 +121,13 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     w.open_block(&format!(
         "pub fn pack(&mut self, val: &{name}, w: &mut vexil_runtime::BitWriter) -> Result<(), vexil_runtime::EncodeError>"
     ));
+    if msg
+        .fields
+        .iter()
+        .any(|field| !is_delta(&field.encoding) && requires_pack_trait(&field.resolved_type))
+    {
+        w.line("use vexil_runtime::Pack as _;");
+    }
     for field in &msg.fields {
         let fname = field.name.as_str();
         if is_delta(&field.encoding) {

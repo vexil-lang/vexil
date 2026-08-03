@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npx tsx src/main.ts"
+    "check": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@vexil-lang/runtime": "file:../../../packages/runtime-ts"
   },
   "devDependencies": {
-    "tsx": "^4.22.4"
+    "tsx": "^4.22.4",
+    "typescript": "^5.5.0"
   }
 }

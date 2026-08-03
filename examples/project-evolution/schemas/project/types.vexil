@@ -1,0 +1,28 @@
+namespace project.types
+
+enum Priority : u8 {
+    Low    @0
+    Medium @1
+    High   @2
+}
+
+message Timestamp {
+    seconds @0 : u64
+    nanos   @1 : u32
+}
+
+flags Permissions {
+    Read  @0
+    Write @1
+    Admin @2
+}
+
+union TaskState {
+    Pending @0 {}
+    Assigned @1 {
+        user_id @0 : u64
+    }
+    Completed @2 {
+        at @0 : Timestamp
+    }
+}

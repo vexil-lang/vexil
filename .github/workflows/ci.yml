@@ -30,6 +30,7 @@ jobs:
       generated_static: ${{ steps.classify.outputs.generated_static }}
       schema: ${{ steps.classify.outputs.schema }}
       generated_targets: ${{ steps.classify.outputs.generated_targets }}
+      examples: ${{ steps.classify.outputs.examples }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -47,6 +48,7 @@ jobs:
             echo "generated_static=true" >> "$GITHUB_OUTPUT"
             echo "schema=true" >> "$GITHUB_OUTPUT"
             echo "generated_targets=true" >> "$GITHUB_OUTPUT"
+            echo "examples=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -72,6 +74,11 @@ jobs:
           fi
           printf '%s\n' "$changed" |
             bash .github/scripts/classify-generated-changes.sh >> "$GITHUB_OUTPUT"
+          if grep -Eq '^(examples/|scripts/examples\.py|crates/vexil-(lang|runtime|codegen-(rust|ts|go|py))/|packages/runtime-(ts|go|py)/|Cargo\.(toml|lock)|\.github/workflows/ci\.yml)' <<< "$changed"; then
+            echo "examples=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "examples=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # Main-branch protection requires this stable gate. Without it, a failed
   # classifier could cause the dependent required jobs to be skipped.
@@ -85,6 +92,7 @@ jobs:
       - generated-python
       - generated-targets
       - generated-static
+      - examples
       - msrv
       - schema-compat
     if: always()
@@ -99,6 +107,7 @@ jobs:
           GENERATED_PYTHON_RESULT: ${{ needs['generated-python'].result }}
           GENERATED_TARGETS_RESULT: ${{ needs['generated-targets'].result }}
           GENERATED_STATIC_RESULT: ${{ needs['generated-static'].result }}
+          EXAMPLES_RESULT: ${{ needs.examples.result }}
           MSRV_RESULT: ${{ needs.msrv.result }}
           SCHEMA_COMPAT_RESULT: ${{ needs['schema-compat'].result }}
         run: |
@@ -110,6 +119,7 @@ jobs:
             "$GENERATED_PYTHON_RESULT" \
             "$GENERATED_TARGETS_RESULT" \
             "$GENERATED_STATIC_RESULT" \
+            "$EXAMPLES_RESULT" \
             "$MSRV_RESULT" \
             "$SCHEMA_COMPAT_RESULT"
           do
@@ -361,6 +371,51 @@ jobs:
       - name: Check generated TypeScript with native tsc
         working-directory: tools/generated-code-checks
         run: npm run check:typescript
+
+  # The examples are public adoption paths. Regenerate tracked artifacts and
+  # execute each advertised scenario whenever a relevant surface changes.
+  examples:
+    name: Curated examples
+    needs: changes
+    if: needs.changes.outputs.examples == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22.12.0"
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: "1.22"
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.10"
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+
+      - name: Install TypeScript example dependencies
+        run: |
+          npm ci --ignore-scripts --prefix examples/cross-language/node-dashboard
+          npm ci --ignore-scripts --prefix examples/live-telemetry
+
+      - name: Verify curated examples
+        run: python scripts/examples.py check all
 
   # ── MSRV check ──────────────────────────────────────────────────────────────
   # Ensures the workspace compiles on the declared minimum supported Rust version.

@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "cross-language-rust-device"
-version = "0.1.0"
-dependencies = [
- "vexil-runtime",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -63,6 +56,13 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "vexil-quickstart"
+version = "0.1.0"
+dependencies = [
+ "vexil-runtime",
+]
 
 [[package]]
 name = "vexil-runtime"

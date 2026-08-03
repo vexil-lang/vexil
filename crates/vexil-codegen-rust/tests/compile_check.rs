@@ -108,6 +108,27 @@ fn test_006_message() {
 }
 
 #[test]
+fn delta_message_with_named_field_compiles() {
+    check_source_compiles(
+        "delta-named-field",
+        r#"
+namespace test.delta_named
+
+enum Status {
+    Ready @0
+    Busy @1
+}
+
+@delta
+message Snapshot {
+    sequence @0 : u32
+    status   @1 : Status
+}
+"#,
+    );
+}
+
+#[test]
 fn test_007_enum() {
     check_compiles("007_enum");
 }
