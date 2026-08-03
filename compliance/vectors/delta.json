@@ -22,7 +22,7 @@
   },
   {
     "name": "delta_mixed_message",
-    "schema": "namespace test.delta\nmessage M {\n  @delta\n  ts @0 : i64\n  label @1 : string\n  @delta\n  count @2 : u32\n}",
+    "schema": "namespace test.delta\nmessage M {\n  ts @0 : i64 @delta\n  label @1 : string\n  count @2 : u32 @delta\n}",
     "type": "M",
     "frames": [
       { "value": { "ts": 1000, "label": "hello", "count": 50 }, "expected_bytes": "e8030000000000000568656c6c6f32000000" },

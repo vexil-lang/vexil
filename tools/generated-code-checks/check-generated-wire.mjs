@@ -141,44 +141,65 @@ function runBasic(label, file, name, goValue, pyValue, goCheck, pyCheck) {
   }
 }
 
-function runDeltaReset() {
-  const item = vector("delta.json", "delta_reset");
-  const goSteps = item.frames.map((frame) => {
-    if (frame.reset) return "encoder.Reset(); decoder.Reset()";
-    return `{ value := uint32(${frame.value.v}); want := []byte{${hexBytes(frame.expected_bytes)}}; w:=vexil.NewBitWriter(); if err:=encoder.Pack(&M{V:value},w); err != nil { t.Fatal(err) }; got:=w.Finish(); if !bytes.Equal(got,want) {t.Fatalf("encode got %x want %x",got,want)}; decoded,err:=decoder.Unpack(vexil.NewBitReader(want)); if err != nil || decoded.V != value {t.Fatalf("decode got %#v err %v",decoded,err)} }`;
-  }).join("\n  ");
-  const pythonFrames = JSON.stringify(item.frames);
+function goFieldName(name) {
+  return name.split("_").map((part) => part[0].toUpperCase() + part.slice(1)).join("");
+}
+
+function goLiteral(value) {
+  return typeof value === "string" ? JSON.stringify(value) : String(value);
+}
+
+function runDeltaVectors() {
+  const items = JSON.parse(readFileSync(join(vectorsDir, "delta.json"), "utf8"));
   const root = mkdtempSync(join(tmpdir(), "vexil-wire-delta-"));
   try {
-    const go = join(root, "go"); const py = join(root, "python");
-    mkdirSync(go, { recursive: true });
-    mkdirSync(py, { recursive: true });
-    writeFileSync(join(go, "schema.vexil"), item.schema);
-    run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], go, "generate Go delta source");
-    writeFileSync(join(go, "go.mod"), `module vexil-generated-delta\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => ${runtimeGo}\n`);
-    writeFileSync(join(go, "generated_test.go"), `package delta
+    for (const item of items) {
+      const goSteps = item.frames.map((frame, index) => {
+        if (frame.reset) return "encoder.Reset(); roundEncoder.Reset(); decoder.Reset()";
+        const fields = Object.entries(frame.value)
+          .map(([name, value]) => `${goFieldName(name)}: ${goLiteral(value)}`)
+          .join(", ");
+        const mismatches = Object.entries(frame.value)
+          .map(([name, value]) => `decoded.${goFieldName(name)} != ${goLiteral(value)}`)
+          .join(" || ");
+        return `{ value := &M{${fields}}; want := []byte{${hexBytes(frame.expected_bytes)}}; w:=vexil.NewBitWriter(); if err:=encoder.Pack(value,w); err != nil { t.Fatal(err) }; got:=w.Finish(); if !bytes.Equal(got,want) {t.Fatalf("${item.name} frame ${index} encode got %x want %x",got,want)}; decoded,err:=decoder.Unpack(vexil.NewBitReader(want)); if err != nil || ${mismatches} {t.Fatalf("${item.name} frame ${index} decode got %#v err %v",decoded,err)}; round:=vexil.NewBitWriter(); if err:=roundEncoder.Pack(decoded,round); err != nil {t.Fatal(err)}; if got:=round.Finish(); !bytes.Equal(got,want) {t.Fatalf("${item.name} frame ${index} re-encode got %x want %x",got,want)} }`;
+      }).join("\n  ");
+      const pythonFrames = JSON.stringify(item.frames);
+      const go = join(root, "go", item.name);
+      const py = join(root, "python", item.name);
+      mkdirSync(go, { recursive: true });
+      mkdirSync(py, { recursive: true });
+      writeFileSync(join(go, "schema.vexil"), item.schema);
+      run(vexilc, ["codegen", "schema.vexil", "--output", "generated.go", "--target", "go"], go, `${item.name}: generate Go delta source`);
+      writeFileSync(join(go, "go.mod"), `module vexil-generated-delta-${item.name.replaceAll("_", "-")}\n\ngo 1.22\n\nrequire github.com/vexil-lang/vexil/packages/runtime-go v0.0.0\n\nreplace github.com/vexil-lang/vexil/packages/runtime-go => ${runtimeGo}\n`);
+      writeFileSync(join(go, "generated_test.go"), `package ${namespacePackage(item.schema)}
 import ("bytes"; "testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")
 func TestGeneratedDeltaContract(t *testing.T) {
-  encoder := NewMEncoder(); decoder := NewMDecoder()
+  encoder := NewMEncoder(); roundEncoder := NewMEncoder(); decoder := NewMDecoder()
   ${goSteps}
 }
 `);
+      run("go", ["test", "./..."], go, `${item.name}: Go generated delta contract`);
 
-    run("go", ["test", "./..."], go, "Go generated delta contract");
-    writeFileSync(join(py, "schema.vexil"), item.schema);
-    run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], py, "generate Python delta source");
-    writeFileSync(join(py, "run.py"), `import json
+      writeFileSync(join(py, "schema.vexil"), item.schema);
+      run(vexilc, ["codegen", "schema.vexil", "--output", "generated.py", "--target", "python"], py, `${item.name}: generate Python delta source`);
+      writeFileSync(join(py, "run.py"), `import json
 from generated import M, MEncoder, MDecoder
 frames = json.loads(r'''${pythonFrames}''')
-encoder = MEncoder(); decoder = MDecoder()
-for frame in frames:
+encoder = MEncoder(); round_encoder = MEncoder(); decoder = MDecoder()
+for index, frame in enumerate(frames):
     if frame.get("reset"):
-        encoder.reset(); decoder.reset(); continue
-    value = frame["value"]["v"]; expected = frame["expected_bytes"]
-    data = encoder.encode(M(v=value)); assert data.hex() == expected, f"encode {data.hex()} != {expected}"
-    decoded = decoder.decode(bytes.fromhex(expected)); assert decoded.v == value, f"decode {decoded.v} != {value}"
+        encoder.reset(); round_encoder.reset(); decoder.reset(); continue
+    value = M(**frame["value"]); expected = bytes.fromhex(frame["expected_bytes"])
+    data = encoder.encode(value); assert data == expected, f"${item.name} frame {index} encode {data.hex()} != {expected.hex()}"
+    decoded = decoder.decode(expected)
+    actual = {name: getattr(decoded, name) for name in frame["value"]}
+    assert actual == frame["value"], f"${item.name} frame {index} decode {actual!r} != {frame['value']!r}"
+    round_data = round_encoder.encode(decoded)
+    assert round_data == expected, f"${item.name} frame {index} re-encode {round_data.hex()} != {expected.hex()}"
 `);
-    run(python, ["run.py"], py, "Python generated delta contract", { ...process.env, PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${py}` });
+      run(python, ["run.py"], py, `${item.name}: Python generated delta contract`, { ...process.env, PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${py}` });
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
@@ -545,7 +566,7 @@ runBasic(
   "func() bool { unknown, ok := decoded.V.(*Event__VexilUnknown); return ok && unknown.Discriminant == 9 && bytes.Equal(unknown.Data, []byte{0xde, 0xad}) }()",
   "type(decoded.v) is Event__VexilUnknown and decoded.v.discriminant == 9 and decoded.v.data == bytes([0xde, 0xad])",
 );
-runDeltaReset();
+runDeltaVectors();
 runOptionalEvolution();
 runTraitInvariance();
 runNestedOptionalConstraint();
