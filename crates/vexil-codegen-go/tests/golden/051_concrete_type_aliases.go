@@ -206,22 +206,20 @@ func (m *AliasUser) Unpack(r *vexil.BitReader) error {
 			}
 			{
 				present, err := r.ReadBool()
-				if err != nil && err != vexil.ErrUnexpectedEOF {
+				if err != nil {
 					return err
 				}
-				if err == nil {
-					if present {
-						r.FlushToByteBoundary()
-						var optVal uint32
-						{
-							v, err := r.ReadU32()
-							if err != nil {
-								return err
-							}
-							optVal = v
+				if present {
+					r.FlushToByteBoundary()
+					var optVal uint32
+					{
+						v, err := r.ReadU32()
+						if err != nil {
+							return err
 						}
-						mapVal = &optVal
+						optVal = v
 					}
+					mapVal = &optVal
 				}
 			}
 			m.Lookup[mapKey] = mapVal

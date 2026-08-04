@@ -8,7 +8,7 @@ changes.
 
 - shared types imported into a task protocol;
 - a generated Rust module tree;
-- a compatible field addition that suggests a minor version bump;
+- a compatible declaration addition that suggests a minor version bump;
 - a field-type change that `vexilc compat` rejects as breaking.
 
 ## Prerequisites
@@ -35,7 +35,8 @@ and confirms that the breaking comparison exits with status 1.
 2. [`schemas/project/messages.vexil`](./schemas/project/messages.vexil) imports
    those declarations and defines the application messages.
 3. [`evolution/v1.vexil`](./evolution/v1.vexil) and
-   [`evolution/v1_1.vexil`](./evolution/v1_1.vexil) show an append-only change.
+   [`evolution/v1_1.vexil`](./evolution/v1_1.vexil) add a declaration without
+   changing the existing message wire contract.
 4. [`evolution/breaking.vexil`](./evolution/breaking.vexil) changes an existing
    field's type and demonstrates the failure path.
 

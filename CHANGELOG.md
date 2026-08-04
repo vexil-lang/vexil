@@ -5,6 +5,15 @@ changes remain in each crate's changelog.
 
 ## Unreleased
 
+### Language and compatibility
+
+- Classify every message field addition as breaking under the current unframed
+  message wire. Nested and aggregate values do not carry an old-schema boundary,
+  so decoders no longer promise to infer appended fields from EOF or trailing
+  bytes. Go and Python generated decoders now propagate EOF at an optional
+  presence bit, matching Rust and TypeScript. Existing encoded bytes are
+  unchanged.
+
 ### Tooling
 
 - Add a diagnostics-first `vexilc lsp` stdio server for unsaved single-file

@@ -7,7 +7,7 @@ message HeaderV1 {
     status @1 : u8
 }
 
-# V2 message - field appended (compatible change)
+# V2 message - field appended (breaking without an internal message boundary)
 message HeaderV2 {
     kind   @0 : u8
     status @1 : u8

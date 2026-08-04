@@ -657,7 +657,8 @@ describe('Compliance: evolution.json', () => {
     encoded_v1?: string;
     encoded_v2?: string;
     decoded_as_v1?: Record<string, unknown>;
-    decoded_as_v2?: Record<string, unknown>;
+    classification: 'breaking';
+    expected_v2_error?: string;
     notes?: string;
   }
 
@@ -674,15 +675,15 @@ describe('Compliance: evolution.json', () => {
     expect(toHex(w.finish())).toBe(vec.encoded_v1);
   });
 
-  it('v1 bytes decoded as v2 fills default for missing field', () => {
+  it('v1 bytes do not contain the appended required field', () => {
     const vec = vectors.find(
       (v) => v.name === 'v1_encode_v2_decode_appended_field',
     )!;
     const r = new BitReader(hexToBytes(vec.encoded_v1!));
     const x = r.readU32();
-    const y = r.remaining() >= 2 ? r.readU16() : 0;
-    expect(x).toBe(vec.decoded_as_v2!.x);
-    expect(y).toBe(vec.decoded_as_v2!.y);
+    expect(x).toBe(vec.value_v1!.x);
+    expect(vec.classification).toBe('breaking');
+    expect(() => r.readU16()).toThrow(/Unexpected end of data/);
   });
 
   it('v2 encode produces expected bytes', () => {
@@ -703,5 +704,38 @@ describe('Compliance: evolution.json', () => {
     const x = r.readU32();
     expect(x).toBe(vec.decoded_as_v1!.x);
     expect(r.remaining()).toBeGreaterThan(0);
+  });
+
+  it('nested appended field consumes the parent field', () => {
+    const vec = vectors.find(
+      (v) => v.name === 'appended_nested_field_consumes_parent_field',
+    )!;
+    const w = new BitWriter();
+    w.writeU8((vec.value_v1!.inner as Record<string, number>).x);
+    w.writeU8(vec.value_v1!.z as number);
+    const bytes = w.finish();
+    expect(toHex(bytes)).toBe(vec.encoded_v1);
+
+    const r = new BitReader(bytes);
+    expect(r.readU8()).toBe(1);
+    expect(r.readU8()).toBe(2);
+    expect(() => r.readU8()).toThrow(/Unexpected end of data/);
+  });
+
+  it('old sub-byte padding matches an appended zero field', () => {
+    const vec = vectors.find(
+      (v) => v.name === 'appended_sub_byte_default_matches_old_padding',
+    )!;
+    const v1 = new BitWriter();
+    v1.writeBits(vec.value_v1!.x as number, 4);
+    const v1Bytes = v1.finish();
+    const v2 = new BitWriter();
+    v2.writeBits(vec.value_v2!.x as number, 4);
+    v2.writeBits(vec.value_v2!.y as number, 4);
+    const v2Bytes = v2.finish();
+
+    expect(toHex(v1Bytes)).toBe(vec.encoded_v1);
+    expect(toHex(v2Bytes)).toBe(vec.encoded_v2);
+    expect(v1Bytes).toEqual(v2Bytes);
   });
 });

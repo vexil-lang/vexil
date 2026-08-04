@@ -60,22 +60,20 @@ func (m *Basic) Pack(w *vexil.BitWriter) error {
 func (m *Basic) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal uint32
-				{
-					v, err := r.ReadU32()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal uint32
+			{
+				v, err := r.ReadU32()
+				if err != nil {
+					return err
 				}
-				m.A = &optVal
+				optVal = v
 			}
+			m.A = &optVal
 		}
 	}
 	{
@@ -251,31 +249,29 @@ func (m *Nested) Pack(w *vexil.BitWriter) error {
 func (m *Nested) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal []string
-				{
-					arrLen, err := r.ReadLeb128(4)
-					if err != nil {
-						return err
-					}
-					optVal = make([]string, arrLen)
-					for i := uint64(0); i < arrLen; i++ {
-						{
-							v, err := r.ReadString()
-							if err != nil {
-								return err
-							}
-							optVal[i] = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal []string
+			{
+				arrLen, err := r.ReadLeb128(4)
+				if err != nil {
+					return err
+				}
+				optVal = make([]string, arrLen)
+				for i := uint64(0); i < arrLen; i++ {
+					{
+						v, err := r.ReadString()
+						if err != nil {
+							return err
 						}
+						optVal[i] = v
 					}
 				}
-				m.A = &optVal
 			}
+			m.A = &optVal
 		}
 	}
 	{
@@ -287,22 +283,20 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 		for i := uint64(0); i < arrLen; i++ {
 			{
 				present, err := r.ReadBool()
-				if err != nil && err != vexil.ErrUnexpectedEOF {
+				if err != nil {
 					return err
 				}
-				if err == nil {
-					if present {
-						r.FlushToByteBoundary()
-						var optVal uint32
-						{
-							v, err := r.ReadU32()
-							if err != nil {
-								return err
-							}
-							optVal = v
+				if present {
+					r.FlushToByteBoundary()
+					var optVal uint32
+					{
+						v, err := r.ReadU32()
+						if err != nil {
+							return err
 						}
-						m.B[i] = &optVal
+						optVal = v
 					}
+					m.B[i] = &optVal
 				}
 			}
 		}
@@ -397,70 +391,68 @@ func (m *Nested) Unpack(r *vexil.BitReader) error {
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal struct { Ok *[]string; Err *map[uint32]string }
-				{
-					isOk, err := r.ReadBool()
-					if err != nil {
-						return err
-					}
-					if isOk {
-						var optValOk []string
-						{
-							arrLen, err := r.ReadLeb128(4)
-							if err != nil {
-								return err
-							}
-							optValOk = make([]string, arrLen)
-							for i := uint64(0); i < arrLen; i++ {
-								{
-									v, err := r.ReadString()
-									if err != nil {
-										return err
-									}
-									optValOk[i] = v
-								}
-							}
-						}
-						optVal.Ok = &optValOk
-					} else {
-						var optValErr map[uint32]string
-						{
-							mapLen, err := r.ReadLeb128(4)
-							if err != nil {
-								return err
-							}
-							optValErr = make(map[uint32]string, mapLen)
-							for i := uint64(0); i < mapLen; i++ {
-								var mapKey uint32
-								var mapVal string
-								{
-									v, err := r.ReadU32()
-									if err != nil {
-										return err
-									}
-									mapKey = v
-								}
-								{
-									v, err := r.ReadString()
-									if err != nil {
-										return err
-									}
-									mapVal = v
-								}
-								optValErr[mapKey] = mapVal
-							}
-						}
-						optVal.Err = &optValErr
-					}
+		if present {
+			r.FlushToByteBoundary()
+			var optVal struct { Ok *[]string; Err *map[uint32]string }
+			{
+				isOk, err := r.ReadBool()
+				if err != nil {
+					return err
 				}
-				m.G = &optVal
+				if isOk {
+					var optValOk []string
+					{
+						arrLen, err := r.ReadLeb128(4)
+						if err != nil {
+							return err
+						}
+						optValOk = make([]string, arrLen)
+						for i := uint64(0); i < arrLen; i++ {
+							{
+								v, err := r.ReadString()
+								if err != nil {
+									return err
+								}
+								optValOk[i] = v
+							}
+						}
+					}
+					optVal.Ok = &optValOk
+				} else {
+					var optValErr map[uint32]string
+					{
+						mapLen, err := r.ReadLeb128(4)
+						if err != nil {
+							return err
+						}
+						optValErr = make(map[uint32]string, mapLen)
+						for i := uint64(0); i < mapLen; i++ {
+							var mapKey uint32
+							var mapVal string
+							{
+								v, err := r.ReadU32()
+								if err != nil {
+									return err
+								}
+								mapKey = v
+							}
+							{
+								v, err := r.ReadString()
+								if err != nil {
+									return err
+								}
+								mapVal = v
+							}
+							optValErr[mapKey] = mapVal
+						}
+					}
+					optVal.Err = &optValErr
+				}
 			}
+			m.G = &optVal
 		}
 	}
 	r.FlushToByteBoundary()

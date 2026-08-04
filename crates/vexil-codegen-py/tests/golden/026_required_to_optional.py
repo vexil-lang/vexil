@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x26, 0x17, 0x33, 0xb3, 0x2d, 0x8b, 0x2f, 0xf3, 0x27, 0x2f, 0xf2, 0x60, 0xc8, 0xb1, 0xb2, 0x99, 0xa6, 0xea, 0x63, 0xeb, 0xcf, 0xd8, 0xee, 0x99, 0x90, 0xe8, 0x3c, 0xb6, 0x88, 0x83, 0x6b, 0xd3)
 
@@ -92,19 +92,15 @@ class SettingsV2:
     @staticmethod
     def decode_from(r: _BitReader) -> SettingsV2:
         m = SettingsV2.__new__(SettingsV2)
-        try:
-            _vexil_m_2e_timeout_present = r.read_bool()
-        except DecodeError:
-            m.timeout = None
+        _vexil_m_2e_timeout_present = r.read_bool()
+        if _vexil_m_2e_timeout_present:
+            r.flush_to_byte_boundary()
+            m.timeout = r.read_u32()
         else:
-            if _vexil_m_2e_timeout_present:
-                r.flush_to_byte_boundary()
-                m.timeout = r.read_u32()
-            else:
-                m.timeout = None
+            m.timeout = None
         m.name = r.read_string()
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "SettingsV1", "SettingsV2"]
+__all__ = ["dataclass", "SCHEMA_HASH", "SettingsV1", "SettingsV2"]

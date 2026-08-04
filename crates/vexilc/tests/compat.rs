@@ -163,7 +163,7 @@ message Sensor {{
 }
 
 #[test]
-fn compat_compatible_addition_with_tempfiles() {
+fn compat_field_addition_is_breaking_without_a_message_boundary() {
     let dir = tempfile::tempdir().expect("failed to create temp dir");
 
     let old_path = dir.path().join("old.vexil");
@@ -203,9 +203,11 @@ message Header {{
         .output()
         .expect("failed to run vexilc");
 
-    assert!(
-        output.status.success(),
-        "expected exit 0 for compatible change\nstderr: {}",
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "expected exit 1 for unframed field addition\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
 
@@ -213,6 +215,8 @@ message Header {{
     let json: serde_json::Value =
         serde_json::from_str(&stdout).expect("output should be valid JSON");
 
-    assert_eq!(json["result"], "compatible");
-    assert_eq!(json["suggested_bump"], "minor");
+    assert_eq!(json["result"], "breaking");
+    assert_eq!(json["suggested_bump"], "major");
+    assert_eq!(json["changes"][0]["kind"], "field_added");
+    assert_eq!(json["changes"][0]["classification"], "major");
 }

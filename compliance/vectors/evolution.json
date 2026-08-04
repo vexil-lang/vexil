@@ -6,8 +6,9 @@
     "type": "M",
     "value_v1": { "x": 42 },
     "encoded_v1": "2a000000",
-    "decoded_as_v2": { "x": 42, "y": 0 },
-    "notes": "v2 decoder fills y with default (0) when reading v1-encoded bytes"
+    "classification": "breaking",
+    "expected_v2_error": "unexpected end of input",
+    "notes": "The bytes are unchanged historical evidence. A strict v2 decoder reaches EOF before required y; EOF is not a general evolution signal."
   },
   {
     "name": "v2_encode_v1_decode_trailing_ignored",
@@ -17,7 +18,8 @@
     "value_v2": { "x": 42, "y": 99 },
     "encoded_v2": "2a0000006300",
     "decoded_as_v1": { "x": 42 },
-    "notes": "v1 decoder reads x, ignores trailing bytes (y=99)"
+    "classification": "breaking",
+    "notes": "A bounded top-level v1 reader can stop after x, but nested and aggregate message values have no boundary that identifies y as trailing data."
   },
   {
     "name": "v1_encode_v2_decode_appended_optional_field",
@@ -26,8 +28,8 @@
     "type": "M",
     "value_v1": { "x": 42 },
     "encoded_v1": "2a000000",
-    "decoded_as_v2": { "x": 42, "y": null },
-    "notes": "An appended optional field decodes as absent from v1 bytes."
+    "classification": "breaking",
+    "notes": "Some top-level readers may treat EOF as an absent optional, but an inline decoder can consume a parent or following value as the presence bit."
   },
   {
     "name": "v2_encode_v1_decode_appended_optional_field",
@@ -37,6 +39,31 @@
     "value_v2": { "x": 42, "y": 99 },
     "encoded_v2": "2a000000016300",
     "decoded_as_v1": { "x": 42 },
-    "notes": "A v1 decoder reads x and ignores the trailing optional-field bytes."
+    "classification": "breaking",
+    "notes": "Stopping after x is observable only when the caller already owns the message boundary; it is not a reusable message compatibility guarantee."
+  },
+  {
+    "name": "appended_nested_field_consumes_parent_field",
+    "schema_v1": "namespace test.evo\nmessage Inner { x @0 : u8 }\nmessage Outer { inner @0 : Inner  z @1 : u8 }",
+    "schema_v2": "namespace test.evo\nmessage Inner { x @0 : u8  y @1 : u8 }\nmessage Outer { inner @0 : Inner  z @1 : u8 }",
+    "type": "Outer",
+    "value_v1": { "inner": { "x": 1 }, "z": 2 },
+    "encoded_v1": "0102",
+    "value_v2": { "inner": { "x": 1, "y": 2 }, "z": 3 },
+    "encoded_v2": "010203",
+    "classification": "breaking",
+    "notes": "A v2 Inner decoder sees the v1 parent field z byte where it expects appended y. No internal length separates the nested value from its parent."
+  },
+  {
+    "name": "appended_sub_byte_default_matches_old_padding",
+    "schema_v1": "namespace test.evo\nmessage M { x @0 : u4 }",
+    "schema_v2": "namespace test.evo\nmessage M { x @0 : u4  y @1 : u4 }",
+    "type": "M",
+    "value_v1": { "x": 5 },
+    "encoded_v1": "05",
+    "value_v2": { "x": 5, "y": 0 },
+    "encoded_v2": "05",
+    "classification": "breaking",
+    "notes": "Old padding and an appended zero-valued u4 produce identical bytes, so payload bytes alone do not identify the schema version or field boundary."
   }
 ]

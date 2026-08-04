@@ -228,16 +228,12 @@ class WithOptional:
         m = WithOptional.__new__(WithOptional)
         _vexil_m_2e_a_fixed_items: list[int | None] = []
         for _ in range(10):
-            try:
-                _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present = r.read_bool()
-            except DecodeError:
-                _vexil_m_2e_a_fixed_item = None
+            _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present = r.read_bool()
+            if _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present:
+                r.flush_to_byte_boundary()
+                _vexil_m_2e_a_fixed_item = r.read_u32()
             else:
-                if _vexil__5f_vexil_5f_m_5f_2e_5f_a_5f_fixed_5f_item_present:
-                    r.flush_to_byte_boundary()
-                    _vexil_m_2e_a_fixed_item = r.read_u32()
-                else:
-                    _vexil_m_2e_a_fixed_item = None
+                _vexil_m_2e_a_fixed_item = None
             _vexil_m_2e_a_fixed_items.append(_vexil_m_2e_a_fixed_item)
         m.a = tuple(_vexil_m_2e_a_fixed_items)
         r.flush_to_byte_boundary()

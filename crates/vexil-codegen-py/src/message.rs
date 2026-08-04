@@ -544,15 +544,7 @@ fn emit_read_type(
         }
         ResolvedType::Optional(inner) => {
             let present = local_name(target, "present");
-            w.open_block("try");
             w.line(&format!("{present} = {reader}.read_bool()"));
-            w.close_block();
-            w.line("except DecodeError:");
-            w.indent();
-            w.line(&format!("{target} = None"));
-            w.dedent();
-            w.line("else:");
-            w.indent();
             w.open_block(&format!("if {present}"));
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.flush_to_byte_boundary()"));
@@ -569,7 +561,6 @@ fn emit_read_type(
             w.indent();
             w.line(&format!("{target} = None"));
             w.close_block();
-            w.dedent();
         }
         ResolvedType::Array(inner) => {
             let length = local_name(target, "array_length");

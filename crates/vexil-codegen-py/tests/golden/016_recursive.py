@@ -112,20 +112,16 @@ class LinkedList:
     def decode_from(r: _BitReader) -> LinkedList:
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_string()
-        try:
-            _vexil_m_2e_next_present = r.read_bool()
-        except DecodeError:
-            m.next = None
+        _vexil_m_2e_next_present = r.read_bool()
+        if _vexil_m_2e_next_present:
+            r.flush_to_byte_boundary()
+            try:
+                r.enter_nested()
+                m.next = LinkedList.decode_from(r)
+            finally:
+                r.leave_nested()
         else:
-            if _vexil_m_2e_next_present:
-                r.flush_to_byte_boundary()
-                try:
-                    r.enter_nested()
-                    m.next = LinkedList.decode_from(r)
-                finally:
-                    r.leave_nested()
-            else:
-                m.next = None
+            m.next = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m

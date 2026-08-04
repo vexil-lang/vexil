@@ -65,20 +65,25 @@ Delta vectors use a frame-based format:
 
 ### Schema Evolution Vectors
 
-Evolution vectors test backward/forward compatibility:
+Evolution vectors record compatibility classifications and the exact bytes that
+explain them. Message values are not internally length-delimited, so adding a
+field is breaking even when one bounded top-level reader can stop early:
 
 ```json
 {
-  "name": "add_optional_field",
+  "name": "appended_field_is_breaking",
   "schema_v1": "namespace test.evol\nmessage M { a @0 : u32 }",
-  "schema_v2": "namespace test.evol\nmessage M { a @0 : u32  b @1 : optional<u32> }",
+  "schema_v2": "namespace test.evol\nmessage M { a @0 : u32  b @1 : u16 }",
   "value_v1": { "a": 1 },
   "encoded_v1": "01000000",
-  "decoded_as_v2": { "a": 1, "b": null },
-  "roundtrip_v2": { "a": 1, "b": null },
-  "encoded_v2": "0100000000"
+  "classification": "breaking",
+  "expected_v2_error": "unexpected end of input"
 }
 ```
+
+The file retains historical top-level byte observations, but they are not a
+general cross-version decoding promise. Its nested-message and sub-byte cases
+show why the schema-level classification is breaking.
 
 ## Vector Files
 
@@ -94,7 +99,7 @@ Evolution vectors test backward/forward compatibility:
 | `messages.json` | Message field ordering and padding |
 | `unions.json` | Union discriminant + length prefix |
 | `delta.json` | Delta/differential encoding |
-| `evolution.json` | Schema evolution compatibility |
+| `evolution.json` | Schema evolution classifications and boundary counterexamples |
 | `v1_types.json` | Fixed-point, geometric, set, and bit-width cases (legacy filename) |
 | `generated_wire.json` | Representative shared matrix executed by generated target code |
 
