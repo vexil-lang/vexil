@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 
 use vexil_lang::codegen::portable::{PortableExpr, PortableExprKind, PortableStatement};
-use vexil_lang::codegen::{CodegenBackend, CodegenError};
+use vexil_lang::codegen::{CodegenBackend, CodegenError, ProjectOutputBuilder};
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
 use vexil_lang::project::ProjectResult;
 
@@ -31,7 +31,7 @@ impl CodegenBackend for GoBackend {
         &self,
         result: &ProjectResult,
     ) -> Result<BTreeMap<PathBuf, String>, CodegenError> {
-        let mut files = BTreeMap::new();
+        let mut files = ProjectOutputBuilder::new();
 
         for (ns, compiled) in &result.schemas {
             let segments: Vec<&str> = ns.split('.').collect();
@@ -114,12 +114,12 @@ impl CodegenBackend for GoBackend {
                 file_path.push(seg);
             }
             file_path.push(format!("{file_name}.go"));
-            files.insert(file_path, code);
+            files.add(file_path, code)?;
         }
 
         // Go doesn't need barrel/index files — imports are package-level
 
-        Ok(files)
+        Ok(files.finish())
     }
 }
 

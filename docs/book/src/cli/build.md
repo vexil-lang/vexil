@@ -16,6 +16,11 @@ vexilc build <root.vexil> --include <dir> --output <dir> [--target <target>]
 | `--output <dir>` | (required) | Output directory for generated code |
 | `--target <target>` | `rust` | Code generation target: `rust`, `typescript`, `go`, or `python` |
 
+Vexil validates the complete generated path set before creating directories or
+writing files. Rooted, traversing, non-portable, or case-colliding output paths
+fail with a `codegen-output-*` diagnostic. A later filesystem I/O failure can
+still leave files written earlier in the operation.
+
 ## Example
 
 ```sh

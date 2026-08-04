@@ -4,6 +4,8 @@
 
 ### Changed
 
+- Validate all project output paths before the first `vexilc build` filesystem
+  write and share one built-in target resolver across generation commands.
 - Report message field additions as breaking changes requiring a major schema
   version transition.
 

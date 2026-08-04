@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 
 use vexil_lang::codegen::portable::{PortableExpr, PortableExprKind, PortableStatement};
-use vexil_lang::codegen::{CodegenBackend, CodegenError};
+use vexil_lang::codegen::{CodegenBackend, CodegenError, ProjectOutputBuilder};
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
 use vexil_lang::project::ProjectResult;
 
@@ -30,7 +30,7 @@ impl CodegenBackend for TypeScriptBackend {
         &self,
         result: &ProjectResult,
     ) -> Result<BTreeMap<PathBuf, String>, CodegenError> {
-        let mut files = BTreeMap::new();
+        let mut files = ProjectOutputBuilder::new();
         let mut index_tree: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
         for (ns, compiled) in &result.schemas {
@@ -137,7 +137,7 @@ impl CodegenBackend for TypeScriptBackend {
                 file_path.push(seg);
             }
             file_path.push(format!("{file_name}.ts"));
-            files.insert(file_path, code);
+            files.add(file_path, code)?;
         }
 
         // Generate index.ts files
@@ -155,10 +155,10 @@ impl CodegenBackend for TypeScriptBackend {
                 let binding = barrel_binding(child);
                 content.push_str(&format!("export * as {binding} from './{child}';\n"));
             }
-            files.insert(index_path, content);
+            files.add(index_path, content)?;
         }
 
-        Ok(files)
+        Ok(files.finish())
     }
 }
 

@@ -35,6 +35,9 @@
 
 ### Added
 
+- Add `ProjectOutputBuilder`, `OutputPathError`, and
+  `validate_project_output` for deterministic, portable generated file sets
+  without changing the `CodegenBackend` trait.
 - Enforce schema `@version` and import SemVer requirements across project graphs.
 - Resolve transparent aliases for concrete container and imported named types.
 

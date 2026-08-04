@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Reject unsafe or case-colliding project output paths instead of overwriting
+  an earlier generated file.
 - Propagate unexpected EOF when an optional field's presence bit is missing
   instead of synthesizing an absent value.
 - Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.

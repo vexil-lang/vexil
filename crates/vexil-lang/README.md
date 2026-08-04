@@ -77,6 +77,11 @@ returns a `BTreeMap<PathBuf, String>` and owns target-specific imports, names,
 relative output paths, and scaffolding such as `mod.rs` or `index.ts`. Your
 application owns the final output directory and all file I/O.
 
+Use `ProjectOutputBuilder` when implementing project generation. It rejects
+rooted, traversing, non-portable, and case-colliding paths before returning a
+map. Callers that accept maps from other implementations can use
+`validate_project_output` and write the canonical map it returns.
+
 Custom backends implement the same trait. They are programmatic extensions;
 the `vexilc` CLI recognizes only its four built-in targets and does not load
 third-party plugins. See [Writing a Codegen Backend](../../docs/book/src/sdk/codegen.md)
