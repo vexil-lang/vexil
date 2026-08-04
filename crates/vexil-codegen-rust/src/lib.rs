@@ -5,9 +5,18 @@
 //!
 //! # Usage
 //!
-//! ```ignore
+//! ```
+//! use vexil_lang::CodegenBackend;
+//! use vexil_codegen_rust::RustBackend;
+//!
+//! let source = "namespace demo\nmessage Ping { id @0 : u32 }";
 //! let result = vexil_lang::compile(source);
-//! let code = vexil_codegen_rust::generate(&result.compiled.unwrap());
+//! assert!(!result.has_errors(), "{:?}", result.diagnostics);
+//! let compiled = result.compiled.expect("successful compilation has IR");
+//!
+//! let code = RustBackend.generate(&compiled)?;
+//! assert!(code.contains("pub struct Ping"));
+//! # Ok::<(), vexil_lang::CodegenError>(())
 //! ```
 
 pub mod annotations;

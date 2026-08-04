@@ -47,6 +47,10 @@
 - [Go](./runtime/go.md)
 - [Python](./runtime/python.md)
 
+# Compiler SDK
+
+- [Writing a Codegen Backend](./sdk/codegen.md)
+
 # Examples
 
 - [Quickstart](./examples/quickstart.md)
