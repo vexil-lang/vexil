@@ -23,6 +23,11 @@ or prove that the surrounding application uses the codec correctly.
 does not prove application-level compatibility, migration correctness, or safe
 deployment order.
 
+Adding a message field is classified as breaking. Message values are not
+internally length-delimited, so nested and aggregate decoders cannot infer the
+old value boundary safely. Prefer a new declaration and explicit migration over
+an EOF-based default.
+
 ## Maintained detail
 
 The repository's [Compatibility and Current Limits](https://github.com/vexil-lang/vexil/blob/main/docs/limitations-and-gaps.md)

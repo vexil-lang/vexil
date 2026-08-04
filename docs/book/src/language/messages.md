@@ -15,7 +15,9 @@ Fields are encoded in ordinal order. Each field has a name, an ordinal (`@N`), a
 
 ## Field ordinals
 
-Ordinals determine wire order. They must be unique within a message but don't need to be sequential. Gaps are allowed -- this is important for schema evolution, since you can add new fields at new ordinals without disturbing existing ones.
+Ordinals determine wire order. They must be unique within a message but do not
+need to be sequential. Gaps can reserve positions and make a schema easier to
+read, but filling a gap or appending a field still changes the message contract.
 
 ```text
 message Config {
@@ -44,8 +46,13 @@ Fields are packed in ordinal order with LSB-first bit packing. Sub-byte fields (
 
 ## Unknown fields
 
-A v1 decoder reading v2-encoded data reads its known fields and ignores any trailing bytes. Decoding never fails because a newer encoder appended fields.
+Generated message types carry target-specific storage for unknown bytes, but
+decoders do not populate it. The storage is empty after every decode. Vexil
+does not currently provide lossless unknown-field round-tripping.
 
-Generated message types carry target-specific storage for unknown bytes, but decoders do not populate it -- the storage is empty after every decode. Vexil does not currently provide lossless unknown-field round-tripping.
+Message values are not internally length-delimited. A decoder therefore cannot
+identify unknown trailing fields safely when the message is nested inside a
+parent or inline aggregate. Adding a field is classified as breaking. See
+[schema evolution](./evolution.md) for the boundary and migration guidance.
 
 See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

@@ -255,7 +255,7 @@ def check_project_evolution() -> None:
         vexilc(
             "compat",
             "examples/project-evolution/evolution/v1.vexil",
-            "examples/project-evolution/evolution/v1_1.vexil",
+            "examples/project-evolution/evolution/compatible.vexil",
         )
     )
     if "COMPATIBLE" not in compatible:

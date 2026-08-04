@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Propagate unexpected EOF when an optional field's presence bit is missing
+  instead of synthesizing an absent value.
 - Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
 - Keep published Result discriminants and correct optional-container access,
   collection keys, geometric values, constraints, and generated file endings.

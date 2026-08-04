@@ -68,9 +68,13 @@ rules to two compiled schemas:
 vexilc compat old.vexil new.vexil
 ```
 
-Append-only fields, typed tombstones, non-exhaustive variants, version
-constraints, and length-bounded union payloads provide the mechanics. They do
-not remove the need to test rolling upgrades and application behavior.
+New declarations, non-exhaustive variants, deprecation metadata, version
+constraints, and length-bounded union payloads provide evolution mechanics.
+Adding a message field is breaking because inline message values do not carry
+an internal boundary that separates an appended field from parent or aggregate
+data. Typed tombstones reserve removed ordinals but do not make removal
+compatible. These rules do not remove the need to test rolling upgrades and
+application behavior.
 
 Follow the [project-evolution example](examples/project-evolution/) for a
 runnable compatible and breaking comparison.

@@ -18,7 +18,7 @@ vexilc compat <old.vexil> <new.vexil> [--format <human|json>]
 
 ```sh
 $ vexilc compat v1/sensor.vexil v2/sensor.vexil
-  ✓ field "flags" added at @2           compatible (minor)
+  ✗ field "flags" added at @2           BREAKING (major)
   ✗ field "timeout" type u32 → u64      BREAKING (major)
 
 Result: BREAKING — requires major version bump
@@ -38,11 +38,11 @@ $ vexilc compat v1.vexil v2.vexil --format json
       "declaration": "SensorReading",
       "field": "flags",
       "detail": "field \"flags\" added at @2",
-      "classification": "minor"
+      "classification": "major"
     }
   ],
-  "result": "compatible",
-  "suggested_bump": "minor"
+  "result": "breaking",
+  "suggested_bump": "major"
 }
 ```
 

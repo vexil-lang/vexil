@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x63, 0x55, 0xb4, 0xa1, 0x61, 0xe9, 0xa7, 0x0e, 0x3c, 0x62, 0xf1, 0xfb, 0x3c, 0x50, 0x70, 0x44, 0xf9, 0x65, 0xcd, 0x91, 0xe2, 0x16, 0xa5, 0x5b, 0x22, 0x1a, 0x82, 0x22, 0x88, 0x93, 0xbe, 0x30)
 
@@ -53,25 +53,17 @@ class M:
     @staticmethod
     def decode_from(r: _BitReader) -> M:
         m = M.__new__(M)
-        try:
-            _vexil_m_2e_v_present = r.read_bool()
-        except DecodeError:
-            m.v = None
-        else:
-            if _vexil_m_2e_v_present:
-                try:
-                    _vexil__5f_vexil_5f_m_5f_2e_5f_v_5f_optional_5f_value_present = r.read_bool()
-                except DecodeError:
-                    _vexil_m_2e_v_optional_value = None
-                else:
-                    if _vexil__5f_vexil_5f_m_5f_2e_5f_v_5f_optional_5f_value_present:
-                        r.flush_to_byte_boundary()
-                        _vexil_m_2e_v_optional_value = r.read_u16()
-                    else:
-                        _vexil_m_2e_v_optional_value = None
-                m.v = (_vexil_m_2e_v_optional_value,)
+        _vexil_m_2e_v_present = r.read_bool()
+        if _vexil_m_2e_v_present:
+            _vexil__5f_vexil_5f_m_5f_2e_5f_v_5f_optional_5f_value_present = r.read_bool()
+            if _vexil__5f_vexil_5f_m_5f_2e_5f_v_5f_optional_5f_value_present:
+                r.flush_to_byte_boundary()
+                _vexil_m_2e_v_optional_value = r.read_u16()
             else:
-                m.v = None
+                _vexil_m_2e_v_optional_value = None
+            m.v = (_vexil_m_2e_v_optional_value,)
+        else:
+            m.v = None
         if m.v is not None and m.v[0] is not None:
             if not (1 <= m.v[0] <= 1000):
                 raise ValueError(f"constraint violation for field 'v': value {m.v[0]} violates constraint")
@@ -79,4 +71,4 @@ class M:
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "M"]
+__all__ = ["dataclass", "SCHEMA_HASH", "M"]

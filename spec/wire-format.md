@@ -295,6 +295,13 @@ Wire format: `[fields in ascending ordinal order][padding to byte boundary]`
 - Byte-aligned fields trigger alignment flush
 - Final padding to byte boundary
 
+Messages do not carry an internal length or end marker. A nested decoder cannot
+distinguish an appended field from bytes belonging to its parent or to the next
+inline aggregate element. Adding a message field is therefore a breaking schema
+change; transport framing around a complete payload does not create nested
+message boundaries. Decoders MUST NOT reinterpret unexpected EOF as a missing
+appended field.
+
 **Example:**
 ```vexil
 message M {

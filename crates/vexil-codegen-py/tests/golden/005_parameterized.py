@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal as _VexilLiteral
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xb2, 0x56, 0xf5, 0x41, 0xe5, 0x8d, 0xeb, 0x54, 0x58, 0x21, 0xa3, 0xbe, 0x87, 0x43, 0xaa, 0xaf, 0x16, 0xe2, 0x4a, 0x3b, 0xf4, 0xdf, 0xbc, 0x74, 0x43, 0x07, 0xae, 0x2e, 0x48, 0xd6, 0x5a, 0x3f)
 
@@ -66,16 +66,12 @@ class Basic:
     @staticmethod
     def decode_from(r: _BitReader) -> Basic:
         m = Basic.__new__(Basic)
-        try:
-            _vexil_m_2e_a_present = r.read_bool()
-        except DecodeError:
-            m.a = None
+        _vexil_m_2e_a_present = r.read_bool()
+        if _vexil_m_2e_a_present:
+            r.flush_to_byte_boundary()
+            m.a = r.read_u32()
         else:
-            if _vexil_m_2e_a_present:
-                r.flush_to_byte_boundary()
-                m.a = r.read_u32()
-            else:
-                m.a = None
+            m.a = None
         _vexil_m_2e_b_array_length = r.read_leb128()
         _vexil_m_2e_b_array_items: list[str] = []
         for _ in range(_vexil_m_2e_b_array_length):
@@ -195,34 +191,26 @@ class Nested:
     @staticmethod
     def decode_from(r: _BitReader) -> Nested:
         m = Nested.__new__(Nested)
-        try:
-            _vexil_m_2e_a_present = r.read_bool()
-        except DecodeError:
-            m.a = None
+        _vexil_m_2e_a_present = r.read_bool()
+        if _vexil_m_2e_a_present:
+            r.flush_to_byte_boundary()
+            _vexil_m_2e_a_array_length = r.read_leb128()
+            _vexil_m_2e_a_array_items: list[str] = []
+            for _ in range(_vexil_m_2e_a_array_length):
+                _vexil_m_2e_a_array_item = r.read_string()
+                _vexil_m_2e_a_array_items.append(_vexil_m_2e_a_array_item)
+            m.a = _vexil_m_2e_a_array_items
         else:
-            if _vexil_m_2e_a_present:
-                r.flush_to_byte_boundary()
-                _vexil_m_2e_a_array_length = r.read_leb128()
-                _vexil_m_2e_a_array_items: list[str] = []
-                for _ in range(_vexil_m_2e_a_array_length):
-                    _vexil_m_2e_a_array_item = r.read_string()
-                    _vexil_m_2e_a_array_items.append(_vexil_m_2e_a_array_item)
-                m.a = _vexil_m_2e_a_array_items
-            else:
-                m.a = None
+            m.a = None
         _vexil_m_2e_b_array_length = r.read_leb128()
         _vexil_m_2e_b_array_items: list[int | None] = []
         for _ in range(_vexil_m_2e_b_array_length):
-            try:
-                _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present = r.read_bool()
-            except DecodeError:
-                _vexil_m_2e_b_array_item = None
+            _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present = r.read_bool()
+            if _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present:
+                r.flush_to_byte_boundary()
+                _vexil_m_2e_b_array_item = r.read_u32()
             else:
-                if _vexil__5f_vexil_5f_m_5f_2e_5f_b_5f_array_5f_item_present:
-                    r.flush_to_byte_boundary()
-                    _vexil_m_2e_b_array_item = r.read_u32()
-                else:
-                    _vexil_m_2e_b_array_item = None
+                _vexil_m_2e_b_array_item = None
             _vexil_m_2e_b_array_items.append(_vexil_m_2e_b_array_item)
         m.b = _vexil_m_2e_b_array_items
         _vexil_m_2e_c_map_length = r.read_leb128()
@@ -258,35 +246,31 @@ class Nested:
         else:
             _vexil_m_2e_f_result_err = None
             m.f = (False, _vexil_m_2e_f_result_err)
-        try:
-            _vexil_m_2e_g_present = r.read_bool()
-        except DecodeError:
-            m.g = None
-        else:
-            if _vexil_m_2e_g_present:
-                r.flush_to_byte_boundary()
-                _vexil_m_2e_g_result_is_ok = r.read_bool()
-                if _vexil_m_2e_g_result_is_ok:
-                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length = r.read_leb128()
-                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items: list[str] = []
-                    for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length):
-                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_item = r.read_string()
-                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items.append(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_item)
-                    _vexil_m_2e_g_result_ok = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items
-                    m.g = (True, _vexil_m_2e_g_result_ok)
-                else:
-                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_length = r.read_leb128()
-                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items: dict[int, str] = {}
-                    for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_length):
-                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_key = r.read_u32()
-                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_value = r.read_string()
-                        _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items[_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_key] = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_value
-                    _vexil_m_2e_g_result_err = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items
-                    m.g = (False, _vexil_m_2e_g_result_err)
+        _vexil_m_2e_g_present = r.read_bool()
+        if _vexil_m_2e_g_present:
+            r.flush_to_byte_boundary()
+            _vexil_m_2e_g_result_is_ok = r.read_bool()
+            if _vexil_m_2e_g_result_is_ok:
+                _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length = r.read_leb128()
+                _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items: list[str] = []
+                for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_length):
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_item = r.read_string()
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items.append(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_item)
+                _vexil_m_2e_g_result_ok = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_ok_array_items
+                m.g = (True, _vexil_m_2e_g_result_ok)
             else:
-                m.g = None
+                _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_length = r.read_leb128()
+                _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items: dict[int, str] = {}
+                for _ in range(_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_length):
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_key = r.read_u32()
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_value = r.read_string()
+                    _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items[_vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_key] = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_value
+                _vexil_m_2e_g_result_err = _vexil__5f_vexil_5f_m_5f_2e_5f_g_5f_result_5f_err_map_items
+                m.g = (False, _vexil_m_2e_g_result_err)
+        else:
+            m.g = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "Basic", "Nested"]
+__all__ = ["dataclass", "SCHEMA_HASH", "Basic", "Nested"]

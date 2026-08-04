@@ -4,8 +4,8 @@ Real protocols rarely remain in one file or one version. This example combines
 two workflows:
 
 - `vexilc build` resolves imports and emits a Rust module tree;
-- `vexilc compat` distinguishes an append-only field from a breaking field-type
-  change.
+- `vexilc compat` distinguishes a compatible declaration addition from a
+  breaking field-type change.
 
 Run the complete path from the repository root:
 

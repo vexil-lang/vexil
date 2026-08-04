@@ -242,7 +242,7 @@ function runOptionalEvolution() {
           const body =
             version === "v1"
               ? `value:=&M{X:42}; writer:=vexil.NewBitWriter(); if err:=value.Pack(writer); err != nil {t.Fatal(err)}; if got:=writer.Finish(); !bytes.Equal(got, []byte{${hexBytes(encodedV1)}}) {t.Fatalf("optional-evolution v1 encode got %x",got)}; decoded:=&M{}; if err:=decoded.Unpack(vexil.NewBitReader([]byte{${hexBytes(encodedV2)}})); err != nil || decoded.X != 42 {t.Fatalf("optional-evolution v2-to-v1 decode: %#v %v",decoded,err)}`
-              : `present:=uint16(99); value:=&M{X:42,Y:&present}; writer:=vexil.NewBitWriter(); if err:=value.Pack(writer); err != nil {t.Fatal(err)}; if got:=writer.Finish(); !bytes.Equal(got, []byte{${hexBytes(encodedV2)}}) {t.Fatalf("optional-evolution v2 encode got %x",got)}; decoded:=&M{}; if err:=decoded.Unpack(vexil.NewBitReader([]byte{${hexBytes(encodedV1)}})); err != nil || decoded.X != 42 || decoded.Y != nil {t.Fatalf("optional-evolution v1-to-v2 decode: %#v %v",decoded,err)}`;
+              : `present:=uint16(99); value:=&M{X:42,Y:&present}; writer:=vexil.NewBitWriter(); if err:=value.Pack(writer); err != nil {t.Fatal(err)}; if got:=writer.Finish(); !bytes.Equal(got, []byte{${hexBytes(encodedV2)}}) {t.Fatalf("optional-evolution v2 encode got %x",got)}; decoded:=&M{}; if err:=decoded.Unpack(vexil.NewBitReader([]byte{${hexBytes(encodedV1)}})); err != vexil.ErrUnexpectedEOF {t.Fatalf("optional-evolution v1-to-v2 decode: got %v, want %v",err,vexil.ErrUnexpectedEOF)}`;
           writeFileSync(
             join(dir, "generated_test.go"),
             `package ${pkg}\nimport ("bytes"; "testing"; vexil "github.com/vexil-lang/vexil/packages/runtime-go")\nfunc TestOptionalEvolution(t *testing.T) { ${body} }\n`,
@@ -252,8 +252,8 @@ function runOptionalEvolution() {
           const body =
             version === "v1"
               ? `value=M(x=42); got=value.encode(); assert got.hex() == '${encodedV1}', f'optional-evolution v1 encode {got.hex()}'; decoded=M.decode(bytes.fromhex('${encodedV2}')); assert decoded.x == 42, f'optional-evolution v2-to-v1 decode {decoded!r}'`
-              : `value=M(x=42,y=99); got=value.encode(); assert got.hex() == '${encodedV2}', f'optional-evolution v2 encode {got.hex()}'; decoded=M.decode(bytes.fromhex('${encodedV1}')); assert decoded.x == 42 and decoded.y is None, f'optional-evolution v1-to-v2 decode {decoded!r}'`;
-          writeFileSync(join(dir, "run.py"), `from generated import M\n${body}\n`);
+              : `value=M(x=42,y=99); got=value.encode(); assert got.hex() == '${encodedV2}', f'optional-evolution v2 encode {got.hex()}';\ntry:\n    M.decode(bytes.fromhex('${encodedV1}'))\nexcept DecodeError:\n    pass\nelse:\n    raise AssertionError('optional-evolution v1-to-v2 decode accepted missing optional field')`;
+          writeFileSync(join(dir, "run.py"), `from generated import M\nfrom vexil_runtime import DecodeError\n${body}\n`);
           run(python, ["run.py"], dir, `optional-evolution ${version}: Python contract`, {
             ...process.env,
             PYTHONPATH: `${runtimePy}${process.platform === "win32" ? ";" : ":"}${dir}`,

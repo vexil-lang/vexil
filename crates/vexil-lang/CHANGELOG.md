@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Classify message field additions as major changes instead of promising
+  cross-version decoding without an internal message boundary.
 - Reject unsupported message invariants instead of silently compiling them.
 - Preserve declaration identity through aliases, imports, tombstones, traits,
   and diamond dependency remapping.
