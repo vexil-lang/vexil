@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Reject unsafe or case-colliding project output paths instead of overwriting
+  an earlier generated file.
 - Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
 - Keep published Result discriminants and correct nested optional, constraint,
   project export, runtime-import, and trait-method generation behavior.
@@ -54,7 +56,6 @@
 - chore(release): bump crate versions
 
 All notable changes to this project will be documented in this file.
-
 
 
 

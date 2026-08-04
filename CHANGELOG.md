@@ -16,6 +16,9 @@ changes remain in each crate's changelog.
 
 ### Tooling
 
+- Add checked, portable project-output construction for codegen backends and
+  validate the complete generated path set before `vexilc build` writes files.
+  Existing `CodegenBackend` implementations remain source compatible.
 - Add a diagnostics-first `vexilc lsp` stdio server for unsaved single-file
   documents, with full-document synchronization and UTF-16-safe ranges. This
   is available from current source builds and was not included in `vexilc`

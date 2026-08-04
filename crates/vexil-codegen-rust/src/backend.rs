@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 
 use vexil_lang::codegen::portable::{PortableExpr, PortableExprKind, PortableStatement};
-use vexil_lang::codegen::{CodegenBackend, CodegenError};
+use vexil_lang::codegen::{CodegenBackend, CodegenError, ProjectOutputBuilder};
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
 use vexil_lang::project::ProjectResult;
 
@@ -32,7 +32,7 @@ impl CodegenBackend for RustBackend {
         &self,
         result: &ProjectResult,
     ) -> Result<BTreeMap<PathBuf, String>, CodegenError> {
-        let mut files = BTreeMap::new();
+        let mut files = ProjectOutputBuilder::new();
         let mut mod_tree: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
         for (ns, compiled) in &result.schemas {
@@ -143,7 +143,7 @@ impl CodegenBackend for RustBackend {
                 file_path.push(seg);
             }
             file_path.push(format!("{file_name}.rs"));
-            files.insert(file_path, code);
+            files.add(file_path, code)?;
         }
 
         // Generate mod.rs files
@@ -158,10 +158,10 @@ impl CodegenBackend for RustBackend {
 
             let child_refs: Vec<&str> = children.iter().map(|s| s.as_str()).collect();
             let mod_content = crate::generate_mod_file(&child_refs);
-            files.insert(mod_path, mod_content);
+            files.add(mod_path, mod_content)?;
         }
 
-        Ok(files)
+        Ok(files.finish())
     }
 }
 

@@ -1,5 +1,7 @@
 use ariadne::{Color, Label, Report, ReportKind, Source};
 use serde::Serialize;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use vexil_lang::compat::{BumpKind, ChangeKind, CompatResult};
 use vexil_lang::diagnostic::{Diagnostic, Severity};
 
@@ -172,6 +174,35 @@ fn cmd_check(filename: &str, include_paths: &[String], json_output: bool) -> i32
     0
 }
 
+fn builtin_backend(target: &str) -> Result<Box<dyn vexil_lang::codegen::CodegenBackend>, String> {
+    match target {
+        "rust" => Ok(Box::new(vexil_codegen_rust::RustBackend)),
+        "typescript" => Ok(Box::new(vexil_codegen_ts::TypeScriptBackend)),
+        "go" => Ok(Box::new(vexil_codegen_go::GoBackend)),
+        "python" => Ok(Box::new(vexil_codegen_py::PythonBackend)),
+        other => Err(format!(
+            "unknown target `{other}` (available: rust, typescript, go, python)"
+        )),
+    }
+}
+
+fn write_project_files(output_path: &Path, files: BTreeMap<PathBuf, String>) -> Result<(), String> {
+    let files = vexil_lang::validate_project_output(files).map_err(|error| error.to_string())?;
+
+    for (relative_path, content) in &files {
+        let full_path = output_path.join(relative_path);
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("creating directory {}: {error}", parent.display()))?;
+        }
+        std::fs::write(&full_path, content)
+            .map_err(|error| format!("writing {}: {error}", full_path.display()))?;
+        eprintln!("  wrote {}", full_path.display());
+    }
+
+    Ok(())
+}
+
 fn cmd_codegen(filename: &str, output: Option<&str>, target: &str) -> i32 {
     let source = match std::fs::read_to_string(filename) {
         Ok(s) => s,
@@ -198,13 +229,10 @@ fn cmd_codegen(filename: &str, output: Option<&str>, target: &str) -> i32 {
             return 1;
         }
     };
-    let backend: Box<dyn vexil_lang::codegen::CodegenBackend> = match target {
-        "rust" => Box::new(vexil_codegen_rust::RustBackend),
-        "typescript" => Box::new(vexil_codegen_ts::TypeScriptBackend),
-        "go" => Box::new(vexil_codegen_go::GoBackend),
-        "python" => Box::new(vexil_codegen_py::PythonBackend),
-        other => {
-            eprintln!("error: unknown target `{other}` (available: rust, typescript, go, python)");
+    let backend = match builtin_backend(target) {
+        Ok(backend) => backend,
+        Err(error) => {
+            eprintln!("error: {error}");
             return 1;
         }
     };
@@ -274,13 +302,10 @@ fn cmd_build(root_file: &str, include_paths: &[String], output_dir: &str, target
     }
 
     // Resolve backend
-    let backend: Box<dyn vexil_lang::codegen::CodegenBackend> = match target {
-        "rust" => Box::new(vexil_codegen_rust::RustBackend),
-        "typescript" => Box::new(vexil_codegen_ts::TypeScriptBackend),
-        "go" => Box::new(vexil_codegen_go::GoBackend),
-        "python" => Box::new(vexil_codegen_py::PythonBackend),
-        other => {
-            eprintln!("error: unknown target `{other}` (available: rust, typescript, go, python)");
+    let backend = match builtin_backend(target) {
+        Ok(backend) => backend,
+        Err(error) => {
+            eprintln!("error: {error}");
             return 1;
         }
     };
@@ -294,21 +319,10 @@ fn cmd_build(root_file: &str, include_paths: &[String], output_dir: &str, target
         }
     };
 
-    // Write files to output directory
-    let output_path = std::path::Path::new(output_dir);
-    for (rel_path, content) in &files {
-        let full_path = output_path.join(rel_path);
-        if let Some(parent) = full_path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
-                eprintln!("error: creating directory {}: {e}", parent.display());
-                return 1;
-            }
-        }
-        if let Err(e) = std::fs::write(&full_path, content) {
-            eprintln!("error: writing {}: {e}", full_path.display());
-            return 1;
-        }
-        eprintln!("  wrote {}", full_path.display());
+    // Validate the complete path set before the first filesystem mutation.
+    if let Err(error) = write_project_files(Path::new(output_dir), files) {
+        eprintln!("error: {error}");
+        return 1;
     }
 
     eprintln!("build complete: {} schemas compiled", result.schemas.len());
@@ -1444,5 +1458,63 @@ fn main() {
             print_usage();
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_generated_path_does_not_create_output_directory() {
+        let temporary = tempfile::tempdir().expect("temporary directory");
+        let output = temporary.path().join("generated");
+        let files = BTreeMap::from([(PathBuf::from("../escape.rs"), String::new())]);
+
+        let error = write_project_files(&output, files).expect_err("unsafe path");
+
+        assert!(error.contains("codegen-output-traversal"), "{error}");
+        assert!(
+            !output.exists(),
+            "validation must precede directory creation"
+        );
+    }
+
+    #[test]
+    fn case_folded_generated_collision_does_not_create_output_directory() {
+        let temporary = tempfile::tempdir().expect("temporary directory");
+        let output = temporary.path().join("generated");
+        let files = BTreeMap::from([
+            (PathBuf::from("demo/File.rs"), String::new()),
+            (PathBuf::from("demo/file.rs"), String::new()),
+        ]);
+
+        let error = write_project_files(&output, files).expect_err("colliding paths");
+
+        assert!(error.contains("codegen-output-duplicate-path"), "{error}");
+        assert!(
+            !output.exists(),
+            "validation must precede directory creation"
+        );
+    }
+
+    #[test]
+    fn alternate_separator_is_reconstructed_before_writing() {
+        let temporary = tempfile::tempdir().expect("temporary directory");
+        let output = temporary.path().join("generated");
+        let files = BTreeMap::from([(PathBuf::from("demo\\generated.rs"), "source".to_string())]);
+
+        write_project_files(&output, files).expect("portable output");
+
+        assert_eq!(
+            std::fs::read_to_string(output.join("demo").join("generated.rs"))
+                .expect("reconstructed output path"),
+            "source"
+        );
+        #[cfg(unix)]
+        assert!(
+            !output.join("demo\\generated.rs").exists(),
+            "the original backslash key must not be written as one Unix filename"
+        );
     }
 }

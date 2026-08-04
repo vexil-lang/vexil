@@ -11,6 +11,8 @@
 
 ### Fixed
 
+- Reject unsafe or case-colliding project output paths instead of overwriting
+  an earlier generated file.
 - Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
 - Keep published Result discriminants and correct nested optional, constraint,
   map/set ordering, inline-bit, and trait-method generation behavior.

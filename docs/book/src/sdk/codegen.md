@@ -90,9 +90,30 @@ Before implementing it, answer these questions:
 disk.
 
 `generate_project` returns a `BTreeMap<PathBuf, String>`. Every path is relative
-to the output directory chosen by the caller. Do not return absolute paths,
-parent traversal, or machine-specific separators embedded in path strings.
-Detect target-name and output-path collisions before returning a partial map.
+to the output directory chosen by the caller. Build that map with
+`ProjectOutputBuilder`:
+
+```rust
+use vexil_lang::ProjectOutputBuilder;
+
+let mut output = ProjectOutputBuilder::new();
+output.add("demo/generated.rs", "// generated source\n")?;
+let files = output.finish();
+# Ok::<(), vexil_lang::OutputPathError>(())
+```
+
+The builder accepts a conservative portable path grammar: one or more ASCII
+components containing letters, digits, `_`, `-`, or `.`, separated by either
+path separator. It rejects roots and drive prefixes, `.` and `..`, repeated,
+mixed, or trailing separators, Windows device names, and case-insensitive
+collisions. This is intentionally narrower than any one host filesystem.
+
+Existing backend implementations remain valid and are not deprecated. A custom
+backend may continue returning a raw map, while a caller can apply
+`validate_project_output` and write the canonical map it returns. The function
+consumes the original map and reconstructs every accepted path using the host's
+separator. Validation prevents lexical path escape. It does not follow symlinks
+or junctions and does not make a sequence of filesystem writes transactional.
 
 For identical compiler input and backend configuration, return identical paths
 and bytes. Sort any data derived from hash maps or sets before emitting it. The
@@ -116,6 +137,11 @@ Use the narrow shared variants when they describe the failure:
   not need it because callers write returned files.
 - `BackendSpecific` for a typed target error such as an escaped-name collision
   or an unsupported target-language construct.
+
+`ProjectOutputBuilder::add` returns `OutputPathError` directly. When a backend
+uses `?` from `generate_project`, Vexil places that error in the existing
+`CodegenError::BackendSpecific` variant. A caller can downcast the boxed error
+to `OutputPathError` and use its stable `diagnostic_id`.
 
 Validate the whole input before expensive emission where practical. On error,
 return no project map. Do not make callers distinguish trustworthy files from

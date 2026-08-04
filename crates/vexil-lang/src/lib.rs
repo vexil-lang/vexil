@@ -21,7 +21,7 @@
 //! ## API Tiers
 //!
 //! - **Tier 1 (stable):** [`compile`], [`compile_project`], [`CompiledSchema`],
-//!   [`ProjectResult`], [`CodegenBackend`]
+//!   [`ProjectResult`], [`CodegenBackend`], [`ProjectOutputBuilder`]
 //! - **Tier 2 (semi-stable):** AST types, pipeline stages
 //! - **Tier 3 (internal):** Lexer, parser -- subject to change
 
@@ -60,7 +60,9 @@ pub mod typeck;
 /// Semantic validation of parsed schemas.
 pub mod validate;
 
-pub use codegen::{CodegenBackend, CodegenError};
+pub use codegen::{
+    validate_project_output, CodegenBackend, CodegenError, OutputPathError, ProjectOutputBuilder,
+};
 pub use ir::{CompiledSchema, ResolvedType, TypeDef, TypeId, TypeRegistry};
 pub use meta::{meta_schema, pack_schema};
 pub use project::compile_project;
