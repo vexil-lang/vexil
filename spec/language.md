@@ -1161,7 +1161,7 @@ decode messages encoded with the old schema, and vice versa.
 
 | Change | Classification |
 |---|---|
-| Add a field with a new, previously-unused ordinal | Compatible — minor |
+| Add a field with a new, previously-unused ordinal | **Breaking** — major |
 | Add a variant to a `@non_exhaustive` enum or union | Compatible — minor |
 | Add a bit position to a `flags` declaration | Compatible — minor |
 | Add a new declaration | Compatible — minor |
@@ -1220,12 +1220,14 @@ Implementations MUST NOT rely on stack overflow for enforcement.
 ### 11.4  Trailing bytes
 
 When a decoder has consumed all declared fields of a message, any
-remaining bytes in the payload are **ignored**.  This enables forward
-compatibility — a v2 encoder may append new fields that a v1 decoder
-simply skips.
+remaining bytes in a caller-bounded payload are **ignored**. This permits a
+top-level caller to carry separate trailing data, but it does not make message
+field addition compatible: nested and aggregate message values do not own such
+a boundary (§11.10).
 
 Decoders MUST NOT reject messages with trailing bytes after the last
-known field.  Decoders MUST NOT interpret trailing bytes.
+known field when the caller has supplied a bounded payload. Decoders MUST NOT
+interpret trailing bytes as fields that are absent from their schema.
 
 ### 11.5  Sub-byte boundary at message end
 
@@ -1271,11 +1273,20 @@ string field returns `DecodeError::InvalidUtf8`.
 
 ### 11.10  Schema evolution compatibility rules
 
-**Adding a field** (new ordinal, appended in declaration order):
-- v1 encoder → v2 decoder: v2 decoder reads known fields, new field gets
-  its default value (zero / empty / None depending on type).
-- v2 encoder → v1 decoder: v1 decoder reads its known fields, ignores
-  trailing bytes (§11.4).
+**Adding a field** (including a new ordinal appended in declaration order) is
+**BREAKING**. Message values are not internally length-delimited (§7.1 of the
+wire-format specification). A decoder of a nested message cannot distinguish
+an appended field from the parent message's next field or from the next value
+in an inline aggregate. At a top-level frame, some particular byte-aligned
+schemas may appear to interoperate by treating EOF as a default or by ignoring
+trailing bytes, but that behaviour is not a schema-level compatibility
+guarantee. Decoders MUST continue to reject truncated required fields rather
+than treating `UnexpectedEof` as an evolution signal.
+
+To evolve message data without a coordinated major-version transition, define
+a separately bounded value or add a new declaration and migrate explicitly.
+Transport framing around a complete payload does not create boundaries for
+nested message values.
 
 **Adding a variant** to a `@non_exhaustive` union:
 - v2 encoder → v1 decoder: v1 decoder reads discriminant, does not

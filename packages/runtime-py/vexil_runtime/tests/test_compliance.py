@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from vexil_runtime import BitWriter, BitReader
+from vexil_runtime import BitWriter, BitReader, DecodeError
 
 VECTORS_DIR = Path(__file__).parent.parent.parent.parent.parent / "compliance" / "vectors"
 
@@ -276,11 +276,14 @@ class TestComplianceEvolution:
         w.write_u32(int(vec["value_v1"]["x"]))
         assert to_hex(w.finish()) == vec["encoded_v1"]
 
-    def test_v1_bytes_decoded_as_v2_fills_default(self) -> None:
+    def test_v1_bytes_do_not_contain_appended_required_field(self) -> None:
         vec = next(v for v in self.vectors if v["name"] == "v1_encode_v2_decode_appended_field")
         r = BitReader(hex_to_bytes(vec["encoded_v1"]))
         x = r.read_u32()
-        assert x == vec["decoded_as_v2"]["x"]
+        assert x == vec["value_v1"]["x"]
+        assert vec["classification"] == "breaking"
+        with pytest.raises(DecodeError, match="Unexpected end of data"):
+            r.read_u16()
 
     def test_v2_encode_produces_expected_bytes(self) -> None:
         vec = next(v for v in self.vectors if v["name"] == "v2_encode_v1_decode_trailing_ignored")
@@ -295,6 +298,38 @@ class TestComplianceEvolution:
         x = r.read_u32()
         assert x == vec["decoded_as_v1"]["x"]
         assert r.remaining() > 0
+
+    def test_nested_appended_field_consumes_parent_field(self) -> None:
+        vec = next(
+            v for v in self.vectors if v["name"] == "appended_nested_field_consumes_parent_field"
+        )
+        w = BitWriter()
+        w.write_u8(int(vec["value_v1"]["inner"]["x"]))
+        w.write_u8(int(vec["value_v1"]["z"]))
+        encoded = w.finish()
+        assert to_hex(encoded) == vec["encoded_v1"]
+
+        r = BitReader(encoded)
+        assert r.read_u8() == 1
+        assert r.read_u8() == 2
+        with pytest.raises(DecodeError, match="Unexpected end of data"):
+            r.read_u8()
+
+    def test_old_sub_byte_padding_matches_appended_zero_field(self) -> None:
+        vec = next(
+            v for v in self.vectors if v["name"] == "appended_sub_byte_default_matches_old_padding"
+        )
+        v1 = BitWriter()
+        v1.write_bits(int(vec["value_v1"]["x"]), 4)
+        v1_bytes = v1.finish()
+        v2 = BitWriter()
+        v2.write_bits(int(vec["value_v2"]["x"]), 4)
+        v2.write_bits(int(vec["value_v2"]["y"]), 4)
+        v2_bytes = v2.finish()
+
+        assert to_hex(v1_bytes) == vec["encoded_v1"]
+        assert to_hex(v2_bytes) == vec["encoded_v2"]
+        assert v1_bytes == v2_bytes
 
 
 def parse_delta_fields(schema: str) -> list[dict]:

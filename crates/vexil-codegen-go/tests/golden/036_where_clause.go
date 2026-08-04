@@ -237,22 +237,20 @@ func (m *Config) Pack(w *vexil.BitWriter) error {
 func (m *Config) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal uint16
-				{
-					v, err := r.ReadU16()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal uint16
+			{
+				v, err := r.ReadU16()
+				if err != nil {
+					return err
 				}
-				m.Port = &optVal
+				optVal = v
 			}
+			m.Port = &optVal
 		}
 	}
 	if m.Port != nil {

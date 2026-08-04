@@ -119,42 +119,38 @@ func (m *SensorReading) Unpack(r *vexil.BitReader) error {
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal float64
-				{
-					v, err := r.ReadF64()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal float64
+			{
+				v, err := r.ReadF64()
+				if err != nil {
+					return err
 				}
-				m.GpsLat = &optVal
+				optVal = v
 			}
+			m.GpsLat = &optVal
 		}
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal float64
-				{
-					v, err := r.ReadF64()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal float64
+			{
+				v, err := r.ReadF64()
+				if err != nil {
+					return err
 				}
-				m.GpsLon = &optVal
+				optVal = v
 			}
+			m.GpsLon = &optVal
 		}
 	}
 	r.FlushToByteBoundary()

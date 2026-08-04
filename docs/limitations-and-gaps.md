@@ -1,6 +1,6 @@
 # Compatibility and Current Limits
 
-Last reviewed: 2026-08-03
+Last reviewed: 2026-08-04
 
 This page separates verified behavior from adoption boundaries and future work.
 It is intentionally conservative: repository tests are evidence for the tested
@@ -11,8 +11,8 @@ surfaces, not a guarantee for every application or environment.
 - The compiler accepts and rejects the schemas listed in the conformance corpus.
 - Rust and TypeScript exercise broad golden and byte-vector coverage.
 - Generated Go and Python compile and execute a representative shared wire
-  matrix, including core scalars, collections, optionals, results, evolution,
-  and open unions.
+  matrix, including core scalars, collections, optionals, results, and open
+  unions.
 - Fields are packed LSB-first, multi-byte scalars are little-endian, unsigned
   varints use LEB128, and signed varints use ZigZag followed by LEB128.
 - Canonical schema hashes use BLAKE3 and ignore comments and formatting.
@@ -38,6 +38,14 @@ schemas, target versions, and deployment platforms your protocol uses.
 
 Peers need the schema out of band. The generated BLAKE3 hash can identify a
 contract, but it does not discover, authenticate, or distribute schemas.
+
+### Message field additions are breaking
+
+Message values do not carry an internal length boundary. In nested messages and
+inline aggregates, a decoder cannot distinguish an appended field from the
+parent's next field or the next aggregate element. `vexilc compat` therefore
+classifies every message field addition as major. A top-level reader that can
+stop early is not evidence of general schema compatibility.
 
 ### Transport remains application-owned
 

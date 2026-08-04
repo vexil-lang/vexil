@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0xaa, 0xc0, 0x46, 0xf1, 0xe1, 0xc5, 0x86, 0xdb, 0x8e, 0xd3, 0xab, 0x3a, 0x96, 0xba, 0x5b, 0x55, 0x70, 0x40, 0x9c, 0x3c, 0x76, 0x7b, 0xcb, 0x75, 0x57, 0x2a, 0x9f, 0xa1, 0x8e, 0x35, 0xdc, 0x57)
 MaxSize: int = 100
@@ -173,16 +173,12 @@ class Config:
     @staticmethod
     def decode_from(r: _BitReader) -> Config:
         m = Config.__new__(Config)
-        try:
-            _vexil_m_2e_port_present = r.read_bool()
-        except DecodeError:
-            m.port = None
+        _vexil_m_2e_port_present = r.read_bool()
+        if _vexil_m_2e_port_present:
+            r.flush_to_byte_boundary()
+            m.port = r.read_u16()
         else:
-            if _vexil_m_2e_port_present:
-                r.flush_to_byte_boundary()
-                m.port = r.read_u16()
-            else:
-                m.port = None
+            m.port = None
         if m.port is not None:
             if not (1024 <= m.port <= 65535):
                 raise ValueError(f"constraint violation for field 'port': value {m.port} violates constraint")
@@ -190,4 +186,4 @@ class Config:
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "MaxSize", "MinSize", "User", "Config"]
+__all__ = ["dataclass", "SCHEMA_HASH", "MaxSize", "MinSize", "User", "Config"]

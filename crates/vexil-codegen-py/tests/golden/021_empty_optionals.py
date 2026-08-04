@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x97, 0x11, 0x67, 0xf9, 0x7a, 0xc2, 0x7a, 0xdd, 0xd0, 0x04, 0xd9, 0xee, 0x7f, 0x28, 0x66, 0xd8, 0x38, 0x00, 0x0b, 0xd8, 0x04, 0xc1, 0x61, 0xc5, 0x34, 0x53, 0xe8, 0x35, 0x51, 0x01, 0x42, 0x60)
 
@@ -58,35 +58,23 @@ class WithOptionals:
     @staticmethod
     def decode_from(r: _BitReader) -> WithOptionals:
         m = WithOptionals.__new__(WithOptionals)
-        try:
-            _vexil_m_2e_name_present = r.read_bool()
-        except DecodeError:
+        _vexil_m_2e_name_present = r.read_bool()
+        if _vexil_m_2e_name_present:
+            r.flush_to_byte_boundary()
+            m.name = r.read_string()
+        else:
             m.name = None
+        _vexil_m_2e_value_present = r.read_bool()
+        if _vexil_m_2e_value_present:
+            r.flush_to_byte_boundary()
+            m.value = r.read_u32()
         else:
-            if _vexil_m_2e_name_present:
-                r.flush_to_byte_boundary()
-                m.name = r.read_string()
-            else:
-                m.name = None
-        try:
-            _vexil_m_2e_value_present = r.read_bool()
-        except DecodeError:
             m.value = None
+        _vexil_m_2e_flag_present = r.read_bool()
+        if _vexil_m_2e_flag_present:
+            m.flag = r.read_bool()
         else:
-            if _vexil_m_2e_value_present:
-                r.flush_to_byte_boundary()
-                m.value = r.read_u32()
-            else:
-                m.value = None
-        try:
-            _vexil_m_2e_flag_present = r.read_bool()
-        except DecodeError:
             m.flag = None
-        else:
-            if _vexil_m_2e_flag_present:
-                m.flag = r.read_bool()
-            else:
-                m.flag = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -133,25 +121,17 @@ class NestedOptional:
     @staticmethod
     def decode_from(r: _BitReader) -> NestedOptional:
         m = NestedOptional.__new__(NestedOptional)
-        try:
-            _vexil_m_2e_inner_present = r.read_bool()
-        except DecodeError:
-            m.inner = None
-        else:
-            if _vexil_m_2e_inner_present:
-                try:
-                    _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present = r.read_bool()
-                except DecodeError:
-                    _vexil_m_2e_inner_optional_value = None
-                else:
-                    if _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present:
-                        r.flush_to_byte_boundary()
-                        _vexil_m_2e_inner_optional_value = r.read_u32()
-                    else:
-                        _vexil_m_2e_inner_optional_value = None
-                m.inner = (_vexil_m_2e_inner_optional_value,)
+        _vexil_m_2e_inner_present = r.read_bool()
+        if _vexil_m_2e_inner_present:
+            _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present = r.read_bool()
+            if _vexil__5f_vexil_5f_m_5f_2e_5f_inner_5f_optional_5f_value_present:
+                r.flush_to_byte_boundary()
+                _vexil_m_2e_inner_optional_value = r.read_u32()
             else:
-                m.inner = None
+                _vexil_m_2e_inner_optional_value = None
+            m.inner = (_vexil_m_2e_inner_optional_value,)
+        else:
+            m.inner = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
@@ -206,37 +186,25 @@ class AllEmpty:
     @staticmethod
     def decode_from(r: _BitReader) -> AllEmpty:
         m = AllEmpty.__new__(AllEmpty)
-        try:
-            _vexil_m_2e_a_present = r.read_bool()
-        except DecodeError:
+        _vexil_m_2e_a_present = r.read_bool()
+        if _vexil_m_2e_a_present:
+            r.flush_to_byte_boundary()
+            m.a = r.read_string()
+        else:
             m.a = None
+        _vexil_m_2e_b_present = r.read_bool()
+        if _vexil_m_2e_b_present:
+            r.flush_to_byte_boundary()
+            m.b = r.read_u32()
         else:
-            if _vexil_m_2e_a_present:
-                r.flush_to_byte_boundary()
-                m.a = r.read_string()
-            else:
-                m.a = None
-        try:
-            _vexil_m_2e_b_present = r.read_bool()
-        except DecodeError:
             m.b = None
+        _vexil_m_2e_c_present = r.read_bool()
+        if _vexil_m_2e_c_present:
+            m.c = r.read_bool()
         else:
-            if _vexil_m_2e_b_present:
-                r.flush_to_byte_boundary()
-                m.b = r.read_u32()
-            else:
-                m.b = None
-        try:
-            _vexil_m_2e_c_present = r.read_bool()
-        except DecodeError:
             m.c = None
-        else:
-            if _vexil_m_2e_c_present:
-                m.c = r.read_bool()
-            else:
-                m.c = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "WithOptionals", "NestedOptional", "AllEmpty"]
+__all__ = ["dataclass", "SCHEMA_HASH", "WithOptionals", "NestedOptional", "AllEmpty"]

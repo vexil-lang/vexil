@@ -40,61 +40,55 @@ func (m *WithOptionals) Pack(w *vexil.BitWriter) error {
 func (m *WithOptionals) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal string
-				{
-					v, err := r.ReadString()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal string
+			{
+				v, err := r.ReadString()
+				if err != nil {
+					return err
 				}
-				m.Name = &optVal
+				optVal = v
 			}
+			m.Name = &optVal
 		}
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal uint32
-				{
-					v, err := r.ReadU32()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal uint32
+			{
+				v, err := r.ReadU32()
+				if err != nil {
+					return err
 				}
-				m.Value = &optVal
+				optVal = v
 			}
+			m.Value = &optVal
 		}
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				var optVal bool
-				{
-					v, err := r.ReadBool()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			var optVal bool
+			{
+				v, err := r.ReadBool()
+				if err != nil {
+					return err
 				}
-				m.Flag = &optVal
+				optVal = v
 			}
+			m.Flag = &optVal
 		}
 	}
 	r.FlushToByteBoundary()
@@ -128,34 +122,30 @@ func (m *NestedOptional) Pack(w *vexil.BitWriter) error {
 func (m *NestedOptional) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				var optVal *uint32
-				{
-					present, err := r.ReadBool()
-					if err != nil && err != vexil.ErrUnexpectedEOF {
-						return err
-					}
-					if err == nil {
-						if present {
-							r.FlushToByteBoundary()
-							var nestedOptVal uint32
-							{
-								v, err := r.ReadU32()
-								if err != nil {
-									return err
-								}
-								nestedOptVal = v
-							}
-							optVal = &nestedOptVal
-						}
-					}
+		if present {
+			var optVal *uint32
+			{
+				present, err := r.ReadBool()
+				if err != nil {
+					return err
 				}
-				m.Inner = &optVal
+				if present {
+					r.FlushToByteBoundary()
+					var nestedOptVal uint32
+					{
+						v, err := r.ReadU32()
+						if err != nil {
+							return err
+						}
+						nestedOptVal = v
+					}
+					optVal = &nestedOptVal
+				}
 			}
+			m.Inner = &optVal
 		}
 	}
 	r.FlushToByteBoundary()
@@ -197,61 +187,55 @@ func (m *AllEmpty) Pack(w *vexil.BitWriter) error {
 func (m *AllEmpty) Unpack(r *vexil.BitReader) error {
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal string
-				{
-					v, err := r.ReadString()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal string
+			{
+				v, err := r.ReadString()
+				if err != nil {
+					return err
 				}
-				m.A = &optVal
+				optVal = v
 			}
+			m.A = &optVal
 		}
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal uint32
-				{
-					v, err := r.ReadU32()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			r.FlushToByteBoundary()
+			var optVal uint32
+			{
+				v, err := r.ReadU32()
+				if err != nil {
+					return err
 				}
-				m.B = &optVal
+				optVal = v
 			}
+			m.B = &optVal
 		}
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				var optVal bool
-				{
-					v, err := r.ReadBool()
-					if err != nil {
-						return err
-					}
-					optVal = v
+		if present {
+			var optVal bool
+			{
+				v, err := r.ReadBool()
+				if err != nil {
+					return err
 				}
-				m.C = &optVal
+				optVal = v
 			}
+			m.C = &optVal
 		}
 	}
 	r.FlushToByteBoundary()

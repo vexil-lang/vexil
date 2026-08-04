@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+
+- Report message field additions as breaking changes requiring a major schema
+  version transition.
+
 ## [0.6.0] - 2026-08-03
 
 ### Added

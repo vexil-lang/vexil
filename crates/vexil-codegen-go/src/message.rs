@@ -772,10 +772,9 @@ fn emit_read_type(
         ResolvedType::Optional(inner) => {
             w.open_block("");
             w.line(&format!("present, err := {reader}.ReadBool()"));
-            w.open_block("if err != nil && err != vexil.ErrUnexpectedEOF");
+            w.open_block("if err != nil");
             w.line(err_return);
             w.close_block();
-            w.open_block("if err == nil");
             w.open_block("if present");
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.FlushToByteBoundary()"));
@@ -789,7 +788,6 @@ fn emit_read_type(
             w.line(&format!("var {opt_value} {inner_go}"));
             emit_read_type(w, &opt_value, inner, registry, reader, err_return);
             w.line(&format!("{target} = &{opt_value}"));
-            w.close_block();
             w.close_block();
             w.close_block();
         }

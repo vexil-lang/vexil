@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x4f, 0x25, 0x39, 0x5a, 0x3e, 0x94, 0xda, 0xf1, 0x8a, 0xee, 0xff, 0x59, 0x90, 0x93, 0x11, 0xaa, 0x20, 0x39, 0xa6, 0x36, 0x6b, 0xe5, 0x3c, 0xb0, 0x16, 0x54, 0x23, 0x6c, 0x09, 0x44, 0x4d, 0x73)
 
@@ -112,22 +112,18 @@ class LinkedList:
     def decode_from(r: _BitReader) -> LinkedList:
         m = LinkedList.__new__(LinkedList)
         m.value = r.read_i64()
-        try:
-            _vexil_m_2e_next_present = r.read_bool()
-        except DecodeError:
-            m.next = None
+        _vexil_m_2e_next_present = r.read_bool()
+        if _vexil_m_2e_next_present:
+            r.flush_to_byte_boundary()
+            try:
+                r.enter_nested()
+                m.next = LinkedList.decode_from(r)
+            finally:
+                r.leave_nested()
         else:
-            if _vexil_m_2e_next_present:
-                r.flush_to_byte_boundary()
-                try:
-                    r.enter_nested()
-                    m.next = LinkedList.decode_from(r)
-                finally:
-                    r.leave_nested()
-            else:
-                m.next = None
+            m.next = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "TreeNode", "LinkedList"]
+__all__ = ["dataclass", "SCHEMA_HASH", "TreeNode", "LinkedList"]

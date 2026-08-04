@@ -433,17 +433,18 @@ func TestComplianceEvolution(t *testing.T) {
 		t.Fatalf("failed to read evolution.json: %v", err)
 	}
 	var vectors []struct {
-		Name        string                 `json:"name"`
-		SchemaV1    string                 `json:"schema_v1"`
-		SchemaV2    string                 `json:"schema_v2"`
-		Type        string                 `json:"type"`
-		ValueV1     map[string]interface{} `json:"value_v1"`
-		ValueV2     map[string]interface{} `json:"value_v2"`
-		EncodedV1   string                 `json:"encoded_v1"`
-		EncodedV2   string                 `json:"encoded_v2"`
-		DecodedAsV1 map[string]interface{} `json:"decoded_as_v1"`
-		DecodedAsV2 map[string]interface{} `json:"decoded_as_v2"`
-		Notes       string                 `json:"notes"`
+		Name           string                 `json:"name"`
+		SchemaV1       string                 `json:"schema_v1"`
+		SchemaV2       string                 `json:"schema_v2"`
+		Type           string                 `json:"type"`
+		ValueV1        map[string]interface{} `json:"value_v1"`
+		ValueV2        map[string]interface{} `json:"value_v2"`
+		EncodedV1      string                 `json:"encoded_v1"`
+		EncodedV2      string                 `json:"encoded_v2"`
+		DecodedAsV1    map[string]interface{} `json:"decoded_as_v1"`
+		DecodedAsV2    map[string]interface{} `json:"decoded_as_v2"`
+		Classification string                 `json:"classification"`
+		Notes          string                 `json:"notes"`
 	}
 	if err := json.Unmarshal(data, &vectors); err != nil {
 		t.Fatalf("failed to parse evolution.json: %v", err)
@@ -451,6 +452,9 @@ func TestComplianceEvolution(t *testing.T) {
 
 	for _, v := range vectors {
 		t.Run(v.Name, func(t *testing.T) {
+			if v.Classification != "breaking" {
+				t.Fatalf("evolution vector classification: got %q, want breaking", v.Classification)
+			}
 			if v.Name == "v1_encode_v2_decode_appended_field" {
 				w := NewBitWriter()
 				w.WriteU32(uint32(toFloat64(v.ValueV1["x"])))
@@ -467,6 +471,39 @@ func TestComplianceEvolution(t *testing.T) {
 				want := hexToBytes(t, v.EncodedV2)
 				if !bytesEqual(got, want) {
 					t.Fatalf("v2 encode: got %X, want %X", got, want)
+				}
+			} else if v.Name == "appended_nested_field_consumes_parent_field" {
+				inner := v.ValueV1["inner"].(map[string]interface{})
+				w := NewBitWriter()
+				w.WriteU8(uint8(toFloat64(inner["x"])))
+				w.WriteU8(uint8(toFloat64(v.ValueV1["z"])))
+				got := w.Finish()
+				want := hexToBytes(t, v.EncodedV1)
+				if !bytesEqual(got, want) {
+					t.Fatalf("nested v1 encode: got %X, want %X", got, want)
+				}
+				r := NewBitReader(got)
+				if x, err := r.ReadU8(); err != nil || x != 1 {
+					t.Fatalf("nested x: got %d, err %v", x, err)
+				}
+				if y, err := r.ReadU8(); err != nil || y != 2 {
+					t.Fatalf("misread appended y: got %d, err %v", y, err)
+				}
+				if _, err := r.ReadU8(); err != ErrUnexpectedEOF {
+					t.Fatalf("parent z after consumption: got err %v, want %v", err, ErrUnexpectedEOF)
+				}
+			} else if v.Name == "appended_sub_byte_default_matches_old_padding" {
+				v1 := NewBitWriter()
+				v1.WriteBits(uint64(toFloat64(v.ValueV1["x"])), 4)
+				v1Bytes := v1.Finish()
+				v2 := NewBitWriter()
+				v2.WriteBits(uint64(toFloat64(v.ValueV2["x"])), 4)
+				v2.WriteBits(uint64(toFloat64(v.ValueV2["y"])), 4)
+				v2Bytes := v2.Finish()
+				if !bytesEqual(v1Bytes, hexToBytes(t, v.EncodedV1)) ||
+					!bytesEqual(v2Bytes, hexToBytes(t, v.EncodedV2)) ||
+					!bytesEqual(v1Bytes, v2Bytes) {
+					t.Fatalf("sub-byte ambiguity: v1 %X, v2 %X", v1Bytes, v2Bytes)
 				}
 			}
 		})

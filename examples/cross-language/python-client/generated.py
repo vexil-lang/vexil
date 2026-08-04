@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x62, 0x19, 0xa3, 0xc2, 0x34, 0x2a, 0xd0, 0xaf, 0x3e, 0xaa, 0xbe, 0x11, 0xca, 0xe9, 0x6c, 0x23, 0x76, 0x6e, 0x62, 0x27, 0xb4, 0xc1, 0xce, 0x0f, 0x2e, 0x5d, 0xbd, 0x08, 0xdf, 0xec, 0x70, 0x93)
 
@@ -111,28 +111,20 @@ class SensorReading:
         m.temperature = r.read_f32()
         m.humidity = r.read_f32()
         m.label = r.read_string()
-        try:
-            _vexil_m_2e_gps_5f_lat_present = r.read_bool()
-        except DecodeError:
+        _vexil_m_2e_gps_5f_lat_present = r.read_bool()
+        if _vexil_m_2e_gps_5f_lat_present:
+            r.flush_to_byte_boundary()
+            m.gps_lat = r.read_f64()
+        else:
             m.gps_lat = None
+        _vexil_m_2e_gps_5f_lon_present = r.read_bool()
+        if _vexil_m_2e_gps_5f_lon_present:
+            r.flush_to_byte_boundary()
+            m.gps_lon = r.read_f64()
         else:
-            if _vexil_m_2e_gps_5f_lat_present:
-                r.flush_to_byte_boundary()
-                m.gps_lat = r.read_f64()
-            else:
-                m.gps_lat = None
-        try:
-            _vexil_m_2e_gps_5f_lon_present = r.read_bool()
-        except DecodeError:
             m.gps_lon = None
-        else:
-            if _vexil_m_2e_gps_5f_lon_present:
-                r.flush_to_byte_boundary()
-                m.gps_lon = r.read_f64()
-            else:
-                m.gps_lon = None
         r.flush_to_byte_boundary()
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "DeviceStatus", "SensorReading"]
+__all__ = ["dataclass", "SCHEMA_HASH", "DeviceStatus", "SensorReading"]

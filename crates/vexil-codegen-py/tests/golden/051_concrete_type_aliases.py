@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal as _VexilLiteral
 
 # Runtime support (to be provided by vexil Python runtime)
-from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader, DecodeError
+from vexil_runtime import BitWriter as _BitWriter, BitReader as _BitReader
 
 SCHEMA_HASH: tuple[int, ...] = (0x34, 0xf7, 0x2b, 0xbd, 0x77, 0x6a, 0x0f, 0x2d, 0xcb, 0x4a, 0xae, 0xea, 0xf9, 0xe3, 0xbc, 0x15, 0xed, 0x6b, 0xa6, 0x81, 0xac, 0x4d, 0x35, 0xbe, 0x2f, 0xf5, 0xa3, 0x4d, 0x8f, 0x0e, 0xb2, 0x34)
 
@@ -156,16 +156,12 @@ class AliasUser:
         _vexil_m_2e_lookup_map_items: dict[str, int | None] = {}
         for _ in range(_vexil_m_2e_lookup_map_length):
             _vexil_m_2e_lookup_map_key = r.read_string()
-            try:
-                _vexil__5f_vexil_5f_m_5f_2e_5f_lookup_5f_map_5f_value_present = r.read_bool()
-            except DecodeError:
-                _vexil_m_2e_lookup_map_value = None
+            _vexil__5f_vexil_5f_m_5f_2e_5f_lookup_5f_map_5f_value_present = r.read_bool()
+            if _vexil__5f_vexil_5f_m_5f_2e_5f_lookup_5f_map_5f_value_present:
+                r.flush_to_byte_boundary()
+                _vexil_m_2e_lookup_map_value = r.read_u32()
             else:
-                if _vexil__5f_vexil_5f_m_5f_2e_5f_lookup_5f_map_5f_value_present:
-                    r.flush_to_byte_boundary()
-                    _vexil_m_2e_lookup_map_value = r.read_u32()
-                else:
-                    _vexil_m_2e_lookup_map_value = None
+                _vexil_m_2e_lookup_map_value = None
             _vexil_m_2e_lookup_map_items[_vexil_m_2e_lookup_map_key] = _vexil_m_2e_lookup_map_value
         m.lookup = _vexil_m_2e_lookup_map_items
         _vexil_m_2e_tags_set_length = r.read_leb128()
@@ -190,4 +186,4 @@ class AliasUser:
         m.unknown = b""
         return m
 
-__all__ = ["dataclass", "DecodeError", "SCHEMA_HASH", "Item", "AliasUser"]
+__all__ = ["dataclass", "SCHEMA_HASH", "Item", "AliasUser"]

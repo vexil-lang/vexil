@@ -440,7 +440,7 @@ fn compare_field_sets(
                 declaration: decl_name.to_string(),
                 field: Some(new_f.name.to_string()),
                 detail: format!("field '{}' @{} was added", new_f.name, ord),
-                classification: BumpKind::Minor,
+                classification: BumpKind::Major,
             });
         }
     }
@@ -801,7 +801,7 @@ mod tests {
     }
 
     #[test]
-    fn field_added_is_minor() {
+    fn field_added_is_major_without_a_message_boundary() {
         let old = compile_schema(
             r#"
             namespace test
@@ -815,12 +815,36 @@ mod tests {
         "#,
         );
         let report = check(&old, &new);
-        assert_eq!(report.suggested_bump, BumpKind::Minor);
-        assert_eq!(report.result, CompatResult::Compatible);
+        assert_eq!(report.suggested_bump, BumpKind::Major);
+        assert_eq!(report.result, CompatResult::Breaking);
         assert!(report
             .changes
             .iter()
             .any(|c| c.kind == ChangeKind::FieldAdded));
+    }
+
+    #[test]
+    fn nested_message_field_addition_is_major() {
+        let old = compile_schema(
+            r#"
+            namespace test
+            message Inner { x @0 : u8 }
+            message Outer { inner @0 : Inner  z @1 : u8 }
+        "#,
+        );
+        let new = compile_schema(
+            r#"
+            namespace test
+            message Inner { x @0 : u8  y @1 : u8 }
+            message Outer { inner @0 : Inner  z @1 : u8 }
+        "#,
+        );
+        let report = check(&old, &new);
+        assert_eq!(report.suggested_bump, BumpKind::Major);
+        assert_eq!(report.result, CompatResult::Breaking);
+        assert!(report.changes.iter().any(|change| {
+            change.kind == ChangeKind::FieldAdded && change.declaration == "Inner"
+        }));
     }
 
     #[test]
@@ -1129,7 +1153,7 @@ mod tests {
             message Point { x @0 : f32  y @1 : f32 }
         "#,
         );
-        // Remove field y (major) and add field z (minor)
+        // Both removing field y and adding field z are major changes.
         let new = compile_schema(
             r#"
             namespace test

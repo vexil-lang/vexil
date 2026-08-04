@@ -1,6 +1,8 @@
 # Schema Evolution
 
-Vexil supports safe schema evolution -- adding fields, deprecating fields, and detecting breaking changes.
+Vexil makes schema changes explicit and classifies whether existing message
+values can still be decoded safely. Because message values are not internally
+length-delimited, adding a field is a breaking change.
 
 ## Compatible changes
 
@@ -8,8 +10,8 @@ These changes are safe (v1 and v2 can interoperate):
 
 | Change | Classification |
 |--------|---------------|
-| Add a field with a new ordinal | Minor |
 | Add a variant to `@non_exhaustive` enum/union | Minor |
+| Add a new declaration | Minor |
 | Mark a field `@deprecated` | Patch |
 | Rename a field (ordinal unchanged) | Patch |
 
@@ -19,6 +21,7 @@ These changes require all peers to upgrade simultaneously:
 
 | Change | Why |
 |--------|-----|
+| Add a field | Nested and aggregate message values have no old-schema boundary |
 | Remove a field | Wire layout changes |
 | Change a field's type | Wire encoding differs |
 | Change a field's ordinal | Wire order changes |
@@ -33,7 +36,7 @@ vexilc compat v1/schema.vexil v2/schema.vexil
 Output:
 
 ```
-  ✓ field "flags" added at @2           compatible (minor)
+  ✗ field "flags" added at @2           BREAKING (major)
   ✗ field "timeout" type u32 → optional<u32>  BREAKING (major)
 
 Result: BREAKING — requires major version bump
@@ -47,11 +50,17 @@ vexilc compat v1.vexil v2.vexil --format json
 
 The `compat` command exits with code 0 for compatible changes and code 1 for breaking changes, making it suitable for CI gates.
 
-## Forward compatibility
+## Why appending is breaking
 
-When a v1 decoder receives v2-encoded data with extra fields, it reads its known fields and ignores the trailing bytes. Decoding succeeds rather than failing on the unrecognised data, which is what makes appending a field a compatible change.
+A bounded top-level reader may be able to stop after its known fields, but that
+does not make the schema change generally compatible. A nested message is
+encoded directly beside its parent's following fields. A newer nested decoder
+cannot tell whether the next bytes contain its appended field or the parent's
+next field. Arrays of inline messages have the same problem between elements.
 
-The ignored bytes are discarded, not retained -- a v1 decoder cannot re-encode the v2 data it did not understand. See [unknown fields](./messages.md#unknown-fields) for what generated messages do and do not carry.
+Do not treat end of input as a general evolution marker. It would turn some
+truncated required fields into defaults. Add a new declaration and migrate
+explicitly, or coordinate a major-version transition for the changed message.
 
 ## Typed tombstones
 

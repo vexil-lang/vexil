@@ -106,24 +106,22 @@ func (m *LinkedList) Unpack(r *vexil.BitReader) error {
 	}
 	{
 		present, err := r.ReadBool()
-		if err != nil && err != vexil.ErrUnexpectedEOF {
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if present {
-				r.FlushToByteBoundary()
-				var optVal LinkedList
-				{
-					if err := r.EnterRecursive(); err != nil {
-						return err
-					}
-					if err := optVal.Unpack(r); err != nil {
-						return err
-					}
-					r.LeaveRecursive()
+		if present {
+			r.FlushToByteBoundary()
+			var optVal LinkedList
+			{
+				if err := r.EnterRecursive(); err != nil {
+					return err
 				}
-				m.Next = &optVal
+				if err := optVal.Unpack(r); err != nil {
+					return err
+				}
+				r.LeaveRecursive()
 			}
+			m.Next = &optVal
 		}
 	}
 	r.FlushToByteBoundary()
