@@ -35,7 +35,7 @@ and confirms that the breaking comparison exits with status 1.
 2. [`schemas/project/messages.vexil`](./schemas/project/messages.vexil) imports
    those declarations and defines the application messages.
 3. [`evolution/v1.vexil`](./evolution/v1.vexil) and
-   [`evolution/v1_1.vexil`](./evolution/v1_1.vexil) add a declaration without
+   [`evolution/compatible.vexil`](./evolution/compatible.vexil) add a declaration without
    changing the existing message wire contract.
 4. [`evolution/breaking.vexil`](./evolution/breaking.vexil) changes an existing
    field's type and demonstrates the failure path.
