@@ -5,7 +5,7 @@ use vexil_lang::ir::{
 };
 
 use crate::emit::CodeWriter;
-use crate::types::{optional_payload_needs_wrapper, ts_type};
+use crate::types::{optional_payload_needs_wrapper, ts_type_with_symbols, TypeScriptSymbols};
 use vexil_lang::codegen::portable::PortableFunction;
 
 // ---------------------------------------------------------------------------
@@ -193,6 +193,26 @@ pub fn emit_write(
     registry: &TypeRegistry,
     writer: &str,
 ) {
+    emit_write_with_symbols(
+        w,
+        access,
+        ty,
+        enc,
+        registry,
+        writer,
+        &TypeScriptSymbols::default(),
+    );
+}
+
+pub(crate) fn emit_write_with_symbols(
+    w: &mut CodeWriter,
+    access: &str,
+    ty: &ResolvedType,
+    enc: &FieldEncoding,
+    registry: &TypeRegistry,
+    writer: &str,
+    symbols: &TypeScriptSymbols,
+) {
     // Check non-default encoding first
     match &enc.encoding {
         Encoding::Varint => {
@@ -224,14 +244,14 @@ pub fn emit_write(
                 encoding: *inner.clone(),
                 limit: enc.limit,
             };
-            emit_write(w, access, ty, &base_enc, registry, writer);
+            emit_write_with_symbols(w, access, ty, &base_enc, registry, writer, symbols);
             return;
         }
         Encoding::Default => {} // fall through to type dispatch
         _ => {}                 // non_exhaustive guard
     }
 
-    emit_write_type(w, access, ty, registry, writer);
+    emit_write_type(w, access, ty, registry, writer, symbols);
 }
 
 fn emit_write_type(
@@ -240,6 +260,7 @@ fn emit_write_type(
     ty: &ResolvedType,
     registry: &TypeRegistry,
     writer: &str,
+    symbols: &TypeScriptSymbols,
 ) {
     match ty {
         ResolvedType::Primitive(p) => match p {
@@ -279,19 +300,9 @@ fn emit_write_type(
             SemanticType::Hash => w.line(&format!("{writer}.writeRawBytes({access});")),
         },
         ResolvedType::Named(id) => {
-            let type_name = match registry.get(*id) {
-                Some(def) => match def {
-                    TypeDef::Message(m) => m.name.to_string(),
-                    TypeDef::Enum(e) => e.name.to_string(),
-                    TypeDef::Flags(f) => f.name.to_string(),
-                    TypeDef::Union(u) => u.name.to_string(),
-                    TypeDef::Newtype(n) => n.name.to_string(),
-                    _ => "Unknown".to_string(),
-                },
-                None => "Unknown".to_string(),
-            };
+            let encode = symbols.encode_ref(*id, registry);
             w.line(&format!("{writer}.enterNested();"));
-            w.line(&format!("encode{type_name}({access}, {writer});"));
+            w.line(&format!("{encode}({access}, {writer});"));
             w.line(&format!("{writer}.leaveNested();"));
         }
         ResolvedType::Optional(inner) => {
@@ -306,24 +317,24 @@ fn emit_write_type(
             } else {
                 access.to_string()
             };
-            emit_write_type(w, &inner_access, inner, registry, writer);
+            emit_write_type(w, &inner_access, inner, registry, writer, symbols);
             w.close_block();
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("{writer}.writeLeb128({access}.length);"));
             w.open_block(&format!("for (const item of {access})"));
-            emit_write_type(w, "item", inner, registry, writer);
+            emit_write_type(w, "item", inner, registry, writer, symbols);
             w.close_block();
         }
         ResolvedType::Set(inner) => {
             w.line(&format!("{writer}.writeLeb128({access}.size);"));
             w.open_block(&format!("for (const item of {access})"));
-            emit_write_type(w, "item", inner, registry, writer);
+            emit_write_type(w, "item", inner, registry, writer, symbols);
             w.close_block();
         }
         ResolvedType::FixedArray(inner, _size) => {
             w.open_block(&format!("for (const item of {access})"));
-            emit_write_type(w, "item", inner, registry, writer);
+            emit_write_type(w, "item", inner, registry, writer, symbols);
             w.close_block();
         }
         ResolvedType::Vec2(inner)
@@ -333,25 +344,25 @@ fn emit_write_type(
         | ResolvedType::Mat3(inner)
         | ResolvedType::Mat4(inner) => {
             w.open_block(&format!("for (const item of {access})"));
-            emit_write_type(w, "item", inner, registry, writer);
+            emit_write_type(w, "item", inner, registry, writer, symbols);
             w.close_block();
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("{writer}.writeLeb128({access}.size);"));
             w.open_block(&format!("for (const [mapK, mapV] of {access})"));
-            emit_write_type(w, "mapK", k, registry, writer);
-            emit_write_type(w, "mapV", v, registry, writer);
+            emit_write_type(w, "mapK", k, registry, writer, symbols);
+            emit_write_type(w, "mapV", v, registry, writer, symbols);
             w.close_block();
         }
         ResolvedType::Result(ok, err) => {
             w.open_block(&format!("if ('ok' in {access})"));
             w.line(&format!("{writer}.writeBool(true);"));
-            emit_write_type(w, &format!("{access}.ok"), ok, registry, writer);
+            emit_write_type(w, &format!("{access}.ok"), ok, registry, writer, symbols);
             w.dedent();
             w.line("} else {");
             w.indent();
             w.line(&format!("{writer}.writeBool(false);"));
-            emit_write_type(w, &format!("{access}.err"), err, registry, writer);
+            emit_write_type(w, &format!("{access}.err"), err, registry, writer, symbols);
             w.close_block();
         }
         _ => {} // non_exhaustive guard
@@ -372,6 +383,26 @@ pub fn emit_read(
     enc: &FieldEncoding,
     registry: &TypeRegistry,
     reader: &str,
+) {
+    emit_read_with_symbols(
+        w,
+        var_name,
+        ty,
+        enc,
+        registry,
+        reader,
+        &TypeScriptSymbols::default(),
+    );
+}
+
+pub(crate) fn emit_read_with_symbols(
+    w: &mut CodeWriter,
+    var_name: &str,
+    ty: &ResolvedType,
+    enc: &FieldEncoding,
+    registry: &TypeRegistry,
+    reader: &str,
+    symbols: &TypeScriptSymbols,
 ) {
     match &enc.encoding {
         Encoding::Varint => {
@@ -405,14 +436,14 @@ pub fn emit_read(
                 encoding: *inner.clone(),
                 limit: enc.limit,
             };
-            emit_read(w, var_name, ty, &base_enc, registry, reader);
+            emit_read_with_symbols(w, var_name, ty, &base_enc, registry, reader, symbols);
             return;
         }
         Encoding::Default => {}
         _ => {} // non_exhaustive guard
     }
 
-    emit_read_type(w, var_name, ty, registry, reader);
+    emit_read_type(w, var_name, ty, registry, reader, symbols);
 }
 
 fn emit_read_type(
@@ -421,6 +452,7 @@ fn emit_read_type(
     ty: &ResolvedType,
     registry: &TypeRegistry,
     reader: &str,
+    symbols: &TypeScriptSymbols,
 ) {
     match ty {
         ResolvedType::Primitive(p) => match p {
@@ -509,24 +541,14 @@ fn emit_read_type(
             }
         },
         ResolvedType::Named(id) => {
-            let type_name = match registry.get(*id) {
-                Some(def) => match def {
-                    TypeDef::Message(m) => m.name.to_string(),
-                    TypeDef::Enum(e) => e.name.to_string(),
-                    TypeDef::Flags(f) => f.name.to_string(),
-                    TypeDef::Union(u) => u.name.to_string(),
-                    TypeDef::Newtype(n) => n.name.to_string(),
-                    _ => "Unknown".to_string(),
-                },
-                None => "Unknown".to_string(),
-            };
+            let decode = symbols.decode_ref(*id, registry);
             w.line(&format!("{reader}.enterNested();"));
-            w.line(&format!("const {var_name} = decode{type_name}({reader});"));
+            w.line(&format!("const {var_name} = {decode}({reader});"));
             w.line(&format!("{reader}.leaveNested();"));
         }
         ResolvedType::Optional(inner) => {
             w.line(&format!("const {var_name}_present = {reader}.readBool();"));
-            let inner_ts = ts_type(inner, registry);
+            let inner_ts = ts_type_with_symbols(inner, registry, symbols);
             let optional_ts = if optional_payload_needs_wrapper(inner) {
                 format!("[{inner_ts}] | null")
             } else {
@@ -537,7 +559,14 @@ fn emit_read_type(
             if is_byte_aligned(inner, registry) {
                 w.line(&format!("{reader}.flushToByteBoundary();"));
             }
-            emit_read_type(w, &format!("{var_name}_inner"), inner, registry, reader);
+            emit_read_type(
+                w,
+                &format!("{var_name}_inner"),
+                inner,
+                registry,
+                reader,
+                symbols,
+            );
             if optional_payload_needs_wrapper(inner) {
                 w.line(&format!("{var_name} = [{var_name}_inner];"));
             } else {
@@ -551,19 +580,33 @@ fn emit_read_type(
         }
         ResolvedType::Array(inner) => {
             w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
-            let array_ts = ts_type(ty, registry);
+            let array_ts = ts_type_with_symbols(ty, registry, symbols);
             w.line(&format!("const {var_name}: {array_ts} = [];"));
             w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
-            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
+            emit_read_type(
+                w,
+                &format!("{var_name}_item"),
+                inner,
+                registry,
+                reader,
+                symbols,
+            );
             w.line(&format!("{var_name}.push({var_name}_item);"));
             w.close_block();
         }
         ResolvedType::Set(inner) => {
             w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
-            let inner_ts = ts_type(inner, registry);
+            let inner_ts = ts_type_with_symbols(inner, registry, symbols);
             w.line(&format!("const {var_name} = new Set<{inner_ts}>();"));
             w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
-            emit_read_type(w, &format!("{var_name}_item"), inner, registry, reader);
+            emit_read_type(
+                w,
+                &format!("{var_name}_item"),
+                inner,
+                registry,
+                reader,
+                symbols,
+            );
             w.line(&format!("{var_name}.add({var_name}_item);"));
             w.close_block();
         }
@@ -572,10 +615,10 @@ fn emit_read_type(
             let mut items = Vec::new();
             for index in 0..n {
                 let item = format!("{var_name}_{index}");
-                emit_read_type(w, &item, inner, registry, reader);
+                emit_read_type(w, &item, inner, registry, reader, symbols);
                 items.push(item);
             }
-            let ty = ts_type(ty, registry);
+            let ty = ts_type_with_symbols(ty, registry, symbols);
             w.line(&format!("const {var_name}: {ty} = [{}];", items.join(", ")));
         }
         ResolvedType::Vec2(inner)
@@ -595,37 +638,44 @@ fn emit_read_type(
             let mut items = Vec::new();
             for index in 0..n {
                 let item = format!("{var_name}_{index}");
-                emit_read_type(w, &item, inner, registry, reader);
+                emit_read_type(w, &item, inner, registry, reader, symbols);
                 items.push(item);
             }
-            let ty = ts_type(ty, registry);
+            let ty = ts_type_with_symbols(ty, registry, symbols);
             w.line(&format!("const {var_name}: {ty} = [{}];", items.join(", ")));
         }
         ResolvedType::Map(k, v) => {
             w.line(&format!("const {var_name}_len = {reader}.readLeb128();"));
-            let k_ts = ts_type(k, registry);
-            let v_ts = ts_type(v, registry);
+            let k_ts = ts_type_with_symbols(k, registry, symbols);
+            let v_ts = ts_type_with_symbols(v, registry, symbols);
             w.line(&format!("const {var_name} = new Map<{k_ts}, {v_ts}>();"));
             w.open_block(&format!("for (let i = 0; i < {var_name}_len; i++)"));
-            emit_read_type(w, &format!("{var_name}_k"), k, registry, reader);
-            emit_read_type(w, &format!("{var_name}_v"), v, registry, reader);
+            emit_read_type(w, &format!("{var_name}_k"), k, registry, reader, symbols);
+            emit_read_type(w, &format!("{var_name}_v"), v, registry, reader, symbols);
             w.line(&format!("{var_name}.set({var_name}_k, {var_name}_v);"));
             w.close_block();
         }
         ResolvedType::Result(ok, err) => {
-            let ok_ts = ts_type(ok, registry);
-            let err_ts = ts_type(err, registry);
+            let ok_ts = ts_type_with_symbols(ok, registry, symbols);
+            let err_ts = ts_type_with_symbols(err, registry, symbols);
             w.line(&format!("const {var_name}_isOk = {reader}.readBool();"));
             w.line(&format!(
                 "let {var_name}: {{ ok: {ok_ts} }} | {{ err: {err_ts} }};"
             ));
             w.open_block(&format!("if ({var_name}_isOk)"));
-            emit_read_type(w, &format!("{var_name}_ok"), ok, registry, reader);
+            emit_read_type(w, &format!("{var_name}_ok"), ok, registry, reader, symbols);
             w.line(&format!("{var_name} = {{ ok: {var_name}_ok }};"));
             w.dedent();
             w.line("} else {");
             w.indent();
-            emit_read_type(w, &format!("{var_name}_err"), err, registry, reader);
+            emit_read_type(
+                w,
+                &format!("{var_name}_err"),
+                err,
+                registry,
+                reader,
+                symbols,
+            );
             w.line(&format!("{var_name} = {{ err: {var_name}_err }};"));
             w.close_block();
         }
@@ -644,19 +694,29 @@ pub fn emit_message(
     registry: &TypeRegistry,
     functions: &[PortableFunction],
 ) {
+    emit_message_with_symbols(w, msg, registry, functions, &TypeScriptSymbols::default());
+}
+
+pub(crate) fn emit_message_with_symbols(
+    w: &mut CodeWriter,
+    msg: &MessageDef,
+    registry: &TypeRegistry,
+    functions: &[PortableFunction],
+    symbols: &TypeScriptSymbols,
+) {
     let name = msg.name.as_str();
 
     // Interface
     w.open_block(&format!("export interface {name}"));
     for field in &msg.fields {
-        let field_ts = ts_type(&field.resolved_type, registry);
+        let field_ts = ts_type_with_symbols(&field.resolved_type, registry, symbols);
         w.line(&format!("{}: {};", field.name, field_ts));
     }
     w.line("_unknown: Uint8Array;");
     for function in functions {
         w.line(&format!(
             "{};",
-            crate::fn_body::method_signature(function, registry)
+            crate::fn_body::method_signature_with_symbols(function, registry, symbols)
         ));
     }
     w.close_block();
@@ -678,7 +738,7 @@ pub fn emit_message(
         w.indent();
         w.line("...fields,");
         for function in functions {
-            crate::fn_body::emit_object_method(w, function, registry);
+            crate::fn_body::emit_object_method_with_symbols(w, function, registry, symbols);
         }
         w.dedent();
         w.line("};");
@@ -702,13 +762,14 @@ pub fn emit_message(
                 field.name.as_str(),
             );
         }
-        emit_write(
+        emit_write_with_symbols(
             w,
             &access,
             &field.resolved_type,
             &field.encoding,
             registry,
             "w",
+            symbols,
         );
     }
     w.line("w.flushToByteBoundary();");
@@ -727,13 +788,14 @@ pub fn emit_message(
     fields.sort_by_key(|field| field.ordinal);
     for field in fields {
         let var_name = field.name.as_str();
-        emit_read(
+        emit_read_with_symbols(
             w,
             var_name,
             &field.resolved_type,
             &field.encoding,
             registry,
             "r",
+            symbols,
         );
         // Validate constraint after decoding
         if let Some(constraint) = &field.constraint {
@@ -767,11 +829,20 @@ pub fn emit_message(
 
 /// Emit a config type: interface only (no codec).
 pub fn emit_config(w: &mut CodeWriter, cfg: &ConfigDef, registry: &TypeRegistry) {
+    emit_config_with_symbols(w, cfg, registry, &TypeScriptSymbols::default());
+}
+
+pub(crate) fn emit_config_with_symbols(
+    w: &mut CodeWriter,
+    cfg: &ConfigDef,
+    registry: &TypeRegistry,
+    symbols: &TypeScriptSymbols,
+) {
     let name = cfg.name.as_str();
 
     w.open_block(&format!("export interface {name}"));
     for field in &cfg.fields {
-        let field_ts = ts_type(&field.resolved_type, registry);
+        let field_ts = ts_type_with_symbols(&field.resolved_type, registry, symbols);
         w.line(&format!("{}: {};", field.name, field_ts));
     }
     w.close_block();

@@ -158,6 +158,8 @@ The following MUST NOT conditions are tested indirectly or require multi-file se
 - **Circular imports** (§6.2): Requires two files that import each other. Not testable as a single file.
 - **Duplicate namespace across compilation unit** (§2.2): Requires two files with the same namespace.
 - **Wildcard import conflict** (§2.7): Requires two imported schemas exporting the same name.
+  TypeScript generation for explicitly qualified same-name imports is covered
+  by `projects/same_name`.
 - **Trait import visibility** (§2.7, §4.10): Direct, wildcard, aliased,
   transitive, and diamond behavior is covered by `projects/trait_alias` and
   compiler project tests.

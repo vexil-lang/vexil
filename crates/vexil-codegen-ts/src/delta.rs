@@ -2,8 +2,8 @@ use vexil_lang::ast::PrimitiveType;
 use vexil_lang::ir::{Encoding, FieldEncoding, MessageDef, ResolvedType, TypeRegistry};
 
 use crate::emit::CodeWriter;
-use crate::message::{emit_read, emit_write};
-use crate::types::ts_type;
+use crate::message::{emit_read_with_symbols, emit_write_with_symbols};
+use crate::types::{ts_type_with_symbols, TypeScriptSymbols};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -184,6 +184,15 @@ fn emit_decode_reconstruct(w: &mut CodeWriter, field_name: &str, ty: &ResolvedTy
 ///
 /// If the message has no delta fields this function is a no-op.
 pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry) {
+    emit_delta_with_symbols(w, msg, registry, &TypeScriptSymbols::default());
+}
+
+pub(crate) fn emit_delta_with_symbols(
+    w: &mut CodeWriter,
+    msg: &MessageDef,
+    registry: &TypeRegistry,
+    symbols: &TypeScriptSymbols,
+) {
     // Collect delta fields up-front.
     let delta_fields: Vec<_> = msg
         .fields
@@ -206,7 +215,7 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     // Private prev fields
     for field in &delta_fields {
         let camel = to_camel(&field.name);
-        let ts = ts_type(&field.resolved_type, registry);
+        let ts = ts_type_with_symbols(&field.resolved_type, registry, symbols);
         let zero = zero_literal(&field.resolved_type);
         w.line(&format!("private prev{camel}: {ts} = {zero};"));
     }
@@ -221,24 +230,26 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
             emit_encode_delta(w, fname, &field.resolved_type);
             // Write the delta value using the INNER encoding (Delta stripped).
             let inner_enc = strip_delta(&field.encoding);
-            emit_write(
+            emit_write_with_symbols(
                 w,
                 &format!("delta_{fname}"),
                 &field.resolved_type,
                 &inner_enc,
                 registry,
                 "w",
+                symbols,
             );
             w.line(&format!("this.prev{camel} = v.{fname};"));
         } else {
             let access = format!("v.{fname}");
-            emit_write(
+            emit_write_with_symbols(
                 w,
                 &access,
                 &field.resolved_type,
                 &field.encoding,
                 registry,
                 "w",
+                symbols,
             );
         }
     }
@@ -270,7 +281,7 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
     // Private prev fields
     for field in &delta_fields {
         let camel = to_camel(&field.name);
-        let ts = ts_type(&field.resolved_type, registry);
+        let ts = ts_type_with_symbols(&field.resolved_type, registry, symbols);
         let zero = zero_literal(&field.resolved_type);
         w.line(&format!("private prev{camel}: {ts} = {zero};"));
     }
@@ -284,26 +295,28 @@ pub fn emit_delta(w: &mut CodeWriter, msg: &MessageDef, registry: &TypeRegistry)
             let inner_enc = strip_delta(&field.encoding);
             let delta_var = format!("delta_{fname}");
             // Read the delta value using the INNER encoding.
-            emit_read(
+            emit_read_with_symbols(
                 w,
                 &delta_var,
                 &field.resolved_type,
                 &inner_enc,
                 registry,
                 "r",
+                symbols,
             );
             // Reconstruct the original value.
             emit_decode_reconstruct(w, fname, &field.resolved_type);
             let camel = to_camel(fname);
             w.line(&format!("this.prev{camel} = {fname};"));
         } else {
-            emit_read(
+            emit_read_with_symbols(
                 w,
                 fname,
                 &field.resolved_type,
                 &field.encoding,
                 registry,
                 "r",
+                symbols,
             );
         }
     }

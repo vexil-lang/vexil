@@ -1,0 +1,25 @@
+namespace collisions.root
+
+import collisions.left as Left
+import collisions.right as Right
+import contracts.left as LeftContract
+import contracts.right as RightContract
+
+message Payload {
+    local @0 : bool
+}
+
+message Envelope {
+    local @0 : Payload
+    left @1 : Left.Payload
+    right @2 : Right.Payload
+    nested @3 : array<optional<Left.Payload>>
+}
+
+message Event {
+    left @0 : i32
+    right @1 : string
+}
+
+impl LeftContract.Shape for Event {}
+impl RightContract.Shape for Event {}

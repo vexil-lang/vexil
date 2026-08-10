@@ -41,9 +41,11 @@ If A imports B and C, and both B and C import D, the compiler deduplicates D. Ea
 Each target language handles cross-file references idiomatically:
 
 - **Rust**: `use` statements referencing sibling modules
-- **TypeScript**: relative `import` statements with barrel `index.ts` files;
-  each barrel exposes child modules as `<child>Schema` namespace objects so
-  per-schema metadata constants do not collide
+- **TypeScript**: relative namespace imports keyed to each defining schema,
+  with barrel `index.ts` files. This keeps same-name local and imported
+  declarations unambiguous. Each barrel exposes child modules as
+  `<child>Schema` namespace objects so per-schema metadata constants do not
+  collide
 - **Go**: standard package imports
 
 See the [language specification](https://github.com/vexil-lang/vexil/blob/main/spec/language.md) for the full normative reference.

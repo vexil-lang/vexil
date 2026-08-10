@@ -18,8 +18,10 @@ vexilc build root.vexil --include schemas --target typescript --output generated
 ```
 
 Project generation creates relative imports and namespace barrel files while
-keeping each schema's hash and version distinct. Generated TypeScript is checked
-with native TypeScript tooling and broad byte-vector coverage against Rust.
+keeping each schema's hash and version distinct. References are tied to their
+defining schema, so a local declaration and declarations imported from several
+schemas may safely share the same name. Generated TypeScript is checked with
+native TypeScript tooling and broad byte-vector coverage against Rust.
 
 See the [TypeScript runtime guide](../../docs/book/src/runtime/typescript.md) and
 [support matrix](../../docs/book/src/getting-started/support-matrix.md).

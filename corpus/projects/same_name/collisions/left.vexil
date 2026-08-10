@@ -1,0 +1,5 @@
+namespace collisions.left
+
+message Payload {
+    left @0 : i32
+}

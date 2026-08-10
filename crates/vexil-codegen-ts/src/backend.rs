@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
 use vexil_lang::codegen::portable::{PortableExpr, PortableExprKind, PortableStatement};
@@ -67,17 +67,7 @@ impl CodegenBackend for TypeScriptBackend {
 
             // Step 2: Build import_paths for this schema.
             let declared_ids: HashSet<TypeId> = compiled.declarations.iter().copied().collect();
-            let local_names: HashSet<String> = compiled
-                .declarations
-                .iter()
-                .filter_map(|id| compiled.registry.get(*id))
-                .map(crate::type_name_of)
-                .filter(|name| *name != "Unknown")
-                .map(str::to_owned)
-                .collect();
-
-            let mut import_paths: HashMap<String, String> = HashMap::new();
-            let mut import_collision = None;
+            let mut imports = crate::ProjectImports::default();
             let impl_ids = compiled.impls().map(|(id, _)| id).collect::<Vec<_>>();
             for &type_id in compiled.declarations.iter().chain(impl_ids.iter()) {
                 if let Some(typedef) = compiled.registry.get(type_id) {
@@ -86,50 +76,19 @@ impl CodegenBackend for TypeScriptBackend {
                         compiled,
                         &declared_ids,
                         |imported_id| {
-                            if let Some((origin_namespace, origin_name)) =
+                            if let Some((origin_namespace, _origin_name)) =
                                 compiled.registry.origin(imported_id)
                             {
                                 let path = relative_module_path(ns, origin_namespace);
-                                if local_names.contains(origin_name) {
-                                    import_collision.get_or_insert_with(|| {
-                                        crate::CodegenError::IdentifierCollision {
-                                            name: origin_name.to_string(),
-                                            context: format!(
-                                                "project imports '{origin_name}' from '{path}' into namespace '{ns}', which already declares '{origin_name}'"
-                                            ),
-                                        }
-                                    });
-                                }
-                                if let Some(existing) =
-                                    import_paths.insert(origin_name.to_string(), path.clone())
-                                {
-                                    if existing != path {
-                                        import_collision = Some(
-                                            crate::CodegenError::IdentifierCollision {
-                                                name: origin_name.to_string(),
-                                                context: format!(
-                                                    "project imports both '{existing}' and '{path}' into namespace '{ns}'"
-                                                ),
-                                            },
-                                        );
-                                    }
-                                }
+                                let binding = namespace_binding(origin_namespace);
+                                imports.add(imported_id, binding, path);
                             }
                         },
                     );
                 }
             }
-            if let Some(error) = import_collision {
-                return Err(CodegenError::BackendSpecific(Box::new(error)));
-            }
-
             // Generate code with cross-file imports.
-            let imports = if import_paths.is_empty() {
-                None
-            } else {
-                Some(&import_paths)
-            };
-            let code = crate::generate_with_imports(compiled, imports)
+            let code = crate::generate_with_imports(compiled, Some(&imports))
                 .map_err(|e| CodegenError::BackendSpecific(Box::new(e)))?;
 
             let mut file_path = PathBuf::new();
@@ -164,6 +123,10 @@ impl CodegenBackend for TypeScriptBackend {
 
 fn barrel_binding(child: &str) -> String {
     format!("{child}Schema")
+}
+
+fn namespace_binding(namespace: &str) -> String {
+    format!("$vexil${}", namespace.replace('.', "$"))
 }
 
 fn relative_module_path(from_namespace: &str, to_namespace: &str) -> String {
@@ -303,13 +266,20 @@ fn collect_named_ids_from_expr(
 
 #[cfg(test)]
 mod barrel_tests {
-    use super::barrel_binding;
+    use super::{barrel_binding, namespace_binding};
 
     #[test]
     fn barrel_bindings_cannot_be_typescript_keywords() {
         assert_eq!(barrel_binding("types"), "typesSchema");
         assert_eq!(barrel_binding("from"), "fromSchema");
         assert_eq!(barrel_binding("default"), "defaultSchema");
+    }
+
+    #[test]
+    fn namespace_bindings_preserve_component_boundaries() {
+        assert_eq!(namespace_binding("imports.left"), "$vexil$imports$left");
+        assert_ne!(namespace_binding("a.b_c"), namespace_binding("a_b.c"));
+        assert!(namespace_binding("from.default").starts_with("$vexil$"));
     }
 }
 
@@ -390,44 +360,103 @@ mod tests {
     fn project_codegen_collects_function_only_imports_through_diamond() {
         let result = function_import_diamond();
         let files = TypeScriptBackend.generate_project(&result).unwrap();
+        assert_eq!(
+            files,
+            TypeScriptBackend.generate_project(&result).unwrap(),
+            "project generation must be deterministic"
+        );
 
         let left = project_file(&files, "left.ts");
         assert!(
-            left.contains("import { Payload, encodePayload, decodePayload } from './base';"),
+            left.contains("import * as $vexil$imports$base from './base';"),
             "{left}"
         );
-        assert!(left.contains("left(input: Payload): Payload;"), "{left}");
+        assert!(
+            left.contains("left(input: $vexil$imports$base.Payload): $vexil$imports$base.Payload;"),
+            "{left}"
+        );
 
         let root = project_file(&files, "root.ts");
         assert!(
-            root.contains("import { Payload, encodePayload, decodePayload } from './base';"),
+            root.contains("import * as $vexil$imports$base from './base';"),
             "{root}"
         );
         assert!(
-            root.contains("import { LeftTransformer } from './left';"),
+            root.contains("import * as $vexil$imports$left from './left';"),
             "{root}"
         );
         assert!(
-            root.contains("import { RightTransformer } from './right';"),
+            root.contains("import * as $vexil$imports$right from './right';"),
             "{root}"
         );
         assert_eq!(result.schemas.len(), 4);
     }
 
     #[test]
-    fn project_codegen_resolves_aliased_trait_to_bare_target_name() {
+    fn project_codegen_resolves_aliased_trait_by_origin_namespace() {
         let result = aliased_trait_project();
         let files = TypeScriptBackend.generate_project(&result).unwrap();
         let root = project_file(&files, "root.ts");
         assert!(
-            root.contains("import { Tagged } from '../traits/contracts';"),
+            root.contains("import * as $vexil$traits$contracts from '../traits/contracts';"),
             "{root}"
         );
         assert!(
-            root.contains("_VexilAssertAssignable<Event, Tagged<bigint>>"),
+            root.contains("_VexilAssertAssignable<Event, $vexil$traits$contracts.Tagged<bigint>>"),
             "{root}"
         );
         assert!(!root.contains("Event, Contracts.Tagged<"), "{root}");
+    }
+
+    #[test]
+    fn project_codegen_qualifies_same_name_types_by_origin_namespace() {
+        let mut loader = InMemoryLoader::new();
+        loader.schemas.insert(
+            "collisions.left".into(),
+            "namespace collisions.left\nmessage Payload { left @0 : i32 }".into(),
+        );
+        loader.schemas.insert(
+            "collisions.right".into(),
+            "namespace collisions.right\nmessage Payload { right @0 : string }".into(),
+        );
+        let root = "namespace collisions.root\nimport collisions.left as Left\nimport collisions.right as Right\nmessage Payload { local @0 : bool }\nmessage Envelope { local @0 : Payload left @1 : Left.Payload right @2 : Right.Payload nested @3 : array<optional<Left.Payload>> }";
+        let result =
+            vexil_lang::compile_project(root, &PathBuf::from("collisions/root.vexil"), &loader)
+                .unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+
+        let files = TypeScriptBackend.generate_project(&result).unwrap();
+        let root = project_file(&files, "root.ts");
+
+        assert!(
+            root.contains("import * as $vexil$collisions$left from './left';"),
+            "{root}"
+        );
+        assert!(
+            root.contains("import * as $vexil$collisions$right from './right';"),
+            "{root}"
+        );
+        assert!(root.contains("local: Payload;"), "{root}");
+        assert!(
+            root.contains("left: $vexil$collisions$left.Payload;"),
+            "{root}"
+        );
+        assert!(
+            root.contains("right: $vexil$collisions$right.Payload;"),
+            "{root}"
+        );
+        assert!(
+            root.contains("nested: ($vexil$collisions$left.Payload | null)[];"),
+            "{root}"
+        );
+        assert!(
+            root.contains("$vexil$collisions$left.encodePayload(v.left, w);"),
+            "{root}"
+        );
+        assert!(
+            root.contains("const left = $vexil$collisions$left.decodePayload(r);"),
+            "{root}"
+        );
     }
 
     fn aliased_trait_project() -> ProjectResult {

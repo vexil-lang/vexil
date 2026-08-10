@@ -1,0 +1,5 @@
+namespace contracts.right
+
+trait Shape {
+    right @0 : string
+}
