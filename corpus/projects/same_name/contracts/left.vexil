@@ -1,0 +1,5 @@
+namespace contracts.left
+
+trait Shape {
+    left @0 : i32
+}

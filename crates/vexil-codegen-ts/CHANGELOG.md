@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- Generate deterministic namespace-qualified project references when local or
+  imported declarations share a TypeScript name.
 - Reject unsafe or case-colliding project output paths instead of overwriting
   an earlier generated file.
 - Preserve bounded unknown non-exhaustive union payloads with collision-safe APIs.
@@ -56,6 +58,5 @@
 - chore(release): bump crate versions
 
 All notable changes to this project will be documented in this file.
-
 
 

@@ -48,7 +48,53 @@ fn build_with_unknown_qualified_trait_emits_no_partial_files() {
 }
 
 #[test]
-fn build_rejects_distinct_imported_trait_name_collisions_without_partial_files() {
+fn typescript_codegen_failure_emits_no_partial_files() {
+    let project = tempfile::tempdir().expect("temporary project");
+    let root = project.path().join("root.vexil");
+    let dependency = project.path().join("dependency.vexil");
+    let output_dir = project.path().join("generated");
+    fs::write(
+        dependency,
+        "namespace dependency\nmessage Ready { value @0 : u64 }",
+    )
+    .expect("write dependency schema");
+    fs::write(
+        &root,
+        "namespace app.root\nimport dependency\ntrait InvalidForTypeScript { fn yield() }",
+    )
+    .expect("write root schema");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_vexilc"))
+        .args([
+            "build",
+            root.to_str().expect("UTF-8 root path"),
+            "--include",
+            project.path().to_str().expect("UTF-8 include path"),
+            "--output",
+            output_dir.to_str().expect("UTF-8 output path"),
+            "--target",
+            "typescript",
+        ])
+        .output()
+        .expect("run vexilc");
+
+    assert!(
+        !result.status.success(),
+        "typescript unexpectedly succeeded"
+    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("trait function is a reserved TypeScript keyword"),
+        "{stderr}"
+    );
+    assert!(
+        !output_dir.exists(),
+        "TypeScript emitted a partial output directory"
+    );
+}
+
+#[test]
+fn build_uses_target_specific_distinct_trait_collision_policy() {
     let project = tempfile::tempdir().expect("temporary project");
     let root = project.path().join("root.vexil");
     fs::write(
@@ -88,8 +134,21 @@ fn build_rejects_distinct_imported_trait_name_collisions_without_partial_files()
             .output()
             .expect("run vexilc");
 
-        assert!(!result.status.success(), "{target} unexpectedly succeeded");
         let stderr = String::from_utf8_lossy(&result.stderr);
+        if target == "typescript" {
+            assert!(result.status.success(), "typescript failed: {stderr}");
+            let root_output = target_output.join("app").join("root.ts");
+            let generated = fs::read_to_string(&root_output)
+                .unwrap_or_else(|error| panic!("read {}: {error}", root_output.display()));
+            assert!(generated.contains("import * as $vexil$left"), "{generated}");
+            assert!(
+                generated.contains("import * as $vexil$right"),
+                "{generated}"
+            );
+            continue;
+        }
+
+        assert!(!result.status.success(), "{target} unexpectedly succeeded");
         assert!(
             stderr.contains(&format!("{target_name} identifier collision for 'Tagged'")),
             "{target}: {stderr}"
@@ -102,7 +161,7 @@ fn build_rejects_distinct_imported_trait_name_collisions_without_partial_files()
 }
 
 #[test]
-fn build_rejects_imported_trait_local_name_collisions_without_partial_files() {
+fn build_uses_target_specific_local_trait_collision_policy() {
     let project = tempfile::tempdir().expect("temporary project");
     let root = project.path().join("root.vexil");
     fs::write(
@@ -137,8 +196,21 @@ fn build_rejects_imported_trait_local_name_collisions_without_partial_files() {
             .output()
             .expect("run vexilc");
 
-        assert!(!result.status.success(), "{target} unexpectedly succeeded");
         let stderr = String::from_utf8_lossy(&result.stderr);
+        if target == "typescript" {
+            assert!(result.status.success(), "typescript failed: {stderr}");
+            let root_output = target_output.join("app").join("root.ts");
+            let generated = fs::read_to_string(&root_output)
+                .unwrap_or_else(|error| panic!("read {}: {error}", root_output.display()));
+            assert!(
+                generated.contains("import * as $vexil$contracts"),
+                "{generated}"
+            );
+            assert!(generated.contains("interface Tagged"), "{generated}");
+            continue;
+        }
+
+        assert!(!result.status.success(), "{target} unexpectedly succeeded");
         assert!(
             stderr.contains(&format!("{target_name} identifier collision for 'Tagged'")),
             "{target}: {stderr}"

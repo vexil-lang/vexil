@@ -5,8 +5,17 @@ use vexil_lang::codegen::portable::{
 use vexil_lang::ir::{BinOp, ResolvedType, TypeRegistry, UnaryOp};
 
 use crate::emit::CodeWriter;
+use crate::types::{ts_type_with_symbols, TypeScriptSymbols};
 
 pub fn method_signature(function: &PortableFunction, registry: &TypeRegistry) -> String {
+    method_signature_with_symbols(function, registry, &TypeScriptSymbols::default())
+}
+
+pub(crate) fn method_signature_with_symbols(
+    function: &PortableFunction,
+    registry: &TypeRegistry,
+    symbols: &TypeScriptSymbols,
+) -> String {
     let params = function
         .params
         .iter()
@@ -14,7 +23,7 @@ pub fn method_signature(function: &PortableFunction, registry: &TypeRegistry) ->
             format!(
                 "{}: {}",
                 parameter.name,
-                crate::types::ts_type(&parameter.ty, registry)
+                ts_type_with_symbols(&parameter.ty, registry, symbols)
             )
         })
         .collect::<Vec<_>>()
@@ -22,7 +31,7 @@ pub fn method_signature(function: &PortableFunction, registry: &TypeRegistry) ->
     let return_type = function
         .return_type
         .as_ref()
-        .map(|ty| crate::types::ts_type(ty, registry))
+        .map(|ty| ts_type_with_symbols(ty, registry, symbols))
         .unwrap_or_else(|| "void".to_string());
     format!("{}({params}): {return_type}", function.name)
 }
@@ -32,20 +41,34 @@ pub fn emit_object_method(
     function: &PortableFunction,
     registry: &TypeRegistry,
 ) {
-    w.open_block(&method_signature(function, registry));
+    emit_object_method_with_symbols(w, function, registry, &TypeScriptSymbols::default());
+}
+
+pub(crate) fn emit_object_method_with_symbols(
+    w: &mut CodeWriter,
+    function: &PortableFunction,
+    registry: &TypeRegistry,
+    symbols: &TypeScriptSymbols,
+) {
+    w.open_block(&method_signature_with_symbols(function, registry, symbols));
     for statement in &function.statements {
-        emit_statement(w, statement, registry);
+        emit_statement(w, statement, registry, symbols);
     }
     w.dedent();
     w.line("},");
 }
 
-fn emit_statement(w: &mut CodeWriter, statement: &PortableStatement, registry: &TypeRegistry) {
+fn emit_statement(
+    w: &mut CodeWriter,
+    statement: &PortableStatement,
+    registry: &TypeRegistry,
+    symbols: &TypeScriptSymbols,
+) {
     match statement {
         PortableStatement::Let { name, ty, value } => {
             w.line(&format!(
                 "const {name}: {} = {};",
-                crate::types::ts_type(ty, registry),
+                ts_type_with_symbols(ty, registry, symbols),
                 emit_expr(value)
             ));
         }

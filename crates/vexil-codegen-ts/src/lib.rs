@@ -29,7 +29,7 @@ pub mod union_gen;
 /// Re-export of the TypeScript code-generation backend.
 pub use backend::TypeScriptBackend;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use vexil_lang::codegen::portable::PortableFunction;
 use vexil_lang::ir::{CompiledSchema, ResolvedType, TypeDef, TypeId};
@@ -53,18 +53,35 @@ pub fn generate(compiled: &CompiledSchema) -> Result<String, CodegenError> {
     generate_with_imports(compiled, None)
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct ProjectImports {
+    modules: BTreeMap<String, String>,
+    symbols: types::TypeScriptSymbols,
+}
+
+impl ProjectImports {
+    pub(crate) fn add(&mut self, id: TypeId, binding: String, module_path: String) {
+        self.modules.insert(binding.clone(), module_path);
+        self.symbols.insert_import(id, binding);
+    }
+}
+
 /// Generate TypeScript code for a compiled schema, with optional cross-file import statements.
 ///
-/// `import_paths` maps type names to their module paths for cross-file imports.
+/// `imports` maps imported TypeIds to namespace-owned TypeScript symbols.
 pub(crate) fn generate_with_imports(
     compiled: &CompiledSchema,
-    import_paths: Option<&std::collections::HashMap<String, String>>,
+    imports: Option<&ProjectImports>,
 ) -> Result<String, CodegenError> {
     let impl_functions = prepare_trait_functions(compiled)?;
 
     // Emit declarations first so their structural requirements can drive the
     // runtime import without scanning generated source text.
-    let declarations = emit_declarations(compiled, &impl_functions)?;
+    let default_symbols = types::TypeScriptSymbols::default();
+    let symbols = imports
+        .map(|imports| &imports.symbols)
+        .unwrap_or(&default_symbols);
+    let declarations = emit_declarations(compiled, &impl_functions, symbols)?;
     let mut w = emit::CodeWriter::new();
 
     // Header
@@ -86,24 +103,13 @@ pub(crate) fn generate_with_imports(
     }
 
     // Cross-file imports
-    if let Some(paths) = import_paths {
-        let mut imports: Vec<(&String, &String)> = paths.iter().collect();
-        imports.sort_by_key(|(name, _)| (*name).clone());
-        for (type_name, module_path) in imports {
+    if let Some(imports) = imports {
+        for (binding, module_path) in &imports.modules {
             if !emitted_import {
                 w.blank();
                 emitted_import = true;
             }
-            let is_trait = compiled.registry.iter().any(|(_, def)| {
-                matches!(def, TypeDef::Trait(trait_def) if trait_def.name == type_name.as_str())
-            });
-            if is_trait {
-                w.line(&format!("import {{ {type_name} }} from '{module_path}';"));
-            } else {
-                w.line(&format!(
-                    "import {{ {type_name}, encode{type_name}, decode{type_name} }} from '{module_path}';",
-                ));
-            }
+            w.line(&format!("import * as {binding} from '{module_path}';"));
         }
     }
     w.blank();
@@ -167,6 +173,7 @@ struct EmittedDeclarations {
 fn emit_declarations(
     compiled: &CompiledSchema,
     impl_functions: &HashMap<TypeId, Vec<PortableFunction>>,
+    symbols: &types::TypeScriptSymbols,
 ) -> Result<EmittedDeclarations, CodegenError> {
     let mut w = emit::CodeWriter::new();
     let mut runtime_imports = RuntimeImports::default();
@@ -192,8 +199,14 @@ fn emit_declarations(
                     .get(&type_id)
                     .map(Vec::as_slice)
                     .unwrap_or_default();
-                message::emit_message(&mut w, msg, &compiled.registry, functions);
-                delta::emit_delta(&mut w, msg, &compiled.registry);
+                message::emit_message_with_symbols(
+                    &mut w,
+                    msg,
+                    &compiled.registry,
+                    functions,
+                    symbols,
+                );
+                delta::emit_delta_with_symbols(&mut w, msg, &compiled.registry, symbols);
             }
             TypeDef::Enum(en) => {
                 runtime_imports.require_codec();
@@ -205,17 +218,17 @@ fn emit_declarations(
             }
             TypeDef::Union(un) => {
                 runtime_imports.require_codec();
-                union_gen::emit_union(&mut w, un, &compiled.registry);
+                union_gen::emit_union_with_symbols(&mut w, un, &compiled.registry, symbols);
             }
             TypeDef::Newtype(nt) => {
                 runtime_imports.require_codec();
-                newtype::emit_newtype(&mut w, nt, &compiled.registry);
+                newtype::emit_newtype_with_symbols(&mut w, nt, &compiled.registry, symbols);
             }
             TypeDef::Config(cfg) => {
-                message::emit_config(&mut w, cfg, &compiled.registry);
+                message::emit_config_with_symbols(&mut w, cfg, &compiled.registry, symbols);
             }
             TypeDef::Trait(trait_def) => {
-                trait_gen::emit_trait(&mut w, type_id, trait_def, compiled)?
+                trait_gen::emit_trait_with_symbols(&mut w, type_id, trait_def, compiled, symbols)?
             }
             _ => {} // non_exhaustive guard
         }
@@ -223,7 +236,7 @@ fn emit_declarations(
 
     for (_, impl_def) in compiled.impls() {
         w.blank();
-        trait_gen::emit_impl_assertion(&mut w, impl_def, &compiled.registry);
+        trait_gen::emit_impl_assertion_with_symbols(&mut w, impl_def, &compiled.registry, symbols);
     }
 
     Ok(EmittedDeclarations {
@@ -529,8 +542,11 @@ mod tests {
             .find(|(path, _)| path.to_string_lossy().ends_with("root.ts"))
             .map(|(_, code)| code)
             .unwrap();
-        assert!(root.contains("import { Tagged } from './dep';"), "{root}");
-        assert!(!root.contains("encodeTagged"), "{root}");
+        assert!(
+            root.contains("import * as $vexil$proj$dep from './dep';"),
+            "{root}"
+        );
+        assert!(!root.contains(".encodeTagged"), "{root}");
         assert!(root.contains("retag(tag: bigint): bigint"), "{root}");
     }
 }

@@ -1,0 +1,5 @@
+namespace collisions.right
+
+message Payload {
+    right @0 : string
+}

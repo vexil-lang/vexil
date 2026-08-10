@@ -1,13 +1,22 @@
 use vexil_lang::ir::{TypeRegistry, UnionDef};
 
 use crate::emit::CodeWriter;
-use crate::message::{emit_read, emit_write};
-use crate::types::ts_type;
+use crate::message::{emit_read_with_symbols, emit_write_with_symbols};
+use crate::types::{ts_type_with_symbols, TypeScriptSymbols};
 
 /// Emit a complete union: discriminated union type + encode/decode.
 ///
 /// Wire format: discriminant (LEB128) + payload byte length (LEB128) + payload bytes.
 pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
+    emit_union_with_symbols(w, un, registry, &TypeScriptSymbols::default());
+}
+
+pub(crate) fn emit_union_with_symbols(
+    w: &mut CodeWriter,
+    un: &UnionDef,
+    registry: &TypeRegistry,
+    symbols: &TypeScriptSymbols,
+) {
     let name = un.name.as_str();
     let non_exhaustive = un.annotations.non_exhaustive;
 
@@ -18,7 +27,7 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
         w.open_block(&format!("export interface {iface_name}"));
         w.line(&format!("tag: '{}';", vname));
         for field in &variant.fields {
-            let field_ts = ts_type(&field.resolved_type, registry);
+            let field_ts = ts_type_with_symbols(&field.resolved_type, registry, symbols);
             w.line(&format!("{}: {};", field.name, field_ts));
         }
         w.close_block();
@@ -67,13 +76,14 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             w.line("const payloadW = new BitWriter();");
             for field in &variant.fields {
                 let access = format!("v.{}", field.name);
-                emit_write(
+                emit_write_with_symbols(
                     w,
                     &access,
                     &field.resolved_type,
                     &field.encoding,
                     registry,
                     "payloadW",
+                    symbols,
                 );
             }
             w.line("payloadW.flushToByteBoundary();");
@@ -130,13 +140,14 @@ pub fn emit_union(w: &mut CodeWriter, un: &UnionDef, registry: &TypeRegistry) {
             w.line("const pr = new BitReader(payloadBytes);");
             for field in &variant.fields {
                 let local = format!("_vexilField{}", field.ordinal);
-                emit_read(
+                emit_read_with_symbols(
                     w,
                     &local,
                     &field.resolved_type,
                     &field.encoding,
                     registry,
                     "pr",
+                    symbols,
                 );
             }
             w.line("pr.flushToByteBoundary();");

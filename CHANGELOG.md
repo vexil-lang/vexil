@@ -16,6 +16,10 @@ changes remain in each crate's changelog.
 
 ### Tooling
 
+- Make TypeScript project generation retain each referenced declaration's
+  defining schema. Local and imported declarations with the same name now
+  generate deterministic namespace-qualified types and codec calls instead of
+  rejecting the complete project.
 - Add checked, portable project-output construction for codegen backends and
   validate the complete generated path set before `vexilc build` writes files.
   Existing `CodegenBackend` implementations remain source compatible.

@@ -108,7 +108,11 @@ fn native_tsc_check(project_name: &str, files: &BTreeMap<PathBuf, String>) {
     );
 }
 
-fn compile_and_generate(project_name: &str, root_ns: &str, expected_schema_count: usize) {
+fn compile_and_generate(
+    project_name: &str,
+    root_ns: &str,
+    expected_schema_count: usize,
+) -> BTreeMap<PathBuf, String> {
     let project_dir = corpus_dir().join(project_name);
 
     // Build root file path from namespace: "simple.main" -> "simple/main.vexil"
@@ -183,23 +187,66 @@ fn compile_and_generate(project_name: &str, root_ns: &str, expected_schema_count
         result.schemas.len(),
         files.len()
     );
+
+    files
+}
+
+fn project_golden(project_name: &str, files: &BTreeMap<PathBuf, String>) {
+    let mut generated = String::new();
+    for (path, content) in files {
+        let path = path.to_string_lossy().replace('\\', "/");
+        generated.push_str(&format!("===== {path} =====\n"));
+        generated.push_str(content);
+    }
+
+    let golden_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden-project");
+    let golden_path = golden_dir.join(format!("{project_name}.txt"));
+    if std::env::var_os("UPDATE_GOLDEN").is_some() {
+        std::fs::create_dir_all(&golden_dir)
+            .unwrap_or_else(|error| panic!("failed to create {}: {error}", golden_dir.display()));
+        std::fs::write(&golden_path, generated)
+            .unwrap_or_else(|error| panic!("failed to write {}: {error}", golden_path.display()));
+        return;
+    }
+
+    let expected = std::fs::read_to_string(&golden_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", golden_path.display()))
+        .replace("\r\n", "\n");
+    assert_eq!(
+        generated, expected,
+        "project golden changed: {project_name}"
+    );
 }
 
 /// Simple two-file project: main imports types.
 #[test]
 fn project_simple() {
-    compile_and_generate("simple", "simple.main", 2);
+    let _ = compile_and_generate("simple", "simple.main", 2);
 }
 
 /// Diamond dependency: root -> left + right -> base.
 /// Verifies diamond dedup (base compiled only once).
 #[test]
 fn project_diamond() {
-    compile_and_generate("diamond", "diamond.root", 4);
+    let _ = compile_and_generate("diamond", "diamond.root", 4);
 }
 
 /// Mixed project with enum + message across three files.
 #[test]
 fn project_mixed() {
-    compile_and_generate("mixed", "mix.app", 3);
+    let _ = compile_and_generate("mixed", "mix.app", 3);
+}
+
+/// Two imported declarations and one local declaration share the same name.
+/// Verifies that TypeId ownership survives generation and strict TypeScript.
+#[test]
+fn project_same_name_imports() {
+    let files = compile_and_generate("same_name", "collisions.root", 5);
+    project_golden("same_name", &files);
+}
+
+/// Imported generic traits and portable impl bodies retain their TypeId owner.
+#[test]
+fn project_aliased_generic_trait() {
+    let _ = compile_and_generate("trait_alias", "app.root", 2);
 }
