@@ -32,6 +32,8 @@ protobuf = { targets = ["x86_64-apple-darwin", "aarch64-apple-darwin"] }
 [dist.dependencies.chocolatey]
 protoc = { targets = ["x86_64-pc-windows-msvc"] }
 
-# Customize GitHub runners for ARM Linux
+# Customize GitHub runners for Apple Silicon and ARM Linux
 [dist.github-custom-runners]
+# macos-14 retires on November 2, 2026; pin a supported Apple Silicon image.
+aarch64-apple-darwin = "macos-15"
 aarch64-unknown-linux-gnu = "ubuntu-24.04-arm"
